@@ -186,7 +186,7 @@ public class OmniscientCompositePrecisionAdjustment extends CompositePrecisionAd
   private Pair<LockStatisticsState, LockStatisticsPrecision> enforcePathThreshold(LockStatisticsState element, LockStatisticsPrecision precision, AssignmentsInPathConditionState assigns) {
     if(assigns != null) {
       if(assigns instanceof UniqueAssignmentsInPathConditionState) {
-        UniqueAssignmentsInPathConditionState unique = (UniqueAssignmentsInPathConditionState)assigns;
+        //UniqueAssignmentsInPathConditionState unique = (UniqueAssignmentsInPathConditionState)assigns;
       //  unique.addAssignment(element);
       }
 

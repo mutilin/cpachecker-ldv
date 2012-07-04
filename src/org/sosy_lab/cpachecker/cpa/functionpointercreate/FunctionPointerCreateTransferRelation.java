@@ -37,44 +37,44 @@ import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.CFACreationUtils;
-import org.sosy_lab.cpachecker.cfa.ast.DefaultExpressionVisitor;
-import org.sosy_lab.cpachecker.cfa.ast.IASTArraySubscriptExpression;
-import org.sosy_lab.cpachecker.cfa.ast.IASTAssignment;
-import org.sosy_lab.cpachecker.cfa.ast.IASTCastExpression;
-import org.sosy_lab.cpachecker.cfa.ast.IASTCharLiteralExpression;
-import org.sosy_lab.cpachecker.cfa.ast.IASTDeclaration;
-import org.sosy_lab.cpachecker.cfa.ast.IASTExpression;
-import org.sosy_lab.cpachecker.cfa.ast.IASTExpressionStatement;
-import org.sosy_lab.cpachecker.cfa.ast.IASTFieldReference;
-import org.sosy_lab.cpachecker.cfa.ast.IASTFloatLiteralExpression;
-import org.sosy_lab.cpachecker.cfa.ast.IASTFunctionCall;
-import org.sosy_lab.cpachecker.cfa.ast.IASTFunctionCallAssignmentStatement;
-import org.sosy_lab.cpachecker.cfa.ast.IASTFunctionCallExpression;
-import org.sosy_lab.cpachecker.cfa.ast.IASTFunctionCallStatement;
-import org.sosy_lab.cpachecker.cfa.ast.IASTIdExpression;
-import org.sosy_lab.cpachecker.cfa.ast.IASTInitializer;
-import org.sosy_lab.cpachecker.cfa.ast.IASTInitializerExpression;
-import org.sosy_lab.cpachecker.cfa.ast.IASTIntegerLiteralExpression;
-import org.sosy_lab.cpachecker.cfa.ast.IASTRightHandSide;
-import org.sosy_lab.cpachecker.cfa.ast.IASTSimpleDeclaration;
-import org.sosy_lab.cpachecker.cfa.ast.IASTStatement;
-import org.sosy_lab.cpachecker.cfa.ast.IASTStringLiteralExpression;
-import org.sosy_lab.cpachecker.cfa.ast.IASTUnaryExpression;
-import org.sosy_lab.cpachecker.cfa.ast.IASTUnaryExpression.UnaryOperator;
-import org.sosy_lab.cpachecker.cfa.ast.IASTVariableDeclaration;
-import org.sosy_lab.cpachecker.cfa.ast.RightHandSideVisitor;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFAEdge;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFAEdgeType;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFAFunctionDefinitionNode;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFAFunctionExitNode;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFANode;
-import org.sosy_lab.cpachecker.cfa.objectmodel.c.CallToReturnEdge;
-import org.sosy_lab.cpachecker.cfa.objectmodel.c.DeclarationEdge;
-import org.sosy_lab.cpachecker.cfa.objectmodel.c.FunctionCallEdge;
-import org.sosy_lab.cpachecker.cfa.objectmodel.c.FunctionDefinitionNode;
-import org.sosy_lab.cpachecker.cfa.objectmodel.c.FunctionReturnEdge;
-import org.sosy_lab.cpachecker.cfa.objectmodel.c.ReturnStatementEdge;
-import org.sosy_lab.cpachecker.cfa.objectmodel.c.StatementEdge;
+import org.sosy_lab.cpachecker.cfa.ast.c.DefaultCExpressionVisitor;
+import org.sosy_lab.cpachecker.cfa.ast.c.CArraySubscriptExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CAssignment;
+import org.sosy_lab.cpachecker.cfa.ast.c.CCastExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CCharLiteralExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CDeclaration;
+import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CExpressionStatement;
+import org.sosy_lab.cpachecker.cfa.ast.c.CFieldReference;
+import org.sosy_lab.cpachecker.cfa.ast.c.CFloatLiteralExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCall;
+import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallAssignmentStatement;
+import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallStatement;
+import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CInitializer;
+import org.sosy_lab.cpachecker.cfa.ast.c.CInitializerExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CIntegerLiteralExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
+import org.sosy_lab.cpachecker.cfa.ast.c.CSimpleDeclaration;
+import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
+import org.sosy_lab.cpachecker.cfa.ast.c.CStringLiteralExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression.UnaryOperator;
+import org.sosy_lab.cpachecker.cfa.ast.c.CVariableDeclaration;
+import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSideVisitor;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdgeType;
+import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
+import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionSummaryEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionEntryNode;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionReturnEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CReturnStatementEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
@@ -154,23 +154,24 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
        // if (functionName == "create") {
        //   int id = functionCallVariable.
       //  }
-        CFAFunctionDefinitionNode fDefNode = functions.getFunctionHead(functionName);
+        FunctionEntryNode fDefNode = functions.getFunctionHead(functionName);
         if (fDefNode != null) {
           logger.log(Level.FINEST, "Function pointer", functionCallVariable, "points to", target, "while it is used.");
 
-          StatementEdge edge = (StatementEdge)pCfaEdge;
-          IASTFunctionCall functionCall = (IASTFunctionCall)edge.getStatement();
+          CStatementEdge edge = (CStatementEdge)pCfaEdge;
+          CFunctionCall functionCall = (CFunctionCall)edge.getStatement();
           CFANode predecessorNode = edge.getPredecessor();
           CFANode successorNode = edge.getSuccessor();
           int lineNumber = edge.getLineNumber();
 
-          CFAFunctionExitNode fExitNode = fDefNode.getExitNode();
+          FunctionExitNode fExitNode = fDefNode.getExitNode();
 
           // Create new edges.
-          CallToReturnEdge calltoReturnEdge = new CallToReturnEdge(edge.getRawStatement(),
+          CFunctionSummaryEdge calltoReturnEdge = new CFunctionSummaryEdge(edge.getRawStatement(),
               lineNumber, predecessorNode, successorNode, functionCall);
 
-          FunctionPointerCreateCallEdge callEdge = new FunctionPointerCreateCallEdge(edge.getRawStatement(), lineNumber, predecessorNode, (FunctionDefinitionNode)fDefNode, functionCall, calltoReturnEdge);
+          FunctionPointerCreateCallEdge callEdge = new FunctionPointerCreateCallEdge(edge.getRawStatement(), lineNumber, predecessorNode, (CFunctionEntryNode)fDefNode, functionCall, calltoReturnEdge);
+          //FunctionPointerCreateCallEdge callEdge = new FunctionPointerCreateCallEdge(edge.getRawStatement(), lineNumber, predecessorNode, (CFunctionEntryNode)fDefNode, functionCall, calltoReturnEdge);
           predecessorNode.addLeavingEdge(callEdge);
           fDefNode.addEnteringEdge(callEdge);
 
@@ -208,7 +209,7 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
     // Some CPAs rely on the call-to-return edge when processing the return edge.
     // We add it here to the CFA and remove it before returning from this function.
     if (cfaEdge instanceof FunctionPointerCreateReturnEdge) {
-      CallToReturnEdge calltoReturnEdge = ((FunctionPointerCreateReturnEdge) cfaEdge).getSummaryEdge();
+    	CFunctionSummaryEdge calltoReturnEdge = ((FunctionPointerCreateReturnEdge) cfaEdge).getSummaryEdge();
       calltoReturnEdge.getPredecessor().addLeavingSummaryEdge(calltoReturnEdge);
       calltoReturnEdge.getSuccessor().addEnteringSummaryEdge(calltoReturnEdge);
     }
@@ -245,19 +246,19 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
       return null;
     }
 
-    IASTStatement statement = ((StatementEdge)pCfaEdge).getStatement();
-    if (!(statement instanceof IASTFunctionCall)) {
+    CStatement statement = ((CStatementEdge)pCfaEdge).getStatement();
+    if (!(statement instanceof CFunctionCall)) {
       return null;
     }
 
-    IASTFunctionCallExpression funcCall = ((IASTFunctionCall)statement).getFunctionCallExpression();
-    IASTExpression nameExp = funcCall.getFunctionNameExpression();
+    CFunctionCallExpression funcCall = ((CFunctionCall)statement).getFunctionCallExpression();
+    CExpression nameExp = funcCall.getFunctionNameExpression();
     String currentFunction = pCfaEdge.getPredecessor().getFunctionName();
 
     // functions may be called either as f() or as (*f)(),
     // so remove the star operator if its there
-    if (nameExp instanceof IASTUnaryExpression) {
-      IASTUnaryExpression unaryExp = (IASTUnaryExpression)nameExp;
+    if (nameExp instanceof CUnaryExpression) {
+      CUnaryExpression unaryExp = (CUnaryExpression)nameExp;
       if (unaryExp.getOperator() == UnaryOperator.STAR) {
         // a = (*f)(b)
         nameExp = unaryExp.getOperand();
@@ -267,10 +268,10 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
       }
     }
 
-    if (nameExp instanceof IASTIdExpression) {
+    if (nameExp instanceof CIdExpression) {
       // a = f(b) or a = (*f)(b)
-      return scopedIfNecessary((IASTIdExpression)nameExp, currentFunction);
-    } else if (nameExp instanceof IASTFieldReference) {
+      return scopedIfNecessary((CIdExpression)nameExp, currentFunction);
+    } else if (nameExp instanceof CFieldReference) {
       // TODO This is a function pointer call "(s->f)()" or "(s.f)()"
       return null;
     } else {
@@ -284,32 +285,32 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
 
       // declaration of a function pointer.
       case DeclarationEdge: {
-        DeclarationEdge declEdge = (DeclarationEdge) pCfaEdge;
+        CDeclarationEdge declEdge = (CDeclarationEdge) pCfaEdge;
         handleDeclaration(newState, declEdge);
         break;
       }
 
       // if edge is a statement edge, e.g. a = b + c
       case StatementEdge: {
-        StatementEdge statementEdge = (StatementEdge) pCfaEdge;
+        CStatementEdge statementEdge = (CStatementEdge) pCfaEdge;
         handleStatement(newState, statementEdge.getStatement(), pCfaEdge);
         break;
       }
 
       case FunctionCallEdge: {
-        FunctionCallEdge functionCallEdge = (FunctionCallEdge) pCfaEdge;
+        CFunctionCallEdge functionCallEdge = (CFunctionCallEdge) pCfaEdge;
         handleFunctionCall(newState, functionCallEdge);
         break;
       }
 
       case ReturnStatementEdge: {
-        ReturnStatementEdge returnStatementEdge = (ReturnStatementEdge)pCfaEdge;
+        CReturnStatementEdge returnStatementEdge = (CReturnStatementEdge)pCfaEdge;
         handleReturnStatement(newState, returnStatementEdge.getExpression(), pCfaEdge);
         break;
       }
 
       case FunctionReturnEdge: {
-        FunctionReturnEdge functionReturnEdge = (FunctionReturnEdge) pCfaEdge;
+        CFunctionReturnEdge functionReturnEdge = (CFunctionReturnEdge) pCfaEdge;
         handleFunctionReturn(newState, functionReturnEdge);
         break;
       }
@@ -332,13 +333,13 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
     return newState;
   }
 
-  private void handleDeclaration(FunctionPointerCreateState.Builder pNewState, DeclarationEdge declEdge) throws UnrecognizedCCodeException {
+  private void handleDeclaration(FunctionPointerCreateState.Builder pNewState, CDeclarationEdge declEdge) throws UnrecognizedCCodeException {
 
-    if (!(declEdge.getDeclaration() instanceof IASTVariableDeclaration)) {
+    if (!(declEdge.getDeclaration() instanceof CVariableDeclaration)) {
       // not a variable declaration
       return;
     }
-    IASTVariableDeclaration decl = (IASTVariableDeclaration)declEdge.getDeclaration();
+    CVariableDeclaration decl = (CVariableDeclaration)declEdge.getDeclaration();
 
     String functionName = declEdge.getPredecessor().getFunctionName();
 
@@ -356,9 +357,9 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
     FunctionPointerCreateTarget initialValue = invalidFunctionPointerTarget;
 
     if (decl.getInitializer() != null) {
-      IASTInitializer init = decl.getInitializer();
-      if (init instanceof IASTInitializerExpression) {
-        initialValue = getValue(((IASTInitializerExpression) init).getExpression(), pNewState, functionName);
+      CInitializer init = decl.getInitializer();
+      if (init instanceof CInitializerExpression) {
+        initialValue = getValue(((CInitializerExpression) init).getExpression(), pNewState, functionName);
       }
     }
 
@@ -366,14 +367,14 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
     pNewState.setTarget(name, initialValue);
   }
 
-  private void handleStatement(FunctionPointerCreateState.Builder pNewState, IASTStatement pStatement,
+  private void handleStatement(FunctionPointerCreateState.Builder pNewState, CStatement pStatement,
         CFAEdge pCfaEdge) throws UnrecognizedCCodeException {
 
-    if (pStatement instanceof IASTAssignment) {
+    if (pStatement instanceof CAssignment) {
       // assignment like "a = b" or "a = foo()"
       String functionName = pCfaEdge.getPredecessor().getFunctionName();
 
-      IASTAssignment assignment = (IASTAssignment)pStatement;
+      CAssignment assignment = (CAssignment)pStatement;
       String varName = getLeftHandSide(assignment.getLeftHandSide(), pCfaEdge, functionName);
 
       if (varName != null) {
@@ -381,10 +382,10 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
         pNewState.setTarget(varName, target);
       }
 
-    } else if (pStatement instanceof IASTFunctionCallStatement) {
+    } else if (pStatement instanceof CFunctionCallStatement) {
       // external function call without return value
 
-    } else if (pStatement instanceof IASTExpressionStatement) {
+    } else if (pStatement instanceof CExpressionStatement) {
       // side-effect free statement
 
     } else {
@@ -392,16 +393,16 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
     }
   }
 
-  private void handleFunctionCall(FunctionPointerCreateState.Builder pNewState, FunctionCallEdge callEdge) throws UnrecognizedCCodeException {
+  private void handleFunctionCall(FunctionPointerCreateState.Builder pNewState, CFunctionCallEdge callEdge) throws UnrecognizedCCodeException {
 
-    FunctionDefinitionNode functionEntryNode = callEdge.getSuccessor();
+    CFunctionEntryNode functionEntryNode = callEdge.getSuccessor();
     String calledFunctionName = functionEntryNode.getFunctionName();
     String callerFunctionName = callEdge.getPredecessor().getFunctionName();
 
     List<String> paramNames = functionEntryNode.getFunctionParameterNames();
-    List<IASTExpression> arguments = callEdge.getArguments();
+    List<CExpression> arguments = callEdge.getArguments();
 
-    if (functionEntryNode.getFunctionDefinition().getDeclSpecifier().takesVarArgs()) {
+    if (functionEntryNode.getFunctionDefinition().getType().takesVarArgs()) {
       if (paramNames.size() > arguments.size()) {
         throw new UnrecognizedCCodeException("Number of parameters on function call does " +
             "not match function definition", callEdge);
@@ -419,7 +420,7 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
 
     for (int i=0; i < paramNames.size(); i++) {
       String paramName = scoped(paramNames.get(i), calledFunctionName);
-      IASTExpression actualArgument = arguments.get(i);
+      CExpression actualArgument = arguments.get(i);
 
       FunctionPointerCreateTarget target = actualArgument.accept(v);
       pNewState.setTarget(paramName, target);
@@ -428,7 +429,7 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
     }
   }
 
-  private void handleReturnStatement(FunctionPointerCreateState.Builder pNewState, IASTExpression returnValue,
+  private void handleReturnStatement(FunctionPointerCreateState.Builder pNewState, CExpression returnValue,
       CFAEdge pCfaEdge) throws UnrecognizedCCodeException {
 
     if (returnValue != null) {
@@ -440,14 +441,14 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
   }
 
 
-  private void handleFunctionReturn(FunctionPointerCreateState.Builder pNewState, FunctionReturnEdge pFunctionReturnEdge) throws UnrecognizedCCodeException {
-    CallToReturnEdge summaryEdge = pFunctionReturnEdge.getSuccessor().getEnteringSummaryEdge();
+  private void handleFunctionReturn(FunctionPointerCreateState.Builder pNewState, CFunctionReturnEdge pFunctionReturnEdge) throws UnrecognizedCCodeException {
+	  CFunctionSummaryEdge summaryEdge = pFunctionReturnEdge.getSummaryEdge();
     assert summaryEdge != null;
 
-    IASTFunctionCall funcCall = summaryEdge.getExpression();
-    if (funcCall instanceof IASTFunctionCallAssignmentStatement) {
+    CFunctionCall funcCall = summaryEdge.getExpression();
+    if (funcCall instanceof CFunctionCallAssignmentStatement) {
 
-      IASTExpression left = ((IASTFunctionCallAssignmentStatement)funcCall).getLeftHandSide();
+      CExpression left = ((CFunctionCallAssignmentStatement)funcCall).getLeftHandSide();
 
       String callerFunction = summaryEdge.getSuccessor().getFunctionName();
       String varName = getLeftHandSide(left, summaryEdge, callerFunction);
@@ -467,25 +468,25 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
     pNewState.clearVariablesWithPrefix(calledFunction + "::");
   }
 
-  private String getLeftHandSide(IASTExpression lhsExpression, CFAEdge edge, String functionName) throws UnrecognizedCCodeException {
+  private String getLeftHandSide(CExpression lhsExpression, CFAEdge edge, String functionName) throws UnrecognizedCCodeException {
 
-    if (lhsExpression instanceof IASTIdExpression) {
+    if (lhsExpression instanceof CIdExpression) {
       // a = ...
-      return scopedIfNecessary((IASTIdExpression)lhsExpression, functionName);
+      return scopedIfNecessary((CIdExpression)lhsExpression, functionName);
 
-    } else if (lhsExpression instanceof IASTUnaryExpression
-        && ((IASTUnaryExpression)lhsExpression).getOperator() == UnaryOperator.STAR) {
+    } else if (lhsExpression instanceof CUnaryExpression
+        && ((CUnaryExpression)lhsExpression).getOperator() == UnaryOperator.STAR) {
       // *a = ...
       // TODO: Support this statement.
 
-    } else if (lhsExpression instanceof IASTFieldReference) {
+    } else if (lhsExpression instanceof CFieldReference) {
 
       //String functionName = pCfaEdge.getPredecessor().getFunctionName();
       //handleAssignmentToVariable(op1.getRawSignature(), op2, v);
 
       // TODO: Support this statement.
 
-    } else if (lhsExpression instanceof IASTArraySubscriptExpression) {
+    } else if (lhsExpression instanceof CArraySubscriptExpression) {
       // TODO assignment to array cell
 
     } else {
@@ -494,12 +495,12 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
     return null;
   }
 
-  private FunctionPointerCreateTarget getValue(IASTRightHandSide exp, FunctionPointerCreateState.Builder element, String function) throws UnrecognizedCCodeException {
+  private FunctionPointerCreateTarget getValue(CRightHandSide exp, FunctionPointerCreateState.Builder element, String function) throws UnrecognizedCCodeException {
     return exp.accept(new ExpressionValueVisitor(element, function, invalidFunctionPointerTarget));
   }
 
-  private static class ExpressionValueVisitor extends DefaultExpressionVisitor<FunctionPointerCreateTarget, UnrecognizedCCodeException>
-                                              implements RightHandSideVisitor<FunctionPointerCreateTarget, UnrecognizedCCodeException> {
+  private static class ExpressionValueVisitor extends DefaultCExpressionVisitor<FunctionPointerCreateTarget, UnrecognizedCCodeException>
+                                              implements CRightHandSideVisitor<FunctionPointerCreateTarget, UnrecognizedCCodeException> {
 
     private final FunctionPointerCreateState.Builder element;
     private final String function;
@@ -513,9 +514,9 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
     }
 
     @Override
-    public FunctionPointerCreateTarget visit(IASTUnaryExpression pE) {
-      if ((pE.getOperator() == UnaryOperator.AMPER) && (pE.getOperand() instanceof IASTIdExpression)) {
-        IASTIdExpression operand = (IASTIdExpression)pE.getOperand();
+    public FunctionPointerCreateTarget visit(CUnaryExpression pE) {
+      if ((pE.getOperator() == UnaryOperator.AMPER) && (pE.getOperand() instanceof CIdExpression)) {
+        CIdExpression operand = (CIdExpression)pE.getOperand();
         return new NamedFunctionTarget(operand.getName());
 
       } else {
@@ -524,52 +525,52 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
     }
 
     @Override
-    public FunctionPointerCreateTarget visit(IASTIdExpression pE) {
+    public FunctionPointerCreateTarget visit(CIdExpression pE) {
       return element.getTarget(scopedIfNecessary(pE, function));
     }
 
     @Override
-    public FunctionPointerCreateTarget visit(IASTCastExpression pE) throws UnrecognizedCCodeException {
+    public FunctionPointerCreateTarget visit(CCastExpression pE) throws UnrecognizedCCodeException {
       return pE.getOperand().accept(this);
     }
 
     @Override
-    protected FunctionPointerCreateTarget visitDefault(IASTExpression pExp) {
+    protected FunctionPointerCreateTarget visitDefault(CExpression pExp) {
       return UnknownTarget.getInstance();
     }
 
     @Override
-    public FunctionPointerCreateTarget visit(IASTFunctionCallExpression pIastFunctionCallExpression) {
+    public FunctionPointerCreateTarget visit(CFunctionCallExpression pIastFunctionCallExpression) {
       return UnknownTarget.getInstance();
     }
 
     @Override
-    public FunctionPointerCreateTarget visit(IASTCharLiteralExpression pE) {
+    public FunctionPointerCreateTarget visit(CCharLiteralExpression pE) {
       return targetForInvalidPointers;
     }
 
     @Override
-    public FunctionPointerCreateTarget visit(IASTFloatLiteralExpression pE) {
+    public FunctionPointerCreateTarget visit(CFloatLiteralExpression pE) {
       return targetForInvalidPointers;
     }
 
     @Override
-    public FunctionPointerCreateTarget visit(IASTIntegerLiteralExpression pE) {
+    public FunctionPointerCreateTarget visit(CIntegerLiteralExpression pE) {
       return targetForInvalidPointers;
     }
 
     @Override
-    public FunctionPointerCreateTarget visit(IASTStringLiteralExpression pE) {
+    public FunctionPointerCreateTarget visit(CStringLiteralExpression pE) {
       return targetForInvalidPointers;
     }
   }
 
   // looks up the variable in the current namespace
-  private static String scopedIfNecessary(IASTIdExpression var, String function) {
-    IASTSimpleDeclaration decl = var.getDeclaration();
+  private static String scopedIfNecessary(CIdExpression var, String function) {
+    CSimpleDeclaration decl = var.getDeclaration();
     boolean isGlobal = false;
-    if (decl instanceof IASTDeclaration) {
-      isGlobal = ((IASTDeclaration)decl).isGlobal();
+    if (decl instanceof CDeclaration) {
+      isGlobal = ((CDeclaration)decl).isGlobal();
     }
 
     if (isGlobal) {

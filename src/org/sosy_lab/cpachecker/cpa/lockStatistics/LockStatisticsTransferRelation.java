@@ -35,27 +35,27 @@ import java.util.Set;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Options;
-import org.sosy_lab.cpachecker.cfa.ast.IASTArraySubscriptExpression;
-import org.sosy_lab.cpachecker.cfa.ast.IASTAssignment;
-import org.sosy_lab.cpachecker.cfa.ast.IASTExpression;
-import org.sosy_lab.cpachecker.cfa.ast.IASTExpressionStatement;
-import org.sosy_lab.cpachecker.cfa.ast.IASTFieldReference;
-import org.sosy_lab.cpachecker.cfa.ast.IASTFunctionCall;
-import org.sosy_lab.cpachecker.cfa.ast.IASTFunctionCallAssignmentStatement;
-import org.sosy_lab.cpachecker.cfa.ast.IASTFunctionCallStatement;
-import org.sosy_lab.cpachecker.cfa.ast.IASTIdExpression;
-import org.sosy_lab.cpachecker.cfa.ast.IASTInitializer;
-import org.sosy_lab.cpachecker.cfa.ast.IASTInitializerExpression;
-import org.sosy_lab.cpachecker.cfa.ast.IASTStatement;
-import org.sosy_lab.cpachecker.cfa.ast.IASTUnaryExpression;
-import org.sosy_lab.cpachecker.cfa.ast.IASTUnaryExpression.UnaryOperator;
-import org.sosy_lab.cpachecker.cfa.ast.IASTVariableDeclaration;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFAEdge;
-import org.sosy_lab.cpachecker.cfa.objectmodel.MultiEdge;
-import org.sosy_lab.cpachecker.cfa.objectmodel.c.CallToReturnEdge;
-import org.sosy_lab.cpachecker.cfa.objectmodel.c.DeclarationEdge;
-import org.sosy_lab.cpachecker.cfa.objectmodel.c.FunctionReturnEdge;
-import org.sosy_lab.cpachecker.cfa.objectmodel.c.StatementEdge;
+import org.sosy_lab.cpachecker.cfa.ast.c.CArraySubscriptExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CAssignment;
+import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CExpressionStatement;
+import org.sosy_lab.cpachecker.cfa.ast.c.CFieldReference;
+import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCall;
+import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallAssignmentStatement;
+import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallStatement;
+import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CInitializer;
+import org.sosy_lab.cpachecker.cfa.ast.c.CInitializerExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
+import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression.UnaryOperator;
+import org.sosy_lab.cpachecker.cfa.ast.c.CVariableDeclaration;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionSummaryEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionReturnEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
@@ -102,7 +102,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
       break;
 
     case FunctionReturnEdge:
-      FunctionReturnEdge functionReturnEdge = (FunctionReturnEdge) cfaEdge;
+      CFunctionReturnEdge functionReturnEdge = (CFunctionReturnEdge) cfaEdge;
       lockStatisticsElement.setLocalLocks();
       successor = handleFunctionReturn(lockStatisticsElement, functionReturnEdge);
       break;
@@ -123,7 +123,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
 
     switch(cfaEdge.getEdgeType()) {
     case StatementEdge:
-      StatementEdge statementEdge = (StatementEdge) cfaEdge;
+      CStatementEdge statementEdge = (CStatementEdge) cfaEdge;
       return handleStatement(element, statementEdge.getStatement(), cfaEdge, precision);
 
     case BlankEdge:
@@ -135,7 +135,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
       //throw new UnrecognizedCFAEdgeException(cfaEdge);
 
     case DeclarationEdge:
-      DeclarationEdge declarationEdge = (DeclarationEdge) cfaEdge;
+      CDeclarationEdge declarationEdge = (CDeclarationEdge) cfaEdge;
       return handleDeclaration(element, declarationEdge, precision, cfaEdge.getLineNumber());
 
     case MultiEdge:
@@ -150,14 +150,14 @@ public class LockStatisticsTransferRelation implements TransferRelation
     return element;
   }
 
-  private LockStatisticsState handleFunctionReturn(LockStatisticsState element, FunctionReturnEdge functionReturnEdge)
+  private LockStatisticsState handleFunctionReturn(LockStatisticsState element, CFunctionReturnEdge functionReturnEdge)
     throws UnrecognizedCCodeException {
-    CallToReturnEdge summaryEdge    = functionReturnEdge.getSuccessor().getEnteringSummaryEdge();
-    IASTFunctionCall exprOnSummary  = summaryEdge.getExpression();
+    CFunctionSummaryEdge summaryEdge    = functionReturnEdge.getSummaryEdge();
+    CFunctionCall exprOnSummary  = summaryEdge.getExpression();
 
-    if(exprOnSummary instanceof IASTFunctionCallAssignmentStatement) {
-      IASTFunctionCallAssignmentStatement assignExp = ((IASTFunctionCallAssignmentStatement)exprOnSummary);
-      IASTExpression op1 = assignExp.getLeftHandSide();
+    if(exprOnSummary instanceof CFunctionCallAssignmentStatement) {
+      CFunctionCallAssignmentStatement assignExp = ((CFunctionCallAssignmentStatement)exprOnSummary);
+      CExpression op1 = assignExp.getLeftHandSide();
 
       printStat (element, functionReturnEdge.getLineNumber(), op1.toASTString());
     }
@@ -165,16 +165,16 @@ public class LockStatisticsTransferRelation implements TransferRelation
     return element;
   }
 
-  private LockStatisticsState handleStatement(LockStatisticsState newElement, IASTStatement expression, CFAEdge cfaEdge, LockStatisticsPrecision precision)
+  private LockStatisticsState handleStatement(LockStatisticsState newElement, CStatement expression, CFAEdge cfaEdge, LockStatisticsPrecision precision)
     throws UnrecognizedCCodeException {
 
-    if (expression instanceof IASTAssignment) {
-      return handleAssignment(newElement, (IASTAssignment)expression, cfaEdge, precision);
+    if (expression instanceof CAssignment) {
+      return handleAssignment(newElement, (CAssignment)expression, cfaEdge, precision);
 
-    } else if (expression instanceof IASTFunctionCallStatement) {
+    } else if (expression instanceof CFunctionCallStatement) {
 
-      String functionName = ((IASTFunctionCallStatement) expression).getFunctionCallExpression().getFunctionNameExpression().toASTString();
-      List <IASTExpression> params = ((IASTFunctionCallStatement) expression).getFunctionCallExpression().getParameterExpressions();
+      String functionName = ((CFunctionCallStatement) expression).getFunctionCallExpression().getFunctionNameExpression().toASTString();
+      List <CExpression> params = ((CFunctionCallStatement) expression).getFunctionCallExpression().getParameterExpressions();
       if (functionName == "mutex_lock_nested") {
         assert !params.isEmpty();
         String paramName = params.get(0).toASTString();
@@ -192,21 +192,21 @@ public class LockStatisticsTransferRelation implements TransferRelation
       }
       return newElement;
 
-    } else if (expression instanceof IASTExpressionStatement) {
+    } else if (expression instanceof CExpressionStatement) {
       return newElement;
     } else {
       throw new UnrecognizedCCodeException(cfaEdge, expression);
     }
   }
 
-  private LockStatisticsState handleAssignment(LockStatisticsState newElement, IASTAssignment assignExpression, CFAEdge cfaEdge, LockStatisticsPrecision precision)
+  private LockStatisticsState handleAssignment(LockStatisticsState newElement, CAssignment assignExpression, CFAEdge cfaEdge, LockStatisticsPrecision precision)
     throws UnrecognizedCCodeException {
-    IASTExpression op1    = assignExpression.getLeftHandSide();
+    CExpression op1    = assignExpression.getLeftHandSide();
 
-    if(op1 instanceof IASTIdExpression ||
-       op1 instanceof IASTUnaryExpression && ((IASTUnaryExpression)op1).getOperator() == UnaryOperator.STAR ||
-       op1 instanceof IASTFieldReference ||
-       op1 instanceof IASTArraySubscriptExpression) {
+    if(op1 instanceof CIdExpression ||
+       op1 instanceof CUnaryExpression && ((CUnaryExpression)op1).getOperator() == UnaryOperator.STAR ||
+       op1 instanceof CFieldReference ||
+       op1 instanceof CArraySubscriptExpression) {
 
       printStat (newElement, cfaEdge.getLineNumber(), op1.toASTString());
       return newElement;
@@ -215,25 +215,26 @@ public class LockStatisticsTransferRelation implements TransferRelation
     }
   }
 
-  private LockStatisticsState handleDeclaration(LockStatisticsState newElement, DeclarationEdge declarationEdge, LockStatisticsPrecision precision, int line)
+  private LockStatisticsState handleDeclaration(LockStatisticsState newElement, CDeclarationEdge declarationEdge, LockStatisticsPrecision precision, int line)
       throws UnrecognizedCCodeException {
 
-      if (!(declarationEdge.getDeclaration() instanceof IASTVariableDeclaration)) {
+      if (!(declarationEdge.getDeclaration() instanceof CVariableDeclaration)) {
         return newElement;
       }
 
-      IASTVariableDeclaration decl = (IASTVariableDeclaration)declarationEdge.getDeclaration();
+      CVariableDeclaration decl = (CVariableDeclaration)declarationEdge.getDeclaration();
 
       String varName = decl.getName();
-      String typeName = decl.getDeclSpecifier().toASTString(null);
+      String typeName = decl.getType().toASTString(null);
+      //String typeName = decl.getDeclSpecifier().toASTString(null);
 
       if(decl.isGlobal() && typeName.contentEquals("mutex null")) {
         globalMutex.add(varName);
         return newElement;
       }
 
-      IASTInitializer init = decl.getInitializer();
-      if(init instanceof IASTInitializerExpression) {
+      CInitializer init = decl.getInitializer();
+      if(init instanceof CInitializerExpression) {
         printStat (newElement, line, varName);
       }
 

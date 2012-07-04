@@ -131,6 +131,7 @@ analysis.useImpactAlgorithm = false
 analysis.useProofCheckAlgorithm = false
 
 # whether or not to use refinement or not
+# whether or not to use refinement or not
 # use CEGAR algorithm for lazy counter-example guided analysis
 # You need to specify a refiner with the cegar.refiner option.
 # Currently all refiner require the use of the ARGCPA.
@@ -377,6 +378,10 @@ cpa.conditions.path.repetitions.limit = -1
 cpa.defuse.merge = "sep"
   allowed values: [sep, join]
 
+# if there is an assumption like (x!=0), this option sets unknown
+# (uninitialized) variables to 1L, when the true-branch is handled.
+cpa.explicit.initAssumptionVars = false
+
 # which merge operator to use for ExplicitCPA
 cpa.explicit.merge = "SEP"
   allowed values: [SEP, JOIN]
@@ -430,6 +435,17 @@ cpa.interval.threshold = 0
 # which merge operator to use for InvariantCPA
 cpa.invariants.merge = "JOIN"
   allowed values: [JOIN, SEP]
+
+# which merge operator to use for LockStatisticsCPA
+cpa.lockstatistics.merge = "SEP"
+  allowed values: [SEP, JOIN]
+
+# which stop operator to use for LockStatisticsCPA
+cpa.lockstatistics.stop = "SEP"
+  allowed values: [SEP, JOIN, NEVER]
+
+# blacklist regex for variables that won't be tracked by LockStatisticsCPA
+cpa.lockstatistics.variableBlacklist = ""
 
 # threshold for unrolling loops of the program (0 is infinite)
 # works only if assumption storage CPA is enabled, because otherwise it would
