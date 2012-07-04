@@ -24,7 +24,7 @@
 package org.sosy_lab.cpachecker.core.algorithm;
 
 import static com.google.common.collect.Iterables.isEmpty;
-import static org.sosy_lab.cpachecker.util.AbstractElements.*;
+import static org.sosy_lab.cpachecker.util.AbstractStates.*;
 
 import java.io.File;
 import java.io.IOException;
@@ -38,19 +38,19 @@ import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.CFA;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFAEdge;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFAFunctionDefinitionNode;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
 import org.sosy_lab.cpachecker.core.CPABuilder;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.CounterexampleChecker;
 import org.sosy_lab.cpachecker.core.reachedset.PartitionedReachedSet;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSetFactory;
 import org.sosy_lab.cpachecker.core.waitlist.Waitlist.TraversalMethod;
-import org.sosy_lab.cpachecker.cpa.art.ARTElement;
+import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CounterexampleAnalysisFailed;
-import org.sosy_lab.cpachecker.util.AbstractElements;
+import org.sosy_lab.cpachecker.util.AbstractStates;
 
 @Options(prefix="counterexample.checker")
 public class CounterexampleCPAChecker implements CounterexampleChecker {
@@ -64,9 +64,6 @@ public class CounterexampleCPAChecker implements CounterexampleChecker {
   @FileOption(FileOption.Type.REQUIRED_INPUT_FILE)
   private File configFile = new File("config/explicitAnalysis-no-cbmc.properties");
 
-  @Option(description="comma sperated list of variables that are never tracked by the analysis")
-  private String ignoreGlobally = "";
-
   public CounterexampleCPAChecker(Configuration config, LogManager logger, ReachedSetFactory pReachedSetFactory, CFA pCfa) throws InvalidConfigurationException {
     this.logger = logger;
     config.inject(this);
@@ -75,12 +72,12 @@ public class CounterexampleCPAChecker implements CounterexampleChecker {
   }
 
   @Override
-  public boolean checkCounterexample(ARTElement pRootElement,
-      ARTElement pErrorElement, Set<ARTElement> pErrorPathElements)
+  public boolean checkCounterexample(ARGState pRootState,
+      ARGState pErrorState, Set<ARGState> pErrorPathStates)
       throws CPAException, InterruptedException {
 
     String automaton =
-        produceGuidingAutomaton(pRootElement, pErrorPathElements);
+        produceGuidingAutomaton(pRootState, pErrorPathStates);
 
     File automatonFile;
     try {
@@ -89,24 +86,23 @@ public class CounterexampleCPAChecker implements CounterexampleChecker {
       throw new CounterexampleAnalysisFailed("Could not write path automaton to file " + e.getMessage(), e);
     }
 
-    CFAFunctionDefinitionNode entryNode = (CFAFunctionDefinitionNode)extractLocation(pRootElement);
+    FunctionEntryNode entryNode = (FunctionEntryNode)extractLocation(pRootState);
 
     try {
       Configuration lConfig = Configuration.builder()
               .loadFromFile(configFile)
               .setOption("specification", automatonFile.getAbsolutePath())
-              .setOption("cpa.explicit.precision.ignore.asString", ignoreGlobally)
               .build();
 
       CPABuilder lBuilder = new CPABuilder(lConfig, logger, reachedSetFactory);
       ConfigurableProgramAnalysis lCpas = lBuilder.buildCPAs(cfa);
-      Algorithm lAlgorithm = new CPAAlgorithm(lCpas, logger);
+      Algorithm lAlgorithm = new CPAAlgorithm(lCpas, logger, lConfig);
       PartitionedReachedSet lReached = new PartitionedReachedSet(TraversalMethod.DFS);
-      lReached.add(lCpas.getInitialElement(entryNode), lCpas.getInitialPrecision(entryNode));
+      lReached.add(lCpas.getInitialState(entryNode), lCpas.getInitialPrecision(entryNode));
 
       lAlgorithm.run(lReached);
 
-      if (isEmpty(filterTargetElements(lReached))) {
+      if (isEmpty(filterTargetStates(lReached))) {
         return false; // target state is not reachable, counterexample is infeasible
       } else {
         return true;
@@ -122,25 +118,25 @@ public class CounterexampleCPAChecker implements CounterexampleChecker {
     }
   }
 
-  private String produceGuidingAutomaton(ARTElement pRootElement,
-      Set<ARTElement> pPathElements) {
+  private String produceGuidingAutomaton(ARGState pRootState,
+      Set<ARGState> pPathStates) {
     StringBuilder sb = new StringBuilder();
     sb.append("CONTROL AUTOMATON AssumptionAutomaton\n\n");
-    sb.append("INITIAL STATE ART" + pRootElement.getElementId() + ";\n\n");
+    sb.append("INITIAL STATE ARG" + pRootState.getStateId() + ";\n\n");
 
-    for (ARTElement e : pPathElements) {
+    for (ARGState s : pPathStates) {
 
-      CFANode loc = AbstractElements.extractLocation(e);
-      sb.append("STATE USEFIRST ART" + e.getElementId() + " :\n");
+      CFANode loc = AbstractStates.extractLocation(s);
+      sb.append("STATE USEFIRST ARG" + s.getStateId() + " :\n");
 
-      for (ARTElement child : e.getChildren()) {
+      for (ARGState child : s.getChildren()) {
         if (child.isCovered()) {
-          child = child.getCoveringElement();
+          child = child.getCoveringState();
           assert !child.isCovered();
         }
 
-        if (pPathElements.contains(child)) {
-          CFANode childLoc = AbstractElements.extractLocation(child);
+        if (pPathStates.contains(child)) {
+          CFANode childLoc = AbstractStates.extractLocation(child);
           CFAEdge edge = loc.getEdgeTo(childLoc);
           sb.append("    MATCH \"");
           escape(edge.getRawStatement(), sb);
@@ -149,7 +145,7 @@ public class CounterexampleCPAChecker implements CounterexampleChecker {
           if (child.isTarget()) {
             sb.append("ERROR");
           } else {
-            sb.append("GOTO ART" + child.getElementId());
+            sb.append("GOTO ARG" + child.getStateId());
           }
           sb.append(";\n");
         }

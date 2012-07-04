@@ -89,6 +89,8 @@ public class PredicateAbstractionManager {
   @Option(name="abs.useCache", description="use caching of abstractions")
   private boolean useCache = true;
 
+  private boolean warnedOfCartesianAbstraction = false;
+
   private final Map<Pair<Formula, Collection<AbstractionPredicate>>, AbstractionFormula> abstractionCache;
   //cache for cartesian abstraction queries. For each predicate, the values
   // are -1: predicate is false, 0: predicate is don't care,
@@ -143,7 +145,7 @@ public class PredicateAbstractionManager {
     logger.log(Level.ALL, "Path formula:", pathFormula);
     logger.log(Level.ALL, "Predicates:", predicates);
 
-    Formula absFormula = abstractionFormula.asFormula();
+    Formula absFormula = abstractionFormula.asInstantiatedFormula();
     Formula symbFormula = buildFormula(pathFormula.getFormula());
     Formula f = fmgr.makeAnd(absFormula, symbFormula);
 
@@ -155,7 +157,12 @@ public class PredicateAbstractionManager {
 
       if (result != null) {
         // create new abstraction object to have a unique abstraction id
-        result = new AbstractionFormula(result.asRegion(), result.asFormula(), pathFormula.getFormula());
+
+        // instantiate the formula with the current indices
+        Formula stateFormula = result.asFormula();
+        Formula instantiatedFormula = fmgr.instantiate(stateFormula, pathFormula.getSsa());
+
+        result = new AbstractionFormula(result.asRegion(), stateFormula, instantiatedFormula, pathFormula.getFormula());
         logger.log(Level.ALL, "Abstraction was cached, result is", result);
         stats.numCallsAbstractionCached++;
         return result;
@@ -169,8 +176,7 @@ public class PredicateAbstractionManager {
       abs = buildBooleanAbstraction(f, pathFormula.getSsa(), predicates);
     }
 
-    Formula symbolicAbs = toConcrete(abs, pathFormula.getSsa());
-    AbstractionFormula result = new AbstractionFormula(abs, symbolicAbs, pathFormula.getFormula());
+    AbstractionFormula result = makeAbstractionFormula(abs, pathFormula.getSsa(), pathFormula.getFormula());
 
     if (useCache) {
       abstractionCache.put(absKey, result);
@@ -204,6 +210,11 @@ public class PredicateAbstractionManager {
       if (!feasibility) {
         // abstract post leads to false, we can return immediately
         return rmgr.makeFalse();
+      }
+
+      if (!warnedOfCartesianAbstraction && !fmgr.isPurelyConjunctive(f)) {
+        logger.log(Level.WARNING, "Using cartesian abstraction when formulas contain disjunctions may be imprecise. This might lead to failing refinements.");
+        warnedOfCartesianAbstraction = true;
       }
 
       try {
@@ -392,12 +403,12 @@ public class PredicateAbstractionManager {
    * Checks if (a1 & p1) => a2
    */
   public boolean checkCoverage(AbstractionFormula a1, PathFormula p1, AbstractionFormula a2) {
-    Formula absFormula = a1.asFormula();
+    Formula absFormula = a1.asInstantiatedFormula();
     Formula symbFormula = buildFormula(p1.getFormula());
     Formula a = fmgr.makeAnd(absFormula, symbFormula);
 
     // get formula of a2 with the indices of p1
-    Formula b = fmgr.instantiate(fmgr.uninstantiate(a2.asFormula()), p1.getSsa());
+    Formula b = fmgr.instantiate(a2.asFormula(), p1.getSsa());
 
     return solver.implies(a, b);
   }
@@ -409,7 +420,7 @@ public class PredicateAbstractionManager {
     stats.numPathFormulaCoverageChecks++;
 
     //handle common special case more efficiently
-    if(a1.equals(a2)) {
+    if (a1.equals(a2)) {
       stats.numEqualPathFormulae++;
       return true;
     }
@@ -417,8 +428,8 @@ public class PredicateAbstractionManager {
     //check ssa maps
     SSAMap map1 = a1.getSsa();
     SSAMap map2 = a2.getSsa();
-    for(String var : map1.allVariables()) {
-     if(map2.getIndex(var) < map1.getIndex(var)) {
+    for (String var : map1.allVariables()) {
+     if (map2.getIndex(var) < map1.getIndex(var)) {
        return false;
      }
     }
@@ -429,14 +440,14 @@ public class PredicateAbstractionManager {
     //quick syntactic check
     Formula leftFormula = fmgr.getArguments(mergedPathFormulae.getFormula())[0];
     Formula rightFormula = a2.getFormula();
-    if(fmgr.checkSyntacticEntails(leftFormula, rightFormula)) {
+    if (fmgr.checkSyntacticEntails(leftFormula, rightFormula)) {
       stats.numSyntacticEntailedPathFormulae++;
       return true;
     }
 
 
     //check formulae
-    if(!solver.implies(mergedPathFormulae.getFormula(), a2.getFormula())) {
+    if (!solver.implies(mergedPathFormulae.getFormula(), a2.getFormula())) {
       return false;
     }
     stats.numSemanticEntailedPathFormulae++;
@@ -451,7 +462,7 @@ public class PredicateAbstractionManager {
    * @return unsat(pAbstractionFormula & pPathFormula)
    */
   public boolean unsat(AbstractionFormula abstractionFormula, PathFormula pathFormula) {
-    Formula absFormula = abstractionFormula.asFormula();
+    Formula absFormula = abstractionFormula.asInstantiatedFormula();
     Formula symbFormula = buildFormula(pathFormula.getFormula());
     Formula f = fmgr.makeAnd(absFormula, symbFormula);
     logger.log(Level.ALL, "Checking satisfiability of formula", f);
@@ -463,14 +474,14 @@ public class PredicateAbstractionManager {
     if (pPreviousBlockFormula == null) {
       pPreviousBlockFormula = fmgr.makeTrue();
     }
-    return new AbstractionFormula(amgr.getRegionCreator().makeTrue(), fmgr.makeTrue(), pPreviousBlockFormula);
+    return new AbstractionFormula(amgr.getRegionCreator().makeTrue(), fmgr.makeTrue(), fmgr.makeTrue(), pPreviousBlockFormula);
   }
 
-  /**
-   * Build the symbolic representation (with indexed variables) of a region.
-   */
-  private Formula toConcrete(Region pRegion, SSAMap ssa) {
-    return fmgr.instantiate(amgr.toConcrete(pRegion), ssa);
+  private AbstractionFormula makeAbstractionFormula(Region abs, SSAMap ssaMap, Formula blockFormula) {
+    Formula symbolicAbs = amgr.toConcrete(abs);
+    Formula instantiatedSymbolicAbs = fmgr.instantiate(symbolicAbs, ssaMap);
+
+    return new AbstractionFormula(abs, symbolicAbs, instantiatedSymbolicAbs, blockFormula);
   }
 
   /**
@@ -489,11 +500,7 @@ public class PredicateAbstractionManager {
       newRegion = rmgr.makeExists(newRegion, predicate.getAbstractVariable());
     }
 
-    Formula newFormula = toConcrete(newRegion, ssaMap);
-
-    AbstractionFormula newAbstraction =
-          new AbstractionFormula(newRegion, newFormula, oldAbstraction.getBlockFormula());
-    return newAbstraction;
+    return makeAbstractionFormula(newRegion, ssaMap, oldAbstraction.getBlockFormula());
   }
 
   /**
@@ -516,12 +523,7 @@ public class PredicateAbstractionManager {
 
     Region expandedRegion = rmgr.makeAnd(reducedAbstraction.asRegion(), removedInformationRegion);
 
-    Formula newFormula = toConcrete(expandedRegion, newSSA);
-    Formula blockFormula = reducedAbstraction.getBlockFormula();
-
-    AbstractionFormula newAbstractionFormula =
-        new AbstractionFormula(expandedRegion, newFormula, blockFormula);
-    return newAbstractionFormula;
+    return makeAbstractionFormula(expandedRegion, newSSA, reducedAbstraction.getBlockFormula());
   }
 
   // delegate methods

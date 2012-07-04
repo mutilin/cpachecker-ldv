@@ -34,22 +34,22 @@ import org.sosy_lab.common.Pair;
 
 class MergeNode {
 
-  private final int elementId;
+  private final int stateId;
   private final Map<Integer, Pair<Boolean, Boolean>> branchesMap;
-  private final List<FunctionBody> incomingElements;
+  private final List<FunctionBody> incomingState;
 
   public MergeNode(int pElementId) {
-    elementId = pElementId;
+    stateId = pElementId;
     branchesMap = new HashMap<Integer,  Pair<Boolean, Boolean>>();
-    incomingElements = new ArrayList<FunctionBody>();
+    incomingState = new ArrayList<FunctionBody>();
   }
 
   public int addBranch(FunctionBody currentFunction) {
-    incomingElements.add(currentFunction);
+    incomingState.add(currentFunction);
     Set<Integer> processedConditions = new HashSet<Integer>();
 
     for (BasicBlock elementInStack: currentFunction) {
-      int idOfElementInStack = elementInStack.getElementId();
+      int idOfElementInStack = elementInStack.getStateId();
       boolean nextConditionValue = elementInStack.isCondition();
       boolean isClosedBefore = elementInStack.isClosedBefore();
 
@@ -72,27 +72,27 @@ class MergeNode {
       }
     }
 
-    setProcessedElements(processedConditions);
+    setProcessedStates(processedConditions);
 
-    return incomingElements.size();
+    return incomingState.size();
   }
 
-  private void setProcessedElements(Set<Integer> pProcessedConditions) {
-    for (FunctionBody stack: incomingElements) {
+  private void setProcessedStates(Set<Integer> pProcessedConditions) {
+    for (FunctionBody stack: incomingState) {
       for (BasicBlock elem: stack) {
-        if (pProcessedConditions.contains(elem.getElementId())) {
+        if (pProcessedConditions.contains(elem.getStateId())) {
           elem.setClosedBefore(true);
         }
       }
     }
   }
 
-  public List<FunctionBody> getIncomingElements() {
-    return incomingElements;
+  public List<FunctionBody> getIncomingStates() {
+    return incomingState;
   }
 
   @Override
   public String toString() {
-    return "id: " + elementId + " >> " + branchesMap;
+    return "id: " + stateId + " >> " + branchesMap;
   }
 }

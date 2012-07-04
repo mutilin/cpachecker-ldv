@@ -26,8 +26,8 @@ package org.sosy_lab.cpachecker.cpa.location;
 import java.util.Collection;
 
 import org.sosy_lab.cpachecker.cfa.CFA;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFAEdge;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.defaults.FlatLatticeDomain;
 import org.sosy_lab.cpachecker.core.defaults.MergeSepOperator;
 import org.sosy_lab.cpachecker.core.defaults.NoOpReducer;
@@ -35,7 +35,7 @@ import org.sosy_lab.cpachecker.core.defaults.SingletonPrecision;
 import org.sosy_lab.cpachecker.core.defaults.StaticPrecisionAdjustment;
 import org.sosy_lab.cpachecker.core.defaults.StopSepOperator;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractDomain;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractElement;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.CPAFactory;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysisWithABM;
@@ -46,48 +46,48 @@ import org.sosy_lab.cpachecker.core.interfaces.ProofChecker;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
 import org.sosy_lab.cpachecker.core.interfaces.StopOperator;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
-import org.sosy_lab.cpachecker.cpa.location.LocationElement.LocationElementFactory;
+import org.sosy_lab.cpachecker.cpa.location.LocationState.LocationStateFactory;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 
 public class LocationCPA implements ConfigurableProgramAnalysis, ConfigurableProgramAnalysisWithABM, ProofChecker {
 
-  private final LocationElementFactory elementFactory;
+  private final LocationStateFactory stateFactory;
   private final AbstractDomain abstractDomain = new FlatLatticeDomain();
-	private final TransferRelation transferRelation;
-	private final StopOperator stopOperator = new StopSepOperator(abstractDomain);
+  private final TransferRelation transferRelation;
+  private final StopOperator stopOperator = new StopSepOperator(abstractDomain);
 
-	public LocationCPA(CFA pCfa) {
-	  elementFactory = new LocationElementFactory(pCfa);
-	  transferRelation = new LocationTransferRelation(elementFactory);
+  public LocationCPA(CFA pCfa) {
+    stateFactory = new LocationStateFactory(pCfa);
+    transferRelation = new LocationTransferRelation(stateFactory);
 
-	  GlobalInfo.getInstance().getCFAInfo().storeLocationElementFactory(elementFactory);
+    GlobalInfo.getInstance().getCFAInfo().storeLocationStateFactory(stateFactory);
   }
 
-	public static CPAFactory factory() {
-	  return new LocationCPAFactory(false);
-	}
+  public static CPAFactory factory() {
+    return new LocationCPAFactory(false);
+  }
 
-	@Override
+  @Override
   public AbstractDomain getAbstractDomain() {
-	  return abstractDomain;
-	}
+    return abstractDomain;
+  }
 
   @Override
   public TransferRelation getTransferRelation() {
     return transferRelation;
   }
 
-	@Override
+  @Override
   public MergeOperator getMergeOperator() {
-	  return MergeSepOperator.getInstance();
-	}
+    return MergeSepOperator.getInstance();
+  }
 
-	@Override
+  @Override
   public StopOperator getStopOperator() {
-	  return stopOperator;
-	}
+    return stopOperator;
+  }
 
   @Override
   public PrecisionAdjustment getPrecisionAdjustment() {
@@ -100,9 +100,9 @@ public class LocationCPA implements ConfigurableProgramAnalysis, ConfigurablePro
   }
 
   @Override
-	public AbstractElement getInitialElement(CFANode node) {
-	  return elementFactory.getElement(node);
-	}
+  public AbstractState getInitialState(CFANode node) {
+    return stateFactory.getState(node);
+  }
 
   @Override
   public Precision getInitialPrecision(CFANode pNode) {
@@ -110,12 +110,12 @@ public class LocationCPA implements ConfigurableProgramAnalysis, ConfigurablePro
   }
 
   @Override
-  public boolean areAbstractSuccessors(AbstractElement pElement, CFAEdge pCfaEdge, Collection<? extends AbstractElement> pSuccessors) throws CPATransferException, InterruptedException {
+  public boolean areAbstractSuccessors(AbstractState pElement, CFAEdge pCfaEdge, Collection<? extends AbstractState> pSuccessors) throws CPATransferException, InterruptedException {
     return pSuccessors.equals(transferRelation.getAbstractSuccessors(pElement, null, pCfaEdge));
   }
 
   @Override
-  public boolean isCoveredBy(AbstractElement pElement, AbstractElement pOtherElement) throws CPAException {
+  public boolean isCoveredBy(AbstractState pElement, AbstractState pOtherElement) throws CPAException {
     return abstractDomain.isLessOrEqual(pElement, pOtherElement);
   }
 }

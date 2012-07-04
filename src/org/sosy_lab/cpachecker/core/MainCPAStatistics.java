@@ -23,7 +23,7 @@
  */
 package org.sosy_lab.cpachecker.core;
 
-import static org.sosy_lab.cpachecker.util.AbstractElements.filterTargetElements;
+import static org.sosy_lab.cpachecker.util.AbstractStates.filterTargetStates;
 
 import java.io.File;
 import java.io.IOException;
@@ -54,15 +54,15 @@ import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.CFACreator;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractElement;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.reachedset.ForwardingReachedSet;
 import org.sosy_lab.cpachecker.core.reachedset.LocationMappedReachedSet;
 import org.sosy_lab.cpachecker.core.reachedset.PartitionedReachedSet;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
-import org.sosy_lab.cpachecker.util.AbstractElements;
+import org.sosy_lab.cpachecker.util.AbstractStates;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
@@ -283,19 +283,27 @@ class MainCPAStatistics implements Statistics {
         }
 
         for (Statistics s : subStats) {
-            String name = s.getName();
-            if (!Strings.isNullOrEmpty(name)) {
-              name = name + " statistics";
-              out.println(name);
-              out.println(Strings.repeat("-", name.length()));
-            }
+          String name = s.getName();
+          if (!Strings.isNullOrEmpty(name)) {
+            name = name + " statistics";
+            out.println(name);
+            out.println(Strings.repeat("-", name.length()));
+          }
 
+          try {
             s.printStatistics(out, result, reached);
+          } catch (OutOfMemoryError e) {
+            logger.logUserException(Level.WARNING, e,
+                "Out of memory while generating statistics and writing output files");
+          }
 
-            if (!Strings.isNullOrEmpty(name)) {
-              out.println();
-            }
+          if (!Strings.isNullOrEmpty(name)) {
+            out.println();
+          }
         }
+        // In theory, we could catch OOM in the following code, too.
+        // However, usually the statistics are not the problematic part,
+        // only the output files. Thus we don't bother here.
 
         if (reached instanceof ForwardingReachedSet) {
           reached = ((ForwardingReachedSet)reached).getDelegate();
@@ -309,27 +317,31 @@ class MainCPAStatistics implements Statistics {
         if (reached instanceof LocationMappedReachedSet) {
           LocationMappedReachedSet l = (LocationMappedReachedSet)reached;
           int locs = l.getNumberOfPartitions();
-          out.println("  Number of locations:        " + locs);
-          out.println("    Avg states per loc.:      " + reachedSize / locs);
-          Map.Entry<Object, Collection<AbstractElement>> maxPartition = l.getMaxPartition();
-          out.println("    Max states per loc.:      " + maxPartition.getValue().size() + " (at node " + maxPartition.getKey() + ")");
+          if (locs > 0) {
+            out.println("  Number of locations:        " + locs);
+            out.println("    Avg states per loc.:      " + reachedSize / locs);
+            Map.Entry<Object, Collection<AbstractState>> maxPartition = l.getMaxPartition();
+            out.println("    Max states per loc.:      " + maxPartition.getValue().size() + " (at node " + maxPartition.getKey() + ")");
+          }
 
         } else {
-          HashMultiset<CFANode> allLocations = HashMultiset.create(AbstractElements.extractLocations(reached));
+          HashMultiset<CFANode> allLocations = HashMultiset.create(AbstractStates.extractLocations(reached));
           int locs = allLocations.entrySet().size();
-          out.println("  Number of locations:        " + locs);
-          out.println("    Avg states per loc.:      " + reachedSize / locs);
+          if (locs > 0) {
+            out.println("  Number of locations:        " + locs);
+            out.println("    Avg states per loc.:      " + reachedSize / locs);
 
-          int max = 0;
-          CFANode maxLoc = null;
-          for (Multiset.Entry<CFANode> location : allLocations.entrySet()) {
-            int size = location.getCount();
-            if (size > max) {
-              max = size;
-              maxLoc = location.getElement();
+            int max = 0;
+            CFANode maxLoc = null;
+            for (Multiset.Entry<CFANode> location : allLocations.entrySet()) {
+              int size = location.getCount();
+              if (size > max) {
+                max = size;
+                maxLoc = location.getElement();
+              }
             }
+            out.println("    Max states per loc.:      " + max + " (at node " + maxLoc + ")");
           }
-          out.println("    Max states per loc.:      " + max + " (at node " + maxLoc + ")");
         }
 
         if (reached instanceof PartitionedReachedSet) {
@@ -337,7 +349,7 @@ class MainCPAStatistics implements Statistics {
           int partitions = p.getNumberOfPartitions();
           out.println("  Number of partitions:       " + partitions);
           out.println("    Avg size of partitions:   " + reachedSize / partitions);
-          Map.Entry<Object, Collection<AbstractElement>> maxPartition = p.getMaxPartition();
+          Map.Entry<Object, Collection<AbstractState>> maxPartition = p.getMaxPartition();
           out.print  ("    Max size of partitions:   " + maxPartition.getValue().size());
           if (maxPartition.getValue().size() > 1) {
             out.println(" (with key " + maxPartition.getKey() + ")");
@@ -345,7 +357,7 @@ class MainCPAStatistics implements Statistics {
             out.println();
           }
         }
-        out.println("  Number of target elements:  " + Iterables.size(filterTargetElements(reached)));
+        out.println("  Number of target states:    " + Iterables.size(filterTargetStates(reached)));
         out.println("Time for analysis setup:      " + creationTime);
         out.println("  Time for loading CPAs:      " + cpaCreationTime);
         if (cfaCreator != null) {

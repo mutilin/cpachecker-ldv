@@ -27,8 +27,8 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFAEdge;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractElement;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 
@@ -37,20 +37,20 @@ enum AlwaysTopTransferRelation implements TransferRelation {
   INSTANCE;
 
   @Override
-  public Collection<? extends AbstractElement> getAbstractSuccessors(
-      AbstractElement pElement, Precision pPrecision, CFAEdge pCfaEdge) {
+  public Collection<? extends AbstractState> getAbstractSuccessors(
+      AbstractState pElement, Precision pPrecision, CFAEdge pCfaEdge) {
 
-    assert pElement == AlwaysTopElement.INSTANCE;
+    assert pElement == AlwaysTopState.INSTANCE;
     assert pPrecision == AlwaysTopPrecision.INSTANCE;
 
-    return Collections.singleton(AlwaysTopElement.INSTANCE);
+    return Collections.singleton(AlwaysTopState.INSTANCE);
   }
 
   @Override
-  public Collection<? extends AbstractElement> strengthen(AbstractElement pElement,
-      List<AbstractElement> pOtherElements, CFAEdge pCfaEdge, Precision pPrecision) {
+  public Collection<? extends AbstractState> strengthen(AbstractState pElement,
+      List<AbstractState> pOtherElements, CFAEdge pCfaEdge, Precision pPrecision) {
 
-    assert pElement == AlwaysTopElement.INSTANCE;
+    assert pElement == AlwaysTopState.INSTANCE;
     assert pPrecision == AlwaysTopPrecision.INSTANCE;
 
     return null;

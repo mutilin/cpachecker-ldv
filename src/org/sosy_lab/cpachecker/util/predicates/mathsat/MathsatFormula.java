@@ -86,7 +86,7 @@ class MathsatFormula implements Formula, Serializable {
       private transient static int storageIndex = -1;
 
       public SerialProxy(Formula pFormula) {
-        if(storageIndex == -1) {
+        if (storageIndex == -1) {
           storageIndex = GlobalInfo.getInstance().addHelperStorage(new MathsatFormulaStorage());
         }
         ((MathsatFormulaStorage)GlobalInfo.getInstance().getHelperStorage(storageIndex)).storeFormula(pFormula);
@@ -132,14 +132,14 @@ class MathsatFormula implements Formula, Serializable {
         //build overall formula using a uninterpreted predicate dummy
         //storageFormula = dummy(formula_1, formula_2, ...)
         long[] terms = new long[formulaeStorage.size()];
-        for(int i = 0; i < formulaeStorage.size(); ++i) {
+        for (int i = 0; i < formulaeStorage.size(); ++i) {
           terms[i] = ((MathsatFormula)formulaeStorage.get(i)).msatTerm;
         }
         Formula storageFormula = GlobalInfo.getInstance().getFormulaManager().makeUIP("dummy", new MathsatFormulaList(terms));
 
         String storageFormulaRepresentation = GlobalInfo.getInstance().getFormulaManager().dumpFormula(storageFormula);
 
-        //avoid quotation marks in formulae
+        //avoid quotation marks in formulae to workaround a bug in MSAT4
         storageFormulaRepresentation = storageFormulaRepresentation.replaceAll("\"", "");
 
         //work around for MathSat bug
@@ -165,7 +165,7 @@ class MathsatFormula implements Formula, Serializable {
         //split storage formula
         Formula[] formulae = GlobalInfo.getInstance().getFormulaManager().getArguments(storageFormula);
         formulaeStorage = new ArrayList<Formula>(storageSize);
-        for(Formula f : formulae) {
+        for (Formula f : formulae) {
           formulaeStorage.add(f);
         }
       }

@@ -27,8 +27,8 @@ import java.util.Collection;
 import java.util.Iterator;
 
 import org.sosy_lab.common.Pair;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFANode;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractElement;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 
 import com.google.common.base.Function;
@@ -36,72 +36,72 @@ import com.google.common.collect.Collections2;
 import com.google.common.collect.Iterators;
 
 /**
- * Live view of an unmodifiable reached element set, where elements
+ * Live view of an unmodifiable reached state set, where states
  * and precision are transformed by mapping functions.
  */
 public class UnmodifiableReachedSetView
   implements UnmodifiableReachedSet
 {
   private final UnmodifiableReachedSet underlying;
-  private final Function<? super AbstractElement, AbstractElement> mapElementFunction;
+  private final Function<? super AbstractState, AbstractState> mapStateFunction;
   private final Function<? super Precision, Precision> mapPrecisionFunction;
-  private final Function<Pair<AbstractElement, Precision>, Pair<AbstractElement, Precision>> mapElementAndPrecisionFunction;
+  private final Function<Pair<AbstractState, Precision>, Pair<AbstractState, Precision>> mapStateAndPrecisionFunction;
 
   public UnmodifiableReachedSetView(
       UnmodifiableReachedSet pUnderlyingSet,
-      Function<? super AbstractElement, AbstractElement> pMapElementFunction,
+      Function<? super AbstractState, AbstractState> pMapStateFunction,
       Function<? super Precision, Precision> pMapPrecisionFunction) {
     assert pUnderlyingSet != null;
-    assert pMapElementFunction != null;
+    assert pMapStateFunction != null;
     assert pMapPrecisionFunction != null;
 
     underlying = pUnderlyingSet;
-    mapElementFunction = pMapElementFunction;
+    mapStateFunction = pMapStateFunction;
     mapPrecisionFunction = pMapPrecisionFunction;
-    mapElementAndPrecisionFunction =
-      new Function<Pair<AbstractElement,Precision>, Pair<AbstractElement,Precision>>() {
+    mapStateAndPrecisionFunction =
+      new Function<Pair<AbstractState,Precision>, Pair<AbstractState,Precision>>() {
         @Override
-        public Pair<AbstractElement, Precision> apply(Pair<AbstractElement, Precision> from) {
+        public Pair<AbstractState, Precision> apply(Pair<AbstractState, Precision> from) {
           return Pair.of(
-              mapElementFunction.apply(from.getFirst()),
+              mapStateFunction.apply(from.getFirst()),
               mapPrecisionFunction.apply(from.getSecond()));
         }
       };
   }
 
   @Override
-  public AbstractElement getFirstElement() {
-    return mapElementFunction.apply(underlying.getFirstElement());
+  public AbstractState getFirstState() {
+    return mapStateFunction.apply(underlying.getFirstState());
   }
 
   @Override
-  public AbstractElement getLastElement() {
-    return mapElementFunction.apply(underlying.getLastElement());
+  public AbstractState getLastState() {
+    return mapStateFunction.apply(underlying.getLastState());
   }
 
   @Override
-  public Precision getPrecision(AbstractElement pElement) throws UnsupportedOperationException {
+  public Precision getPrecision(AbstractState pState) throws UnsupportedOperationException {
     throw new UnsupportedOperationException("Unwrapping prevents reverse mapping");
   }
 
   @Override
-  public Collection<AbstractElement> getReached() {
-    return Collections2.transform(underlying.getReached(), mapElementFunction);
+  public Collection<AbstractState> getReached() {
+    return Collections2.transform(underlying.getReached(), mapStateFunction);
   }
 
   @Override
-  public Collection<AbstractElement> getReached(AbstractElement pElement) throws UnsupportedOperationException {
+  public Collection<AbstractState> getReached(AbstractState pState) throws UnsupportedOperationException {
     throw new UnsupportedOperationException("Unwrapping may prevent to know the location");
   }
 
   @Override
-  public Collection<AbstractElement> getReached(CFANode pLocation) {
-    return Collections2.transform(underlying.getReached(pLocation), mapElementFunction);
+  public Collection<AbstractState> getReached(CFANode pLocation) {
+    return Collections2.transform(underlying.getReached(pLocation), mapStateFunction);
   }
 
   @Override
-  public Collection<Pair<AbstractElement, Precision>> getReachedWithPrecision() {
-    return Collections2.transform(underlying.getReachedWithPrecision(), mapElementAndPrecisionFunction);
+  public Collection<Pair<AbstractState, Precision>> getReachedWithPrecision() {
+    return Collections2.transform(underlying.getReachedWithPrecision(), mapStateAndPrecisionFunction);
   }
 
   @Override
@@ -110,8 +110,8 @@ public class UnmodifiableReachedSetView
   }
 
   @Override
-  public Collection<AbstractElement> getWaitlist() {
-    return Collections2.transform(underlying.getWaitlist(), mapElementFunction);
+  public Collection<AbstractState> getWaitlist() {
+    return Collections2.transform(underlying.getWaitlist(), mapStateFunction);
   }
 
   @Override
@@ -120,17 +120,17 @@ public class UnmodifiableReachedSetView
   }
 
   @Override
-  public boolean hasWaitingElement() {
-    return underlying.hasWaitingElement();
+  public boolean hasWaitingState() {
+    return underlying.hasWaitingState();
   }
 
   @Override
-  public Iterator<AbstractElement> iterator() {
-    return Iterators.transform(underlying.iterator(), mapElementFunction);
+  public Iterator<AbstractState> iterator() {
+    return Iterators.transform(underlying.iterator(), mapStateFunction);
   }
 
   @Override
-  public boolean contains(AbstractElement pElement) {
+  public boolean contains(AbstractState pState) {
     throw new UnsupportedOperationException("Unwrapping may prevent to check contains");
   }
 

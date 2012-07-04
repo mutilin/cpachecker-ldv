@@ -46,14 +46,14 @@ import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.core.CPAchecker;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractElement;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.ProofChecker;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
-import org.sosy_lab.cpachecker.cpa.art.ARTElement;
+import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 
@@ -90,33 +90,33 @@ public class ProofCheckAlgorithm implements Algorithm, StatisticsProvider {
   private final ProofChecker cpa;
   private final LogManager logger;
 
-  @Option(name = "pcc.proofFile", description = "file in which ART representation needed for proof checking is stored")
+  @Option(name = "pcc.proofFile", description = "file in which ARG representation needed for proof checking is stored")
   @FileOption(FileOption.Type.OUTPUT_FILE)
-  private File file = new File("art.obj");
-  private final ARTElement rootElement;
+  private File file = new File("arg.obj");
+  private final ARGState rootState;
 
 
   public ProofCheckAlgorithm(ConfigurableProgramAnalysis cpa, Configuration pConfig, LogManager logger) throws InvalidConfigurationException {
     pConfig.inject(this);
 
-    if(!(cpa instanceof ProofChecker)) {
+    if (!(cpa instanceof ProofChecker)) {
       throw new InvalidConfigurationException("ProofCheckAlgorithm needs a CPA that implements the ProofChecker interface.");
     }
     this.cpa = (ProofChecker)cpa;
     this.logger = logger;
 
-    ARTElement rootElement = null;
+    ARGState rootState = null;
     try {
-      rootElement = readART();
+      rootState = readART();
     } catch(Throwable e) {
       e.printStackTrace();
-      throw new RuntimeException("Failed reading ART.", e);
+      throw new RuntimeException("Failed reading ARG.", e);
     }
-    this.rootElement = rootElement;
+    this.rootState = rootState;
     System.gc();
   }
 
-  private ARTElement readART() throws IOException, ClassNotFoundException {
+  private ARGState readART() throws IOException, ClassNotFoundException {
     stats.totalTimer.start();
     stats.readTimer.start();
     InputStream fis = null;
@@ -133,7 +133,7 @@ public class ProofCheckAlgorithm implements Algorithm, StatisticsProvider {
       ObjectInputStream o = new ObjectInputStream(zis);
       //read helper storages
       int numberOfStorages = o.readInt();
-      for(int i = 0; i < numberOfStorages; ++i) {
+      for (int i = 0; i < numberOfStorages; ++i) {
         Serializable storage = (Serializable)o.readObject();
         GlobalInfo.getInstance().addHelperStorage(storage);
       }
@@ -148,8 +148,8 @@ public class ProofCheckAlgorithm implements Algorithm, StatisticsProvider {
       entry = zis.getNextEntry();
       assert entry.getName().equals("Proof");
       o = new ObjectInputStream(zis);
-      //read ART
-      return (ARTElement)o.readObject();
+      //read ARG
+      return (ARGState)o.readObject();
     }
     finally {
       fis.close();
@@ -166,93 +166,93 @@ public class ProofCheckAlgorithm implements Algorithm, StatisticsProvider {
 
     logger.log(Level.INFO, "Proof check algorithm started");
 
-    AbstractElement initialElement = reachedSet.popFromWaitlist();
-    Precision initialPrecision = reachedSet.getPrecision(initialElement);
+    AbstractState initialState = reachedSet.popFromWaitlist();
+    Precision initialPrecision = reachedSet.getPrecision(initialState);
 
-    logger.log(Level.FINE, "Checking root element");
+    logger.log(Level.FINE, "Checking root state");
 
-    if(!(cpa.isCoveredBy(initialElement, rootElement) && cpa.isCoveredBy(rootElement, initialElement))) {
+    if (!(cpa.isCoveredBy(initialState, rootState) && cpa.isCoveredBy(rootState, initialState))) {
       stats.totalTimer.stop();
-      logger.log(Level.WARNING, "Root element of proof is invalid.");
+      logger.log(Level.WARNING, "Root state of proof is invalid.");
       return false;
     }
 
-    reachedSet.add(rootElement, initialPrecision);
+    reachedSet.add(rootState, initialPrecision);
 
-    Set<ARTElement> postponedElements = new HashSet<ARTElement>();
+    Set<ARGState> postponedStates = new HashSet<ARGState>();
 
     do {
-      for(ARTElement e : postponedElements) {
-        if(!reachedSet.contains(e.getCoveringElement())) {
+      for (ARGState e : postponedStates) {
+        if (!reachedSet.contains(e.getCoveringState())) {
           stats.totalTimer.stop();
-          logger.log(Level.WARNING, "Covering element", e.getCoveringElement(), "was not found in reached set");
+          logger.log(Level.WARNING, "Covering state", e.getCoveringState(), "was not found in reached set");
           return false;
         }
         reachedSet.reAddToWaitlist(e);
       }
-      postponedElements.clear();
+      postponedStates.clear();
 
-      while (reachedSet.hasWaitingElement()) {
+      while (reachedSet.hasWaitingState()) {
         CPAchecker.stopIfNecessary();
 
         stats.countIterations++;
-        ARTElement element = (ARTElement)reachedSet.popFromWaitlist();
+        ARGState state = (ARGState)reachedSet.popFromWaitlist();
 
-        logger.log(Level.FINE, "Looking at element", element);
+        logger.log(Level.FINE, "Looking at state", state);
 
-        if(element.isCovered()) {
+        if (state.isCovered()) {
 
-          logger.log(Level.FINER, "Element is covered by another abstract element; checking coverage");
-          ARTElement coveringElement = element.getCoveringElement();
+          logger.log(Level.FINER, "State is covered by another abstract state; checking coverage");
+          ARGState coveringState = state.getCoveringState();
 
-          if(!reachedSet.contains(coveringElement)) {
-            postponedElements.add(element);
+          if (!reachedSet.contains(coveringState)) {
+            postponedStates.add(state);
             continue;
           }
 
           stats.stopTimer.start();
-          if(!isCoveringCycleFree(element)) {
+          if (!isCoveringCycleFree(state)) {
             stats.stopTimer.stop();
             stats.totalTimer.stop();
-            logger.log(Level.WARNING, "Found cycle in covering relation for element", element);
+            logger.log(Level.WARNING, "Found cycle in covering relation for state", state);
             return false;
           }
-          if(!cpa.isCoveredBy(element, coveringElement)) {
+          if (!cpa.isCoveredBy(state, coveringState)) {
             stats.stopTimer.stop();
             stats.totalTimer.stop();
-            logger.log(Level.WARNING, "Element", element, "is not covered by", coveringElement);
+            logger.log(Level.WARNING, "State", state, "is not covered by", coveringState);
             return false;
           }
           stats.stopTimer.stop();
         }
         else {
           stats.transferTimer.start();
-          Collection<ARTElement> successors = element.getChildren();
+          Collection<ARGState> successors = state.getChildren();
           logger.log(Level.FINER, "Checking abstract successors", successors);
-          if(!cpa.areAbstractSuccessors(element, null, successors)) {
+          if (!cpa.areAbstractSuccessors(state, null, successors)) {
             stats.transferTimer.stop();
             stats.totalTimer.stop();
-            logger.log(Level.WARNING, "Element", element, "has other successors than", successors);
+            logger.log(Level.WARNING, "State", state, "has other successors than", successors);
             return false;
           }
           stats.transferTimer.stop();
-          for(ARTElement e : successors) {
+          for (ARGState e : successors) {
             reachedSet.add(e, initialPrecision);
           }
         }
       }
-    } while(!postponedElements.isEmpty());
+    } while (!postponedStates.isEmpty());
     stats.totalTimer.stop();
     return true;
   }
 
-  private boolean isCoveringCycleFree(ARTElement pElement) {
-    HashSet<ARTElement> seen = new HashSet<ARTElement>();
-    seen.add(pElement);
-    while(pElement.isCovered()) {
-      pElement = pElement.getCoveringElement();
-      boolean isNew = seen.add(pElement);
-      if(!isNew) {
+  private boolean isCoveringCycleFree(ARGState pState) {
+    HashSet<ARGState> seen = new HashSet<ARGState>();
+    seen.add(pState);
+    while (pState.isCovered()) {
+      pState = pState.getCoveringState();
+      boolean isNew = seen.add(pState);
+      if (!isNew) {
         return false;
       }
     }

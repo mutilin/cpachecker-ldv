@@ -31,13 +31,13 @@ import org.sosy_lab.common.configuration.IntegerOption;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFAEdge;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFAEdgeType;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdgeType;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractElement;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
-import org.sosy_lab.cpachecker.core.interfaces.conditions.AvoidanceReportingElement;
+import org.sosy_lab.cpachecker.core.interfaces.conditions.AvoidanceReportingState;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.util.assumptions.PreventingHeuristic;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.Formula;
@@ -66,13 +66,13 @@ public class AssumeEdgesInPathCondition implements PathCondition, Statistics {
   }
 
   @Override
-  public AvoidanceReportingElement getInitialElement(CFANode pNode) {
-    return new RepetitionsInPathConditionElement(0, false);
+  public AvoidanceReportingState getInitialState(CFANode pNode) {
+    return new RepetitionsInPathConditionState(0, false);
   }
 
   @Override
-  public AvoidanceReportingElement getAbstractSuccessor(AbstractElement pElement, CFAEdge pEdge) {
-    RepetitionsInPathConditionElement element = (RepetitionsInPathConditionElement)pElement;
+  public AvoidanceReportingState getAbstractSuccessor(AbstractState pElement, CFAEdge pEdge) {
+    RepetitionsInPathConditionState element = (RepetitionsInPathConditionState)pElement;
 
     if (pEdge.getEdgeType() != CFAEdgeType.AssumeEdge) {
       return element;
@@ -87,7 +87,7 @@ public class AssumeEdgesInPathCondition implements PathCondition, Statistics {
 
     maxAssumeEdgesInPath = Math.max(assumeEdgesInPath, maxAssumeEdgesInPath);
 
-    return new RepetitionsInPathConditionElement(assumeEdgesInPath, thresholdReached);
+    return new RepetitionsInPathConditionState(assumeEdgesInPath, thresholdReached);
   }
 
   @Override
@@ -116,12 +116,12 @@ public class AssumeEdgesInPathCondition implements PathCondition, Statistics {
   }
 
 
-  private static class RepetitionsInPathConditionElement implements AbstractElement, AvoidanceReportingElement {
+  private static class RepetitionsInPathConditionState implements AbstractState, AvoidanceReportingState {
 
     private final int assumeEdgesInPath;
     private final boolean thresholdReached;
 
-    private RepetitionsInPathConditionElement(int pPathLength, boolean pThresholdReached) {
+    private RepetitionsInPathConditionState(int pPathLength, boolean pThresholdReached) {
       assumeEdgesInPath = pPathLength;
       thresholdReached = pThresholdReached;
     }
@@ -133,9 +133,7 @@ public class AssumeEdgesInPathCondition implements PathCondition, Statistics {
 
     @Override
     public Formula getReasonFormula(FormulaManager pMgr) {
-      String formula = PreventingHeuristic.ASSUMEEDGESINPATH.getFormulaString(assumeEdgesInPath);
-
-      return pMgr.parse(formula);
+      return PreventingHeuristic.ASSUMEEDGESINPATH.getFormula(pMgr, assumeEdgesInPath);
     }
 
     @Override

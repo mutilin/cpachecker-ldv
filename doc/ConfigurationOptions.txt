@@ -70,8 +70,8 @@ analysis.programNames = no default value
 
 # which reached set implementation to use?
 # NORMAL: just a simple set
-# LOCATIONMAPPED: a different set per location (faster, elements with
-# different locations cannot be merged)
+# LOCATIONMAPPED: a different set per location (faster, states with different
+# locations cannot be merged)
 # PARTITIONED: partitioning depending on CPAs (e.g Location, Callstack etc.)
 analysis.reachedSet = PARTITIONED
   enum:     [NORMAL, LOCATIONMAPPED, PARTITIONED]
@@ -82,10 +82,10 @@ analysis.restartAfterUnknown = false
 # stop after the first error has been found
 analysis.stopAfterError = true
 
-# which strategy to adopt for visiting states? TOPSORT is deprecated, use the
-# option analysis.traversal.useTopsort instead
+# which strategy to adopt for visiting states? RPO is deprecated, use the
+# option analysis.traversal.useReversePostorder instead
 analysis.traversal.order = DFS
-  enum:     [DFS, BFS, TOPSORT, RAND]
+  enum:     [DFS, BFS, RPO, RAND]
 
 # handle states with a deeper callstack first?
 # This needs the CallstackCPA to have any effect.
@@ -95,10 +95,14 @@ analysis.traversal.useCallstack = false
 # ExplicitCPA)
 analysis.traversal.useExplicitInformation = false
 
-# Use an implementation of topsort strategy that allows to select a secondary
-# strategy that is used if there are two elements with the same topsort id.
-# The secondary strategy is selected with 'analysis.traversal.order'. The
-# secondary strategy may not be TOPSORT.
+# Use an implementation of reverse postorder strategy that allows to select a
+# secondary strategy that is used if there are two states with the same
+# reverse postorder id. The secondary strategy is selected with
+# 'analysis.traversal.order'. The secondary strategy may not be RPO.
+analysis.traversal.useReversePostorder = false
+
+# DEPRECATED: This option was renamed to analysis.traversal.useTopsort and
+# will soon get removed.
 analysis.traversal.useTopsort = false
 
 # use adjustable conditions algorithm
@@ -129,7 +133,7 @@ analysis.useProofCheckAlgorithm = false
 # whether or not to use refinement or not
 # use CEGAR algorithm for lazy counter-example guided analysis
 # You need to specify a refiner with the cegar.refiner option.
-# Currently all refiner require the use of the ARTCPA.
+# Currently all refiner require the use of the ARGCPA.
 analysis.useRefinement = false
 
 # Add a threshold to the automaton, after so many branches on a path the
@@ -234,9 +238,6 @@ counterexample.checker = "CBMC"
 # configuration file for counterexample checks with CPAchecker
 counterexample.checker.config = "config/explicitAnalysis-no-cbmc.properties"
 
-# comma sperated list of variables that are never tracked by the analysis
-counterexample.checker.ignoreGlobally = ""
-
 # continue analysis after an counterexample was found that was denied by the
 # second check
 counterexample.continueAfterInfeasibleError = true
@@ -263,23 +264,23 @@ cpa.abm.blockHeuristic = FunctionAndLoopPartitioning.class
 cpa.abm.gatherCacheMissStatistics = false
 
 # export one variable assignment for error path to file, if one is found
-cpa.art.errorPath.assignment = "ErrorPathAssignment.txt"
+cpa.arg.errorPath.assignment = "ErrorPathAssignment.txt"
 
 # export error path to file, if one is found
-cpa.art.errorPath.core = "ErrorPathCore.txt"
-cpa.art.errorPath.export = true
-cpa.art.errorPath.file = "ErrorPath.txt"
-cpa.art.errorPath.graph = "ErrorPath.dot"
-cpa.art.errorPath.json = "ErrorPath.json"
-cpa.art.errorPath.source = "ErrorPath.c"
+cpa.arg.errorPath.core = "ErrorPathCore.txt"
+cpa.arg.errorPath.export = true
+cpa.arg.errorPath.file = "ErrorPath.txt"
+cpa.arg.errorPath.graph = "ErrorPath.dot"
+cpa.arg.errorPath.json = "ErrorPath.json"
+cpa.arg.errorPath.source = "ErrorPath.c"
 
-# export final ART as .dot file
-cpa.art.export = true
-cpa.art.file = "ART.dot"
+# export final ARG as .dot file
+cpa.arg.export = true
+cpa.arg.file = "ARG.dot"
 
 # whether to keep covered states in the reached set as addition to keeping
-# them in the ART
-cpa.art.keepCoveredStatesInReached = false
+# them in the ARG
+cpa.arg.keepCoveredStatesInReached = false
 
 # signal the analysis to break in case of reached error state
 cpa.automaton.breakOnTargetState = true
@@ -294,6 +295,22 @@ cpa.automaton.dotExportFile = "%s.dot"
 # file with automaton specification for ObserverAutomatonCPA and
 # ControlAutomatonCPA
 cpa.automaton.inputFile = no default value
+
+# bitsize for values
+cpa.bdd.bitsize = 8
+
+# initialize all variables to 0 when they are declared
+cpa.bdd.initAllVars = false
+
+# track all variables or none
+cpa.bdd.trackAll = true
+
+# either use one bit to know if a value is 0 (or not 0)or use a vector to
+# store all memory cells of a variable
+cpa.bdd.useBitvector = false
+
+# which vars should be tracked, default: track all
+cpa.bdd.whiteListRegex = ".*"
 
 # which composite merge operator to use (plain or agree)
 # Both delegate to the component cpas, but agree only allows merging if all
@@ -364,9 +381,6 @@ cpa.defuse.merge = "sep"
 cpa.explicit.merge = "SEP"
   allowed values: [SEP, JOIN]
 
-# csv list of variables never to track
-cpa.explicit.precision.ignore.asString = ""
-
 # threshold for amount of different values that are tracked for one variable
 # per path (-1 means infinitely)
 cpa.explicit.precision.path.defaultThreshold = -1
@@ -382,24 +396,21 @@ cpa.explicit.stop = "SEP"
 # blacklist regex for variables that won't be tracked by ExplicitCPA
 cpa.explicit.variableBlacklist = ""
 
-# whether or not to remove important variables again
-cpa.explict.refiner.keepImportantVariablesInCounterexampleCheck = true
-
-# whether or not to skip counter-example checks of variables that already are
-# in the precision
-cpa.explict.refiner.skipRedundantChecks = true
-
 # whether or not to use assumption-closure for explicit refinement
-cpa.explict.refiner.useAssumptionClosure = false
+cpa.explict.refiner.useAssumptionClosure = true
 
 # whether or not to use explicit interpolation
 cpa.explict.refiner.useExplicitInterpolation = false
 
-# whether or not to use the top most interpolation point
-cpa.explict.refiner.useTopMostInterpolationPoint = true
+# whether or not to always use the inital node as starting point for the next
+# iteration
+cpa.explict.refiner.useInitialNodeAsRestartingPoint = true
 
 # whitelist regex for variables that will be tracked by FeatureVarsCPA
 cpa.featurevars.variableWhitelist = ""
+
+# Which strategy to use for forced coverings (empty for none)
+cpa.forcedCovering = no default value
 
 # whether function pointers with invalid targets (e.g., 0) should be tracked
 # in order to find calls to such pointers
@@ -509,38 +520,22 @@ cpa.predicate.enableBlockreducer = false
 # where to dump interpolation and abstraction problems (format string)
 cpa.predicate.formulaDumpFilePattern = "%s%04d-%s%03d.msat"
 
-# handle Pointers
+# Handle aliasing of pointers. This adds disjunctions to the formulas, so be
+# careful when using cartesian abstraction.
 cpa.predicate.handlePointerAliasing = true
 
 # initialize all variables to 0 when they are declared
 cpa.predicate.initAllVars = false
 
+# use uninterpreted functions for *, & and array access
+cpa.predicate.lvalsAsUIFs = false
+
 # the machine model used for functions sizeof and alignof
 cpa.predicate.machineModel = LINUX32
   enum:     [LINUX32, LINUX64]
 
-# With of the bitvectors if useBitwise is true.
-cpa.predicate.mathsat.bitWidth = 32
-
-# use uninterpreted functions for *, & and array access
-cpa.predicate.mathsat.lvalsAsUIFs = false
-
-# Whether to use signed or unsigned variables if useBitwise is true.
-cpa.predicate.mathsat.signed = true
-
-# Encode program variables of bitvectors of a fixed size,instead of using
-# REALS. No interpolation and thus no refinement issupported in this case.
-cpa.predicate.mathsat.useBitwise = false
-
 # use a combination of theories (this is incomplete)
 cpa.predicate.mathsat.useDtc = false
-
-# encode program variables as INTEGERs in MathSAT, instead of using REALs.
-# Since interpolation is not really supported by the laz solver, when
-# computing interpolants we still use the LA solver, but encoding variables
-# as ints might still be a good idea: we can tighten strict inequalities, and
-# split negated equalities
-cpa.predicate.mathsat.useIntegers = false
 
 # Use UIFs (recommended because its more precise)
 cpa.predicate.mathsat.useUIFs = true
@@ -636,10 +631,27 @@ cpa.predicate.refinement.verifyInterpolants = false
 # blocksize)
 cpa.predicate.satCheck = 0
 
+# export solverqueries in smtlib-format
+cpa.predicate.smtinterpol.logfile = "smtinterpol.smt2"
+
 # Whether to use MathSAT 4, MathSAT 5 or YICES (in combination with Mathsat
 # 4) as SMT solver
-cpa.predicate.solver = "MATHSAT4"
-  allowed values: [MATHSAT4, MATHSAT5, YICES]
+cpa.predicate.solver = MATHSAT4
+  allowed values: [MATHSAT4, MATHSAT5, YICES, SMTINTERPOL]
+
+# With of the bitvectors if useBitvectors is true.
+cpa.predicate.solver.bitWidth = 32
+
+# Whether to use signed or unsigned variables if useBitvectors is true.
+cpa.predicate.solver.signed = true
+
+# Encode program variables as bitvectors of a fixed size,instead of using
+# REALS. Not all solvers might support this.
+cpa.predicate.solver.useBitvectors = false
+
+# Encode program variables as INTEGER variables, instead of using REALs. Not
+# all solvers might support this.
+cpa.predicate.solver.useIntegers = false
 
 # whether to include the symbolic path formula in the coverage checks or do
 # only the fast abstract checks
@@ -677,8 +689,8 @@ parser.dialect = GNUC
 # Ignore all casts that appear in the source code.
 parser.ignoreCasts = false
 
-# file in which ART representation needed for proof checking is stored
-pcc.proofFile = "art.obj"
+# file in which ARG representation needed for proof checking is stored
+pcc.proofFile = "arg.obj"
 
 pcc.proofgen.doPCC = false
 

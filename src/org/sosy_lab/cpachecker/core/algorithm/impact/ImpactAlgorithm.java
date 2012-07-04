@@ -23,7 +23,7 @@
  */
 package org.sosy_lab.cpachecker.core.algorithm.impact;
 
-import static org.sosy_lab.cpachecker.util.AbstractElements.extractLocation;
+import static org.sosy_lab.cpachecker.util.AbstractStates.extractLocation;
 import static org.sosy_lab.cpachecker.util.CFAUtils.leavingEdges;
 
 import java.io.PrintStream;
@@ -42,17 +42,17 @@ import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFAEdge;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.algorithm.Algorithm;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractElement;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
-import org.sosy_lab.cpachecker.cpa.art.ARTElement;
+import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.predicates.CachingPathFormulaManager;
@@ -142,8 +142,8 @@ public class ImpactAlgorithm implements Algorithm, StatisticsProvider {
     imgr = new UninstantiatingInterpolationManager(fmgr, pfmgr, solver, factory, config, logger);
   }
 
-  public AbstractElement getInitialElement(CFANode location) {
-    return new Vertex(fmgr.makeTrue(), cpa.getInitialElement(location));
+  public AbstractState getInitialState(CFANode location) {
+    return new Vertex(fmgr.makeTrue(), cpa.getInitialState(location));
   }
 
   public Precision getInitialPrecision(CFANode location) {
@@ -162,13 +162,13 @@ public class ImpactAlgorithm implements Algorithm, StatisticsProvider {
     try {
       assert v.isLeaf() && !v.isCovered();
 
-      AbstractElement predecessor = v.getWrappedElement();
+      AbstractState predecessor = v.getWrappedState();
       Precision precision = reached.getPrecision(v);
 
       CFANode loc = extractLocation(v);
       for (CFAEdge edge : leavingEdges(loc)) {
 
-        Collection<? extends AbstractElement> successors = cpa.getTransferRelation().getAbstractSuccessors(predecessor, precision, edge);
+        Collection<? extends AbstractState> successors = cpa.getTransferRelation().getAbstractSuccessors(predecessor, precision, edge);
         if (successors.isEmpty()) {
           // edge not feasible
           // create fake vertex
@@ -201,7 +201,7 @@ public class ImpactAlgorithm implements Algorithm, StatisticsProvider {
       List<Formula> pathFormulas = new ArrayList<Formula>(path.size());
       addPathFormulasToList(path, pathFormulas);
 
-      CounterexampleTraceInfo<Formula> cex = imgr.buildCounterexampleTrace(pathFormulas, Collections.<ARTElement>emptySet());
+      CounterexampleTraceInfo<Formula> cex = imgr.buildCounterexampleTrace(pathFormulas, Collections.<ARGState>emptySet());
 
       if (!cex.isSpurious()) {
         return Collections.emptyList(); // real counterexample
@@ -252,7 +252,7 @@ public class ImpactAlgorithm implements Algorithm, StatisticsProvider {
         && !w.isCovered() // ???
         && w.isOlderThan(v)
         && !v.isAncestorOf(w)
-        && cpa.getStopOperator().stop(v.getWrappedElement(), Collections.singleton(w.getWrappedElement()), prec);
+        && cpa.getStopOperator().stop(v.getWrappedState(), Collections.singleton(w.getWrappedState()), prec);
   }
 
   private boolean cover(Vertex v, Vertex w, Precision prec) throws CPAException {
@@ -323,7 +323,7 @@ public class ImpactAlgorithm implements Algorithm, StatisticsProvider {
     path.add(0, x); // now path is [x; v] (including x and v)
     assert formulas.size() == path.size() + 1;
 
-    CounterexampleTraceInfo<Formula> interpolantInfo = imgr.buildCounterexampleTrace(formulas, Collections.<ARTElement>emptySet());
+    CounterexampleTraceInfo<Formula> interpolantInfo = imgr.buildCounterexampleTrace(formulas, Collections.<ARGState>emptySet());
 
     if (!interpolantInfo.isSpurious()) {
       logger.log(Level.FINER, "Forced covering unsuccessful.");
@@ -370,7 +370,7 @@ public class ImpactAlgorithm implements Algorithm, StatisticsProvider {
       }
 
       Precision prec = reached.getPrecision(v);
-      for (AbstractElement ae : reached.getReached(v)) {
+      for (AbstractState ae : reached.getReached(v)) {
         Vertex w = (Vertex)ae;
 
         if (cover(v, w, prec)) {
@@ -416,7 +416,7 @@ public class ImpactAlgorithm implements Algorithm, StatisticsProvider {
       forceCoverTime.start();
       try {
         Precision prec = reached.getPrecision(v);
-        for (AbstractElement ae : reached.getReached(v)) {
+        for (AbstractState ae : reached.getReached(v)) {
           Vertex w = (Vertex)ae;
           if (mayCover(v, w, prec)) {
             if (forceCover(v, w, prec)) {
@@ -444,7 +444,7 @@ public class ImpactAlgorithm implements Algorithm, StatisticsProvider {
 
     outer:
     while (true) {
-      for (AbstractElement ae : reached) {
+      for (AbstractState ae : reached) {
         Vertex v = (Vertex)ae;
         if (v.isLeaf() && !v.isCovered()) {
 

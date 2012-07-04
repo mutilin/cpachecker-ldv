@@ -23,7 +23,7 @@
  */
 package org.sosy_lab.cpachecker.cpa.assume;
 
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.defaults.MergeSepOperator;
 import org.sosy_lab.cpachecker.core.defaults.SingletonPrecision;
 import org.sosy_lab.cpachecker.core.defaults.StaticPrecisionAdjustment;
@@ -37,7 +37,7 @@ import org.sosy_lab.cpachecker.core.interfaces.StopOperator;
 /*
  * CPA that stores parameter of a prespecified external function.
  * Used for modeling assumptions. PredicateTransferRelation strengthens
- * its abstract element with respect to the given parameter.
+ * its abstract state with respect to the given parameter.
  */
 public class AssumeCPA implements ConfigurableProgramAnalysis {
 
@@ -61,8 +61,8 @@ public class AssumeCPA implements ConfigurableProgramAnalysis {
   }
 
   @Override
-  public AssumeElement getInitialElement(CFANode pNode) {
-    return UnconstrainedAssumeElement.getInstance();
+  public AssumeState getInitialState(CFANode pNode) {
+    return UnconstrainedAssumeState.getInstance();
   }
 
   @Override

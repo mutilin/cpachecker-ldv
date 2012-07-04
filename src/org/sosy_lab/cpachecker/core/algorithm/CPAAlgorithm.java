@@ -29,15 +29,22 @@ import java.util.Collection;
 import java.util.List;
 import java.util.logging.Level;
 
+import org.sosy_lab.common.Classes;
 import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.Timer;
 import org.sosy_lab.common.Triple;
+import org.sosy_lab.common.configuration.ClassOption;
+import org.sosy_lab.common.configuration.Configuration;
+import org.sosy_lab.common.configuration.InvalidConfigurationException;
+import org.sosy_lab.common.configuration.Option;
+import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.core.CPAchecker;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.defaults.MergeSepOperator;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractElement;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
+import org.sosy_lab.cpachecker.core.interfaces.ForcedCovering;
 import org.sosy_lab.cpachecker.core.interfaces.MergeOperator;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustment;
@@ -51,6 +58,7 @@ import org.sosy_lab.cpachecker.exceptions.CPAException;
 
 import com.google.common.collect.Iterables;
 
+@Options(prefix="cpa")
 public class CPAAlgorithm implements Algorithm, StatisticsProvider {
 
   private static class CPAStatistics implements Statistics {
@@ -62,6 +70,7 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
     private Timer mergeTimer         = new Timer();
     private Timer stopTimer          = new Timer();
     private Timer addTimer           = new Timer();
+    private Timer forcedCoveringTimer = new Timer();
 
     private int   countIterations   = 0;
     private int   maxWaitlistSize   = 0;
@@ -85,13 +94,16 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
       out.println("Average size of waitlist:        " + countWaitlistSize
           / countIterations);
       out.println("Number of computed successors:   " + countSuccessors);
-      out.println("Max successors for one element:  " + maxSuccessors);
+      out.println("Max successors for one state:    " + maxSuccessors);
       out.println("Number of times merged:          " + countMerge);
       out.println("Number of times stopped:         " + countStop);
       out.println("Number of times breaked:         " + countBreak);
       out.println();
       out.println("Total time for CPA algorithm:     " + totalTimer + " (Max: " + totalTimer.printMaxTime() + ")");
       out.println("  Time for choose from waitlist:  " + chooseTimer);
+      if (forcedCoveringTimer.getNumberOfIntervals() > 0) {
+        out.println("  Time for forced covering:       " + forcedCoveringTimer);
+      }
       out.println("  Time for precision adjustment:  " + precisionTimer);
       out.println("  Time for transfer relation:     " + transferTimer);
       if (mergeTimer.getNumberOfIntervals() > 0) {
@@ -102,32 +114,62 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
     }
   }
 
+  @Option(description="Which strategy to use for forced coverings (empty for none)",
+          name="forcedCovering")
+  @ClassOption(packagePrefix="org.sosy_lab.cpachecker")
+  private Class<? extends ForcedCovering> forcedCoveringClass = null;
+  private final ForcedCovering forcedCovering;
+
   private final CPAStatistics               stats = new CPAStatistics();
 
   private final ConfigurableProgramAnalysis cpa;
 
   private final LogManager                  logger;
 
-  public CPAAlgorithm(ConfigurableProgramAnalysis cpa, LogManager logger) {
+  public CPAAlgorithm(ConfigurableProgramAnalysis cpa, LogManager logger, Configuration config) throws InvalidConfigurationException {
+    config.inject(this);
     this.cpa = cpa;
     this.logger = logger;
+
+    if (forcedCoveringClass != null) {
+      forcedCovering = Classes.createInstance(ForcedCovering.class, forcedCoveringClass,
+          new Class<?>[] {Configuration.class, LogManager.class, ConfigurableProgramAnalysis.class},
+          new Object[]   {config,              logger,           cpa});
+    } else {
+      forcedCovering = null;
+    }
   }
 
   @Override
   public boolean run(final ReachedSet reachedSet) throws CPAException, InterruptedException {
     stats.totalTimer.start();
+    try {
+      return run0(reachedSet);
+    } finally {
+      stats.totalTimer.stop();
+      stats.chooseTimer.stop();
+      stats.precisionTimer.stop();
+      stats.transferTimer.stop();
+      stats.mergeTimer.stop();
+      stats.stopTimer.stop();
+      stats.addTimer.stop();
+      stats.forcedCoveringTimer.stop();
+    }
+  }
+
+  private boolean run0(final ReachedSet reachedSet) throws CPAException, InterruptedException {
     final TransferRelation transferRelation = cpa.getTransferRelation();
     final MergeOperator mergeOperator = cpa.getMergeOperator();
     final StopOperator stopOperator = cpa.getStopOperator();
     final PrecisionAdjustment precisionAdjustment =
         cpa.getPrecisionAdjustment();
 
-    while (reachedSet.hasWaitingElement()) {
+    while (reachedSet.hasWaitingState()) {
       CPAchecker.stopIfNecessary();
 
       stats.countIterations++;
 
-      // Pick next element using strategy
+      // Pick next state using strategy
       // BFS, DFS or top sort according to the configuration
       int size = reachedSet.getWaitlistSize();
       if (size >= stats.maxWaitlistSize) {
@@ -136,33 +178,44 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
       stats.countWaitlistSize += size;
 
       stats.chooseTimer.start();
-      final AbstractElement element = reachedSet.popFromWaitlist();
-      final Precision precision = reachedSet.getPrecision(element);
+      final AbstractState state = reachedSet.popFromWaitlist();
+      final Precision precision = reachedSet.getPrecision(state);
       stats.chooseTimer.stop();
 
-      logger.log(Level.FINER, "Retrieved element from waitlist");
-      logger.log(Level.ALL, "Current element is", element, "with precision",
+      logger.log(Level.FINER, "Retrieved state from waitlist");
+      logger.log(Level.ALL, "Current state is", state, "with precision",
           precision);
 
+      if (forcedCovering != null) {
+        stats.forcedCoveringTimer.start();
+        boolean stop = forcedCovering.tryForcedCovering(state, precision, reachedSet);
+        stats.forcedCoveringTimer.stop();
+
+        if (stop) {
+          // TODO: remove state from reached set?
+          continue;
+        }
+      }
+
       stats.transferTimer.start();
-      Collection<? extends AbstractElement> successors =
-          transferRelation.getAbstractSuccessors(element, precision, null);
+      Collection<? extends AbstractState> successors =
+          transferRelation.getAbstractSuccessors(state, precision, null);
       stats.transferTimer.stop();
       // TODO When we have a nice way to mark the analysis result as incomplete,
-      // we could continue analysis on a CPATransferException with the next element from waitlist.
+      // we could continue analysis on a CPATransferException with the next state from waitlist.
 
       int numSuccessors = successors.size();
-      logger.log(Level.FINER, "Current element has", numSuccessors,
+      logger.log(Level.FINER, "Current state has", numSuccessors,
           "successors");
       stats.countSuccessors += numSuccessors;
       stats.maxSuccessors = Math.max(numSuccessors, stats.maxSuccessors);
 
-      for (AbstractElement successor : Iterables.consumingIterable(successors)) {
-        logger.log(Level.FINER, "Considering successor of current element");
-        logger.log(Level.ALL, "Successor of", element, "\nis", successor);
+      for (AbstractState successor : Iterables.consumingIterable(successors)) {
+        logger.log(Level.FINER, "Considering successor of current state");
+        logger.log(Level.ALL, "Successor of", state, "\nis", successor);
 
         stats.precisionTimer.start();
-        Triple<AbstractElement, Precision, Action> precAdjustmentResult =
+        Triple<AbstractState, Precision, Action> precAdjustmentResult =
             precisionAdjustment.prec(successor, precision, reachedSet);
         stats.precisionTimer.stop();
 
@@ -176,60 +229,59 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
           stats.stopTimer.stop();
 
           if (stop) {
-            // don't signal BREAK for covered elements
-            // no need to call merge and stop either, so just ignore this element
+            // don't signal BREAK for covered states
+            // no need to call merge and stop either, so just ignore this state
             // and handle next successor
             stats.countStop++;
             logger.log(Level.FINER,
-                "Break was signalled but ignored because the element is covered.");
+                "Break was signalled but ignored because the state is covered.");
             continue;
 
           } else {
             stats.countBreak++;
             logger.log(Level.FINER, "Break signalled, CPAAlgorithm will stop.");
 
-            // add the new element
+            // add the new state
             reachedSet.add(successor, successorPrecision);
 
             if (!successors.isEmpty()) {
-              // re-add the old element to the waitlist, there are unhandled
+              // re-add the old state to the waitlist, there are unhandled
               // successors left that otherwise would be forgotten
-              reachedSet.reAddToWaitlist(element);
+              reachedSet.reAddToWaitlist(state);
             }
 
-            stats.totalTimer.stop();
             return true;
           }
         }
         assert action == Action.CONTINUE : "Enum Action has unhandled values!";
 
-        Collection<AbstractElement> reached = reachedSet.getReached(successor);
+        Collection<AbstractState> reached = reachedSet.getReached(successor);
 
         // An optimization, we don't bother merging if we know that the
         // merge operator won't do anything (i.e., it is merge-sep).
         if (mergeOperator != MergeSepOperator.getInstance() && !reached.isEmpty()) {
           stats.mergeTimer.start();
 
-          List<AbstractElement> toRemove = new ArrayList<AbstractElement>();
-          List<Pair<AbstractElement, Precision>> toAdd =
-              new ArrayList<Pair<AbstractElement, Precision>>();
+          List<AbstractState> toRemove = new ArrayList<AbstractState>();
+          List<Pair<AbstractState, Precision>> toAdd =
+              new ArrayList<Pair<AbstractState, Precision>>();
 
           logger.log(Level.FINER, "Considering", reached.size(),
-              "elements from reached set for merge");
-          for (AbstractElement reachedElement : reached) {
-            AbstractElement mergedElement =
-                mergeOperator.merge(successor, reachedElement,
+              "states from reached set for merge");
+          for (AbstractState reachedState : reached) {
+            AbstractState mergedState =
+                mergeOperator.merge(successor, reachedState,
                     successorPrecision);
 
-            if (!mergedElement.equals(reachedElement)) {
+            if (!mergedState.equals(reachedState)) {
               logger.log(Level.FINER,
-                  "Successor was merged with element from reached set");
+                  "Successor was merged with state from reached set");
               logger.log(Level.ALL, "Merged", successor, "\nand",
-                  reachedElement, "\n-->", mergedElement);
+                  reachedState, "\n-->", mergedState);
               stats.countMerge++;
 
-              toRemove.add(reachedElement);
-              toAdd.add(Pair.of(mergedElement, successorPrecision));
+              toRemove.add(reachedState);
+              toAdd.add(Pair.of(mergedState, successorPrecision));
             }
           }
           reachedSet.removeAll(toRemove);
@@ -258,12 +310,14 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
         }
       }
     }
-    stats.totalTimer.stop();
     return true;
   }
 
   @Override
   public void collectStatistics(Collection<Statistics> pStatsCollection) {
+    if (forcedCovering instanceof StatisticsProvider) {
+      ((StatisticsProvider)forcedCovering).collectStatistics(pStatsCollection);
+    }
     pStatsCollection.add(stats);
   }
 }

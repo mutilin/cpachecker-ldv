@@ -26,8 +26,8 @@ package org.sosy_lab.cpachecker.core.algorithm;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.base.Predicates.instanceOf;
 import static com.google.common.collect.Iterables.*;
-import static org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractElement.FILTER_ABSTRACTION_ELEMENTS;
-import static org.sosy_lab.cpachecker.util.AbstractElements.*;
+import static org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState.FILTER_ABSTRACTION_STATES;
+import static org.sosy_lab.cpachecker.util.AbstractStates.*;
 
 import java.io.File;
 import java.io.IOException;
@@ -53,31 +53,31 @@ import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.CFA;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFAEdge;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFANode;
-import org.sosy_lab.cpachecker.cfa.objectmodel.c.FunctionCallEdge;
-import org.sosy_lab.cpachecker.cfa.objectmodel.c.FunctionReturnEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionReturnEdge;
 import org.sosy_lab.cpachecker.core.CPABuilder;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.CounterexampleInfo;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractElement;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
 import org.sosy_lab.cpachecker.core.interfaces.WrapperCPA;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSetFactory;
-import org.sosy_lab.cpachecker.cpa.art.ARTCPA;
-import org.sosy_lab.cpachecker.cpa.art.ARTElement;
-import org.sosy_lab.cpachecker.cpa.art.ARTUtils;
-import org.sosy_lab.cpachecker.cpa.art.Path;
-import org.sosy_lab.cpachecker.cpa.assumptions.storage.AssumptionStorageElement;
-import org.sosy_lab.cpachecker.cpa.loopstack.LoopstackElement;
-import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractElement;
+import org.sosy_lab.cpachecker.cpa.arg.ARGCPA;
+import org.sosy_lab.cpachecker.cpa.arg.ARGState;
+import org.sosy_lab.cpachecker.cpa.arg.ARGUtils;
+import org.sosy_lab.cpachecker.cpa.arg.Path;
+import org.sosy_lab.cpachecker.cpa.assumptions.storage.AssumptionStorageState;
+import org.sosy_lab.cpachecker.cpa.loopstack.LoopstackState;
+import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateCPA;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
-import org.sosy_lab.cpachecker.util.AbstractElements;
+import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.CFAUtils.Loop;
 import org.sosy_lab.cpachecker.util.predicates.Model;
 import org.sosy_lab.cpachecker.util.predicates.PathFormula;
@@ -99,23 +99,23 @@ import com.google.common.collect.Multimaps;
 @Options(prefix="bmc")
 public class BMCAlgorithm implements Algorithm, StatisticsProvider {
 
-  private static final Function<AbstractElement, PredicateAbstractElement> EXTRACT_PREDICATE_ELEMENT
-      = AbstractElements.extractElementByTypeFunction(PredicateAbstractElement.class);
+  private static final Function<AbstractState, PredicateAbstractState> EXTRACT_PREDICATE_STATE
+      = AbstractStates.extractStateByTypeFunction(PredicateAbstractState.class);
 
-  private static final Predicate<AbstractElement> IS_STOP_ELEMENT =
-    Predicates.compose(new Predicate<AssumptionStorageElement>() {
+  private static final Predicate<AbstractState> IS_STOP_STATE =
+    Predicates.compose(new Predicate<AssumptionStorageState>() {
                              @Override
-                             public boolean apply(AssumptionStorageElement pArg0) {
+                             public boolean apply(AssumptionStorageState pArg0) {
                                return (pArg0 != null) && pArg0.isStop();
                              }
                            },
-                       AbstractElements.extractElementByTypeFunction(AssumptionStorageElement.class));
+                       AbstractStates.extractStateByTypeFunction(AssumptionStorageState.class));
 
-  private static final Predicate<AbstractElement> IS_IN_LOOP = new Predicate<AbstractElement>() {
+  private static final Predicate<AbstractState> IS_IN_LOOP = new Predicate<AbstractState>() {
     @Override
-    public boolean apply(AbstractElement pArg0) {
-      LoopstackElement loopElement = extractElementByType(pArg0, LoopstackElement.class);
-      return loopElement.getLoop() != null;
+    public boolean apply(AbstractState pArg0) {
+      LoopstackState loopState = extractStateByType(pArg0, LoopstackState.class);
+      return loopState.getLoop() != null;
     }
   };
 
@@ -214,7 +214,7 @@ public class BMCAlgorithm implements Algorithm, StatisticsProvider {
   @Override
   public boolean run(final ReachedSet pReachedSet) throws CPAException, InterruptedException {
     if (induction) {
-      CFANode initialLocation = extractLocation(pReachedSet.getFirstElement());
+      CFANode initialLocation = extractLocation(pReachedSet.getFirstState());
       invariantGenerator.start(initialLocation);
     }
 
@@ -222,8 +222,8 @@ public class BMCAlgorithm implements Algorithm, StatisticsProvider {
       logger.log(Level.INFO, "Creating formula for program");
       final boolean soundInner = algorithm.run(pReachedSet);
 
-      if (any(transform(skip(pReachedSet, 1), EXTRACT_PREDICATE_ELEMENT), FILTER_ABSTRACTION_ELEMENTS)) {
-        // first element of reached is always an abstraction element, so skip it
+      if (any(transform(skip(pReachedSet, 1), EXTRACT_PREDICATE_STATE), FILTER_ABSTRACTION_STATES)) {
+        // first state of reached is always an abstraction state, so skip it
         logger.log(Level.WARNING, "BMC algorithm does not work with abstractions. Could not check for satisfiability!");
         return soundInner;
       }
@@ -268,12 +268,12 @@ public class BMCAlgorithm implements Algorithm, StatisticsProvider {
   }
 
   /**
-   * This method tries to find a feasible path to (one of) the target element(s).
+   * This method tries to find a feasible path to (one of) the target state(s).
    * It does so by asking the solver for a satisfying assignment.
    */
   private void createErrorPath(final ReachedSet pReachedSet) throws CPATransferException {
-    if (!(cpa instanceof ARTCPA)) {
-      logger.log(Level.INFO, "Error found, but error path cannot be created without ARTCPA");
+    if (!(cpa instanceof ARGCPA)) {
+      logger.log(Level.INFO, "Error found, but error path cannot be created without ARGCPA");
       return;
     }
 
@@ -281,12 +281,12 @@ public class BMCAlgorithm implements Algorithm, StatisticsProvider {
     try {
       logger.log(Level.INFO, "Error found, creating error path");
 
-      Iterable<ARTElement> art = Iterables.filter(pReachedSet.getReached(), ARTElement.class);
+      Iterable<ARGState> arg = Iterables.filter(pReachedSet.getReached(), ARGState.class);
 
       // get the branchingFormula
       // this formula contains predicates for all branches we took
       // this way we can figure out which branches make a feasible path
-      Formula branchingFormula = pmgr.buildBranchingFormula(art);
+      Formula branchingFormula = pmgr.buildBranchingFormula(arg);
 
       if (branchingFormula.isTrue()) {
         logger.log(Level.WARNING, "Could not create error path because of missing branching informating");
@@ -312,11 +312,11 @@ public class BMCAlgorithm implements Algorithm, StatisticsProvider {
 
       // get precise error path
       Map<Integer, Boolean> branchingInformation = pmgr.getBranchingPredicateValuesFromModel(model);
-      ARTElement root = (ARTElement)pReachedSet.getFirstElement();
+      ARGState root = (ARGState)pReachedSet.getFirstState();
 
       Path targetPath;
       try {
-        targetPath = ARTUtils.getPathFromBranchingInformation(root, pReachedSet.getReached(), branchingInformation);
+        targetPath = ARGUtils.getPathFromBranchingInformation(root, pReachedSet.getReached(), branchingInformation);
       } catch (IllegalArgumentException e) {
         logger.logUserException(Level.WARNING, e, "Could not create error path");
         return;
@@ -341,7 +341,7 @@ public class BMCAlgorithm implements Algorithm, StatisticsProvider {
         counterexample.addFurtherInformation(pathFormula, dumpCounterexampleFormula);
       }
 
-      ((ARTCPA)cpa).setCounterexample(counterexample);
+      ((ARGCPA)cpa).setCounterexample(counterexample);
 
     } finally {
       stats.errorPathCreation.stop();
@@ -351,11 +351,11 @@ public class BMCAlgorithm implements Algorithm, StatisticsProvider {
   private boolean checkTargetStates(final ReachedSet pReachedSet) {
     if (checkTargetStates) {
 
-      List<AbstractElement> targetElements = Lists.newArrayList(AbstractElements.filterTargetElements(pReachedSet));
-      logger.log(Level.FINER, "Found", targetElements.size(), "potential target elements");
+      List<AbstractState> targetStates = Lists.newArrayList(AbstractStates.filterTargetStates(pReachedSet));
+      logger.log(Level.FINER, "Found", targetStates.size(), "potential target states");
 
       // create formula
-      Formula program = createFormulaFor(targetElements);
+      Formula program = createFormulaFor(targetStates);
 
       logger.log(Level.INFO, "Starting satisfiability check...");
       stats.satCheck.start();
@@ -365,21 +365,21 @@ public class BMCAlgorithm implements Algorithm, StatisticsProvider {
       stats.satCheck.stop();
 
       if (safe) {
-        pReachedSet.removeAll(targetElements);
+        pReachedSet.removeAll(targetStates);
       }
       return safe;
 
     } else {
       // fast check for trivial cases
-      return none(pReachedSet, IS_TARGET_ELEMENT);
+      return none(pReachedSet, IS_TARGET_STATE);
     }
   }
 
   private boolean checkBoundingAssertions(final ReachedSet pReachedSet) {
     if (boundingAssertions) {
       // create formula for unwinding assertions
-      Iterable<AbstractElement> stopElements = filter(pReachedSet, IS_STOP_ELEMENT);
-      Formula assertions = createFormulaFor(stopElements);
+      Iterable<AbstractState> stopStates = filter(pReachedSet, IS_STOP_STATE);
+      Formula assertions = createFormulaFor(stopStates);
 
       logger.log(Level.INFO, "Starting assertions check...");
 
@@ -394,17 +394,17 @@ public class BMCAlgorithm implements Algorithm, StatisticsProvider {
 
     } else {
       // fast check for trivial cases
-      return none(pReachedSet, IS_STOP_ELEMENT);
+      return none(pReachedSet, IS_STOP_STATE);
     }
   }
 
   /**
    * Create a disjunctive formula of all the path formulas in the supplied iterable.
    */
-  private Formula createFormulaFor(Iterable<AbstractElement> elements) {
+  private Formula createFormulaFor(Iterable<AbstractState> states) {
     Formula f = fmgr.makeFalse();
 
-    for (PredicateAbstractElement e : AbstractElements.projectToType(elements, PredicateAbstractElement.class)) {
+    for (PredicateAbstractState e : AbstractStates.projectToType(states, PredicateAbstractState.class)) {
       f = fmgr.makeOr(f, e.getPathFormula().getFormula());
     }
 
@@ -437,9 +437,9 @@ public class BMCAlgorithm implements Algorithm, StatisticsProvider {
 
     // function edges do not count as incoming/outgoing edges
     Iterable<CFAEdge> incomingEdges = Iterables.filter(loop.getIncomingEdges(),
-                                                       Predicates.not(instanceOf(FunctionReturnEdge.class)));
+                                                       Predicates.not(instanceOf(CFunctionReturnEdge.class)));
     Iterable<CFAEdge> outgoingEdges = Iterables.filter(loop.getOutgoingEdges(),
-                                                       Predicates.not(instanceOf(FunctionCallEdge.class)));
+                                                       Predicates.not(instanceOf(CFunctionCallEdge.class)));
 
     if (Iterables.size(incomingEdges) > 1) {
       logger.log(Level.WARNING, "Could not use induction for proving program safety, loop has too many incoming edges", incomingEdges);
@@ -463,7 +463,7 @@ public class BMCAlgorithm implements Algorithm, StatisticsProvider {
     // 2) Assume that one loop iteration is safe and prove that the next one is safe, too.
 
     // Suppose that the loop has a single outgoing edge,
-    // which leads to the error location. This edge is always an AssumeEdge,
+    // which leads to the error location. This edge is always an CAssumeEdge,
     // and it has a "sibling" which is an inner edge of the loop and leads to
     // the next iteration. We call the latter the continuation edge.
     // The common predecessor node of these two edges will be called cut point.
@@ -500,20 +500,20 @@ public class BMCAlgorithm implements Algorithm, StatisticsProvider {
 
     // Create initial reached set
     ReachedSet reached = reachedSetFactory.create();
-    reached.add(cpa.getInitialElement(loopHead), cpa.getInitialPrecision(loopHead));
+    reached.add(cpa.getInitialState(loopHead), cpa.getInitialPrecision(loopHead));
 
     // Run algorithm in order to create formula (A & B)
 
     logger.log(Level.INFO, "Running algorithm to create induction hypothesis");
     algorithm.run(reached);
 
-    Multimap<CFANode, AbstractElement> reachedPerLocation = Multimaps.index(reached, AbstractElements.EXTRACT_LOCATION);
+    Multimap<CFANode, AbstractState> reachedPerLocation = Multimaps.index(reached, AbstractStates.EXTRACT_LOCATION);
 
-    // live view of reached set with only the elements in the loop
-    Iterable<AbstractElement> loopStates = Iterables.filter(reached, IS_IN_LOOP);
+    // live view of reached set with only the states in the loop
+    Iterable<AbstractState> loopStates = Iterables.filter(reached, IS_IN_LOOP);
 
     assert !Iterables.isEmpty(loopStates);
-    if (Iterables.any(loopStates, IS_TARGET_ELEMENT)) {
+    if (Iterables.any(loopStates, IS_TARGET_STATE)) {
       logger.log(Level.WARNING, "Could not use induction for proving program safety, target state is contained in the loop");
       return false;
     }
@@ -529,12 +529,12 @@ public class BMCAlgorithm implements Algorithm, StatisticsProvider {
       // filter out exit edges that do not lead to a target state, we don't care about them
       {
         CFANode exitLocation = outgoingEdge.getSuccessor();
-        Iterable<AbstractElement> exitStates = reachedPerLocation.get(exitLocation);
-        ARTElement lastExitState = (ARTElement)Iterables.getLast(exitStates);
+        Iterable<AbstractState> exitStates = reachedPerLocation.get(exitLocation);
+        ARGState lastExitState = (ARGState)Iterables.getLast(exitStates);
 
         // the states reachable from the exit edge
-        Set<ARTElement> outOfLoopStates = lastExitState.getSubtree();
-        if (Iterables.isEmpty(filterTargetElements(outOfLoopStates))) {
+        Set<ARGState> outOfLoopStates = lastExitState.getSubgraph();
+        if (Iterables.isEmpty(filterTargetStates(outOfLoopStates))) {
           // no target state reachable
           continue;
         }
@@ -543,11 +543,11 @@ public class BMCAlgorithm implements Algorithm, StatisticsProvider {
       logger.log(Level.FINEST, "Considering exit edge", outgoingEdge);
 
       CFANode cutPoint = outgoingEdge.getPredecessor();
-      Iterable<AbstractElement> cutPointStates = reachedPerLocation.get(cutPoint);
-      AbstractElement lastcutPointState = Iterables.getLast(cutPointStates);
+      Iterable<AbstractState> cutPointStates = reachedPerLocation.get(cutPoint);
+      AbstractState lastcutPointState = Iterables.getLast(cutPointStates);
 
       // Create (A & B)
-      PathFormula pathFormulaAB = extractElementByType(lastcutPointState, PredicateAbstractElement.class).getPathFormula();
+      PathFormula pathFormulaAB = extractStateByType(lastcutPointState, PredicateAbstractState.class).getPathFormula();
       Formula formulaAB = fmgr.makeAnd(invariants, pathFormulaAB.getFormula());
 
       // Create C
@@ -591,8 +591,8 @@ public class BMCAlgorithm implements Algorithm, StatisticsProvider {
 
     Formula invariant = fmgr.makeFalse();
 
-    for (AbstractElement locState : AbstractElements.filterLocation(reached, loc)) {
-      Formula f = AbstractElements.extractReportedFormulas(fmgr, locState);
+    for (AbstractState locState : AbstractStates.filterLocation(reached, loc)) {
+      Formula f = AbstractStates.extractReportedFormulas(fmgr, locState);
       logger.log(Level.ALL, "Invariant:", f);
 
       invariant = fmgr.makeOr(invariant, f);
@@ -619,7 +619,7 @@ public class BMCAlgorithm implements Algorithm, StatisticsProvider {
     private final Timer invariantGeneration = new Timer();
 
     private final LogManager logger;
-    private final ConfigurableProgramAnalysis invariantCPAs;
+    private final Algorithm invariantAlgorithm;
     private final ReachedSet reached;
 
     private CFANode initialLocation = null;
@@ -641,12 +641,15 @@ public class BMCAlgorithm implements Algorithm, StatisticsProvider {
           throw new InvalidConfigurationException("could not read configuration file for invariant generation: " + e.getMessage(), e);
         }
 
-        invariantCPAs = new CPABuilder(invariantConfig, logger, reachedSetFactory).buildCPAs(cfa);
+        ConfigurableProgramAnalysis invariantCPAs = new CPABuilder(invariantConfig, logger, reachedSetFactory).buildCPAs(cfa);
+        invariantAlgorithm = new CPAAlgorithm(invariantCPAs, logger, invariantConfig);
+
         reached = new ReachedSetFactory(invariantConfig, logger).create();
+        reached.add(invariantCPAs.getInitialState(initialLocation), invariantCPAs.getInitialPrecision(initialLocation));
 
       } else {
         // invariant generation is disabled
-        invariantCPAs = null;
+        invariantAlgorithm = null;
         reached = new ReachedSetFactory(config, logger).create(); // create reached set that will stay empty
       }
     }
@@ -655,7 +658,7 @@ public class BMCAlgorithm implements Algorithm, StatisticsProvider {
       checkState(initialLocation == null);
       initialLocation = pInitialLocation;
 
-      if (invariantCPAs == null) {
+      if (!reached.hasWaitingState()) {
         // invariant generation disabled
         return;
       }
@@ -698,7 +701,7 @@ public class BMCAlgorithm implements Algorithm, StatisticsProvider {
     private ReachedSet findInvariants() throws CPAException, InterruptedException {
       checkState(initialLocation != null);
 
-      if (invariantCPAs == null) {
+      if (!reached.hasWaitingState()) {
         // invariant generation disabled
         return reached;
       }
@@ -707,16 +710,13 @@ public class BMCAlgorithm implements Algorithm, StatisticsProvider {
       logger.log(Level.INFO, "Finding invariants");
 
       try {
-        reached.add(invariantCPAs.getInitialElement(initialLocation), invariantCPAs.getInitialPrecision(initialLocation));
-
-        Algorithm invariantAlgorithm = new CPAAlgorithm(invariantCPAs, logger);
-
+        assert invariantAlgorithm != null;
         invariantAlgorithm.run(reached);
 
         return reached;
 
       } finally {
-        invariantGeneration.start();
+        invariantGeneration.stop();
       }
     }
   }

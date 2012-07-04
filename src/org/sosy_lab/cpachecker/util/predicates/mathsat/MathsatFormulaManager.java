@@ -379,6 +379,34 @@ public abstract class MathsatFormulaManager implements FormulaManager {
   }
 
   @Override
+  public boolean isPurelyConjunctive(Formula f) {
+    long t = getTerm(f);
+
+    if ((msat_term_is_atom(t) != 0)
+        || (msat_term_is_uif(t) != 0)) {
+      // term is atom
+      return true;
+
+    } else if (msat_term_is_not(t) != 0) {
+      t = msat_term_get_arg(t, 0);
+      return ((msat_term_is_uif(t) != 0)
+          || (msat_term_is_atom(t) != 0));
+
+    } else if (msat_term_is_and(t) != 0) {
+      int arity = msat_term_arity(t);
+      for (int i = 0; i < arity; ++i) {
+        if (!isPurelyConjunctive(encapsulate(msat_term_get_arg(t, i)))) {
+          return false;
+        }
+      }
+      return true;
+
+    } else {
+      return false;
+    }
+  }
+
+  @Override
   public Formula instantiate(Formula f, SSAMap ssa) {
     Deque<Formula> toProcess = new ArrayDeque<Formula>();
     Map<Formula, Formula> cache = new HashMap<Formula, Formula>();
@@ -648,7 +676,7 @@ public abstract class MathsatFormulaManager implements FormulaManager {
     while (!toProcess.isEmpty()) {
       final long rightSubTerm = toProcess.pop();
 
-      if(rightSubTerm == leftTerm) {
+      if (rightSubTerm == leftTerm) {
         return true;
       }
 
@@ -656,7 +684,7 @@ public abstract class MathsatFormulaManager implements FormulaManager {
         int args = msat_term_arity(rightSubTerm);
         for (int i = 0; i < args; ++i) {
           long arg = msat_term_get_arg(rightSubTerm, i);
-          if(!seen.contains(arg)) {
+          if (!seen.contains(arg)) {
             toProcess.add(arg);
             seen.add(arg);
           }
@@ -672,7 +700,7 @@ public abstract class MathsatFormulaManager implements FormulaManager {
     final long t = getTerm(f);
     int arity = msat_term_arity(t);
     Formula[] result = new Formula[arity];
-    for(int i = 0; i < arity; ++i) {
+    for (int i = 0; i < arity; ++i) {
       result[i] = encapsulate(msat_term_get_arg(t, i));
     }
     return result;

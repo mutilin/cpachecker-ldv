@@ -28,10 +28,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFAEdge;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFAEdgeType;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFANode;
-import org.sosy_lab.cpachecker.cfa.objectmodel.MultiEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdgeType;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
 import org.sosy_lab.cpachecker.util.CFATraversal;
 import org.sosy_lab.cpachecker.util.CFATraversal.DefaultCFAVisitor;
 import org.sosy_lab.cpachecker.util.CFATraversal.TraversalProcess;
@@ -43,8 +43,8 @@ import org.sosy_lab.cpachecker.util.CFATraversal.TraversalProcess;
 class MultiEdgeCreator extends DefaultCFAVisitor {
 
   static void createMultiEdges(MutableCFA cfa) {
-    CFATraversal.dfs().ignoreSummaryEdges().traverse(cfa.getMainFunction(),
-        new CFATraversal.NodeCollectingCFAVisitor(new MultiEdgeCreator(cfa)));
+    CFATraversal.dfs().ignoreSummaryEdges().traverseOnce(cfa.getMainFunction(),
+                                                         new MultiEdgeCreator(cfa));
   }
 
   private final MutableCFA cfa;

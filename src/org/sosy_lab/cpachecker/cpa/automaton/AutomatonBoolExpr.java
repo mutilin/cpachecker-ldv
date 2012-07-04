@@ -26,11 +26,11 @@ package org.sosy_lab.cpachecker.cpa.automaton;
 import java.util.logging.Level;
 import java.util.regex.Pattern;
 
-import org.sosy_lab.cpachecker.cfa.ast.IASTNode;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFALabelNode;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFANode;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractElement;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractQueryableElement;
+import org.sosy_lab.cpachecker.cfa.ast.c.CAstNode;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.c.CLabelNode;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractQueryableState;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.automaton.AutomatonASTComparator.ASTMatcher;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.InvalidQueryException;
@@ -78,8 +78,8 @@ interface AutomatonBoolExpr extends AutomatonExpression {
     @Override
     public ResultValue<Boolean> eval(AutomatonExpressionArguments pArgs) {
       CFANode successorNode = pArgs.getCfaEdge().getSuccessor();
-      if (successorNode instanceof CFALabelNode) {
-        String label = ((CFALabelNode)successorNode).getLabel();
+      if (successorNode instanceof CLabelNode) {
+        String label = ((CLabelNode)successorNode).getLabel();
         if (pattern.matcher(label).matches()) {
           return CONST_TRUE;
         } else {
@@ -87,7 +87,7 @@ interface AutomatonBoolExpr extends AutomatonExpression {
         }
       } else {
         return CONST_FALSE;
-        //return new ResultValue<Boolean>("cannot evaluate if the CFAEdge is not a CFALabelNode", "MatchLabelRegEx.eval(..)");
+        //return new ResultValue<Boolean>("cannot evaluate if the CFAEdge is not a CLabelNode", "MatchLabelRegEx.eval(..)");
       }
     }
 
@@ -115,11 +115,11 @@ interface AutomatonBoolExpr extends AutomatonExpression {
     public ResultValue<Boolean> eval(AutomatonExpressionArguments pArgs) throws UnrecognizedCFAEdgeException {
       Optional<?> ast = pArgs.getCfaEdge().getRawAST();
       if (ast.isPresent()) {
-        if (!(ast.get() instanceof IASTNode)) {
+        if (!(ast.get() instanceof CAstNode)) {
           throw new UnrecognizedCFAEdgeException(pArgs.getCfaEdge());
         }
         // some edges do not have an AST node attached to them, e.g. BlankEdges
-        if(patternAST.matches((IASTNode)ast.get(), pArgs)) {
+        if (patternAST.matches((CAstNode)ast.get(), pArgs)) {
           return CONST_TRUE;
         } else {
           return CONST_FALSE;
@@ -183,7 +183,7 @@ interface AutomatonBoolExpr extends AutomatonExpression {
   }
 
   /**
-   * Sends a query string to all available AbstractElements.
+   * Sends a query string to all available AbstractStates.
    * Returns TRUE if one Element returned TRUE;
    * Returns FALSE if all Elements returned either FALSE or an InvalidQueryException.
    * Returns MAYBE if no Element is available or the Variables could not be replaced.
@@ -197,7 +197,7 @@ interface AutomatonBoolExpr extends AutomatonExpression {
 
     @Override
     public ResultValue<Boolean> eval(AutomatonExpressionArguments pArgs) {
-      if (pArgs.getAbstractElements().isEmpty()) {
+      if (pArgs.getAbstractStates().isEmpty()) {
         return new ResultValue<Boolean>("No CPA elements available", "AutomatonBoolExpr.ALLCPAQuery");
       } else {
         // replace transition variables
@@ -205,9 +205,9 @@ interface AutomatonBoolExpr extends AutomatonExpression {
         if (modifiedQueryString == null) {
           return new ResultValue<Boolean>("Failed to modify queryString \"" + queryString + "\"", "AutomatonBoolExpr.ALLCPAQuery");
         }
-        for (AbstractElement ae : pArgs.getAbstractElements()) {
-          if (ae instanceof AbstractQueryableElement) {
-            AbstractQueryableElement aqe = (AbstractQueryableElement) ae;
+        for (AbstractState ae : pArgs.getAbstractStates()) {
+          if (ae instanceof AbstractQueryableState) {
+            AbstractQueryableState aqe = (AbstractQueryableState) ae;
             try {
               Object result = aqe.evaluateProperty(modifiedQueryString);
               if (result instanceof Boolean) {
@@ -229,7 +229,7 @@ interface AutomatonBoolExpr extends AutomatonExpression {
     }
   }
   /**
-   * Sends a query-String to an <code>AbstractElement</code> of another analysis and returns the query-Result.
+   * Sends a query-String to an <code>AbstractState</code> of another analysis and returns the query-Result.
    */
   static class CPAQuery implements AutomatonBoolExpr {
     private final String cpaName;
@@ -248,9 +248,9 @@ interface AutomatonBoolExpr extends AutomatonExpression {
         return new ResultValue<Boolean>("Failed to modify queryString \"" + queryString + "\"", "AutomatonBoolExpr.CPAQuery");
       }
 
-      for (AbstractElement ae : pArgs.getAbstractElements()) {
-        if (ae instanceof AbstractQueryableElement) {
-          AbstractQueryableElement aqe = (AbstractQueryableElement) ae;
+      for (AbstractState ae : pArgs.getAbstractStates()) {
+        if (ae instanceof AbstractQueryableState) {
+          AbstractQueryableState aqe = (AbstractQueryableState) ae;
           if (aqe.getCPAName().equals(cpaName)) {
             try {
               Object result = aqe.evaluateProperty(modifiedQueryString);

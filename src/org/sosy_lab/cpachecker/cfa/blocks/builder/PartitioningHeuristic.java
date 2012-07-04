@@ -29,7 +29,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 import org.sosy_lab.cpachecker.cfa.blocks.BlockPartitioning;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.util.CFATraversal;
 
 
@@ -44,9 +44,7 @@ public abstract class PartitioningHeuristic {
    * @see org.sosy_lab.cpachecker.cfa.blocks.BlockPartitioning
    */
   public final BlockPartitioning buildPartitioning(CFANode mainFunction) {
-    CFATraversal.NodeCollectingCFAVisitor visitor = new CFATraversal.NodeCollectingCFAVisitor();
-    CFATraversal.dfs().ignoreFunctionCalls().traverse(mainFunction, visitor);
-    Set<CFANode> mainFunctionBody = visitor.getVisitedNodes();
+    Set<CFANode> mainFunctionBody = CFATraversal.dfs().ignoreFunctionCalls().collectNodesReachableFrom(mainFunction);
     BlockPartitioningBuilder builder = new BlockPartitioningBuilder(mainFunctionBody);
 
     //traverse CFG
@@ -56,19 +54,19 @@ public abstract class PartitioningHeuristic {
     seen.add(mainFunction);
     stack.push(mainFunction);
 
-    while(!stack.isEmpty()) {
+    while (!stack.isEmpty()) {
       CFANode node = stack.pop();
 
-      if(shouldBeCached(node)) {
+      if (shouldBeCached(node)) {
         Set<CFANode> subtree = getBlockForNode(node);
-        if(subtree != null) {
+        if (subtree != null) {
           builder.addBlock(subtree, mainFunction);
         }
       }
 
-      for(int i = 0; i < node.getNumLeavingEdges(); i++) {
+      for (int i = 0; i < node.getNumLeavingEdges(); i++) {
         CFANode nextNode = node.getLeavingEdge(i).getSuccessor();
-        if(!seen.contains(nextNode)) {
+        if (!seen.contains(nextNode)) {
           stack.push(nextNode);
           seen.add(nextNode);
         }

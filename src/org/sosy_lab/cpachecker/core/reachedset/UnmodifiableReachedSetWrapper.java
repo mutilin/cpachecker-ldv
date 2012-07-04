@@ -28,8 +28,8 @@ import java.util.Collections;
 import java.util.Iterator;
 
 import org.sosy_lab.common.Pair;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFANode;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractElement;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 
 import com.google.common.collect.Iterators;
@@ -43,17 +43,17 @@ public class UnmodifiableReachedSetWrapper implements UnmodifiableReachedSet {
   }
 
   @Override
-  public Collection<AbstractElement> getReached() {
+  public Collection<AbstractState> getReached() {
     return Collections.unmodifiableCollection(delegate.getReached());
   }
 
   @Override
-  public Iterator<AbstractElement> iterator() {
+  public Iterator<AbstractState> iterator() {
     return Iterators.unmodifiableIterator(delegate.iterator());
   }
 
   @Override
-  public Collection<Pair<AbstractElement, Precision>> getReachedWithPrecision() {
+  public Collection<Pair<AbstractState, Precision>> getReachedWithPrecision() {
     return Collections.unmodifiableCollection(delegate.getReachedWithPrecision());
   }
 
@@ -63,32 +63,32 @@ public class UnmodifiableReachedSetWrapper implements UnmodifiableReachedSet {
   }
 
   @Override
-  public Collection<AbstractElement> getReached(AbstractElement pElement) throws UnsupportedOperationException {
-    return Collections.unmodifiableCollection(delegate.getReached(pElement));
+  public Collection<AbstractState> getReached(AbstractState pState) throws UnsupportedOperationException {
+    return Collections.unmodifiableCollection(delegate.getReached(pState));
   }
 
   @Override
-  public Collection<AbstractElement> getReached(CFANode pLocation) {
+  public Collection<AbstractState> getReached(CFANode pLocation) {
     return Collections.unmodifiableCollection(delegate.getReached(pLocation));
   }
 
   @Override
-  public AbstractElement getFirstElement() {
-    return delegate.getFirstElement();
+  public AbstractState getFirstState() {
+    return delegate.getFirstState();
   }
 
   @Override
-  public AbstractElement getLastElement() {
-    return delegate.getLastElement();
+  public AbstractState getLastState() {
+    return delegate.getLastState();
   }
 
   @Override
-  public boolean hasWaitingElement() {
-    return delegate.hasWaitingElement();
+  public boolean hasWaitingState() {
+    return delegate.hasWaitingState();
   }
 
   @Override
-  public Collection<AbstractElement> getWaitlist() {
+  public Collection<AbstractState> getWaitlist() {
     return Collections.unmodifiableCollection(delegate.getWaitlist());
   }
 
@@ -98,14 +98,14 @@ public class UnmodifiableReachedSetWrapper implements UnmodifiableReachedSet {
   }
 
   @Override
-  public Precision getPrecision(AbstractElement pElement)
+  public Precision getPrecision(AbstractState pState)
       throws UnsupportedOperationException {
-    return delegate.getPrecision(pElement);
+    return delegate.getPrecision(pState);
   }
 
   @Override
-  public boolean contains(AbstractElement pElement) {
-    return delegate.contains(pElement);
+  public boolean contains(AbstractState pState) {
+    return delegate.contains(pState);
   }
 
   @Override

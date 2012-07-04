@@ -26,8 +26,8 @@ package org.sosy_lab.cpachecker.cpa.explicit;
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.blocks.ReferencedVariable;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFANode;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractElement;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
 
@@ -36,8 +36,8 @@ public class ExplicitReducer implements Reducer {
 
   private boolean occursInBlock(Block pBlock, String pVar) {
     // TODO could be more efficient (avoid linear runtime)
-    for(ReferencedVariable referencedVar : pBlock.getReferencedVariables()) {
-      if(referencedVar.getName().equals(pVar)) {
+    for (ReferencedVariable referencedVar : pBlock.getReferencedVariables()) {
+      if (referencedVar.getName().equals(pVar)) {
         return true;
       }
     }
@@ -45,12 +45,12 @@ public class ExplicitReducer implements Reducer {
   }
 
   @Override
-  public AbstractElement getVariableReducedElement(AbstractElement pExpandedElement, Block pContext, CFANode pCallNode) {
-    ExplicitElement expandedElement = (ExplicitElement)pExpandedElement;
+  public AbstractState getVariableReducedState(AbstractState pExpandedState, Block pContext, CFANode pCallNode) {
+    ExplicitState expandedState = (ExplicitState)pExpandedState;
 
-    ExplicitElement clonedElement = expandedElement.clone();
-    for(String trackedVar : expandedElement.getTrackedVariableNames()) {
-      if(!occursInBlock(pContext, trackedVar)) {
+    ExplicitState clonedElement = expandedState.clone();
+    for (String trackedVar : expandedState.getTrackedVariableNames()) {
+      if (!occursInBlock(pContext, trackedVar)) {
         clonedElement.deleteValue(trackedVar);
       }
     }
@@ -59,25 +59,25 @@ public class ExplicitReducer implements Reducer {
   }
 
   @Override
-  public AbstractElement getVariableExpandedElement(AbstractElement pRootElement, Block pReducedContext,
-      AbstractElement pReducedElement) {
-    ExplicitElement rootElement = (ExplicitElement)pRootElement;
-    ExplicitElement reducedElement = (ExplicitElement)pReducedElement;
+  public AbstractState getVariableExpandedState(AbstractState pRootState, Block pReducedContext,
+      AbstractState pReducedState) {
+    ExplicitState rootState = (ExplicitState)pRootState;
+    ExplicitState reducedState = (ExplicitState)pReducedState;
 
-    ExplicitElement diffElement = rootElement.clone();
-    for(String trackedVar : reducedElement.getTrackedVariableNames()) {
+    ExplicitState diffElement = rootState.clone();
+    for (String trackedVar : reducedState.getTrackedVariableNames()) {
       diffElement.deleteValue(trackedVar);
     }
     //TODO: following is needed with threshold != inf
-  /*  for(String trackedVar : diffElement.getTrackedVariableNames()) {
-      if(occursInBlock(pReducedContext, trackedVar)) {
+  /*  for (String trackedVar : diffElement.getTrackedVariableNames()) {
+      if (occursInBlock(pReducedContext, trackedVar)) {
         diffElement.deleteValue(trackedVar);
       }
     }*/
-    for(String trackedVar : reducedElement.getTrackedVariableNames()) {
-      Long value = reducedElement.getValueFor(trackedVar);
-      if(value != null) {
-        diffElement.assignConstant(trackedVar, reducedElement.getValueFor(trackedVar));
+    for (String trackedVar : reducedState.getTrackedVariableNames()) {
+      Long value = reducedState.getValueFor(trackedVar);
+      if (value != null) {
+        diffElement.assignConstant(trackedVar, reducedState.getValueFor(trackedVar));
       } else {
         diffElement.forget(trackedVar);
       }
@@ -107,8 +107,8 @@ public class ExplicitReducer implements Reducer {
   }
 
   @Override
-  public Object getHashCodeForElement(AbstractElement pElementKey, Precision pPrecisionKey) {
-    ExplicitElement elementKey = (ExplicitElement)pElementKey;
+  public Object getHashCodeForState(AbstractState pElementKey, Precision pPrecisionKey) {
+    ExplicitState elementKey = (ExplicitState)pElementKey;
     ExplicitPrecision precisionKey = (ExplicitPrecision)pPrecisionKey;
 
     return Pair.of(elementKey.getConstantsMap(), precisionKey);

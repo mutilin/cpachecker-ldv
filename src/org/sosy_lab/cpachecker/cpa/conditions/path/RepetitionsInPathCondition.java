@@ -33,13 +33,13 @@ import org.sosy_lab.common.configuration.IntegerOption;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFAEdge;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFAEdgeType;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdgeType;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractElement;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
-import org.sosy_lab.cpachecker.core.interfaces.conditions.AvoidanceReportingElement;
+import org.sosy_lab.cpachecker.core.interfaces.conditions.AvoidanceReportingState;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.util.assumptions.PreventingHeuristic;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.Formula;
@@ -74,8 +74,8 @@ public class RepetitionsInPathCondition implements PathCondition, Statistics {
   }
 
   @Override
-  public AvoidanceReportingElement getInitialElement(CFANode pNode) {
-    return new RepetitionsInPathConditionElement(ImmutableMap.<CFAEdge, Integer>of(), threshold, false);
+  public AvoidanceReportingState getInitialState(CFANode pNode) {
+    return new RepetitionsInPathConditionState(ImmutableMap.<CFAEdge, Integer>of(), threshold, false);
   }
 
   private boolean isInteresting(CFAEdge edge) {
@@ -84,8 +84,8 @@ public class RepetitionsInPathCondition implements PathCondition, Statistics {
   }
 
   @Override
-  public AvoidanceReportingElement getAbstractSuccessor(AbstractElement pElement, CFAEdge pEdge) {
-    RepetitionsInPathConditionElement element = (RepetitionsInPathConditionElement)pElement;
+  public AvoidanceReportingState getAbstractSuccessor(AbstractState pElement, CFAEdge pEdge) {
+    RepetitionsInPathConditionState element = (RepetitionsInPathConditionState)pElement;
 
     if (!isInteresting(pEdge)) {
       return element;
@@ -105,7 +105,7 @@ public class RepetitionsInPathCondition implements PathCondition, Statistics {
     Map<CFAEdge, Integer> newFrequencyMap = Maps.newHashMap(element.frequencyMap);
     newFrequencyMap.put(pEdge, repetitions);
 
-    return new RepetitionsInPathConditionElement(newFrequencyMap, threshold, thresholdReached);
+    return new RepetitionsInPathConditionState(newFrequencyMap, threshold, thresholdReached);
   }
 
   @Override
@@ -134,13 +134,13 @@ public class RepetitionsInPathCondition implements PathCondition, Statistics {
   }
 
 
-  private static class RepetitionsInPathConditionElement implements AbstractElement, AvoidanceReportingElement {
+  private static class RepetitionsInPathConditionState implements AbstractState, AvoidanceReportingState {
 
     private final ImmutableMap<CFAEdge, Integer> frequencyMap;
     private final int threshold;
     private final boolean thresholdReached;
 
-    private RepetitionsInPathConditionElement(Map<CFAEdge, Integer> pFrequencyMap,
+    private RepetitionsInPathConditionState(Map<CFAEdge, Integer> pFrequencyMap,
         int pThreshold, boolean pThresholdReached) {
       frequencyMap = ImmutableMap.copyOf(pFrequencyMap);
       threshold = pThreshold;
@@ -154,9 +154,7 @@ public class RepetitionsInPathCondition implements PathCondition, Statistics {
 
     @Override
     public Formula getReasonFormula(FormulaManager pMgr) {
-      String formula = PreventingHeuristic.REPETITIONSINPATH.getFormulaString(threshold);
-
-      return pMgr.parse(formula);
+      return PreventingHeuristic.REPETITIONSINPATH.getFormula(pMgr, threshold);
     }
 
     @Override

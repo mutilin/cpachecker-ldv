@@ -65,7 +65,7 @@ class CoreComponentsFactory {
 
   @Option(description = "use CEGAR algorithm for lazy counter-example guided analysis"
         + "\nYou need to specify a refiner with the cegar.refiner option."
-        + "\nCurrently all refiner require the use of the ARTCPA.")
+        + "\nCurrently all refiner require the use of the ARGCPA.")
   private boolean useRefinement = false;
 
   @Option(description="use CBMC to double-check counter-examples")
@@ -111,7 +111,7 @@ class CoreComponentsFactory {
 
     Algorithm algorithm;
 
-    if(useProofCheckAlgorithm) {
+    if (useProofCheckAlgorithm) {
       logger.log(Level.INFO, "Using Proof Check Algorithm");
       algorithm = new ProofCheckAlgorithm(cpa, config, logger);
     } else if (useRestartingAlgorithm) {
@@ -122,7 +122,7 @@ class CoreComponentsFactory {
       algorithm = new ImpactAlgorithm(config, logger, cpa);
 
     } else {
-      algorithm = new CPAAlgorithm(cpa, logger);
+      algorithm = new CPAAlgorithm(cpa, logger, config);
 
       if (useRefinement) {
         algorithm = new CEGARAlgorithm(algorithm, cpa, config, logger);

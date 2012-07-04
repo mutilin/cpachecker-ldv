@@ -30,8 +30,7 @@ import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
-import org.sosy_lab.cpachecker.cfa.CFA;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
 import org.sosy_lab.cpachecker.core.defaults.MergeJoinOperator;
 import org.sosy_lab.cpachecker.core.defaults.MergeSepOperator;
@@ -40,7 +39,7 @@ import org.sosy_lab.cpachecker.core.defaults.StopJoinOperator;
 import org.sosy_lab.cpachecker.core.defaults.StopNeverOperator;
 import org.sosy_lab.cpachecker.core.defaults.StopSepOperator;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractDomain;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractElement;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.CPAFactory;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysisWithABM;
 import org.sosy_lab.cpachecker.core.interfaces.MergeOperator;
@@ -81,13 +80,10 @@ public class ExplicitCPA implements ConfigurableProgramAnalysisWithABM, Statisti
   private final ExplicitReducer reducer;
   private final ExplicitCPAStatistics statistics;
 
-  private final CFA cfa;
-
   private final Configuration config;
   private final LogManager logger;
 
-  private ExplicitCPA(Configuration config, LogManager logger, CFA cfa) throws InvalidConfigurationException {
-    this.cfa    = cfa;
+  private ExplicitCPA(Configuration config, LogManager logger) throws InvalidConfigurationException {
     this.config = config;
     this.logger = logger;
 
@@ -104,11 +100,11 @@ public class ExplicitCPA implements ConfigurableProgramAnalysisWithABM, Statisti
   }
 
   private MergeOperator initializeMergeOperator() {
-    if(mergeType.equals("SEP")) {
+    if (mergeType.equals("SEP")) {
       return MergeSepOperator.getInstance();
     }
 
-    else if(mergeType.equals("JOIN")) {
+    else if (mergeType.equals("JOIN")) {
       return new MergeJoinOperator(abstractDomain);
     }
 
@@ -116,15 +112,15 @@ public class ExplicitCPA implements ConfigurableProgramAnalysisWithABM, Statisti
   }
 
   private StopOperator initializeStopOperator() {
-    if(stopType.equals("SEP")) {
+    if (stopType.equals("SEP")) {
       return new StopSepOperator(abstractDomain);
     }
 
-    else if(stopType.equals("JOIN")) {
+    else if (stopType.equals("JOIN")) {
       return new StopJoinOperator(abstractDomain);
     }
 
-    else if(stopType.equals("NEVER")) {
+    else if (stopType.equals("NEVER")) {
       return new StopNeverOperator();
     }
 
@@ -156,8 +152,8 @@ public class ExplicitCPA implements ConfigurableProgramAnalysisWithABM, Statisti
   }
 
   @Override
-  public AbstractElement getInitialElement(CFANode node) {
-    return new ExplicitElement();
+  public AbstractState getInitialState(CFANode node) {
+    return new ExplicitState();
   }
 
   @Override
@@ -174,11 +170,11 @@ public class ExplicitCPA implements ConfigurableProgramAnalysisWithABM, Statisti
     return precisionAdjustment;
   }
 
-  protected Configuration getConfiguration() {
+  public Configuration getConfiguration() {
     return config;
   }
 
-  protected LogManager getLogger() {
+  public LogManager getLogger() {
     return logger;
   }
 
@@ -192,11 +188,7 @@ public class ExplicitCPA implements ConfigurableProgramAnalysisWithABM, Statisti
     pStatsCollection.add(statistics);
   }
 
-  ExplicitCPAStatistics getStats() {
+  public ExplicitCPAStatistics getStats() {
     return statistics;
-  }
-
-  CFA getCFA() {
-    return cfa;
   }
 }

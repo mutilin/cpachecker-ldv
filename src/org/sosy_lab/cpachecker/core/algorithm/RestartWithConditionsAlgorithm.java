@@ -33,17 +33,17 @@ import org.sosy_lab.common.configuration.IntegerOption;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractElement;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.conditions.AdjustableConditionCPA;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
-import org.sosy_lab.cpachecker.cpa.art.ARTCPA;
-import org.sosy_lab.cpachecker.cpa.art.ARTElement;
-import org.sosy_lab.cpachecker.cpa.art.ARTReachedSet;
+import org.sosy_lab.cpachecker.cpa.arg.ARGCPA;
+import org.sosy_lab.cpachecker.cpa.arg.ARGReachedSet;
+import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.assumptions.storage.AssumptionStorageCPA;
-import org.sosy_lab.cpachecker.cpa.assumptions.storage.AssumptionStorageElement;
+import org.sosy_lab.cpachecker.cpa.assumptions.storage.AssumptionStorageState;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
-import org.sosy_lab.cpachecker.util.AbstractElements;
+import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.CPAs;
 
 import com.google.common.collect.ImmutableList;
@@ -54,7 +54,6 @@ import com.google.common.collect.Iterables;
 public class RestartWithConditionsAlgorithm implements Algorithm {
 
   private final Algorithm innerAlgorithm;
-  private final ARTCPA cpa;
   private final LogManager logger;
 
   private final List<? extends AdjustableConditionCPA> conditionCPAs;
@@ -70,10 +69,10 @@ public class RestartWithConditionsAlgorithm implements Algorithm {
     logger = pLogger;
     innerAlgorithm = pAlgorithm;
 
-    if (!(pCpa instanceof ARTCPA)) {
-      throw new InvalidConfigurationException("ARTCPA needed for RestartWithConditionsAlgorithm");
+    if (!(pCpa instanceof ARGCPA)) {
+      throw new InvalidConfigurationException("ARGCPA needed for RestartWithConditionsAlgorithm");
     }
-    cpa = (ARTCPA)pCpa;
+    ARGCPA cpa = (ARGCPA)pCpa;
     if (cpa.retrieveWrappedCpa(AssumptionStorageCPA.class) == null) {
       throw new InvalidConfigurationException("AssumptionStorageCPA needed for RestartWithConditionsAlgorithm");
     }
@@ -91,7 +90,7 @@ public class RestartWithConditionsAlgorithm implements Algorithm {
       // run the inner algorithm to fill the reached set
       sound &= innerAlgorithm.run(pReached);
 
-      if (Iterables.any(pReached, AbstractElements.IS_TARGET_ELEMENT)) {
+      if (Iterables.any(pReached, AbstractStates.IS_TARGET_STATE)) {
         return sound;
       }
 
@@ -101,13 +100,13 @@ public class RestartWithConditionsAlgorithm implements Algorithm {
         return sound;
       }
 
-      List<AbstractElement> elementsWithAssumptions = getElementsWithAssumptions(pReached);
+      List<AbstractState> statesWithAssumptions = getStatesWithAssumptions(pReached);
 
-      // if there are elements that an assumption is generated for
-      if (!elementsWithAssumptions.isEmpty()) {
+      // if there are states that an assumption is generated for
+      if (!statesWithAssumptions.isEmpty()) {
         logger.log(Level.INFO, "Adjusting heuristics thresholds.");
-        // if necessary, this will re-add elements to the waitlist
-        adjustThresholds(elementsWithAssumptions, pReached);
+        // if necessary, this will re-add state to the waitlist
+        adjustThresholds(statesWithAssumptions, pReached);
       }
 
       // adjust precision of condition CPAs
@@ -119,44 +118,44 @@ public class RestartWithConditionsAlgorithm implements Algorithm {
         }
       }
 
-    } while (pReached.hasWaitingElement());
+    } while (pReached.hasWaitingState());
 
     return sound;
   }
 
-  private List<AbstractElement> getElementsWithAssumptions(ReachedSet reached) {
+  private List<AbstractState> getStatesWithAssumptions(ReachedSet reached) {
 
-    List<AbstractElement> retList = new ArrayList<AbstractElement>();
+    List<AbstractState> retList = new ArrayList<AbstractState>();
 
-    for (AbstractElement element : reached) {
+    for (AbstractState state : reached) {
 
-      // TODO do we need target elements?
-//      if (AbstractElements.isTargetElement(element)) {
-//        // create assumptions for target element
-//        retList.add(element);
+      // TODO do we need target states?
+//      if (AbstractStates.isTargetState(state)) {
+//        // create assumptions for target state
+//        retList.add(state);
 //
 //      } else {
 
         // check if stored assumption is not "true"
-        AssumptionStorageElement e = AbstractElements.extractElementByType(element, AssumptionStorageElement.class);
+        AssumptionStorageState s = AbstractStates.extractStateByType(state, AssumptionStorageState.class);
 
-        if (!e.getAssumption().isTrue()
-            || !e.getStopFormula().isTrue()) {
+        if (!s.getAssumption().isTrue()
+            || !s.getStopFormula().isTrue()) {
 
-          retList.add(element);
+          retList.add(state);
         }
     }
 
     return retList;
   }
 
-  private void adjustThresholds(List<AbstractElement> pElementsWithAssumptions, ReachedSet pReached) {
+  private void adjustThresholds(List<AbstractState> pStatesWithAssumptions, ReachedSet pReached) {
 
-    ARTReachedSet reached = new ARTReachedSet(pReached, cpa);
-    for (AbstractElement e: pElementsWithAssumptions) {
-      ARTElement artElement = (ARTElement)e;
+    ARGReachedSet reached = new ARGReachedSet(pReached);
+    for (AbstractState s: pStatesWithAssumptions) {
+      ARGState argState = (ARGState)s;
 
-      for (ARTElement parent : ImmutableSet.copyOf(artElement.getParents())){
+      for (ARGState parent : ImmutableSet.copyOf(argState.getParents())){
         reached.removeSubtree(parent);
       }
     }

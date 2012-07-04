@@ -30,11 +30,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFAEdge;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFANode;
-import org.sosy_lab.cpachecker.cfa.objectmodel.c.CallToReturnEdge;
-import org.sosy_lab.cpachecker.cfa.objectmodel.c.FunctionCallEdge;
-import org.sosy_lab.cpachecker.cfa.objectmodel.c.FunctionReturnEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionReturnEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionSummaryEdge;
 
 import com.google.common.base.Function;
 import com.google.common.base.Predicate;
@@ -129,14 +129,14 @@ public class CFATraversal {
 
   /**
    * Returns a new instance of this class which behaves exactly like the current
-   * instance, except it ignores summary edges ({@link CallToReturnEdge}s).
+   * instance, except it ignores summary edges ({@link CFunctionSummaryEdge}s).
    * It will not call the visitor for them, and it will not follow this edge
    * during traversing.
    */
   public CFATraversal ignoreSummaryEdges() {
     return new CFATraversal(edgeSupplier,
         Predicates.<CFAEdge>or(ignoreEdge,
-            Predicates.instanceOf(CallToReturnEdge.class)));
+            Predicates.instanceOf(CFunctionSummaryEdge.class)));
   }
 
   /**
@@ -150,8 +150,8 @@ public class CFATraversal {
     return new CFATraversal(edgeSupplier,
         Predicates.<CFAEdge>or(
             ignoreEdge,
-            Predicates.instanceOf(FunctionCallEdge.class),
-            Predicates.instanceOf(FunctionReturnEdge.class)
+            Predicates.instanceOf(CFunctionCallEdge.class),
+            Predicates.instanceOf(CFunctionReturnEdge.class)
             ));
   }
 
@@ -196,6 +196,33 @@ public class CFATraversal {
     return;
   }
 
+  /**
+   * Traverse through the CFA according to the strategy represented by the
+   * current instance, starting at a given node and passing each
+   * encountered node and edge to a given visitor.
+   *
+   * Each node will be visited only once.
+   * This method does the same as wrapping the given visitor in a
+   * {@link NodeCollectingCFAVisitor} and calling {@link #traverse(CFANode, CFAVisitor)}.
+   *
+   * @param startingNode The starting node.
+   * @param visitor The visitor to notify.
+   */
+  public void traverseOnce(final CFANode startingNode, final CFATraversal.CFAVisitor visitor) {
+    traverse(startingNode, new NodeCollectingCFAVisitor(visitor));
+  }
+
+  /**
+   * Traverse through the CFA according to the strategy represented by the
+   * current instance, starting at a given node and collecting all encountered nodes.
+   * @param startingNode The starting node.
+   * @return A modifiable reference to the set of visited nodes.
+   */
+  public Set<CFANode> collectNodesReachableFrom(final CFANode startingNode) {
+    NodeCollectingCFAVisitor visitor = new NodeCollectingCFAVisitor();
+    this.traverse(startingNode, visitor);
+    return visitor.getVisitedNodes();
+  }
 
   // --- Useful visitor implementations ---
 

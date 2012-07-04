@@ -50,7 +50,7 @@ public class FeatureVarsTest {
 
       prop = new HashMap<String, String>(prop);
       prop.put("analysis.traversal.order", "bfs");
-      prop.put("analysis.traversal.useTopsort", "true");
+      prop.put("analysis.traversal.useReversePostorder", "true");
       prop.put("analysis.traversal.useCallstack", "true");
       prop.put("CompositeCPA.cpas", "cpa.location.LocationCPA, cpa.callstack.CallstackCPA, cpa.featurevariables.FeatureVarsCPA, cpa.explicit.ExplicitCPA");
 
@@ -111,8 +111,8 @@ public class FeatureVarsTest {
       prop.put("analysis.traversal.order", "bfs");
       prop.put("analysis.traversal.useTopsort", "true");
       prop.put("analysis.traversal.useCallstack", "true");
-      prop.put("cpa","cpa.art.ARTCPA");
-      prop.put("ARTCPA.cpa","cpa.composite.CompositeCPA");
+      prop.put("cpa","cpa.arg.ARGCPA");
+      prop.put("ARGCPA.cpa","cpa.composite.CompositeCPA");
       prop.put("CompositeCPA.cpas", "cpa.location.LocationCPA, cpa.callstack.CallstackCPA, cpa.featurevariables.FeatureVarsCPA, cpa.explicit.ExplicitCPA");
 
       TestResults results = run(prop, "test/programs/simple/featureVarsTest.c");
@@ -136,11 +136,11 @@ public class FeatureVarsTest {
       );
 
       prop = new HashMap<String, String>(prop);
-      prop.put("cpa","cpa.art.ARTCPA");
+      prop.put("cpa","cpa.arg.ARGCPA");
       prop.put("analysis.traversal.order", "bfs");
       prop.put("analysis.traversal.useTopsort", "true");
       prop.put("analysis.traversal.useCallstack", "true");
-      prop.put("ARTCPA.cpa","cpa.composite.CompositeCPA");
+      prop.put("ARGCPA.cpa","cpa.composite.CompositeCPA");
       prop.put("CompositeCPA.cpas", "cpa.location.LocationCPA, cpa.callstack.CallstackCPA, cpa.featurevariables.FeatureVarsCPA, cpa.explicit.ExplicitCPA");
 
       File sourceFile = new File("test/programs/simple/tmpProgram.c");
@@ -174,8 +174,8 @@ public class FeatureVarsTest {
       );
 
       prop = new HashMap<String, String>(prop);
-      prop.put("cpa","cpa.art.ARTCPA");
-      prop.put("ARTCPA.cpa","cpa.composite.CompositeCPA");
+      prop.put("cpa","cpa.arg.ARGCPA");
+      prop.put("ARGCPA.cpa","cpa.composite.CompositeCPA");
       prop.put("CompositeCPA.cpas", "cpa.location.LocationCPA, cpa.callstack.CallstackCPA, cpa.featurevariables.FeatureVarsCPA, cpa.explicit.ExplicitCPA");
 
       File sourceFile = new File("test/programs/simple/tmpProgram.c");
@@ -243,7 +243,7 @@ public class FeatureVarsTest {
       File tmpFile = new File("test/config/automata/tmpSpecification.spc");
       tmpFile.deleteOnExit();
       Files.writeFile(tmpFile , "OBSERVER AUTOMATON tmpAutomaton\n" +
-      		"INITIAL STATE Init;\n"+
+          "INITIAL STATE Init;\n"+
           "STATE Init :\n"+
           "MATCH {$1} ->\n"+
           "PRINT \"Found $1 in Line $line\" GOTO Init;\n"+
@@ -251,8 +251,8 @@ public class FeatureVarsTest {
       File sourceFile = new File("test/programs/simple/tmpProgram.c");
       sourceFile.deleteOnExit();
       Files.writeFile(sourceFile, "int __SELECTED_FEATURE_base; int main() { " +
-      		"if (__SELECTED_FEATURE_base && !__SELECTED_FEATURE_base ) { foo(1); } else {foo(2);} " +
-      		"}");
+          "if (__SELECTED_FEATURE_base && !__SELECTED_FEATURE_base ) { foo(1); } else {foo(2);} " +
+          "}");
       TestResults results = run(prop, "test/programs/simple/tmpProgram.c");
       //System.out.println(results.getLog());
       //System.out.println(results.getCheckerResult().getResult());

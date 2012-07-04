@@ -36,18 +36,18 @@ import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.CFACreator;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFAFunctionDefinitionNode;
+import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.algorithm.Algorithm;
 import org.sosy_lab.cpachecker.core.algorithm.ExternalCBMCAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.impact.ImpactAlgorithm;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractElement;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.ParserException;
-import org.sosy_lab.cpachecker.util.AbstractElements;
+import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 
 import com.google.common.base.Charsets;
@@ -176,7 +176,7 @@ public class CPAchecker {
 
         if (algorithm instanceof ImpactAlgorithm) {
           ImpactAlgorithm mcmillan = (ImpactAlgorithm)algorithm;
-          reached.add(mcmillan.getInitialElement(cfa.getMainFunction()), mcmillan.getInitialPrecision(cfa.getMainFunction()));
+          reached.add(mcmillan.getInitialState(cfa.getMainFunction()), mcmillan.getInitialPrecision(cfa.getMainFunction()));
         } else {
           initializeReachedSet(reached, cpa, cfa.getMainFunction());
         }
@@ -264,7 +264,7 @@ public class CPAchecker {
 
         // either run only once (if stopAfterError == true)
         // or until the waitlist is empty
-      } while (!stopAfterError && reached.hasWaitingElement());
+      } while (!stopAfterError && reached.hasWaitingState());
 
       logger.log(Level.INFO, "Stopping analysis ...");
       return sound;
@@ -279,12 +279,12 @@ public class CPAchecker {
   }
 
   private Result analyzeResult(final ReachedSet reached, boolean sound) {
-    if (Iterables.any(reached, AbstractElements.IS_TARGET_ELEMENT)) {
+    if (Iterables.any(reached, AbstractStates.IS_TARGET_STATE)) {
       return Result.UNSAFE;
     }
 
-    if (reached.hasWaitingElement()) {
-      logger.log(Level.WARNING, "Analysis not completed: there are still elements to be processed.");
+    if (reached.hasWaitingState()) {
+      logger.log(Level.WARNING, "Analysis not completed: there are still states to be processed.");
       return Result.UNKNOWN;
     }
 
@@ -299,12 +299,12 @@ public class CPAchecker {
   private void initializeReachedSet(
       final ReachedSet reached,
       final ConfigurableProgramAnalysis cpa,
-      final CFAFunctionDefinitionNode mainFunction) {
+      final FunctionEntryNode mainFunction) {
     logger.log(Level.FINE, "Creating initial reached set");
 
-    AbstractElement initialElement = cpa.getInitialElement(mainFunction);
+    AbstractState initialState = cpa.getInitialState(mainFunction);
     Precision initialPrecision = cpa.getInitialPrecision(mainFunction);
 
-    reached.add(initialElement, initialPrecision);
+    reached.add(initialState, initialPrecision);
   }
 }

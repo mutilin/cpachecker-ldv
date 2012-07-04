@@ -28,7 +28,7 @@ import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
 import org.sosy_lab.cpachecker.core.defaults.MergeJoinOperator;
 import org.sosy_lab.cpachecker.core.defaults.MergeSepOperator;
@@ -37,7 +37,7 @@ import org.sosy_lab.cpachecker.core.defaults.StopJoinOperator;
 import org.sosy_lab.cpachecker.core.defaults.StopNeverOperator;
 import org.sosy_lab.cpachecker.core.defaults.StopSepOperator;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractDomain;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractElement;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.CPAFactory;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysisWithABM;
 import org.sosy_lab.cpachecker.core.interfaces.MergeOperator;
@@ -86,11 +86,11 @@ public class AndersenCPA implements ConfigurableProgramAnalysisWithABM {
   }
 
   private MergeOperator initializeMergeOperator() {
-    if(mergeType.equals("SEP")) {
+    if (mergeType.equals("SEP")) {
       return MergeSepOperator.getInstance();
     }
 
-    else if(mergeType.equals("JOIN")) {
+    else if (mergeType.equals("JOIN")) {
       return new MergeJoinOperator(abstractDomain);
     }
 
@@ -98,15 +98,15 @@ public class AndersenCPA implements ConfigurableProgramAnalysisWithABM {
   }
 
   private StopOperator initializeStopOperator() {
-    if(stopType.equals("SEP")) {
+    if (stopType.equals("SEP")) {
       return new StopSepOperator(abstractDomain);
     }
 
-    else if(stopType.equals("JOIN")) {
+    else if (stopType.equals("JOIN")) {
       return new StopJoinOperator(abstractDomain);
     }
 
-    else if(stopType.equals("NEVER")) {
+    else if (stopType.equals("NEVER")) {
       return new StopNeverOperator();
     }
 
@@ -134,8 +134,8 @@ public class AndersenCPA implements ConfigurableProgramAnalysisWithABM {
   }
 
   @Override
-  public AbstractElement getInitialElement(CFANode node) {
-    return new AndersenElement();
+  public AbstractState getInitialState(CFANode node) {
+    return new AndersenState();
   }
 
   @Override

@@ -27,20 +27,17 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.sosy_lab.cpachecker.cfa.CFA;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFANode;
-import org.sosy_lab.cpachecker.cpa.location.LocationElement.LocationElementFactory;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cpa.location.LocationState.LocationStateFactory;
 
 
 public class CFAInfo {
-  private final CFA cfa;
   private final Map<Integer, CFANode> nodeNumberToNode;
-  private LocationElementFactory locationElementFactory;
+  private LocationStateFactory locationStateFactory;
 
   CFAInfo(CFA cfa) {
-    this.cfa = cfa;
-
     HashMap<Integer, CFANode> nodeNumberToNode = new HashMap<Integer, CFANode>();
-    for(CFANode node : cfa.getAllNodes()) {
+    for (CFANode node : cfa.getAllNodes()) {
       nodeNumberToNode.put(node.getNodeNumber(), node);
     }
     this.nodeNumberToNode = nodeNumberToNode;
@@ -50,11 +47,11 @@ public class CFAInfo {
     return nodeNumberToNode.get(nodeNumber);
   }
 
-  public void storeLocationElementFactory(LocationElementFactory pElementFactory) {
-    locationElementFactory = pElementFactory;
+  public void storeLocationStateFactory(LocationStateFactory pElementFactory) {
+    locationStateFactory = pElementFactory;
   }
 
-  public LocationElementFactory getLocationElementFactory() {
-    return locationElementFactory;
+  public LocationStateFactory getLocationStateFactory() {
+    return locationStateFactory;
   }
 }

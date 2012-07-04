@@ -39,23 +39,23 @@ import org.sosy_lab.common.configuration.IntegerOption;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
-import org.sosy_lab.cpachecker.cfa.ast.IASTAssignment;
-import org.sosy_lab.cpachecker.cfa.ast.IASTDeclaration;
-import org.sosy_lab.cpachecker.cfa.ast.IASTExpression;
-import org.sosy_lab.cpachecker.cfa.ast.IASTFieldReference;
-import org.sosy_lab.cpachecker.cfa.ast.IASTIdExpression;
-import org.sosy_lab.cpachecker.cfa.ast.IASTSimpleDeclaration;
-import org.sosy_lab.cpachecker.cfa.ast.IASTStatement;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFAEdge;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFAEdgeType;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFANode;
-import org.sosy_lab.cpachecker.cfa.objectmodel.c.StatementEdge;
+import org.sosy_lab.cpachecker.cfa.ast.c.CAssignment;
+import org.sosy_lab.cpachecker.cfa.ast.c.CDeclaration;
+import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CFieldReference;
+import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CSimpleDeclaration;
+import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdgeType;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractElement;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
-import org.sosy_lab.cpachecker.core.interfaces.conditions.AvoidanceReportingElement;
+import org.sosy_lab.cpachecker.core.interfaces.conditions.AvoidanceReportingState;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
-import org.sosy_lab.cpachecker.cpa.explicit.ExplicitElement;
+import org.sosy_lab.cpachecker.cpa.explicit.ExplicitState;
 import org.sosy_lab.cpachecker.util.assumptions.PreventingHeuristic;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.Formula;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.FormulaManager;
@@ -85,7 +85,7 @@ public class AssignmentsInPathCondition implements PathCondition, Statistics {
   /**
    * the reference to the current element
    */
-  private AssignmentsInPathConditionElement currentElement = null;
+  private AssignmentsInPathConditionState currentState = null;
 
   /**
    * the maximal number of assignments over all variables for all elements seen to far
@@ -109,34 +109,34 @@ public class AssignmentsInPathCondition implements PathCondition, Statistics {
   }
 
   @Override
-  public AvoidanceReportingElement getInitialElement(CFANode node) {
+  public AvoidanceReportingState getInitialState(CFANode node) {
 
-    AvoidanceReportingElement element = demandUniqueness ? new UniqueAssignmentsInPathConditionElement() : new AllAssignmentsInPathConditionElement();
+    AvoidanceReportingState element = demandUniqueness ? new UniqueAssignmentsInPathConditionState() : new AllAssignmentsInPathConditionState();
 
     return element;
   }
 
   @Override
-  public AvoidanceReportingElement getAbstractSuccessor(AbstractElement element, CFAEdge edge) {
-    currentElement = (AssignmentsInPathConditionElement)element;
+  public AvoidanceReportingState getAbstractSuccessor(AbstractState element, CFAEdge edge) {
+    currentState = (AssignmentsInPathConditionState)element;
 
-    if(edge.getEdgeType() == CFAEdgeType.StatementEdge) {
-      StatementEdge statementEdge = (StatementEdge)edge;
+    if (edge.getEdgeType() == CFAEdgeType.StatementEdge) {
+      CStatementEdge statementEdge = (CStatementEdge)edge;
 
-      IASTStatement statement = statementEdge.getStatement();
-      if(statement instanceof IASTAssignment) {
-        IASTExpression leftHandSide = ((IASTAssignment)statement).getLeftHandSide();
+      CStatement statement = statementEdge.getStatement();
+      if (statement instanceof CAssignment) {
+        CExpression leftHandSide = ((CAssignment)statement).getLeftHandSide();
 
         String assignedVariable = getScopedVariableName(leftHandSide, edge);
-        if(assignedVariable != null) {
-          currentElement = currentElement.getSuccessor(assignedVariable);
+        if (assignedVariable != null) {
+          currentState = currentState.getSuccessor(assignedVariable);
         }
       }
     }
 
-    maxNumberOfAssignments = Math.max(maxNumberOfAssignments, currentElement.maximum);
+    maxNumberOfAssignments = Math.max(maxNumberOfAssignments, currentState.maximum);
 
-    for(Map.Entry<String, Integer> assignment : currentElement.getAssignmentCounts().entrySet()) {
+    for (Map.Entry<String, Integer> assignment : currentState.getAssignmentCounts().entrySet()) {
       String variableName     = assignment.getKey();
       Integer currentCounter  = maxNumberOfAssignmentsPerIdentifier.containsKey(variableName) ? maxNumberOfAssignmentsPerIdentifier.get(variableName) : 0;
 
@@ -145,7 +145,7 @@ public class AssignmentsInPathCondition implements PathCondition, Statistics {
       maxNumberOfAssignmentsPerIdentifier.put(variableName, currentCounter);
     }
 
-    return currentElement;
+    return currentState;
   }
 
   /**
@@ -155,14 +155,15 @@ public class AssignmentsInPathCondition implements PathCondition, Statistics {
    * @param edge the cfa edge
    * @return the scoped name of the assigned variable, or null, if neither an identifier nor a field reference where assigned
    */
-  private String getScopedVariableName(IASTExpression expression, CFAEdge edge) {
+  private String getScopedVariableName(CExpression expression, CFAEdge edge) {
     String scope = "";
 
-    if(!isGlobalIdentifier(expression))
+    if (!isGlobalIdentifier(expression)) {
       scope = edge.getPredecessor().getFunctionName() + "::";
+    }
 
-    if(expression instanceof IASTIdExpression
-        || expression instanceof IASTFieldReference) {
+    if (expression instanceof CIdExpression
+        || expression instanceof CFieldReference) {
       return scope + expression.toASTString();
     }
 
@@ -175,13 +176,13 @@ public class AssignmentsInPathCondition implements PathCondition, Statistics {
    * @param expression the expression in question
    * @return true, if the given expression references a global identifier, else false
    */
-  private boolean isGlobalIdentifier(IASTExpression expression) {
-    if(expression instanceof IASTIdExpression) {
-      IASTIdExpression identifier       = (IASTIdExpression)expression;
-      IASTSimpleDeclaration declaration = identifier.getDeclaration();
+  private boolean isGlobalIdentifier(CExpression expression) {
+    if (expression instanceof CIdExpression) {
+      CIdExpression identifier       = (CIdExpression)expression;
+      CSimpleDeclaration declaration = identifier.getDeclaration();
 
-      if(declaration instanceof IASTDeclaration) {
-        return ((IASTDeclaration)declaration).isGlobal();
+      if (declaration instanceof CDeclaration) {
+        return ((CDeclaration)declaration).isGlobal();
       }
     }
 
@@ -204,7 +205,7 @@ public class AssignmentsInPathCondition implements PathCondition, Statistics {
     out.println("Threshold value: " + threshold);
     out.println("max. number of assignments: " + maxNumberOfAssignments);
 
-    if(extendedStatsFile != null) {
+    if (extendedStatsFile != null) {
       writeLogFile();
     }
   }
@@ -216,7 +217,7 @@ public class AssignmentsInPathCondition implements PathCondition, Statistics {
       // log the last element found
       builder.append("total number of variable assignments of last element:");
       builder.append("\n");
-      builder.append(currentElement);
+      builder.append(currentState);
 
       // log the max-aggregation
       builder.append("\n");
@@ -240,7 +241,7 @@ public class AssignmentsInPathCondition implements PathCondition, Statistics {
   private static String assignmentsAsString(Map<String, Integer> assignments) {
     StringBuilder builder = new StringBuilder();
 
-    for(Map.Entry<String, Integer> assignment : assignments.entrySet()) {
+    for (Map.Entry<String, Integer> assignment : assignments.entrySet()) {
       builder.append(assignment.getKey());
       builder.append(" -> ");
       builder.append(assignment.getValue());
@@ -250,7 +251,7 @@ public class AssignmentsInPathCondition implements PathCondition, Statistics {
     return builder.toString();
   }
 
-  abstract public class AssignmentsInPathConditionElement implements AbstractElement, AvoidanceReportingElement {
+  abstract public class AssignmentsInPathConditionState implements AbstractState, AvoidanceReportingState {
     /**
      * the maximal number of assignments over all variables
      */
@@ -262,7 +263,7 @@ public class AssignmentsInPathCondition implements PathCondition, Statistics {
      * @param assignedVariable the name of the assigned variable
      * @return the successor of the current element, based on the given assigned variable
      */
-    abstract public AssignmentsInPathConditionElement getSuccessor(String assignedVariable);
+    abstract public AssignmentsInPathConditionState getSuccessor(String assignedVariable);
 
     /**
      * This method returns the maximal number of assignments over all variables.
@@ -274,9 +275,8 @@ public class AssignmentsInPathCondition implements PathCondition, Statistics {
     }
 
     @Override
-    public Formula getReasonFormula(FormulaManager formuaManager) {
-      String formula = PreventingHeuristic.ASSIGNMENTSINPATH.getFormulaString(maximum);
-      return formuaManager.parse(formula);
+    public Formula getReasonFormula(FormulaManager formulaManager) {
+      return PreventingHeuristic.ASSIGNMENTSINPATH.getFormula(formulaManager, maximum);
     }
 
     @Override
@@ -318,7 +318,7 @@ public class AssignmentsInPathCondition implements PathCondition, Statistics {
     }
   }
 
-  public class AllAssignmentsInPathConditionElement extends AssignmentsInPathConditionElement {
+  public class AllAssignmentsInPathConditionState extends AssignmentsInPathConditionState {
 
     /**
      * the mapping from variable name to the number of assignments to this variable
@@ -328,22 +328,22 @@ public class AssignmentsInPathCondition implements PathCondition, Statistics {
     /**
      * default constructor for creating the initial element
      */
-    public AllAssignmentsInPathConditionElement() {}
+    public AllAssignmentsInPathConditionState() {}
 
     /**
      * copy constructor for successor computation
      *
      * @param original the original element to be copied
      */
-    private AllAssignmentsInPathConditionElement(AllAssignmentsInPathConditionElement original) {
+    private AllAssignmentsInPathConditionState(AllAssignmentsInPathConditionState original) {
       mapping = new HashMap<String, Integer>(original.mapping);
       maximum = original.maximum;
     }
 
     @Override
-    public AllAssignmentsInPathConditionElement getSuccessor(String assignedVariable) {
+    public AllAssignmentsInPathConditionState getSuccessor(String assignedVariable) {
       // create a copy ...
-      AllAssignmentsInPathConditionElement successor = new AllAssignmentsInPathConditionElement(this);
+      AllAssignmentsInPathConditionState successor = new AllAssignmentsInPathConditionState(this);
 
       // ... and update the mapping at the maximum
       Integer numberOfAssignments = mapping.containsKey(assignedVariable) ? mapping.get(assignedVariable) + 1 : 1;
@@ -370,7 +370,7 @@ public class AssignmentsInPathCondition implements PathCondition, Statistics {
     }
   }
 
-  public class UniqueAssignmentsInPathConditionElement extends AssignmentsInPathConditionElement {
+  public class UniqueAssignmentsInPathConditionState extends AssignmentsInPathConditionState {
 
     /**
      * the mapping from variable name to the set of assigned values to this variable
@@ -385,22 +385,22 @@ public class AssignmentsInPathCondition implements PathCondition, Statistics {
     /**
      * default constructor for creating the initial element
      */
-    public UniqueAssignmentsInPathConditionElement() {}
+    public UniqueAssignmentsInPathConditionState() {}
 
     /**
      * copy constructor for successor computation
      *
      * @param original the original element to be copied
      */
-    private UniqueAssignmentsInPathConditionElement(UniqueAssignmentsInPathConditionElement original) {
+    private UniqueAssignmentsInPathConditionState(UniqueAssignmentsInPathConditionState original) {
       mapping = HashMultimap.create(original.mapping);
       maximum = original.maximum;
     }
 
     @Override
-    public UniqueAssignmentsInPathConditionElement getSuccessor(String assignedVariable) {
+    public UniqueAssignmentsInPathConditionState getSuccessor(String assignedVariable) {
       // create a copy ...
-      UniqueAssignmentsInPathConditionElement successor = new UniqueAssignmentsInPathConditionElement(this);
+      UniqueAssignmentsInPathConditionState successor = new UniqueAssignmentsInPathConditionState(this);
 
       // ... and set the later to be assigned variable
       successor.assignedVariable  = assignedVariable;
@@ -409,18 +409,18 @@ public class AssignmentsInPathCondition implements PathCondition, Statistics {
     }
 
     /**
-     * This method adds an assignment for the last assigned variable, if the current value of this assigned variable in the ExplicitElement was not assigned before, i.e. if it is unique.
+     * This method adds an assignment for the last assigned variable, if the current value of this assigned variable in the ExplicitState was not assigned before, i.e. if it is unique.
      *
-     * @param element the ExplicitElement from which to query assignment information
+     * @param element the ExplicitState from which to query assignment information
      */
-    public void addAssignment(ExplicitElement element) {
-      if(assignedVariable == null) {
+    public void addAssignment(ExplicitState element) {
+      if (assignedVariable == null) {
         return;
       }
 
-      if(element.contains(assignedVariable)) {
+      if (element.contains(assignedVariable)) {
         Long value = element.getValueFor(assignedVariable);
-        if(value != null) {
+        if (value != null) {
           mapping.put(assignedVariable, value);
 
           maximum = Math.max(maximum, getAssignmentCount(assignedVariable));
@@ -451,7 +451,7 @@ public class AssignmentsInPathCondition implements PathCondition, Statistics {
     public Map<String, Integer> getAssignmentCounts() {
       Map<String, Integer> map = new HashMap<String, Integer>();
 
-      for(String variableName : mapping.keys()) {
+      for (String variableName : mapping.keys()) {
         map.put(variableName, getAssignmentCount(variableName));
       }
 

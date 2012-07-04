@@ -44,11 +44,11 @@ import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.CFA;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.CPABuilder;
 import org.sosy_lab.cpachecker.core.CPAchecker;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractElement;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
@@ -57,7 +57,7 @@ import org.sosy_lab.cpachecker.core.reachedset.ForwardingReachedSet;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSetFactory;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
-import org.sosy_lab.cpachecker.util.AbstractElements;
+import org.sosy_lab.cpachecker.util.AbstractStates;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.Iterables;
@@ -163,7 +163,7 @@ public class RestartAlgorithm implements Algorithm, StatisticsProvider {
 
     ForwardingReachedSet reached = (ForwardingReachedSet)pReached;
 
-    CFANode mainFunction = AbstractElements.extractLocation(pReached.getFirstElement());
+    CFANode mainFunction = AbstractStates.extractLocation(pReached.getFirstState());
     assert mainFunction != null : "Location information needed";
 
     Iterator<File> configFilesIterator = configFiles.iterator();
@@ -198,7 +198,7 @@ public class RestartAlgorithm implements Algorithm, StatisticsProvider {
         try {
           boolean sound = currentAlgorithm.run(currentReached);
 
-          if (Iterables.any(currentReached, AbstractElements.IS_TARGET_ELEMENT)) {
+          if (Iterables.any(currentReached, AbstractStates.IS_TARGET_STATE)) {
             return sound;
           }
 
@@ -207,10 +207,10 @@ public class RestartAlgorithm implements Algorithm, StatisticsProvider {
             // another algorithm, continue with the next algorithm
             logger.log(Level.INFO, "Analysis result was unsound.");
 
-          } else if (currentReached.hasWaitingElement()) {
-            // if there are still elements in the waitlist, the result is unknown
+          } else if (currentReached.hasWaitingState()) {
+            // if there are still states in the waitlist, the result is unknown
             // continue with the next algorithm
-            logger.log(Level.INFO, "Analysis not completed: There are still elements to be processed.");
+            logger.log(Level.INFO, "Analysis not completed: There are still states to be processed.");
 
           } else {
             // sound analysis and completely finished, terminate
@@ -249,7 +249,7 @@ public class RestartAlgorithm implements Algorithm, StatisticsProvider {
     @Option(name = "analysis.useRefinement",
         description = "use CEGAR algorithm for lazy counter-example guided analysis"
           + "\nYou need to specify a refiner with the cegar.refiner option."
-          + "\nCurrently all refiner require the use of the ARTCPA.")
+          + "\nCurrently all refiner require the use of the ARGCPA.")
           boolean useRefinement = false;
 
     @Option(name="analysis.useCBMC",
@@ -282,7 +282,7 @@ public class RestartAlgorithm implements Algorithm, StatisticsProvider {
     Configuration singleConfig = singleConfigBuilder.build();
     singleConfig.inject(singleOptions);
 
-    if(singleOptions.runCBMCasExternalTool){
+    if (singleOptions.runCBMCasExternalTool){
       algorithm = new ExternalCBMCAlgorithm(filename, singleConfig, logger);
       reached = new ReachedSetFactory(singleConfig, logger).create();
     }
@@ -304,11 +304,11 @@ public class RestartAlgorithm implements Algorithm, StatisticsProvider {
       ReachedSetFactory pReachedSetFactory) {
     logger.log(Level.FINE, "Creating initial reached set");
 
-    AbstractElement initialElement = cpa.getInitialElement(mainFunction);
+    AbstractState initialState = cpa.getInitialState(mainFunction);
     Precision initialPrecision = cpa.getInitialPrecision(mainFunction);
 
     ReachedSet reached = pReachedSetFactory.create();
-    reached.add(initialElement, initialPrecision);
+    reached.add(initialState, initialPrecision);
     return reached;
   }
 
@@ -331,7 +331,7 @@ public class RestartAlgorithm implements Algorithm, StatisticsProvider {
   throws InvalidConfigurationException, CPAException {
     logger.log(Level.FINE, "Creating algorithms");
 
-    Algorithm algorithm = new CPAAlgorithm(cpa, logger);
+    Algorithm algorithm = new CPAAlgorithm(cpa, logger, pConfig);
 
     if (pOptions.useRefinement) {
       algorithm = new CEGARAlgorithm(algorithm, cpa, pConfig, logger);
@@ -354,7 +354,7 @@ public class RestartAlgorithm implements Algorithm, StatisticsProvider {
 
   @Override
   public void collectStatistics(Collection<Statistics> pStatsCollection) {
-    if(currentAlgorithm instanceof StatisticsProvider) {
+    if (currentAlgorithm instanceof StatisticsProvider) {
       ((StatisticsProvider)currentAlgorithm).collectStatistics(pStatsCollection);
     }
     pStatsCollection.add(stats);

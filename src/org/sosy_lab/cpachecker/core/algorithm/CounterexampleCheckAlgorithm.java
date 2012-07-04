@@ -44,17 +44,17 @@ import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.algorithm.cbmctools.CBMCChecker;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractElement;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.CounterexampleChecker;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSetFactory;
-import org.sosy_lab.cpachecker.cpa.art.ARTCPA;
-import org.sosy_lab.cpachecker.cpa.art.ARTElement;
-import org.sosy_lab.cpachecker.cpa.art.ARTUtils;
-import org.sosy_lab.cpachecker.cpa.art.Path;
+import org.sosy_lab.cpachecker.cpa.arg.ARGCPA;
+import org.sosy_lab.cpachecker.cpa.arg.ARGState;
+import org.sosy_lab.cpachecker.cpa.arg.ARGUtils;
+import org.sosy_lab.cpachecker.cpa.arg.Path;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.RefinementFailedException;
 import org.sosy_lab.cpachecker.exceptions.RefinementFailedException.Reason;
@@ -88,8 +88,8 @@ public class CounterexampleCheckAlgorithm implements Algorithm, StatisticsProvid
     this.logger = logger;
     config.inject(this);
 
-    if (!(pCpa instanceof ARTCPA)) {
-      throw new InvalidConfigurationException("ART CPA needed for counterexample check");
+    if (!(pCpa instanceof ARGCPA)) {
+      throw new InvalidConfigurationException("ARG CPA needed for counterexample check");
     }
 
     if (checkerName.equals("CBMC")) {
@@ -105,17 +105,17 @@ public class CounterexampleCheckAlgorithm implements Algorithm, StatisticsProvid
   public boolean run(ReachedSet reached) throws CPAException, InterruptedException {
     boolean sound = true;
 
-    while (reached.hasWaitingElement()) {
+    while (reached.hasWaitingState()) {
       sound &= algorithm.run(reached);
 
-      AbstractElement lastElement = reached.getLastElement();
-      if (!(lastElement instanceof ARTElement)) {
+      AbstractState lastState = reached.getLastState();
+      if (!(lastState instanceof ARGState)) {
         // no analysis possible
         break;
       }
 
-      ARTElement errorElement = (ARTElement)lastElement;
-      if (!errorElement.isTarget()) {
+      ARGState errorState = (ARGState)lastState;
+      if (!errorState.isTarget()) {
         // no analysis necessary
         break;
       }
@@ -123,16 +123,17 @@ public class CounterexampleCheckAlgorithm implements Algorithm, StatisticsProvid
       // check counterexample
       checkTime.start();
       try {
-        ARTElement rootElement = (ARTElement)reached.getFirstElement();
+        ARGState rootState = (ARGState)reached.getFirstState();
 
-        Set<ARTElement> elementsOnErrorPath = ARTUtils.getAllElementsOnPathsTo(errorElement);
+        Set<ARGState> statesOnErrorPath = ARGUtils.getAllStatesOnPathsTo(errorState);
 
         boolean feasibility;
         try {
-          feasibility = checker.checkCounterexample(rootElement, errorElement, elementsOnErrorPath);
+          feasibility = checker.checkCounterexample(rootState, errorState, statesOnErrorPath);
         } catch (CPAException e) {
           logger.logUserException(Level.WARNING, e, "Counterexample found, but feasibility could not be verified");
-          return false;
+          //return false;
+          throw e;
         }
 
         if (feasibility) {
@@ -146,7 +147,7 @@ public class CounterexampleCheckAlgorithm implements Algorithm, StatisticsProvid
           if (continueAfterInfeasibleError) {
             // This counterexample is infeasible, so usually we would remove it
             // from the reached set. This is not possible, because the
-            // counterexample of course contains the root element and we don't
+            // counterexample of course contains the root state and we don't
             // know up to which point we have to remove the path from the reached set.
             // However, we also cannot let it stay in the reached set, because
             // then the states on the path might cover other, actually feasible,
@@ -157,17 +158,17 @@ public class CounterexampleCheckAlgorithm implements Algorithm, StatisticsProvid
             // and prevent them from covering new paths.
 
             if (removeInfeasibleErrors) {
-              sound &= handleInfeasibleCounterexample(reached, elementsOnErrorPath);
+              sound &= handleInfeasibleCounterexample(reached, statesOnErrorPath);
 
             } else if (sound) {
-              logger.log(Level.WARNING, "Infeasible counterexample found, but could not remove it from the ART. Therefore, we cannot prove safety.");
+              logger.log(Level.WARNING, "Infeasible counterexample found, but could not remove it from the ARG. Therefore, we cannot prove safety.");
               sound = false;
             }
 
-            sound &= removeErrorElement(reached, errorElement);
+            sound &= removeErrorState(reached, errorState);
 
           } else {
-            Path path = ARTUtils.getOnePathTo(errorElement);
+            Path path = ARGUtils.getOnePathTo(errorState);
             throw new RefinementFailedException(Reason.InfeasibleCounterexample, path);
           }
         }
@@ -178,65 +179,65 @@ public class CounterexampleCheckAlgorithm implements Algorithm, StatisticsProvid
     return sound;
   }
 
-  private boolean handleInfeasibleCounterexample(ReachedSet reached, Set<ARTElement> elementsOnErrorPath) {
+  private boolean handleInfeasibleCounterexample(ReachedSet reached, Set<ARGState> statesOnErrorPath) {
     boolean sound = true;
 
     // So we let the states stay in the reached set, and just prevent
-    // them from covering other elements by removing all existing
-    // coverage relations (and re-adding the covered elements)
-    // and preventing new ones via ARTElement#setNotCovering().
+    // them from covering other states by removing all existing
+    // coverage relations (and re-adding the covered states)
+    // and preventing new ones via ARGState#setNotCovering().
 
-    Collection<ARTElement> coveredByErrorPath = new ArrayList<ARTElement>();
+    Collection<ARGState> coveredByErrorPath = new ArrayList<ARGState>();
 
-    for (ARTElement errorPathElement : elementsOnErrorPath) {
+    for (ARGState errorPathState : statesOnErrorPath) {
       // schedule for coverage removal
-      coveredByErrorPath.addAll(errorPathElement.getCoveredByThis());
+      coveredByErrorPath.addAll(errorPathState.getCoveredByThis());
 
       // prevent future coverage
-      errorPathElement.setNotCovering();
+      errorPathState.setNotCovering();
     }
 
-    for (ARTElement coveredElement : coveredByErrorPath) {
-      if (isTransitiveChildOf(coveredElement, coveredElement.getCoveringElement())) {
-        // This element is covered by one of it's (transitive) parents
+    for (ARGState coveredState : coveredByErrorPath) {
+      if (isTransitiveChildOf(coveredState, coveredState.getCoveringState())) {
+        // This state is covered by one of it's (transitive) parents
         // so this is a loop.
-        // Don't add the element, because otherwise the loop would
+        // Don't add the state, because otherwise the loop would
         // get unrolled endlessly.
-        logger.log(Level.WARNING, "Infeasible counterexample found, but could not remove it from the ART due to loops in the counterexample path. Therefore, we cannot prove safety.");
+        logger.log(Level.WARNING, "Infeasible counterexample found, but could not remove it from the ARG due to loops in the counterexample path. Therefore, we cannot prove safety.");
         sound = false;
         continue;
       }
 
-      for (ARTElement parentOfCovered : coveredElement.getParents()) {
-        if (elementsOnErrorPath.contains(parentOfCovered)) {
+      for (ARGState parentOfCovered : coveredState.getParents()) {
+        if (statesOnErrorPath.contains(parentOfCovered)) {
           // this should never happen, but handle anyway
           // we may not re-add this parent, because otherwise
           // the error-path will be re-discovered again
           // but not adding the parent is unsound
-          logger.log(Level.WARNING, "Infeasible counterexample found, but could not remove it from the ART. Therefore, we cannot prove safety.");
+          logger.log(Level.WARNING, "Infeasible counterexample found, but could not remove it from the ARG. Therefore, we cannot prove safety.");
           sound = false;
 
         } else {
-          // let covered element be re-discovered
+          // let covered state be re-discovered
           reached.reAddToWaitlist(parentOfCovered);
         }
       }
-      assert !reached.contains(coveredElement) : "covered element in reached set";
-      coveredElement.removeFromART();
+      assert !reached.contains(coveredState) : "covered state in reached set";
+      coveredState.removeFromARG();
     }
     return sound;
   }
 
-  private boolean isTransitiveChildOf(ARTElement potentialChild, ARTElement potentialParent) {
+  private boolean isTransitiveChildOf(ARGState potentialChild, ARGState potentialParent) {
 
-    Set<ARTElement> seen = new HashSet<ARTElement>();
-    Deque<ARTElement> waitlist = new ArrayDeque<ARTElement>(); // use BFS
+    Set<ARGState> seen = new HashSet<ARGState>();
+    Deque<ARGState> waitlist = new ArrayDeque<ARGState>(); // use BFS
 
     waitlist.addAll(potentialChild.getParents());
     while (!waitlist.isEmpty()) {
-      ARTElement current = waitlist.pollFirst();
+      ARGState current = waitlist.pollFirst();
 
-      for (ARTElement currentParent : current.getParents()) {
+      for (ARGState currentParent : current.getParents()) {
         if (currentParent.equals(potentialParent)) {
           return true;
         }
@@ -250,43 +251,43 @@ public class CounterexampleCheckAlgorithm implements Algorithm, StatisticsProvid
     return false;
   }
 
-  private boolean removeErrorElement(ReachedSet reached, ARTElement errorElement) {
+  private boolean removeErrorState(ReachedSet reached, ARGState errorState) {
     boolean sound = true;
 
-    // remove re-added parent of errorElement to prevent computing
-    // the same error element over and over
-    Set<ARTElement> parents = errorElement.getParents();
-    assert parents.size() == 1 : "error element that was merged";
+    // remove re-added parent of errorState to prevent computing
+    // the same error state over and over
+    Set<ARGState> parents = errorState.getParents();
+    assert parents.size() == 1 : "error state that was merged";
 
-    ARTElement parent = Iterables.getOnlyElement(parents);
+    ARGState parent = Iterables.getOnlyElement(parents);
 
     if (parent.getChildren().size() > 1) {
-      // The error element has a sibling, so the parent and the sibling
-      // should stay in the reached set, but then the error element
+      // The error state has a sibling, so the parent and the sibling
+      // should stay in the reached set, but then the error state
       // would get re-discovered.
       // Currently just handle this by removing them anyway,
       // as this probably doesn't occur.
       sound = false;
     }
 
-    // this includes the errorElement and its siblings
-    List<ARTElement> siblings = copyOf(parent.getChildren());
-    for (ARTElement toRemove : siblings) {
+    // this includes the errorState and its siblings
+    List<ARGState> siblings = copyOf(parent.getChildren());
+    for (ARGState toRemove : siblings) {
 
       assert toRemove.getChildren().isEmpty();
 
-      // element toRemove may cover some elements, but hopefully only siblings which we remove anyway
+      // state toRemove may cover some states, but hopefully only siblings which we remove anyway
       assert siblings.containsAll(toRemove.getCoveredByThis());
 
       reached.remove(toRemove);
-      toRemove.removeFromART();
+      toRemove.removeFromARG();
     }
 
     reached.remove(parent);
-    parent.removeFromART();
+    parent.removeFromARG();
 
-    assert errorElement.isDestroyed() : "errorElement is not the child of its parent";
-    assert !reached.contains(errorElement) : "reached.remove() didn't work";
+    assert errorState.isDestroyed() : "errorState is not the child of its parent";
+    assert !reached.contains(errorState) : "reached.remove() didn't work";
     return sound;
   }
 

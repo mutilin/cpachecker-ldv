@@ -50,10 +50,10 @@ import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.configuration.TimeSpanOption;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
-import org.sosy_lab.cpachecker.cpa.art.ARTElement;
+import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.RefinementFailedException;
@@ -221,13 +221,13 @@ public abstract class InterpolationManager<I> {
    * This is used to detect timeouts for interpolation
    *
    * @param pFormulas the formulas for the path
-   * @param elementsOnPath the ARTElements on the path (may be empty if no branching information is required)
+   * @param elementsOnPath the ARGElements on the path (may be empty if no branching information is required)
    * @throws CPAException
    * @throws InterruptedException
    */
   public CounterexampleTraceInfo<I> buildCounterexampleTrace(
       final List<Formula> pFormulas,
-      final Set<ARTElement> elementsOnPath) throws CPAException, InterruptedException {
+      final Set<ARGState> elementsOnPath) throws CPAException, InterruptedException {
 
     // if we don't want to limit the time given to the solver
     if (itpTimeLimit == 0) {
@@ -280,13 +280,13 @@ public abstract class InterpolationManager<I> {
   /**
    * Counterexample analysis and predicate discovery.
    * @param pFormulas the formulas for the path
-   * @param elementsOnPath the ARTElements on the path (may be empty if no branching information is required)
+   * @param elementsOnPath the ARGElements on the path (may be empty if no branching information is required)
    * @param pItpProver interpolation solver used
    * @return counterexample info with predicated information
    * @throws CPAException
    */
   private <T> CounterexampleTraceInfo<I> buildCounterexampleTraceWithSpecifiedItp(
-      List<Formula> pFormulas, Set<ARTElement> elementsOnPath, InterpolatingTheoremProver<T> pItpProver) throws CPAException, InterruptedException {
+      List<Formula> pFormulas, Set<ARGState> elementsOnPath, InterpolatingTheoremProver<T> pItpProver) throws CPAException, InterruptedException {
 
     logger.log(Level.FINEST, "Building counterexample trace");
     stats.cexAnalysisTimer.start();
@@ -674,7 +674,7 @@ public abstract class InterpolationManager<I> {
       // If we are entering or exiting a function, update the stack
       // of entry points
       // TODO checking if the abstraction node is a new function
-//        if (wellScopedPredicates && e.getAbstractionLocation() instanceof CFAFunctionDefinitionNode) {
+//        if (wellScopedPredicates && e.getAbstractionLocation() instanceof FunctionEntryNode) {
 //          entryPoints.push(i);
 //        }
         // TODO check we are returning from a function
@@ -690,7 +690,7 @@ public abstract class InterpolationManager<I> {
     stats.interpolantVerificationTimer.start();
     try {
 
-      final int n = interpolants.size();;
+      final int n = interpolants.size();
       assert n == (formulas.size() - 1);
 
       // The following three properties need to be checked:
@@ -771,7 +771,6 @@ public abstract class InterpolationManager<I> {
    *
    * @param interpolants the interpolants
    * @return Information about the counterexample, including the predicates.
-   * @throws RefinementFailedException If there were no predicates.
    */
   private <T> CounterexampleTraceInfo<I> extractPredicates(
       List<Formula> interpolants) {
@@ -810,13 +809,13 @@ public abstract class InterpolationManager<I> {
    *
    * @param f The list of formulas on the path.
    * @param pItpProver The solver.
-   * @param elementsOnPath The ARTElements of the paths represented by f.
+   * @param elementsOnPath The ARGElements of the paths represented by f.
    * @return Information about the error path, including a satisfying assignment.
    * @throws CPATransferException
    * @throws InterruptedException
    */
   private <T> CounterexampleTraceInfo<I> getErrorPath(List<Formula> f,
-      InterpolatingTheoremProver<T> pItpProver, Set<ARTElement> elementsOnPath)
+      InterpolatingTheoremProver<T> pItpProver, Set<ARGState> elementsOnPath)
       throws CPATransferException, InterruptedException {
 
     // get the branchingFormula

@@ -26,13 +26,13 @@ package org.sosy_lab.cpachecker.cpa.assumptions.storage;
 import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
 import org.sosy_lab.cpachecker.core.defaults.MergeSepOperator;
 import org.sosy_lab.cpachecker.core.defaults.SingletonPrecision;
 import org.sosy_lab.cpachecker.core.defaults.StaticPrecisionAdjustment;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractDomain;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractElement;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.CPAFactory;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.MergeOperator;
@@ -61,7 +61,7 @@ public class AssumptionStorageCPA implements ConfigurableProgramAnalysis {
   private final StopOperator stopOperator;
   private final TransferRelation transferRelation;
   private final ExtendedFormulaManager formulaManager;
-  private final AssumptionStorageElement topElement;
+  private final AssumptionStorageState topState;
 
   private AssumptionStorageCPA(Configuration config, LogManager logger) throws InvalidConfigurationException
   {
@@ -69,8 +69,8 @@ public class AssumptionStorageCPA implements ConfigurableProgramAnalysis {
     CtoFormulaConverter converter = new CtoFormulaConverter(config, formulaManager, logger);
     abstractDomain = new AssumptionStorageDomain(formulaManager);
     stopOperator = new AssumptionStorageStop();
-    topElement = new AssumptionStorageElement(formulaManager.makeTrue(), formulaManager.makeTrue());
-    transferRelation = new AssumptionStorageTransferRelation(converter, formulaManager, topElement);
+    topState = new AssumptionStorageState(formulaManager.makeTrue(), formulaManager.makeTrue());
+    transferRelation = new AssumptionStorageTransferRelation(converter, formulaManager, topState);
   }
 
   public ExtendedFormulaManager getFormulaManager()
@@ -84,8 +84,8 @@ public class AssumptionStorageCPA implements ConfigurableProgramAnalysis {
   }
 
   @Override
-  public AbstractElement getInitialElement(CFANode node) {
-    return topElement;
+  public AbstractState getInitialState(CFANode node) {
+    return topState;
   }
 
   @Override

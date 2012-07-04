@@ -25,7 +25,7 @@ package org.sosy_lab.cpachecker.cpa.predicate;
 
 import static com.google.common.collect.Iterables.skip;
 import static com.google.common.collect.Lists.transform;
-import static org.sosy_lab.cpachecker.util.AbstractElements.extractElementByType;
+import static org.sosy_lab.cpachecker.util.AbstractStates.extractStateByType;
 
 import java.util.Collection;
 import java.util.List;
@@ -39,17 +39,17 @@ import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.CounterexampleInfo;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
-import org.sosy_lab.cpachecker.cpa.art.ARTElement;
-import org.sosy_lab.cpachecker.cpa.art.ARTReachedSet;
-import org.sosy_lab.cpachecker.cpa.art.AbstractARTBasedRefiner;
-import org.sosy_lab.cpachecker.cpa.art.Path;
+import org.sosy_lab.cpachecker.cpa.arg.ARGReachedSet;
+import org.sosy_lab.cpachecker.cpa.arg.ARGState;
+import org.sosy_lab.cpachecker.cpa.arg.AbstractARGBasedRefiner;
+import org.sosy_lab.cpachecker.cpa.arg.Path;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.RefinementFailedException;
 import org.sosy_lab.cpachecker.exceptions.RefinementFailedException.Reason;
-import org.sosy_lab.cpachecker.util.AbstractElements;
+import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.invariants.Farkas;
 import org.sosy_lab.cpachecker.util.invariants.balancer.Balancer;
 import org.sosy_lab.cpachecker.util.invariants.balancer.MatrixBalancer;
@@ -69,7 +69,7 @@ import org.sosy_lab.cpachecker.util.predicates.interpolation.CounterexampleTrace
 import com.google.common.collect.Lists;
 
 @Options(prefix="cpa.predicate.refinement")
-public class InvariantRefiner extends AbstractARTBasedRefiner {
+public class InvariantRefiner extends AbstractARGBasedRefiner {
 
   @Option(description="split arithmetic equalities when extracting predicates from interpolants")
   private boolean splitItpAtoms = false;
@@ -116,7 +116,7 @@ public class InvariantRefiner extends AbstractARTBasedRefiner {
   }
 
   @Override
-  protected CounterexampleInfo performRefinement(ARTReachedSet pReached, Path pPath) throws CPAException, InterruptedException {
+  protected CounterexampleInfo performRefinement(ARGReachedSet pReached, Path pPath) throws CPAException, InterruptedException {
 
     totalRefinement.start();
 
@@ -127,7 +127,7 @@ public class InvariantRefiner extends AbstractARTBasedRefiner {
       // the counterexample path was spurious, and we refine
       logger.log(Level.FINEST, "Error trace is spurious, refining the abstraction");
 
-      List<Pair<ARTElement, CFANode>> path = transformPath(pPath);
+      List<Pair<ARGState, CFANode>> path = transformPath(pPath);
       predicateRefiner.performRefinement(pReached, path, counterexample, false);
 
       totalRefinement.stop();
@@ -212,22 +212,32 @@ public class InvariantRefiner extends AbstractARTBasedRefiner {
     falseFormula.add(amgr.makePredicate(emgr.makeFalse()));
 
     // Get the list of abstraction elements.
-    List<Pair<ARTElement, CFANode>> path = transformPath(pPath);
+    List<Pair<ARGState, CFANode>> path = transformPath(pPath);
 
     // We ignore the error location, so the iteration is over i < N,
     // where N is /one less than/ the length of the path.
     int N = path.size() - 1;
     TemplateFormula phi;
     for (int i = 0; i < N; i++) {
-      Pair<ARTElement, CFANode> pair = path.get(i);
+      Pair<ARGState, CFANode> pair = path.get(i);
       CFANode loc = pair.getSecond();
       phi = tnet.getTemplate(loc).getTemplateFormula();
       if (phi != null) {
-        Collection<AbstractionPredicate> phiPreds = makeAbstractionPredicates(phi);
+        boolean atomic = true;
+        //Collection<AbstractionPredicate> phiPreds = makeAbstractionPredicates(phi);
+        Collection<AbstractionPredicate> phiPreds = makeAbstrPreds(phi, atomic);
         ceti.addPredicatesForRefinement(phiPreds);
       } else {
         ceti.addPredicatesForRefinement(trueFormula);
       }
+    }
+  }
+
+  private Collection<AbstractionPredicate> makeAbstrPreds(TemplateFormula invariant, boolean atomic) {
+    if (atomic) {
+      return makeAbstractionPredicates(invariant);
+    } else {
+      return makeAbstractionPredicatesNonatomic(invariant);
     }
   }
 
@@ -258,15 +268,24 @@ public class InvariantRefiner extends AbstractARTBasedRefiner {
     return preds;
   }
 
-  private List<Pair<ARTElement, CFANode>> transformPath(Path pPath) {
+  private Collection<AbstractionPredicate> makeAbstractionPredicatesNonatomic(TemplateFormula invariant) {
+    // Like makeAbstractionPredicates, only does /not/ split the passed
+    // invariant into atoms, but keeps it whole.
+    Collection<AbstractionPredicate> preds = new Vector<AbstractionPredicate>();
+    Formula formula = invariant.translate(emgr.getDelegate());
+    preds.add( amgr.makePredicate(formula) );
+    return preds;
+  }
+
+  private List<Pair<ARGState, CFANode>> transformPath(Path pPath) {
     // Just extracts information from pPath, putting it into
     // convenient form.
-    List<Pair<ARTElement, CFANode>> result = Lists.newArrayList();
+    List<Pair<ARGState, CFANode>> result = Lists.newArrayList();
 
-    for (ARTElement ae : skip(transform(pPath, Pair.<ARTElement>getProjectionToFirst()), 1)) {
-      PredicateAbstractElement pe = extractElementByType(ae, PredicateAbstractElement.class);
-      if (pe.isAbstractionElement()) {
-        CFANode loc = AbstractElements.extractLocation(ae);
+    for (ARGState ae : skip(transform(pPath, Pair.<ARGState>getProjectionToFirst()), 1)) {
+      PredicateAbstractState pe = extractStateByType(ae, PredicateAbstractState.class);
+      if (pe.isAbstractionState()) {
+        CFANode loc = AbstractStates.extractLocation(ae);
         result.add(Pair.of(ae, loc));
       }
     }

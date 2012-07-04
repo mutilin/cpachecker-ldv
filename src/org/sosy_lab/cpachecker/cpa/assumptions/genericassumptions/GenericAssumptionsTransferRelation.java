@@ -27,12 +27,12 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
-import org.sosy_lab.cpachecker.cfa.ast.IASTBinaryExpression;
-import org.sosy_lab.cpachecker.cfa.ast.NumericTypes;
-import org.sosy_lab.cpachecker.cfa.ast.IASTBinaryExpression.BinaryOperator;
-import org.sosy_lab.cpachecker.cfa.ast.IASTExpression;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFAEdge;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractElement;
+import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression.BinaryOperator;
+import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.types.c.CNumericTypes;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
@@ -56,32 +56,32 @@ public class GenericAssumptionsTransferRelation implements TransferRelation {
         new ArithmeticOverflowAssumptionBuilder());
 
   @Override
-  public Collection<? extends AbstractElement> getAbstractSuccessors(AbstractElement el, Precision p, CFAEdge edge)
+  public Collection<? extends AbstractState> getAbstractSuccessors(AbstractState el, Precision p, CFAEdge edge)
   throws CPATransferException
   {
 
-    IASTExpression allAssumptions = null;
+    CExpression allAssumptions = null;
     for (GenericAssumptionBuilder b : assumptionBuilders) {
-      IASTExpression assumption = b.assumptionsForEdge(edge);
+      CExpression assumption = b.assumptionsForEdge(edge);
       if (assumption != null) {
         if (allAssumptions == null) {
           allAssumptions = assumption;
         } else {
-          allAssumptions = new IASTBinaryExpression(null, null, allAssumptions, assumption, BinaryOperator.LOGICAL_AND);
+          allAssumptions = new CBinaryExpression(null, null, allAssumptions, assumption, BinaryOperator.LOGICAL_AND);
         }
       }
     }
 
     if (allAssumptions == null) {
-      allAssumptions = NumericTypes.TRUE;
+      allAssumptions = CNumericTypes.TRUE;
     }
 
-    return Collections.singleton(new GenericAssumptionsElement(allAssumptions));
+    return Collections.singleton(new GenericAssumptionsState(allAssumptions));
   }
 
   @Override
-  public Collection<? extends AbstractElement> strengthen(
-      AbstractElement el, List<AbstractElement> otherElements,
+  public Collection<? extends AbstractState> strengthen(
+      AbstractState el, List<AbstractState> otherElements,
       CFAEdge edge, Precision p)
       throws CPATransferException {
     // TODO Improve strengthening for assumptions so that they

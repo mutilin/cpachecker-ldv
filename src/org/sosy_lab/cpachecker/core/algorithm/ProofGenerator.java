@@ -23,7 +23,7 @@
  */
 package org.sosy_lab.cpachecker.core.algorithm;
 
-import static org.sosy_lab.cpachecker.util.AbstractElements.extractLocation;
+import static org.sosy_lab.cpachecker.util.AbstractStates.extractLocation;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -44,7 +44,7 @@ import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
-import org.sosy_lab.cpachecker.cpa.art.ARTElement;
+import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 
 @Options
@@ -52,9 +52,9 @@ public class ProofGenerator {
 
   @Option(name = "pcc.proofgen.doPCC", description = "")
   private boolean doPCC = false;
-  @Option(name = "pcc.proofFile", description = "file in which ART representation needed for proof checking is stored")
+  @Option(name = "pcc.proofFile", description = "file in which ARG representation needed for proof checking is stored")
   @FileOption(FileOption.Type.OUTPUT_FILE)
-  private File file = new File("art.obj");
+  private File file = new File("arg.obj");
 
   private final LogManager logger;
 
@@ -69,9 +69,9 @@ public class ProofGenerator {
     UnmodifiableReachedSet reached = pResult.getReached();
     // check result
     if (pResult.getResult() != Result.SAFE
-        || reached.getFirstElement() == null
-        || !(reached.getFirstElement() instanceof ARTElement)
-        || (extractLocation(reached.getFirstElement()) == null)) {
+        || reached.getFirstState() == null
+        || !(reached.getFirstState() instanceof ARGState)
+        || (extractLocation(reached.getFirstState()) == null)) {
       logger.log(Level.SEVERE, "Proof cannot be generated because checked property not known to be true.");
       return;
     }
@@ -90,8 +90,8 @@ public class ProofGenerator {
       zos.putNextEntry(ze);
       ObjectOutputStream o = new ObjectOutputStream(zos);
       //TODO might also want to write used configuration to the file so that proof checker does not need to get it as an argument
-      //write ART
-      o.writeObject(reached.getFirstElement());
+      //write ARG
+      o.writeObject(reached.getFirstState());
       zos.closeEntry();
 
       ze = new ZipEntry("Helper");
@@ -100,16 +100,15 @@ public class ProofGenerator {
       o = new ObjectOutputStream(zos);
       int numberOfStorages = GlobalInfo.getInstance().getNumberOfHelperStorages();
       o.writeInt(numberOfStorages);
-      for(int i = 0; i < numberOfStorages; ++i) {
+      for (int i = 0; i < numberOfStorages; ++i) {
         o.writeObject(GlobalInfo.getInstance().getHelperStorage(i));
       }
 
+      o.flush();
       zos.closeEntry();
-
-      o.close();
       zos.close();
     } catch (IOException e) {
-      System.err.println(e);
+      throw new RuntimeException(e);
     } finally {
       try {
         fos.close();

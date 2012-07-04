@@ -28,27 +28,27 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFAEdge;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFANode;
-import org.sosy_lab.cpachecker.cfa.objectmodel.c.CallToReturnEdge;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractElement;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.FunctionSummaryEdge;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
-import org.sosy_lab.cpachecker.cpa.location.LocationElement.LocationElementFactory;
+import org.sosy_lab.cpachecker.cpa.location.LocationState.LocationStateFactory;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 
 public class InverseLocationTransferRelation implements TransferRelation {
 
-  private final LocationElementFactory factory;
+  private final LocationStateFactory factory;
 
-  public InverseLocationTransferRelation(LocationElementFactory pFactory) {
+  public InverseLocationTransferRelation(LocationStateFactory pFactory) {
     factory = pFactory;
   }
 
-  private Collection<LocationElement> getAbstractSuccessor(AbstractElement element,
+  private Collection<LocationState> getAbstractSuccessor(AbstractState element,
       CFAEdge cfaEdge, Precision prec) throws CPATransferException {
 
-    LocationElement inputElement = (LocationElement) element;
+    LocationState inputElement = (LocationState) element;
     CFANode node = inputElement.getLocationNode();
 
     int numEnteringEdges = node.getNumEnteringEdges();
@@ -57,42 +57,42 @@ public class InverseLocationTransferRelation implements TransferRelation {
       CFAEdge testEdge = node.getEnteringEdge(edgeIdx);
 
       if (testEdge == cfaEdge) {
-        return Collections.singleton(factory.getElement(testEdge.getPredecessor()));
+        return Collections.singleton(factory.getState(testEdge.getPredecessor()));
       }
     }
 
     if (node.getEnteringSummaryEdge() != null) {
-      CallToReturnEdge summaryEdge = node.getEnteringSummaryEdge();
-      return Collections.singleton(factory.getElement(summaryEdge.getPredecessor()));
+      FunctionSummaryEdge summaryEdge = node.getEnteringSummaryEdge();
+      return Collections.singleton(factory.getState(summaryEdge.getPredecessor()));
     }
 
     return Collections.emptySet();
   }
 
   @Override
-  public Collection<LocationElement> getAbstractSuccessors(AbstractElement element,
+  public Collection<LocationState> getAbstractSuccessors(AbstractState element,
       Precision prec, CFAEdge cfaEdge) throws CPATransferException {
 
     if (cfaEdge != null) {
       return getAbstractSuccessor(element, cfaEdge, prec);
     }
 
-    CFANode node = ((LocationElement)element).getLocationNode();
+    CFANode node = ((LocationState)element).getLocationNode();
 
     int numEnteringEdges = node.getNumEnteringEdges();
-    List<LocationElement> allSuccessors = new ArrayList<LocationElement>(numEnteringEdges);
+    List<LocationState> allSuccessors = new ArrayList<LocationState>(numEnteringEdges);
 
     for (int edgeIdx = 0; edgeIdx < numEnteringEdges; edgeIdx++) {
       CFAEdge tempEdge = node.getEnteringEdge(edgeIdx);
-      allSuccessors.add(factory.getElement(tempEdge.getPredecessor()));
+      allSuccessors.add(factory.getState(tempEdge.getPredecessor()));
     }
 
     return allSuccessors;
   }
 
   @Override
-  public Collection<? extends AbstractElement> strengthen(AbstractElement element,
-      List<AbstractElement> otherElements, CFAEdge cfaEdge, Precision precision) {
+  public Collection<? extends AbstractState> strengthen(AbstractState element,
+      List<AbstractState> otherElements, CFAEdge cfaEdge, Precision precision) {
     return null;
   }
 }

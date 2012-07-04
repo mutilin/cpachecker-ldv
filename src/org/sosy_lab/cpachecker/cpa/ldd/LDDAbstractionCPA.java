@@ -24,33 +24,31 @@
 package org.sosy_lab.cpachecker.cpa.ldd;
 
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
 
 import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.cpachecker.cfa.CFA;
-import org.sosy_lab.cpachecker.cfa.ast.BasicType;
-import org.sosy_lab.cpachecker.cfa.ast.IASTDeclaration;
-import org.sosy_lab.cpachecker.cfa.ast.IASTFunctionDeclaration;
-import org.sosy_lab.cpachecker.cfa.ast.IASTParameterDeclaration;
-import org.sosy_lab.cpachecker.cfa.ast.IASTSimpleDeclSpecifier;
-import org.sosy_lab.cpachecker.cfa.ast.IASTVariableDeclaration;
-import org.sosy_lab.cpachecker.cfa.ast.IType;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFAEdge;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFAFunctionDefinitionNode;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFANode;
-import org.sosy_lab.cpachecker.cfa.objectmodel.c.DeclarationEdge;
-import org.sosy_lab.cpachecker.cfa.objectmodel.c.FunctionDefinitionNode;
+import org.sosy_lab.cpachecker.cfa.ast.c.CDeclaration;
+import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionDeclaration;
+import org.sosy_lab.cpachecker.cfa.ast.c.CParameterDeclaration;
+import org.sosy_lab.cpachecker.cfa.ast.c.CVariableDeclaration;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
+import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionEntryNode;
+import org.sosy_lab.cpachecker.cfa.types.c.CBasicType;
+import org.sosy_lab.cpachecker.cfa.types.c.CSimpleType;
+import org.sosy_lab.cpachecker.cfa.types.c.CType;
 import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
 import org.sosy_lab.cpachecker.core.defaults.MergeSepOperator;
 import org.sosy_lab.cpachecker.core.defaults.SingletonPrecision;
 import org.sosy_lab.cpachecker.core.defaults.StaticPrecisionAdjustment;
 import org.sosy_lab.cpachecker.core.defaults.StopSepOperator;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractDomain;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractElement;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.CPAFactory;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.MergeOperator;
@@ -75,58 +73,53 @@ public class LDDAbstractionCPA implements ConfigurableProgramAnalysis {
 
   private final LDDRegionManager regionManager;
 
-  private final LDDAbstractElement initialElement;
-
-  private final Map<String, Integer> variables = new HashMap<String, Integer>();
-
-  private final Set<String> constants = new HashSet<String>();
+  private final LDDAbstractState initialState;
 
   public LDDAbstractionCPA(CFA cfa, Configuration config, LogManager logger) throws InvalidConfigurationException {
+    Map<String, Integer> variables = new HashMap<String, Integer>();
+
     for (CFANode node : cfa.getAllNodes()) {
       for (CFAEdge edge : CFAUtils.leavingEdges(node)) {
-        if (edge instanceof DeclarationEdge) {
-          DeclarationEdge declarationEdge = (DeclarationEdge) edge;
-          IASTDeclaration declaration = declarationEdge.getDeclaration();
-          if (declaration instanceof IASTVariableDeclaration) {
+        if (edge instanceof CDeclarationEdge) {
+          CDeclarationEdge declarationEdge = (CDeclarationEdge) edge;
+          CDeclaration declaration = declarationEdge.getDeclaration();
+          if (declaration instanceof CVariableDeclaration) {
             String name = declaration.getName();
-            IType type = declaration.getDeclSpecifier();
-            registerVariable(name, type);
-          } else if (declaration instanceof IASTFunctionDeclaration) {
-            IASTFunctionDeclaration funDecl = (IASTFunctionDeclaration) declaration;
-            for (IASTParameterDeclaration paramDecl : funDecl.getDeclSpecifier().getParameters()) {
+            CType type = declaration.getType();
+            registerVariable(name, type, variables);
+          } else if (declaration instanceof CFunctionDeclaration) {
+            CFunctionDeclaration funDecl = (CFunctionDeclaration) declaration;
+            for (CParameterDeclaration paramDecl : funDecl.getType().getParameters()) {
               String name = paramDecl.getName();
-              IType type = paramDecl.getDeclSpecifier();
-              registerVariable(name, type);
+              CType type = paramDecl.getType();
+              registerVariable(name, type, variables);
             }
           }
         }
       }
     }
-    for (CFAFunctionDefinitionNode node : cfa.getAllFunctionHeads()) {
-      if (node instanceof FunctionDefinitionNode) {
-        FunctionDefinitionNode fDefNode = (FunctionDefinitionNode) node;
-        for (IASTParameterDeclaration paramDecl : fDefNode.getFunctionDefinition().getDeclSpecifier().getParameters()) {
+    for (FunctionEntryNode node : cfa.getAllFunctionHeads()) {
+      if (node instanceof CFunctionEntryNode) {
+        CFunctionEntryNode fDefNode = (CFunctionEntryNode) node;
+        for (CParameterDeclaration paramDecl : fDefNode.getFunctionDefinition().getType().getParameters()) {
           String name = paramDecl.getName();
-          IType type = paramDecl.getDeclSpecifier();
-          registerVariable(name, type);
+          CType type = paramDecl.getType();
+          registerVariable(name, type, variables);
         }
       }
     }
-    this.regionManager = new LDDRegionManager(this.variables.size());
+    this.regionManager = new LDDRegionManager(variables.size());
     this.domain = new LDDAbstractDomain(this.regionManager);
     this.stopOperator = new StopSepOperator(this.domain);
-    this.initialElement = new LDDAbstractElement(this.regionManager.makeTrue());
-    this.transferRelation = new LDDAbstractionTransferRelation(this.regionManager, this.variables, this.constants);
+    this.initialState = new LDDAbstractState(this.regionManager.makeTrue());
+    this.transferRelation = new LDDAbstractionTransferRelation(this.regionManager, variables);
   }
 
-  private void registerVariable(String name, IType type) {
-    if (name != null && !name.isEmpty() && type != null && type instanceof IASTSimpleDeclSpecifier) {
-      BasicType basicType = ((IASTSimpleDeclSpecifier) type).getType();
-      if (basicType == BasicType.INT) {
-        this.variables.put(name, this.variables.size());
-        if (type.isConst()) {
-          this.constants.add(name);
-        }
+  private void registerVariable(String name, CType type, Map<String, Integer> variables) {
+    if (name != null && !name.isEmpty() && type != null && type instanceof CSimpleType) {
+      CBasicType basicType = ((CSimpleType) type).getType();
+      if (basicType == CBasicType.INT) {
+        variables.put(name, variables.size());
       }
     }
   }
@@ -157,8 +150,8 @@ public class LDDAbstractionCPA implements ConfigurableProgramAnalysis {
   }
 
   @Override
-  public AbstractElement getInitialElement(CFANode pNode) {
-    return this.initialElement;
+  public AbstractState getInitialState(CFANode pNode) {
+    return this.initialState;
   }
 
   @Override

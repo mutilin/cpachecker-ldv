@@ -30,13 +30,13 @@ import java.util.List;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFAEdge;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.defaults.AbstractCPAFactory;
 import org.sosy_lab.cpachecker.core.defaults.MergeSepOperator;
 import org.sosy_lab.cpachecker.core.defaults.SimplePrecisionAdjustment;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractDomain;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractElement;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.CPAFactory;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysisWithABM;
@@ -137,7 +137,7 @@ public class CompositeCPA implements ConfigurableProgramAnalysis, StatisticsProv
       CompositeStopOperator compositeStop = new CompositeStopOperator(stopOps);
 
       PrecisionAdjustment compositePrecisionAdjustment;
-      if(options.precAdjust.equals("IGNORANT")) {
+      if (options.precAdjust.equals("IGNORANT")) {
         if (simplePrec) {
           compositePrecisionAdjustment = new CompositeSimplePrecisionAdjustment(simplePrecisionAdjustments.build());
         } else {
@@ -242,15 +242,15 @@ public class CompositeCPA implements ConfigurableProgramAnalysis, StatisticsProv
   }
 
   @Override
-  public AbstractElement getInitialElement (CFANode node) {
+  public AbstractState getInitialState (CFANode node) {
     Preconditions.checkNotNull(node);
 
-    ImmutableList.Builder<AbstractElement> initialElements = ImmutableList.builder();
+    ImmutableList.Builder<AbstractState> initialStates = ImmutableList.builder();
     for (ConfigurableProgramAnalysis sp : cpas) {
-      initialElements.add(sp.getInitialElement(node));
+      initialStates.add(sp.getInitialState(node));
     }
 
-    return new CompositeElement(initialElements.build());
+    return new CompositeState(initialStates.build());
   }
 
   @Override
@@ -272,8 +272,9 @@ public class CompositeCPA implements ConfigurableProgramAnalysis, StatisticsProv
       }
     }
 
-    if(precisionAdjustment instanceof StatisticsProvider)
+    if (precisionAdjustment instanceof StatisticsProvider) {
       ((StatisticsProvider)precisionAdjustment).collectStatistics(pStatsCollection);
+    }
   }
 
   @Override
@@ -300,12 +301,12 @@ public class CompositeCPA implements ConfigurableProgramAnalysis, StatisticsProv
   }
 
   @Override
-  public boolean areAbstractSuccessors(AbstractElement pElement, CFAEdge pCfaEdge, Collection<? extends AbstractElement> pSuccessors) throws CPATransferException, InterruptedException {
+  public boolean areAbstractSuccessors(AbstractState pElement, CFAEdge pCfaEdge, Collection<? extends AbstractState> pSuccessors) throws CPATransferException, InterruptedException {
     return transferRelation.areAbstractSuccessors(pElement, pCfaEdge, pSuccessors, cpas);
   }
 
   @Override
-  public boolean isCoveredBy(AbstractElement pElement, AbstractElement pOtherElement) throws CPAException {
+  public boolean isCoveredBy(AbstractState pElement, AbstractState pOtherElement) throws CPAException {
     return stopOperator.isCoveredBy(pElement, pOtherElement, cpas);
   }
 }

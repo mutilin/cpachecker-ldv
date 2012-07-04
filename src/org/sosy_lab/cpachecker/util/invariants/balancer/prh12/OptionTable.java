@@ -29,9 +29,9 @@ import java.util.logging.Level;
 
 import org.sosy_lab.common.LogManager;
 import org.sosy_lab.cpachecker.util.invariants.balancer.Assumption;
+import org.sosy_lab.cpachecker.util.invariants.balancer.Assumption.AssumptionType;
 import org.sosy_lab.cpachecker.util.invariants.balancer.AssumptionSet;
 import org.sosy_lab.cpachecker.util.invariants.balancer.Matrix;
-import org.sosy_lab.cpachecker.util.invariants.balancer.Assumption.AssumptionType;
 
 /*
  * This class is used by PivotRowHandler.
@@ -121,7 +121,7 @@ public class OptionTable {
         // The code there must be one of 2, 3, 4, or 6.
         int code = table[i0][j0];
         AssumptionSet as;
-        switch(code) {
+        switch (code) {
         case 2:
           as = change2to7(i0,j0);
           aset.addAll(as);

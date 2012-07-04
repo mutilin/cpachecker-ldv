@@ -32,7 +32,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
 
 @SuppressWarnings("unused")
 public class BlockedCFAReducerTest {
@@ -114,7 +114,6 @@ public class BlockedCFAReducerTest {
 
      ReducerUnderTest reducer = new ReducerUnderTest(null);
      while (reducer.applySequenceRule(funct)) {
-       ;
      }
 
      assertEquals(3, funct.getNumOfActiveNodes());

@@ -26,15 +26,15 @@ package org.sosy_lab.cpachecker.cpa.assumptions.genericassumptions;
 import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
-import org.sosy_lab.cpachecker.cfa.ast.NumericTypes;
-import org.sosy_lab.cpachecker.cfa.objectmodel.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.types.c.CNumericTypes;
 import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
 import org.sosy_lab.cpachecker.core.defaults.MergeSepOperator;
 import org.sosy_lab.cpachecker.core.defaults.SingletonPrecision;
 import org.sosy_lab.cpachecker.core.defaults.StaticPrecisionAdjustment;
 import org.sosy_lab.cpachecker.core.defaults.StopAlwaysOperator;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractDomain;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractElement;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.CPAFactory;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.MergeOperator;
@@ -49,14 +49,14 @@ public class GenericAssumptionsCPA implements ConfigurableProgramAnalysis {
     return AutomaticCPAFactory.forType(GenericAssumptionsCPA.class);
   }
 
-  private final AbstractElement topElement;
+  private final AbstractState topState;
   private final AbstractDomain abstractDomain;
   private final TransferRelation transferRelation;
 
   private GenericAssumptionsCPA(Configuration config, LogManager logger) throws InvalidConfigurationException {
     transferRelation = new GenericAssumptionsTransferRelation();
-    topElement = new GenericAssumptionsElement(NumericTypes.TRUE);
-    abstractDomain = new GenericAssumptionsDomain(topElement);
+    topState = new GenericAssumptionsState(CNumericTypes.TRUE);
+    abstractDomain = new GenericAssumptionsDomain(topState);
   }
 
   @Override
@@ -65,8 +65,8 @@ public class GenericAssumptionsCPA implements ConfigurableProgramAnalysis {
   }
 
   @Override
-  public AbstractElement getInitialElement(CFANode pNode) {
-    return topElement;
+  public AbstractState getInitialState(CFANode pNode) {
+    return topState;
   }
 
   @Override
