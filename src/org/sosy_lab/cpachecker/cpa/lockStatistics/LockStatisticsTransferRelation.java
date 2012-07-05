@@ -104,10 +104,12 @@ public class LockStatisticsTransferRelation implements TransferRelation
     case FunctionReturnEdge:
       CFunctionReturnEdge functionReturnEdge = (CFunctionReturnEdge) cfaEdge;
       lockStatisticsElement.setLocalLocks();
+      //TODO:clone prev element
       successor = handleFunctionReturn(lockStatisticsElement, functionReturnEdge);
       break;
 
     default:
+    	//TODO:clone prev element
       successor = handleSimpleEdge(lockStatisticsElement, lockStatisticsPrecision, cfaEdge);
     }
 
@@ -165,11 +167,11 @@ public class LockStatisticsTransferRelation implements TransferRelation
     return element;
   }
 
-  private LockStatisticsState handleStatement(LockStatisticsState newElement, CStatement expression, CFAEdge cfaEdge, LockStatisticsPrecision precision)
+  private LockStatisticsState handleStatement(LockStatisticsState element, CStatement expression, CFAEdge cfaEdge, LockStatisticsPrecision precision)
     throws UnrecognizedCCodeException {
 
     if (expression instanceof CAssignment) {
-      return handleAssignment(newElement, (CAssignment)expression, cfaEdge, precision);
+      return handleAssignment(element, (CAssignment)expression, cfaEdge, precision);
 
     } else if (expression instanceof CFunctionCallStatement) {
 
@@ -178,22 +180,22 @@ public class LockStatisticsTransferRelation implements TransferRelation
       if (functionName == "mutex_lock_nested") {
         assert !params.isEmpty();
         String paramName = params.get(0).toASTString();
-        newElement.add(paramName);
+        element.add(paramName);
         if (globalMutex.contains(paramName))
-          newElement.addGlobal(paramName);
+          element.addGlobal(paramName);
 
       }
       else if (functionName == "mutex_unlock") {
         assert !params.isEmpty();
         String paramName = params.get(0).toASTString();
-        newElement.delete(paramName);
+        element.delete(paramName);
         if (globalMutex.contains(paramName))
-          newElement.deleteGlobal(paramName);
+          element.deleteGlobal(paramName);
       }
-      return newElement;
+      return element;
 
     } else if (expression instanceof CExpressionStatement) {
-      return newElement;
+      return element;
     } else {
       throw new UnrecognizedCCodeException(cfaEdge, expression);
     }
