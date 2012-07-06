@@ -43,18 +43,16 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CFieldReference;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCall;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallAssignmentStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallStatement;
-import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CInitializer;
-import org.sosy_lab.cpachecker.cfa.ast.c.CInitializerExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression.UnaryOperator;
 import org.sosy_lab.cpachecker.cfa.ast.c.CVariableDeclaration;
+import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression.UnaryOperator;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
-import org.sosy_lab.cpachecker.cfa.model.c.CFunctionSummaryEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionReturnEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionSummaryEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
@@ -74,13 +72,13 @@ public class LockStatisticsTransferRelation implements TransferRelation
   public LockStatisticsTransferRelation(Configuration config) throws InvalidConfigurationException {
     config.inject(this);
     try {
-      file = new FileOutputStream ("output/01.txt");
+      file = new FileOutputStream ("output/race_results.txt");
       zzz = new PrintWriter(file);
       zzz.close();
     }
     catch(FileNotFoundException e)
     {
-      System.out.println("Ошибка открытия файла 01.txt");
+      System.out.println("Ошибка открытия файла race_results.txt");
       System.exit(0);
     }
   }
@@ -104,12 +102,11 @@ public class LockStatisticsTransferRelation implements TransferRelation
     case FunctionReturnEdge:
       CFunctionReturnEdge functionReturnEdge = (CFunctionReturnEdge) cfaEdge;
       lockStatisticsElement.setLocalLocks();
-      //TODO:clone prev element
+
       successor = handleFunctionReturn(lockStatisticsElement, functionReturnEdge);
       break;
 
     default:
-    	//TODO:clone prev element
       successor = handleSimpleEdge(lockStatisticsElement, lockStatisticsPrecision, cfaEdge);
     }
 
@@ -130,26 +127,27 @@ public class LockStatisticsTransferRelation implements TransferRelation
 
     case BlankEdge:
     case ReturnStatementEdge:
-      return element;
+      return element.clone();
 
     case AssumeEdge:
-      return element;
+      return element.clone();
       //throw new UnrecognizedCFAEdgeException(cfaEdge);
 
     case DeclarationEdge:
       CDeclarationEdge declarationEdge = (CDeclarationEdge) cfaEdge;
-      return handleDeclaration(element, declarationEdge, precision, cfaEdge.getLineNumber());
+      return handleDeclaration(element.clone(), declarationEdge, precision, cfaEdge.getLineNumber());
 
     case MultiEdge:
+      LockStatisticsState tmpElement = element.clone();
+
       for (CFAEdge edge : (MultiEdge)cfaEdge) {
-        return handleSimpleEdge(element, precision, edge);
+        tmpElement = handleSimpleEdge(tmpElement, precision, edge);
       }
-      break;
+      return tmpElement;
 
     default:
       throw new UnrecognizedCFAEdgeException(cfaEdge);
     }
-    return element;
   }
 
   private LockStatisticsState handleFunctionReturn(LockStatisticsState element, CFunctionReturnEdge functionReturnEdge)
@@ -157,21 +155,25 @@ public class LockStatisticsTransferRelation implements TransferRelation
     CFunctionSummaryEdge summaryEdge    = functionReturnEdge.getSummaryEdge();
     CFunctionCall exprOnSummary  = summaryEdge.getExpression();
 
+    LockStatisticsState newElement = element.clone();
+
     if(exprOnSummary instanceof CFunctionCallAssignmentStatement) {
       CFunctionCallAssignmentStatement assignExp = ((CFunctionCallAssignmentStatement)exprOnSummary);
       CExpression op1 = assignExp.getLeftHandSide();
 
-      printStat (element, functionReturnEdge.getLineNumber(), op1.toASTString());
+      printStat (newElement, functionReturnEdge.getLineNumber(), op1.toASTString());
     }
 
-    return element;
+    return newElement;
   }
 
   private LockStatisticsState handleStatement(LockStatisticsState element, CStatement expression, CFAEdge cfaEdge, LockStatisticsPrecision precision)
     throws UnrecognizedCCodeException {
 
+    LockStatisticsState newElement = element.clone();
+
     if (expression instanceof CAssignment) {
-      return handleAssignment(element, (CAssignment)expression, cfaEdge, precision);
+      return handleAssignment(newElement, (CAssignment)expression, cfaEdge, precision);
 
     } else if (expression instanceof CFunctionCallStatement) {
 
@@ -180,22 +182,22 @@ public class LockStatisticsTransferRelation implements TransferRelation
       if (functionName == "mutex_lock_nested") {
         assert !params.isEmpty();
         String paramName = params.get(0).toASTString();
-        element.add(paramName);
+        newElement.add(paramName);
         if (globalMutex.contains(paramName))
-          element.addGlobal(paramName);
+          newElement.addGlobal(paramName);
 
       }
       else if (functionName == "mutex_unlock") {
         assert !params.isEmpty();
         String paramName = params.get(0).toASTString();
-        element.delete(paramName);
+        newElement.delete(paramName);
         if (globalMutex.contains(paramName))
-          element.deleteGlobal(paramName);
+          newElement.deleteGlobal(paramName);
       }
-      return element;
+      return newElement;
 
     } else if (expression instanceof CExpressionStatement) {
-      return element;
+      return newElement;
     } else {
       throw new UnrecognizedCCodeException(cfaEdge, expression);
     }
@@ -205,16 +207,26 @@ public class LockStatisticsTransferRelation implements TransferRelation
     throws UnrecognizedCCodeException {
     CExpression op1    = assignExpression.getLeftHandSide();
 
-    if(op1 instanceof CIdExpression ||
+    //next two comments to experiment
+    if(/*op1 instanceof CIdExpression ||???*/
        op1 instanceof CUnaryExpression && ((CUnaryExpression)op1).getOperator() == UnaryOperator.STAR ||
        op1 instanceof CFieldReference ||
        op1 instanceof CArraySubscriptExpression) {
-
       printStat (newElement, cfaEdge.getLineNumber(), op1.toASTString());
-      return newElement;
-    } else {
+
+    }/* else {
       throw new UnrecognizedCCodeException("left operand of assignment has to be a variable", cfaEdge, op1);
+    }*/
+
+    CRightHandSide op2    = assignExpression.getRightHandSide();
+
+    if (op2 instanceof CUnaryExpression && ((CUnaryExpression)op2).getOperator() == UnaryOperator.STAR ||
+        op2 instanceof CFieldReference ||
+        op2 instanceof CArraySubscriptExpression) {
+
+       printStat (newElement, cfaEdge.getLineNumber(), op2.toASTString());
     }
+    return newElement;
   }
 
   private LockStatisticsState handleDeclaration(LockStatisticsState newElement, CDeclarationEdge declarationEdge, LockStatisticsPrecision precision, int line)
@@ -235,10 +247,11 @@ public class LockStatisticsTransferRelation implements TransferRelation
         return newElement;
       }
 
-      CInitializer init = decl.getInitializer();
+      /*CInitializer init = decl.getInitializer();
+      ????
       if(init instanceof CInitializerExpression) {
         printStat (newElement, line, varName);
-      }
+      }*/
 
       return newElement;
   }
@@ -246,12 +259,13 @@ public class LockStatisticsTransferRelation implements TransferRelation
   @Override
   public Collection<? extends AbstractState> strengthen(AbstractState element, List<AbstractState> elements, CFAEdge cfaEdge, Precision precision)
     throws UnrecognizedCCodeException {
+    //TODO ???
     return null;
   }
 
   private void printStat (LockStatisticsState element, int line, String name) {
     try {
-      file = new FileOutputStream ("output/01.txt", true);
+      file = new FileOutputStream ("output/race_results.txt", true);
       zzz = new PrintWriter(file);
       zzz.print(line);
       zzz.print(": ");
@@ -261,7 +275,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
     }
     catch(FileNotFoundException e)
     {
-      System.out.println("Ошибка открытия файла 01.txt");
+      System.out.println("Ошибка открытия файла race_results.txt");
       System.exit(0);
     } finally {
       if(file != null)
