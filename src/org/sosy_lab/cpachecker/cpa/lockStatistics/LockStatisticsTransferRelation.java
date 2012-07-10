@@ -35,16 +35,23 @@ import java.util.Set;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Options;
-import org.sosy_lab.cpachecker.cfa.ast.c.CArraySubscriptExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CAssignment;
+import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CCastExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpressionStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFieldReference;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCall;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallAssignmentStatement;
+import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallStatement;
+import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CIntegerLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
+import org.sosy_lab.cpachecker.cfa.ast.c.CSimpleDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
+import org.sosy_lab.cpachecker.cfa.ast.c.CStringLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CVariableDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression.UnaryOperator;
@@ -54,6 +61,11 @@ import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionReturnEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionSummaryEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
+import org.sosy_lab.cpachecker.cfa.types.c.CElaboratedType;
+import org.sosy_lab.cpachecker.cfa.types.c.CNamedType;
+import org.sosy_lab.cpachecker.cfa.types.c.CPointerType;
+import org.sosy_lab.cpachecker.cfa.types.c.CType;
+import org.sosy_lab.cpachecker.cfa.types.c.CElaboratedType.ElaboratedType;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
@@ -130,6 +142,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
       return element.clone();
 
     case AssumeEdge:
+      //TODO it can be pointer here!
       return element.clone();
       //throw new UnrecognizedCFAEdgeException(cfaEdge);
 
@@ -174,18 +187,21 @@ public class LockStatisticsTransferRelation implements TransferRelation
 
     if (expression instanceof CAssignment) {
       return handleAssignment(newElement, (CAssignment)expression, cfaEdge, precision);
-
-    } else if (expression instanceof CFunctionCallStatement) {
+    }
+    else if (expression instanceof CFunctionCallStatement) {
 
       String functionName = ((CFunctionCallStatement) expression).getFunctionCallExpression().getFunctionNameExpression().toASTString();
       List <CExpression> params = ((CFunctionCallStatement) expression).getFunctionCallExpression().getParameterExpressions();
+      //System.out.print(functionName + "\n");
       if (functionName == "mutex_lock_nested") {
         assert !params.isEmpty();
         String paramName = params.get(0).toASTString();
         newElement.add(paramName);
         if (globalMutex.contains(paramName))
           newElement.addGlobal(paramName);
-
+        else
+        //add mutex as local
+          newElement.add(paramName);
       }
       else if (functionName == "mutex_unlock") {
         assert !params.isEmpty();
@@ -193,6 +209,9 @@ public class LockStatisticsTransferRelation implements TransferRelation
         newElement.delete(paramName);
         if (globalMutex.contains(paramName))
           newElement.deleteGlobal(paramName);
+        else
+        //delete local mutex
+          newElement.delete(paramName);
       }
       return newElement;
 
@@ -207,25 +226,14 @@ public class LockStatisticsTransferRelation implements TransferRelation
     throws UnrecognizedCCodeException {
     CExpression op1    = assignExpression.getLeftHandSide();
 
-    //next two comments to experiment
-    if(/*op1 instanceof CIdExpression ||???*/
-       op1 instanceof CUnaryExpression && ((CUnaryExpression)op1).getOperator() == UnaryOperator.STAR ||
-       op1 instanceof CFieldReference ||
-       op1 instanceof CArraySubscriptExpression) {
+    if (CheckVariableToSave(op1, false))
       printStat (newElement, cfaEdge.getLineNumber(), op1.toASTString());
-
-    }/* else {
-      throw new UnrecognizedCCodeException("left operand of assignment has to be a variable", cfaEdge, op1);
-    }*/
 
     CRightHandSide op2    = assignExpression.getRightHandSide();
 
-    if (op2 instanceof CUnaryExpression && ((CUnaryExpression)op2).getOperator() == UnaryOperator.STAR ||
-        op2 instanceof CFieldReference ||
-        op2 instanceof CArraySubscriptExpression) {
+    if (CheckVariableToSave(op2, false))
+      printStat (newElement, cfaEdge.getLineNumber(), op2.toASTString());
 
-       printStat (newElement, cfaEdge.getLineNumber(), op2.toASTString());
-    }
     return newElement;
   }
 
@@ -239,16 +247,18 @@ public class LockStatisticsTransferRelation implements TransferRelation
       CVariableDeclaration decl = (CVariableDeclaration)declarationEdge.getDeclaration();
 
       String varName = decl.getName();
-      String typeName = decl.getType().toASTString(null);
-      //String typeName = decl.getDeclSpecifier().toASTString(null);
+      CType type = decl.getType();
 
-      if(decl.isGlobal() && typeName.contentEquals("mutex null")) {
+      //TODO only mutex?
+       if(decl.isGlobal() && type instanceof CNamedType &&
+          ((CNamedType)type).getName().contentEquals("mutex")) {
         globalMutex.add(varName);
         return newElement;
       }
 
+      //Do we need initialization to analyze?
       /*CInitializer init = decl.getInitializer();
-      ????
+
       if(init instanceof CInitializerExpression) {
         printStat (newElement, line, varName);
       }*/
@@ -259,8 +269,72 @@ public class LockStatisticsTransferRelation implements TransferRelation
   @Override
   public Collection<? extends AbstractState> strengthen(AbstractState element, List<AbstractState> elements, CFAEdge cfaEdge, Precision precision)
     throws UnrecognizedCCodeException {
-    //TODO ???
     return null;
+  }
+
+  /**Checks expression if we need to save it in statistics. We need only global variables with pointers;
+   *
+   * @param expression for check
+   * @param isKnownPointer define if we already know this variable as pointer
+   * @return true if we need to save this variable
+   */
+  private boolean CheckVariableToSave(CRightHandSide expression, boolean isKnownPointer)
+  {
+    if (expression instanceof CIdExpression)
+    {
+      CSimpleDeclaration decl = ((CIdExpression)expression).getDeclaration();
+
+      CType type = decl.getType();
+
+      //Global pointer!
+      if (decl instanceof CDeclaration && ((CDeclaration)decl).isGlobal() &&
+          type instanceof CPointerType)
+      {
+        type = ((CPointerType)type).getType();
+        //pointer to structure
+        if (type instanceof CElaboratedType && ((CElaboratedType)type).getKind() == ElaboratedType.STRUCT)
+          return true;
+        else
+          return false;
+      }
+      else if (decl instanceof CDeclaration && ((CDeclaration)decl).isGlobal() &&
+          isKnownPointer)
+      {
+        if (type instanceof CElaboratedType && ((CElaboratedType)type).getKind() == ElaboratedType.STRUCT)
+          return true;
+        else
+          return false;
+      }
+      else if (decl instanceof CDeclaration)
+        return false;
+      else if (!(type instanceof CPointerType))
+        return false;
+      else
+        //just for some case
+        return true;
+    }
+    else if (expression instanceof CUnaryExpression && ((CUnaryExpression)expression).getOperator() == UnaryOperator.STAR)
+    //*a
+      return CheckVariableToSave(((CUnaryExpression)expression).getOperand(), true);
+    else if (expression instanceof CFieldReference && ((CFieldReference)expression).isPointerDereference())
+    //a->b
+      return CheckVariableToSave(((CFieldReference)expression).getFieldOwner(), true);
+    /*else if (expression instanceof CArraySubscriptExpression)
+    //a[i]
+      return CheckVariableToSave(((CArraySubscriptExpression)expression).getArrayExpression());*/
+    else if (expression instanceof CBinaryExpression)
+    //TODO do it more carefully!
+      return (CheckVariableToSave(((CBinaryExpression)expression).getOperand1(), isKnownPointer) &&
+              CheckVariableToSave(((CBinaryExpression)expression).getOperand2(), isKnownPointer));
+    else if (expression instanceof CCastExpression ||
+             expression instanceof CFunctionCallExpression ||
+             expression instanceof CIntegerLiteralExpression ||
+             expression instanceof CStringLiteralExpression ||
+             expression instanceof CUnaryExpression)
+    //we dont't need to write it into statistics: only pointers to structures
+      return false;
+    else
+      return false;
   }
 
   private void printStat (LockStatisticsState element, int line, String name) {
