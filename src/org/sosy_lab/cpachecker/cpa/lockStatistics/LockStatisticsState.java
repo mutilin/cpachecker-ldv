@@ -23,15 +23,8 @@
  */
 package org.sosy_lab.cpachecker.cpa.lockStatistics;
 
-import static com.google.common.base.Objects.equal;
-import static com.google.common.base.Preconditions.checkNotNull;
-
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import org.sosy_lab.cpachecker.core.interfaces.AbstractQueryableState;
@@ -46,103 +39,40 @@ public class LockStatisticsState implements AbstractQueryableState, FormulaRepor
   private static final long serialVersionUID = -3152134511524554357L;
 
   /**
-   * the map that keeps the name of variables and their constant values
+   * the map that keeps the name of locks that now are locked
    */
-  private final Map<String, Long> constantsMap;
-
-  /**
-   * the element from the previous context, needed for return edges
-   */
-  private final LockStatisticsState previousElement;
-
-  private final Set<String> localLocks;
-  private final List< Set<String> > globalLocks;
+  private final Set<String> Locks;
 
   public LockStatisticsState() {
-    constantsMap    = new HashMap<String, Long>();
-    previousElement = null;
-    globalLocks = new ArrayList< Set<String> >();
-    localLocks  = new HashSet<String>();
+    Locks  = new HashSet<String>();
   }
 
-  LockStatisticsState(LockStatisticsState previousElement) {
-    constantsMap          = new HashMap<String, Long>();
-    this.previousElement  = previousElement;
-    globalLocks = new ArrayList< Set<String> >();
-    localLocks  = new HashSet<String>();
-  }
-
-  private LockStatisticsState(Map<String, Long> constantsMap, LockStatisticsState previousElement, List< Set<String> > globalLocks, Set<String> localLocks) {
-    this.constantsMap     = constantsMap;
-    this.previousElement  = previousElement;
-    this.globalLocks = globalLocks;
-    this.localLocks  = localLocks;
-  }
-
-  /**
-   * Assigns a value to the variable and puts it in the map
-   * @param variableName name of the variable.
-   * @param value value to be assigned.
-   */
-  void assignConstant(String variableName, Long value) {
-    constantsMap.put(checkNotNull(variableName), checkNotNull(value));
-  }
-
-  void forget(String variableName) {
-    constantsMap.remove(variableName);
-  }
-
-  public Long getValueFor(String variableName) {
-    return checkNotNull(constantsMap.get(variableName));
+  private LockStatisticsState(Set<String> pLocks) {
+    this.Locks  = pLocks;
   }
 
   public boolean contains(String variableName) {
-    return constantsMap.containsKey(variableName);
-  }
-
-  LockStatisticsState getPreviousElement() {
-    return previousElement;
+    return Locks.contains(variableName);
   }
 
   public int getSize() {
-    return constantsMap.size();
+    return Locks.size();
+  }
+
+  public Set<String> getLocks() {
+    return Locks;
   }
 
   void add (String lockName) {
-    localLocks.add(lockName);
-  }
-
-  void addGlobal (String name) {
-    int i;
-    for (i = 0; i < globalLocks.size(); i++)
-      globalLocks.get(i).add(name);
+    Locks.add(lockName);
   }
 
   void delete(String lockName) {
-    localLocks.remove(lockName);
-  }
-
-  void deleteGlobal (String name) {
-    int i;
-    for (i = 0; i < globalLocks.size(); i++)
-      globalLocks.get(i).remove(name);
+    Locks.remove(lockName);
   }
 
   String print() {
-    return localLocks.toString();
-  }
-
-  void setLocalLocks() {
-    int i = globalLocks.size() - 1;
-    localLocks.clear();
-    localLocks.addAll(globalLocks.get(i));
-    globalLocks.remove(i);
-  }
-
-  void setGlobalLocks() {
- //   int i = globalLocks.size();
-    globalLocks.add(localLocks);
-   // localLocks.clear();
+    return Locks.toString();
   }
 
   /**
@@ -152,19 +82,18 @@ public class LockStatisticsState implements AbstractQueryableState, FormulaRepor
    * @return a new element representing the join of this element and the other element
    */
   LockStatisticsState join(LockStatisticsState other) {
-    int size = Math.min(constantsMap.size(), other.constantsMap.size());
+    int size = Math.min(Locks.size(), other.Locks.size());
 
-    Map<String, Long> newConstantsMap = new HashMap<String, Long>(size);
+    Set<String> newLocks = new HashSet<String>(size);
 
-    for (Map.Entry<String, Long> otherEntry : other.constantsMap.entrySet()) {
-      String key = otherEntry.getKey();
+    for (String otherLock : other.Locks) {
 
-      if (equal(otherEntry.getValue(), constantsMap.get(key))) {
-        newConstantsMap.put(key, otherEntry.getValue());
+      if (Locks.contains(otherLock)) {
+        newLocks.add(otherLock);
       }
     }
 
-    return new LockStatisticsState(newConstantsMap, previousElement, globalLocks,localLocks);
+    return new LockStatisticsState(newLocks);
   }
 
   /**
@@ -174,22 +103,16 @@ public class LockStatisticsState implements AbstractQueryableState, FormulaRepor
    * @return true, if this element is less or equal than the other element, based on the order imposed by the lattice
    */
   boolean isLessOrEqual(LockStatisticsState other) {
-    // this element is not less or equal than the other element, if the previous elements differ
-    if (previousElement != other.previousElement) {
-      return false;
-    }
 
     // also, this element is not less or equal than the other element, if it contains less elements
-    if (constantsMap.size() < other.constantsMap.size()) {
+    if (Locks.size() < other.Locks.size()) {
       return false;
     }
 
     // also, this element is not less or equal than the other element,
     // if any one constant's value of the other element differs from the constant's value in this element
-    for (Map.Entry<String, Long> otherEntry : other.constantsMap.entrySet()) {
-      String key = otherEntry.getKey();
-
-      if (!otherEntry.getValue().equals(constantsMap.get(key))) {
+    for (String Lock : Locks) {
+      if (!other.Locks.contains(Lock)) {
         return false;
       }
     }
@@ -199,7 +122,7 @@ public class LockStatisticsState implements AbstractQueryableState, FormulaRepor
 
   @Override
   public LockStatisticsState clone() {
-    return new LockStatisticsState(new HashMap<String, Long>(constantsMap), previousElement, new ArrayList< Set<String> >(globalLocks), new HashSet<String>(localLocks));
+    return new LockStatisticsState(new HashSet<String>(Locks));
   }
 
   @Override
@@ -218,51 +141,26 @@ public class LockStatisticsState implements AbstractQueryableState, FormulaRepor
 
     LockStatisticsState otherElement = (LockStatisticsState) other;
 
-    return (otherElement.previousElement == previousElement)
-        && otherElement.constantsMap.equals(constantsMap);
+    return otherElement.Locks.equals(Locks);
   }
 
   @Override
   public int hashCode() {
-    return constantsMap.hashCode();
+    return Locks.hashCode();
   }
 
   @Override
   public String toString() {
     StringBuilder sb = new StringBuilder();
     sb.append("[");
-    for (Map.Entry<String, Long> entry : constantsMap.entrySet()) {
-      String key = entry.getKey();
-      sb.append(" <");
-      sb.append(key);
-      sb.append(" = ");
-      sb.append(entry.getValue());
-      sb.append(">\n");
+    for (String lock : Locks) {
+      sb.append(lock);
+      sb.append(", ");
     }
-
-    return sb.append("] size->  ").append(constantsMap.size()).toString();
-  }
-
-  public String toCompactString() {
-    StringBuilder sb = new StringBuilder();
-    sb.append("[");
-
-    boolean first = true;
-    for (Map.Entry<String, Long> entry: constantsMap.entrySet())
-    {
-      if(first) {
-        first = false;
-      } else {
-        sb.append(", ");
-      }
-      String key = entry.getKey();
-      sb.append(key);
-      sb.append("=");
-      sb.append(entry.getValue());
-    }
-    sb.append("]");
-
-    return sb.toString();
+    //if we add something, we need to remove last ", "
+    if (sb.length() > 2)
+      sb.delete(sb.length() - 2, sb.length());
+    return sb.append("] size->  ").append(Locks.size()).toString();
   }
 
   @Override
@@ -271,66 +169,36 @@ public class LockStatisticsState implements AbstractQueryableState, FormulaRepor
 
     if (pProperty.startsWith("contains(")) {
       String varName = pProperty.substring("contains(".length(), pProperty.length() - 1);
-      return this.constantsMap.containsKey(varName);
+      return this.Locks.contains(varName);
     } else {
-      String[] parts = pProperty.split("==");
-      if (parts.length != 2) {
-        Long value = this.constantsMap.get(pProperty);
-        if (value != null) {
-          return value;
-        } else {
-          throw new InvalidQueryException("The Query \"" + pProperty + "\" is invalid. Could not find the variable \""
-              + pProperty + "\"");
-        }
-      } else {
-        return checkProperty(pProperty);
-      }
+      return checkProperty(pProperty);
     }
   }
 
   @Override
   public boolean checkProperty(String pProperty) throws InvalidQueryException {
-    // e.g. "x==5" where x is a variable. Returns if 5 is the associated constant
-    String[] parts = pProperty.split("==");
-
-    if (parts.length != 2) {
-      throw new InvalidQueryException("The Query \"" + pProperty
-          + "\" is invalid. Could not split the property string correctly.");
-    } else {
-      Long value = this.constantsMap.get(parts[0]);
-
-      if (value == null) {
-        return false;
-      } else {
-        try {
-          return value.longValue() == Long.parseLong(parts[1]);
-        } catch (NumberFormatException e) {
-          // The command might contains something like "main::p==cmd" where the user wants to compare the variable p to the variable cmd (nearest in scope)
-          // perhaps we should omit the "main::" and find the variable via static scoping ("main::p" is also not intuitive for a user)
-          // TODO: implement Variable finding via static scoping
-          throw new InvalidQueryException("The Query \"" + pProperty + "\" is invalid. Could not parse the long \""
-              + parts[1] + "\"");
-        }
-      }
-    }
+    if (Locks.contains(pProperty))
+      return true;
+    else
+      return false;
   }
 
   @Override
   public void modifyProperty(String pModification) throws InvalidQueryException {
     Preconditions.checkNotNull(pModification);
 
-    // either "deletevalues(methodname::varname)" or "setvalue(methodname::varname:=1929)"
+    // either "deletelock(lockname)" or "setlock(lockname)"
     String[] statements = pModification.split(";");
     for (int i = 0; i < statements.length; i++) {
       String statement = statements[i].trim().toLowerCase();
-      if (statement.startsWith("deletevalues(")) {
+      if (statement.startsWith("deletelock(")) {
         if (!statement.endsWith(")")) {
           throw new InvalidQueryException(statement + " should end with \")\"");
         }
 
-        String varName = statement.substring("deletevalues(".length(), statement.length() - 1);
+        String varName = statement.substring("deletelock(".length(), statement.length() - 1);
 
-        Object x = this.constantsMap.remove(varName);
+        Object x = this.Locks.remove(varName);
 
         if (x == null) {
           // varname was not present in one of the maps
@@ -338,43 +206,31 @@ public class LockStatisticsState implements AbstractQueryableState, FormulaRepor
         }
       }
 
-      else if (statement.startsWith("setvalue(")) {
+      else if (statement.startsWith("setlock(")) {
         if (!statement.endsWith(")")) {
           throw new InvalidQueryException(statement + " should end with \")\"");
         }
 
-        String assignment = statement.substring("setvalue(".length(), statement.length() - 1);
-        String[] assignmentParts = assignment.split(":=");
-
-        if (assignmentParts.length != 2) {
-          throw new InvalidQueryException("The Query \"" + pModification
-              + "\" is invalid. Could not split the property string correctly.");
-        } else {
-          String varName = assignmentParts[0].trim();
-          try {
-            long newValue = Long.parseLong(assignmentParts[1].trim());
-            this.assignConstant(varName, newValue);
-          } catch (NumberFormatException e) {
-            throw new InvalidQueryException("The Query \"" + pModification
-                + "\" is invalid. Could not parse the long \"" + assignmentParts[1].trim() + "\"");
-          }
-        }
+        String assignment = statement.substring("setlock(".length(), statement.length() - 1);
+        String varName = assignment.trim();
+        this.add(varName);
       }
     }
   }
 
   @Override
   public String getCPAName() {
-    return "ExplicitAnalysis";
+    return "LockStatisticsAnalysis";
   }
 
   @Override
   public Formula getFormulaApproximation(FormulaManager manager) {
     Formula formula = manager.makeTrue();
-
-    for (Map.Entry<String, Long> entry : constantsMap.entrySet()) {
-      Formula var = manager.makeVariable(entry.getKey());
-      Formula val = manager.makeNumber(entry.getValue().toString());
+    //TODO understand this. Make it normally
+    for (String lock : Locks) {
+      Formula var = manager.makeVariable(lock);
+      //1 is equal that lock is locked, but it is "ugly hack"
+      Formula val = manager.makeNumber("1");
       formula = manager.makeAnd(formula, manager.makeEqual(var, val));
     }
 
@@ -382,14 +238,6 @@ public class LockStatisticsState implements AbstractQueryableState, FormulaRepor
   }
 
   void deleteValue(String varName) {
-    this.constantsMap.remove(varName);
-  }
-
-  Set<String> getTrackedVariableNames() {
-    return constantsMap.keySet();
-  }
-
-  Map<String, Long> getConstantsMap() {
-    return constantsMap;
+    this.Locks.remove(varName);
   }
 }

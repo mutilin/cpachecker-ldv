@@ -61,7 +61,7 @@ public class LockStatisticsReducer implements Reducer {
     LockStatisticsState elementKey = (LockStatisticsState)pElementKey;
     LockStatisticsPrecision precisionKey = (LockStatisticsPrecision)pPrecisionKey;
 
-    return Pair.of(elementKey.getConstantsMap(), precisionKey);
+    return Pair.of(elementKey.getLocks(), precisionKey);
   }
 
   @Override

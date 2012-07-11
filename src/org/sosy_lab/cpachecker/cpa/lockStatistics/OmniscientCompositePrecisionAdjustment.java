@@ -48,7 +48,6 @@ import org.sosy_lab.cpachecker.cpa.location.LocationState;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 
-import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableList;
 
 public class OmniscientCompositePrecisionAdjustment extends CompositePrecisionAdjustment implements StatisticsProvider {
@@ -125,7 +124,7 @@ public class OmniscientCompositePrecisionAdjustment extends CompositePrecisionAd
         AssignmentsInPathConditionState assigns = AbstractStates.extractStateByType(composite, AssignmentsInPathConditionState.class);
 
         totalEnforceReachedSetThreshold.start();
-        LockStatisticsState newElement = enforceReachedSetThreshold(explicit, explicitPrecision, slice.getReached(location.getLocationNode()));
+        LockStatisticsState newElement = explicit;//enforceReachedSetThreshold(explicit, explicitPrecision, slice.getReached(location.getLocationNode()));
         totalEnforceReachedSetThreshold.stop();
 
         totalEnforcePathThreshold.start();
@@ -165,7 +164,7 @@ public class OmniscientCompositePrecisionAdjustment extends CompositePrecisionAd
     return Triple.of(outElement, outPrecision, action);
   }
 
-  private LockStatisticsState enforceReachedSetThreshold(LockStatisticsState element, LockStatisticsPrecision precision, Collection<AbstractState> reachedSetAtLocation) {
+  /*private LockStatisticsState enforceReachedSetThreshold(LockStatisticsState element, LockStatisticsPrecision precision, Collection<AbstractState> reachedSetAtLocation) {
     // if an actual meaningful threshold is set
     if(precision.getReachedSetThresholds().defaultThreshold != -1) {
       // create the mapping from variable name to the number of different values this variable has
@@ -175,13 +174,13 @@ public class OmniscientCompositePrecisionAdjustment extends CompositePrecisionAd
       for(String variable : valueMapping.keySet()) {
         if(precision.getReachedSetThresholds().exceeds(variable, valueMapping.get(variable).size())) {
           precision.getReachedSetThresholds().setExceeded(variable);
-          element.forget(variable);
+          //element.forget(variable);
         }
       }
     }
 
     return element;
-  }
+  }*/
 
   private Pair<LockStatisticsState, LockStatisticsPrecision> enforcePathThreshold(LockStatisticsState element, LockStatisticsPrecision precision, AssignmentsInPathConditionState assigns) {
     if(assigns != null) {
@@ -203,7 +202,7 @@ public class OmniscientCompositePrecisionAdjustment extends CompositePrecisionAd
           }
 
           precision.getReachedSetThresholds().setExceeded(entry.getKey());
-          element.forget(entry.getKey());
+          //element.forget(entry.getKey());
         }
       }
     }
@@ -226,7 +225,7 @@ public class OmniscientCompositePrecisionAdjustment extends CompositePrecisionAd
    *
    * @param reachedSetAtLocation the collection of AbstractElements in the reached set that refer to the current location
    */
-  private HashMultimap<String, Long> createMappingFromReachedSet(Collection<AbstractState> reachedSetAtLocation) {
+  /*private HashMultimap<String, Long> createMappingFromReachedSet(Collection<AbstractState> reachedSetAtLocation) {
     HashMultimap<String, Long> valueMapping = HashMultimap.create();
 
     for(AbstractState element : reachedSetAtLocation) {
@@ -236,5 +235,5 @@ public class OmniscientCompositePrecisionAdjustment extends CompositePrecisionAd
     }
 
     return valueMapping;
-  }
+  }*/
 }
