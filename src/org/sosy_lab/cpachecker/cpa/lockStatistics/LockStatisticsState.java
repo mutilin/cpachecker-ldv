@@ -157,7 +157,7 @@ public class LockStatisticsState implements AbstractQueryableState, FormulaRepor
       sb.append(lock);
       sb.append(", ");
     }
-    //if we add something, we need to remove last ", "
+    //if we have added something, we need to remove last ", "
     if (sb.length() > 2)
       sb.delete(sb.length() - 2, sb.length());
     return sb.append("] size->  ").append(Locks.size()).toString();

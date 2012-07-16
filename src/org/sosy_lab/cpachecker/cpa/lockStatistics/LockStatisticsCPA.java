@@ -75,7 +75,7 @@ public class LockStatisticsCPA implements ConfigurableProgramAnalysisWithABM, St
   private AbstractDomain abstractDomain;
   private MergeOperator mergeOperator;
   private StopOperator stopOperator;
-  private TransferRelation transferRelation;
+  private LockStatisticsTransferRelation transferRelation;
   private PrecisionAdjustment precisionAdjustment;
   private final LockStatisticsReducer reducer;
   private final LockStatisticsCPAStatistics statistics;
@@ -96,7 +96,9 @@ public class LockStatisticsCPA implements ConfigurableProgramAnalysisWithABM, St
     stopOperator        = initializeStopOperator();
     precisionAdjustment = StaticPrecisionAdjustment.getInstance();
     reducer             = new LockStatisticsReducer();
-    statistics          = new LockStatisticsCPAStatistics();
+    statistics          = new LockStatisticsCPAStatistics(transferRelation.getGlobalLockStatistics(),
+                                                transferRelation.getLocalLockStatistics(),
+                                                transferRelation.getNameToType());
 
   }
 

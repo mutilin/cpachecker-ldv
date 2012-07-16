@@ -23,13 +23,12 @@
  */
 package org.sosy_lab.cpachecker.cpa.lockStatistics;
 
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.PrintWriter;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.sosy_lab.common.configuration.Configuration;
@@ -58,11 +57,9 @@ import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionReturnEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionSummaryEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
-import org.sosy_lab.cpachecker.cfa.types.c.CElaboratedType;
 import org.sosy_lab.cpachecker.cfa.types.c.CNamedType;
 import org.sosy_lab.cpachecker.cfa.types.c.CPointerType;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
-import org.sosy_lab.cpachecker.cfa.types.c.CElaboratedType.ElaboratedType;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
@@ -73,23 +70,81 @@ import org.sosy_lab.cpachecker.exceptions.UnrecognizedCFAEdgeException;
 @Options(prefix="cpa.lockStatistics")
 public class LockStatisticsTransferRelation implements TransferRelation
 {
-  private final Set<String> globalMutex = new HashSet<String>();
+  /* This class has information about one action - line, read/write,
+   * locks.
+   */
+  public static class ActionInfo
+  {
+    private int line;
+    private Set<String> locks;
+    private boolean isWrite;
 
-  PrintWriter zzz = null;
-  FileOutputStream file = null;
+    ActionInfo(int l, Set<String> lo, boolean write)
+    {
+      line = l;
+      isWrite = write;
+      locks = new HashSet<String>();
+
+      //we could't clone it. I don't know why
+      for (String lock : lo)
+        locks.add(lock);
+    }
+
+    public Set<String> getLocks() {
+      return locks;
+    }
+
+    public boolean isWrite() {
+      return isWrite;
+    }
+
+    public int getLine() {
+      return line;
+    }
+
+    @Override
+    public String toString()
+    {
+      StringBuilder sb = new StringBuilder();
+
+      sb.append("  In line ");
+
+     // for (Integer line : lines)
+        sb.append(line);
+      /*if (lines.size() > 0)
+          sb.delete(sb.length() - 2, sb.length());
+*/
+      if (locks.size() > 0) {
+        sb.append(" was locked with {");
+        for (String lock : locks)
+          sb.append(lock + ", ");
+
+        if (locks.size() > 0)
+          sb.delete(sb.length() - 2, sb.length());
+        sb.append("}, ");
+      }
+      else {
+        sb.append(" without locks, ");
+      }
+      if (isWrite)
+        sb.append("write access");
+      else
+        sb.append("read access");
+
+      return sb.toString();
+    }
+  }
+
+  private final Set<String> globalMutex = new HashSet<String>();
+  private Map<String, Set<ActionInfo>> GlobalLockStat;
+  private Map<String, Set<ActionInfo>> LocalLockStat;
+  private Map<String, String> NameToType;
 
   public LockStatisticsTransferRelation(Configuration config) throws InvalidConfigurationException {
     config.inject(this);
-    try {
-      file = new FileOutputStream ("output/race_results.txt");
-      zzz = new PrintWriter(file);
-      zzz.close();
-    }
-    catch(FileNotFoundException e)
-    {
-      System.out.println("Ошибка открытия файла race_results.txt");
-      System.exit(0);
-    }
+    GlobalLockStat = new HashMap<String, Set<ActionInfo>>();
+    LocalLockStat = new HashMap<String, Set<ActionInfo>>();
+    NameToType = new HashMap<String, String>();
   }
 
   @Override
@@ -165,14 +220,12 @@ public class LockStatisticsTransferRelation implements TransferRelation
       CExpression op1 = ((CBinaryExpression)pExpression).getOperand1();
       CExpression op2 = ((CBinaryExpression)pExpression).getOperand2();
 
-      if (CheckVariableToSave(op1, false))
-        printStat(element, cfaEdge.getLineNumber(), op1.toASTString());
-
-      if (CheckVariableToSave(op2, false))
-        printStat(element, cfaEdge.getLineNumber(), op2.toASTString());
+      CheckVariableToSave(element, cfaEdge.getLineNumber(), op1, false, false);
+      CheckVariableToSave(element, cfaEdge.getLineNumber(), op2, false, false);
     }
-    else if (CheckVariableToSave(pExpression, false))
-      printStat (element, cfaEdge.getLineNumber(), pExpression.toASTString());
+    else {
+      CheckVariableToSave(element, cfaEdge.getLineNumber(), pExpression, false, false);
+    }
 
     return element.clone();
   }
@@ -188,9 +241,8 @@ public class LockStatisticsTransferRelation implements TransferRelation
       CFunctionCallAssignmentStatement assignExp = ((CFunctionCallAssignmentStatement)exprOnSummary);
       CExpression op1 = assignExp.getLeftHandSide();
 
-      printStat (newElement, functionReturnEdge.getLineNumber(), op1.toASTString());
+      CheckVariableToSave(element, functionReturnEdge.getLineNumber(), op1, false, true);
     }
-
     return newElement;
   }
 
@@ -198,7 +250,6 @@ public class LockStatisticsTransferRelation implements TransferRelation
     throws UnrecognizedCCodeException {
 
     LockStatisticsState newElement = element.clone();
-
     if (expression instanceof CAssignment) {
       return handleAssignment(newElement, (CAssignment)expression, cfaEdge, precision);
     }
@@ -206,7 +257,6 @@ public class LockStatisticsTransferRelation implements TransferRelation
 
       String functionName = ((CFunctionCallStatement) expression).getFunctionCallExpression().getFunctionNameExpression().toASTString();
       List <CExpression> params = ((CFunctionCallStatement) expression).getFunctionCallExpression().getParameterExpressions();
-      //System.out.print(functionName + "\n");
       if (functionName == "mutex_lock_nested" ||
           functionName == "mutex_lock" ||
           functionName == "mutex_trylock") {
@@ -232,13 +282,11 @@ public class LockStatisticsTransferRelation implements TransferRelation
     throws UnrecognizedCCodeException {
     CExpression op1    = assignExpression.getLeftHandSide();
 
-    if (CheckVariableToSave(op1, false))
-      printStat (newElement, cfaEdge.getLineNumber(), op1.toASTString());
+    CheckVariableToSave(newElement, cfaEdge.getLineNumber(), op1, false, true);
 
-    CRightHandSide op2    = assignExpression.getRightHandSide();
+    CRightHandSide op2 = assignExpression.getRightHandSide();
 
-    if (CheckVariableToSave(op2, false))
-      printStat (newElement, cfaEdge.getLineNumber(), op2.toASTString());
+    CheckVariableToSave(newElement, cfaEdge.getLineNumber(), op2, false, false);
 
     return newElement;
   }
@@ -282,69 +330,128 @@ public class LockStatisticsTransferRelation implements TransferRelation
    *
    * @param expression for check
    * @param isKnownPointer define if we already know this variable as pointer
-   * @return true if we need to save this variable
    */
-  private boolean CheckVariableToSave(CRightHandSide expression, boolean isKnownPointer)
+  private boolean CheckVariableToSave(LockStatisticsState element, int line,
+                                  CRightHandSide expression, boolean isKnownPointer,
+                                  boolean isWrite)
   {
     if (expression instanceof CIdExpression) {
       CSimpleDeclaration decl = ((CIdExpression)expression).getDeclaration();
 
       CType type = decl.getType();
-
-      //Global pointer!
-      if (decl instanceof CDeclaration && ((CDeclaration)decl).isGlobal() &&
-          type instanceof CPointerType) {
-        type = ((CPointerType)type).getType();
-        //pointer to structure
-        if (type instanceof CElaboratedType && ((CElaboratedType)type).getKind() == ElaboratedType.STRUCT)
-          return true;
+      if (decl instanceof CDeclaration && type instanceof CPointerType) {
+        //type = ((CPointerType)type).getType();
+        /* //pointer to structure
+        if (type instanceof CElaboratedType &&
+           ((CElaboratedType)type).getKind() == ElaboratedType.STRUCT)*/
+        addInfo(element, line, (CExpression)expression, isWrite);
       }
-      else if (decl instanceof CDeclaration && ((CDeclaration)decl).isGlobal() &&
-          isKnownPointer) {
-        if (type instanceof CElaboratedType && ((CElaboratedType)type).getKind() == ElaboratedType.STRUCT)
-          return true;
+      else if (decl instanceof CDeclaration && isKnownPointer) {
+        //if (type instanceof CElaboratedType && ((CElaboratedType)type).getKind() == ElaboratedType.STRUCT)
+        addInfo(element, line, (CExpression)expression, isWrite);
       }
     }
     else if (expression instanceof CUnaryExpression && ((CUnaryExpression)expression).getOperator() == UnaryOperator.STAR)
     //*a
-      return CheckVariableToSave(((CUnaryExpression)expression).getOperand(), true);
+      CheckVariableToSave(element, line, ((CUnaryExpression)expression).getOperand(), true, isWrite);
     else if (expression instanceof CFieldReference && ((CFieldReference)expression).isPointerDereference())
     //a->b
-      return CheckVariableToSave(((CFieldReference)expression).getFieldOwner(), true);
+      //TODO this is wrong!
+      CheckVariableToSave(element, line, ((CFieldReference)expression).getFieldOwner(), true, isWrite);
     else if (expression instanceof CFieldReference) {
     // it can be smth like (*a).b
       CExpression tmpExpression = ((CFieldReference)expression).getFieldOwner();
 
       if (tmpExpression instanceof CUnaryExpression &&
          ((CUnaryExpression)tmpExpression).getOperator() == UnaryOperator.STAR)
-        return CheckVariableToSave(((CUnaryExpression)tmpExpression).getOperand(), true);
+        CheckVariableToSave(element, line, ((CUnaryExpression)tmpExpression).getOperand(), true, isWrite);
     }
-    else if (expression instanceof CBinaryExpression)
-    //TODO do it more carefully!
-      return (CheckVariableToSave(((CBinaryExpression)expression).getOperand1(), isKnownPointer) ||
-              CheckVariableToSave(((CBinaryExpression)expression).getOperand2(), isKnownPointer));
+    else if (expression instanceof CBinaryExpression) {
+      CheckVariableToSave(element, line, ((CBinaryExpression)expression).getOperand1(), isKnownPointer, isWrite);
+      CheckVariableToSave(element, line, ((CBinaryExpression)expression).getOperand2(), isKnownPointer, isWrite);
+    }
 
-
-    return false;
+    return true;
   }
 
-  private void printStat (LockStatisticsState element, int line, String name) {
-    try {
-      file = new FileOutputStream ("output/race_results.txt", true);
-      zzz = new PrintWriter(file);
-      zzz.print(line);
-      zzz.print(": ");
-      zzz.print(name);
-      zzz.print("  ");
-      zzz.println(element.print());
+  private void addInfo (LockStatisticsState element, int line, CExpression op, boolean isWrite) {
+    String name = op.toASTString();
+
+    if (op instanceof CIdExpression) {
+      CSimpleDeclaration decl = ((CIdExpression)op).getDeclaration();
+
+
+      if (!NameToType.containsKey(name))
+        NameToType.put(name, decl.getType().toASTString(name));
+      if (((CDeclaration)decl).isGlobal())
+        addGlobalInfo(element, line, name, isWrite);
+      else
+        addLocalInfo(element, line, name, isWrite);
     }
-    catch(FileNotFoundException e)
-    {
-      System.out.println("Ошибка открытия файла race_results.txt");
-      System.exit(0);
-    } finally {
-      if(file != null)
-          zzz.close();
+    //TODO else?
+  }
+  private void addGlobalInfo(LockStatisticsState element, int line, String name, boolean isWrite) {
+    boolean isThere = false;
+
+    if (GlobalLockStat.containsKey(name)) {
+      Set<ActionInfo> tmpActions = GlobalLockStat.get(name);
+
+      for (ActionInfo action : tmpActions) {
+        if (action.locks.equals(element.getLocks()) && isWrite == action.isWrite &&
+            action.getLine() == line) {
+          isThere = true;
+          break;
+        }
+      }
+
+      if (!isThere) {
+        ActionInfo action = new ActionInfo(line, element.getLocks(), isWrite);
+        tmpActions.add(action);
+      }
     }
+    else {
+      ActionInfo action = new ActionInfo(line, element.getLocks(), isWrite);
+      Set<ActionInfo> tmpActions = new HashSet<ActionInfo>();
+
+      tmpActions.add(action);
+      GlobalLockStat.put(name, tmpActions);
+    }
+  }
+
+  private void addLocalInfo (LockStatisticsState element, int line, String name, boolean isWrite) {
+    boolean isThere = false;
+
+    if (LocalLockStat.containsKey(name)) {
+      Set<ActionInfo> tmpActions = LocalLockStat.get(name);
+
+      for (ActionInfo action : tmpActions) {
+        if (action.locks.equals(element.getLocks()) && isWrite == action.isWrite &&
+            action.getLine() == line) {
+          isThere = true;
+          break;
+        }
+      }
+
+      if (!isThere) {
+        ActionInfo action = new ActionInfo(line, element.getLocks(), isWrite);
+        tmpActions.add(action);
+      }
+    }
+    else {
+      ActionInfo action = new ActionInfo(line, element.getLocks(), isWrite);
+      Set<ActionInfo> tmpActions = new HashSet<ActionInfo>();
+      tmpActions.add(action);
+      LocalLockStat.put(name, tmpActions);
+    }
+  }
+
+  public Map<String, Set<ActionInfo>> getGlobalLockStatistics() {
+    return GlobalLockStat;
+  }
+  public Map<String, Set<ActionInfo>> getLocalLockStatistics() {
+    return LocalLockStat;
+  }
+  public Map<String, String> getNameToType() {
+    return NameToType;
   }
 }
