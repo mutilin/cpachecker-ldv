@@ -70,70 +70,7 @@ import org.sosy_lab.cpachecker.exceptions.UnrecognizedCFAEdgeException;
 @Options(prefix="cpa.lockStatistics")
 public class LockStatisticsTransferRelation implements TransferRelation
 {
-  /* This class has information about one action - line, read/write,
-   * locks.
-   */
-  public static class ActionInfo
-  {
-    private int line;
-    private Set<String> locks;
-    private boolean isWrite;
 
-    ActionInfo(int l, Set<String> lo, boolean write)
-    {
-      line = l;
-      isWrite = write;
-      locks = new HashSet<String>();
-
-      //we could't clone it. I don't know why
-      for (String lock : lo)
-        locks.add(lock);
-    }
-
-    public Set<String> getLocks() {
-      return locks;
-    }
-
-    public boolean isWrite() {
-      return isWrite;
-    }
-
-    public int getLine() {
-      return line;
-    }
-
-    @Override
-    public String toString()
-    {
-      StringBuilder sb = new StringBuilder();
-
-      sb.append("  In line ");
-
-     // for (Integer line : lines)
-        sb.append(line);
-      /*if (lines.size() > 0)
-          sb.delete(sb.length() - 2, sb.length());
-*/
-      if (locks.size() > 0) {
-        sb.append(" was locked with {");
-        for (String lock : locks)
-          sb.append(lock + ", ");
-
-        if (locks.size() > 0)
-          sb.delete(sb.length() - 2, sb.length());
-        sb.append("}, ");
-      }
-      else {
-        sb.append(" without locks, ");
-      }
-      if (isWrite)
-        sb.append("write access");
-      else
-        sb.append("read access");
-
-      return sb.toString();
-    }
-  }
 
   private final Set<String> globalMutex = new HashSet<String>();
   private Map<String, Set<ActionInfo>> GlobalLockStat;
@@ -262,7 +199,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
           functionName == "mutex_trylock") {
         assert !params.isEmpty();
         String paramName = params.get(0).toASTString();
-        newElement.add(paramName);
+        newElement.add(paramName, cfaEdge.getLineNumber());
       }
       else if (functionName == "mutex_unlock") {
         assert !params.isEmpty();
@@ -303,7 +240,6 @@ public class LockStatisticsTransferRelation implements TransferRelation
       String varName = decl.getName();
       CType type = decl.getType();
 
-      //TODO only mutex?
        if(decl.isGlobal() && type instanceof CNamedType &&
           ((CNamedType)type).getName().contentEquals("mutex")) {
         globalMutex.add(varName);
@@ -356,7 +292,6 @@ public class LockStatisticsTransferRelation implements TransferRelation
       CheckVariableToSave(element, line, ((CUnaryExpression)expression).getOperand(), true, isWrite);
     else if (expression instanceof CFieldReference && ((CFieldReference)expression).isPointerDereference())
     //a->b
-      //TODO this is wrong!
       CheckVariableToSave(element, line, ((CFieldReference)expression).getFieldOwner(), true, isWrite);
     else if (expression instanceof CFieldReference) {
     // it can be smth like (*a).b
@@ -397,7 +332,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
       Set<ActionInfo> tmpActions = GlobalLockStat.get(name);
 
       for (ActionInfo action : tmpActions) {
-        if (action.locks.equals(element.getLocks()) && isWrite == action.isWrite &&
+        if (action.getLocks().equals(element.getLocks()) && isWrite == action.isWrite() &&
             action.getLine() == line) {
           isThere = true;
           break;
@@ -425,7 +360,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
       Set<ActionInfo> tmpActions = LocalLockStat.get(name);
 
       for (ActionInfo action : tmpActions) {
-        if (action.locks.equals(element.getLocks()) && isWrite == action.isWrite &&
+        if (action.getLocks().equals(element.getLocks()) && isWrite == action.isWrite() &&
             action.getLine() == line) {
           isThere = true;
           break;

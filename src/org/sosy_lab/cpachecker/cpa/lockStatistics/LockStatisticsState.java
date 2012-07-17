@@ -38,37 +38,44 @@ import com.google.common.base.Preconditions;
 public class LockStatisticsState implements AbstractQueryableState, FormulaReportingState, Serializable {
   private static final long serialVersionUID = -3152134511524554357L;
 
-  /**
-   * the map that keeps the name of locks that now are locked
-   */
-  private final Set<String> Locks;
+  private final Set<LockStatisticsMutex> Locks;
 
   public LockStatisticsState() {
-    Locks  = new HashSet<String>();
+    Locks  = new HashSet<LockStatisticsMutex>();
   }
 
-  private LockStatisticsState(Set<String> pLocks) {
+  private LockStatisticsState(Set<LockStatisticsMutex> pLocks) {
     this.Locks  = pLocks;
   }
 
   public boolean contains(String variableName) {
-    return Locks.contains(variableName);
+    for (LockStatisticsMutex mutex : Locks) {
+      if (mutex.getName().equals(variableName))
+        return true;
+    }
+    return false;
   }
 
   public int getSize() {
     return Locks.size();
   }
 
-  public Set<String> getLocks() {
+  public Set<LockStatisticsMutex> getLocks() {
     return Locks;
   }
 
-  void add (String lockName) {
-    Locks.add(lockName);
+  void add (String lockName, int line) {
+    LockStatisticsMutex tmpMutex = new LockStatisticsMutex(lockName, line);
+    Locks.add(tmpMutex);
   }
 
   void delete(String lockName) {
-    Locks.remove(lockName);
+    for (LockStatisticsMutex mutex : Locks) {
+      if (mutex.getName().equals(lockName)){
+        Locks.remove(mutex);
+        break;
+      }
+    }
   }
 
   String print() {
@@ -84,9 +91,9 @@ public class LockStatisticsState implements AbstractQueryableState, FormulaRepor
   LockStatisticsState join(LockStatisticsState other) {
     int size = Math.min(Locks.size(), other.Locks.size());
 
-    Set<String> newLocks = new HashSet<String>(size);
+    Set<LockStatisticsMutex> newLocks = new HashSet<LockStatisticsMutex>(size);
 
-    for (String otherLock : other.Locks) {
+    for (LockStatisticsMutex otherLock : other.Locks) {
 
       if (Locks.contains(otherLock)) {
         newLocks.add(otherLock);
@@ -111,7 +118,7 @@ public class LockStatisticsState implements AbstractQueryableState, FormulaRepor
 
     // also, this element is not less or equal than the other element,
     // if any one constant's value of the other element differs from the constant's value in this element
-    for (String Lock : Locks) {
+    for (LockStatisticsMutex Lock : Locks) {
       if (!other.Locks.contains(Lock)) {
         return false;
       }
@@ -122,7 +129,7 @@ public class LockStatisticsState implements AbstractQueryableState, FormulaRepor
 
   @Override
   public LockStatisticsState clone() {
-    return new LockStatisticsState(new HashSet<String>(Locks));
+    return new LockStatisticsState(new HashSet<LockStatisticsMutex>(Locks));
   }
 
   @Override
@@ -153,7 +160,7 @@ public class LockStatisticsState implements AbstractQueryableState, FormulaRepor
   public String toString() {
     StringBuilder sb = new StringBuilder();
     sb.append("[");
-    for (String lock : Locks) {
+    for (LockStatisticsMutex lock : Locks) {
       sb.append(lock);
       sb.append(", ");
     }
@@ -213,7 +220,8 @@ public class LockStatisticsState implements AbstractQueryableState, FormulaRepor
 
         String assignment = statement.substring("setlock(".length(), statement.length() - 1);
         String varName = assignment.trim();
-        this.add(varName);
+        //TODO what line?
+        this.add(varName, 0);
       }
     }
   }
@@ -227,17 +235,13 @@ public class LockStatisticsState implements AbstractQueryableState, FormulaRepor
   public Formula getFormulaApproximation(FormulaManager manager) {
     Formula formula = manager.makeTrue();
     //TODO understand this. Make it normally
-    for (String lock : Locks) {
-      Formula var = manager.makeVariable(lock);
+    for (LockStatisticsMutex lock : Locks) {
+      Formula var = manager.makeVariable(lock.getName());
       //1 is equal that lock is locked, but it is "ugly hack"
       Formula val = manager.makeNumber("1");
       formula = manager.makeAnd(formula, manager.makeEqual(var, val));
     }
 
     return formula;
-  }
-
-  void deleteValue(String varName) {
-    this.Locks.remove(varName);
   }
 }
