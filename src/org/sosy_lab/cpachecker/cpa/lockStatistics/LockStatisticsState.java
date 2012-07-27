@@ -29,6 +29,7 @@ import java.util.Set;
 
 import org.sosy_lab.cpachecker.core.interfaces.AbstractQueryableState;
 import org.sosy_lab.cpachecker.core.interfaces.FormulaReportingState;
+import org.sosy_lab.cpachecker.cpa.lockStatistics.LockStatisticsLock.LockType;
 import org.sosy_lab.cpachecker.exceptions.InvalidQueryException;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.Formula;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.FormulaManager;
@@ -38,18 +39,18 @@ import com.google.common.base.Preconditions;
 public class LockStatisticsState implements AbstractQueryableState, FormulaReportingState, Serializable {
   private static final long serialVersionUID = -3152134511524554357L;
 
-  private final Set<LockStatisticsMutex> Locks;
+  private final Set<LockStatisticsLock> Locks;
 
   public LockStatisticsState() {
-    Locks  = new HashSet<LockStatisticsMutex>();
+    Locks  = new HashSet<LockStatisticsLock>();
   }
 
-  private LockStatisticsState(Set<LockStatisticsMutex> pLocks) {
+  private LockStatisticsState(Set<LockStatisticsLock> pLocks) {
     this.Locks  = pLocks;
   }
 
   public boolean contains(String variableName) {
-    for (LockStatisticsMutex mutex : Locks) {
+    for (LockStatisticsLock mutex : Locks) {
       if (mutex.getName().equals(variableName))
         return true;
     }
@@ -60,17 +61,17 @@ public class LockStatisticsState implements AbstractQueryableState, FormulaRepor
     return Locks.size();
   }
 
-  public Set<LockStatisticsMutex> getLocks() {
+  public Set<LockStatisticsLock> getLocks() {
     return Locks;
   }
 
-  void add (String lockName, int line) {
-    LockStatisticsMutex tmpMutex = new LockStatisticsMutex(lockName, line);
+  void add (String lockName, int line, LockType type) {
+    LockStatisticsLock tmpMutex = new LockStatisticsLock(lockName, line, type);
     Locks.add(tmpMutex);
   }
 
   void delete(String lockName) {
-    for (LockStatisticsMutex mutex : Locks) {
+    for (LockStatisticsLock mutex : Locks) {
       if (mutex.getName().equals(lockName)){
         Locks.remove(mutex);
         break;
@@ -91,9 +92,9 @@ public class LockStatisticsState implements AbstractQueryableState, FormulaRepor
   LockStatisticsState join(LockStatisticsState other) {
     int size = Math.min(Locks.size(), other.Locks.size());
 
-    Set<LockStatisticsMutex> newLocks = new HashSet<LockStatisticsMutex>(size);
+    Set<LockStatisticsLock> newLocks = new HashSet<LockStatisticsLock>(size);
 
-    for (LockStatisticsMutex otherLock : other.Locks) {
+    for (LockStatisticsLock otherLock : other.Locks) {
 
       if (Locks.contains(otherLock)) {
         newLocks.add(otherLock);
@@ -118,7 +119,7 @@ public class LockStatisticsState implements AbstractQueryableState, FormulaRepor
 
     // also, this element is not less or equal than the other element,
     // if any one constant's value of the other element differs from the constant's value in this element
-    for (LockStatisticsMutex Lock : Locks) {
+    for (LockStatisticsLock Lock : Locks) {
       if (!other.Locks.contains(Lock)) {
         return false;
       }
@@ -129,7 +130,7 @@ public class LockStatisticsState implements AbstractQueryableState, FormulaRepor
 
   @Override
   public LockStatisticsState clone() {
-    return new LockStatisticsState(new HashSet<LockStatisticsMutex>(Locks));
+    return new LockStatisticsState(new HashSet<LockStatisticsLock>(Locks));
   }
 
   @Override
@@ -160,7 +161,7 @@ public class LockStatisticsState implements AbstractQueryableState, FormulaRepor
   public String toString() {
     StringBuilder sb = new StringBuilder();
     sb.append("[");
-    for (LockStatisticsMutex lock : Locks) {
+    for (LockStatisticsLock lock : Locks) {
       sb.append(lock);
       sb.append(", ");
     }
@@ -220,8 +221,8 @@ public class LockStatisticsState implements AbstractQueryableState, FormulaRepor
 
         String assignment = statement.substring("setlock(".length(), statement.length() - 1);
         String varName = assignment.trim();
-        //TODO what line?
-        this.add(varName, 0);
+        //TODO what line? mutex?
+        this.add(varName, 0, LockType.MUTEX);
       }
     }
   }
@@ -235,7 +236,7 @@ public class LockStatisticsState implements AbstractQueryableState, FormulaRepor
   public Formula getFormulaApproximation(FormulaManager manager) {
     Formula formula = manager.makeTrue();
     //TODO understand this. Make it normally
-    for (LockStatisticsMutex lock : Locks) {
+    for (LockStatisticsLock lock : Locks) {
       Formula var = manager.makeVariable(lock.getName());
       //1 is equal that lock is locked, but it is "ugly hack"
       Formula val = manager.makeNumber("1");

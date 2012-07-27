@@ -96,9 +96,7 @@ public class LockStatisticsCPA implements ConfigurableProgramAnalysisWithABM, St
     stopOperator        = initializeStopOperator();
     precisionAdjustment = StaticPrecisionAdjustment.getInstance();
     reducer             = new LockStatisticsReducer();
-    statistics          = new LockStatisticsCPAStatistics(transferRelation.getGlobalLockStatistics(),
-                                                transferRelation.getLocalLockStatistics(),
-                                                transferRelation.getNameToType());
+    statistics          = new LockStatisticsCPAStatistics();
 
   }
 

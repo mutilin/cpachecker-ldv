@@ -23,14 +23,7 @@
  */
 package org.sosy_lab.cpachecker.cpa.lockStatistics;
 
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.PrintStream;
-import java.io.PrintWriter;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
 
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
@@ -38,485 +31,232 @@ import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 
 public class LockStatisticsCPAStatistics implements Statistics {
 
-  private Map<String, Set<ActionInfo>> GlobalLockStatistics;
-  private Map<String, Set<ActionInfo>> LocalLockStatistics;
-  private Map<String, String> NameToType;
-
- // private Set<String> GlobalCases;
-  //private Set<String> LocalCases;
-
-  private Map<String, Set<ActionInfo>> GlobalUnsafeStatistics;
-  private Map<String, Set<ActionInfo>> LocalUnsafeStatistics;
-
-  PrintWriter writer = null;
-  FileOutputStream file = null;
-
-
-  public LockStatisticsCPAStatistics(Map<String, Set<ActionInfo>> global,
-                                     Map<String, Set<ActionInfo>> local,
-                                     Map<String, String> names) {
-    GlobalLockStatistics = global;
-    LocalLockStatistics = local;
-
-    //GlobalCases = new HashSet<String>();
-    //LocalCases = new HashSet<String>();
-
-    NameToType = names;
-
-    try {
-      file = new FileOutputStream ("output/race_results.txt");
-      writer = new PrintWriter(file);
-      writer.close();
-    }
-    catch(FileNotFoundException e)
-    {
-      System.out.println("Ошибка открытия файла race_results.txt");
-      System.exit(0);
-    }
-  }
+  public LockStatisticsCPAStatistics() { }
 
   @Override
   public String getName() {
     return "LockStatisticsCPA";
   }
 
-  private Set<LockStatisticsMutex> FindMutexes() {
-    Set<LockStatisticsMutex> mutexes = new HashSet<LockStatisticsMutex>();
-
-    for (String name : GlobalLockStatistics.keySet()) {
-      for (ActionInfo action : GlobalLockStatistics.get(name)) {
-        for (LockStatisticsMutex mutex : action.getLocks()) {
-          if (!mutexes.contains(mutex))
-            mutexes.add(mutex);
-        }
-      }
-    }
-
-    for (String name : LocalLockStatistics.keySet()) {
-      for (ActionInfo action : LocalLockStatistics.get(name)) {
-        for (LockStatisticsMutex mutex : action.getLocks()) {
-          if (!mutexes.contains(mutex))
-            mutexes.add(mutex);
-        }
-      }
-    }
-
-    return mutexes;
-  }
-
-  /*private void FindGlobalUnsafeCases() throws Exception {
-    GlobalUnsafeStatistics = new HashMap<String, Set<ActionInfo>>();
-
-
+  /*private Collection<VariableInfo> FindUnsafeCases(Collection<VariableInfo> locks) {
     Map<Integer, Set<Set<LockStatisticsMutex>>> Cases = new HashMap<Integer, Set<Set<LockStatisticsMutex>>>();
 
-    for (String name : GlobalLockStatistics.keySet()) {
-      Cases.clear();
+    Collection<VariableInfo> unsafe = new HashSet<VariableInfo>();
 
-      Set<ActionInfo> Actions = GlobalLockStatistics.get(name);
-      Set<Set<LockStatisticsMutex>> DifferentLocks;
+    for (VariableInfo var : locks) {
+      VariableInfo UnsafeTypes = new VariableInfo(var.getName());
 
-      for (ActionInfo action : Actions) {
-        if (Cases.containsKey(action.getLine())) {
-          DifferentLocks = Cases.get(action.getLine());
-          if (!DifferentLocks.contains(action.getLocks())) {
-            DifferentLocks.add(action.getLocks());
+      for (String type : var.keySet()) {
+        TypeInfo typeInfo = var.get(type);
+
+        Cases.clear();
+        Set<Set<LockStatisticsMutex>> DifferentLocks;
+
+        for (LineInfo line : typeInfo.getLines()) {
+          if (Cases.containsKey(line.getLine())) {
+            DifferentLocks = Cases.get(line.getLine());
+            if (!DifferentLocks.contains(line.getLocks())) {
+              DifferentLocks.add(line.getLocks());
+            }
+          }
+          else {
+            DifferentLocks = new HashSet<Set<LockStatisticsMutex>>();
+            DifferentLocks.add(line.getLocks());
+            Cases.put(line.getLine(), DifferentLocks);
           }
         }
-        else {
-          DifferentLocks = new HashSet<Set<LockStatisticsMutex>>();
-          DifferentLocks.add(action.getLocks());
-          Cases.put(action.getLine(), DifferentLocks);
+
+        Map<Set<Set<LockStatisticsMutex>>, Set<Integer>> LocksCount = new HashMap<Set<Set<LockStatisticsMutex>>, Set<Integer>>();
+
+        for (Integer line : Cases.keySet()) {
+          DifferentLocks = Cases.get(line);
+          if (!LocksCount.containsKey(DifferentLocks)) {
+            Set<Integer> lines = new HashSet<Integer>();
+            lines.add(line);
+            LocksCount.put(DifferentLocks, lines);
+          }
+          else {
+            Set<Integer> lines = LocksCount.get(DifferentLocks);
+            lines.add(line);
+          }
+        }
+
+        TypeInfo UnsafeLines = UnsafeTypes.new TypeInfo(type);
+
+        boolean isDifferent = false;
+        int FirstLine = -1;
+
+        for (LineInfo line : typeInfo.getLines()) {
+          if (LocksCount.get(Cases.get(line.getLine())).size() == 1 &&
+            LocksCount.size() > 1) {
+            UnsafeLines.add(line);
+            if (FirstLine == -1) {
+              FirstLine = line.getLine();
+            }
+            else {
+              if (FirstLine != line.getLine()) {
+                isDifferent = true;
+              }
+            }
+          }
+        }
+        if (UnsafeLines.size() > 0 && isDifferent){
+          UnsafeTypes.add(UnsafeLines);
         }
       }
+      if (UnsafeTypes.size() > 0) {
+        unsafe.add(UnsafeTypes);
+      }
+    }
 
+    return unsafe;
+  }
 
+  /*private Map<String, Set<ActionInfo>> FindUnsafeCases3(Map<String, Set<ActionInfo>> locks) {
 
-      //System.out.println(Cases.toString());
+    Map<String, Set<ActionInfo>> unsafe = new HashMap<String, Set<ActionInfo>>();
+    Map<Set<LockStatisticsMutex>, Set<ActionInfo>> MutexToAction =
+      new HashMap<Set<LockStatisticsMutex>, Set<ActionInfo>>();
 
-      Map<Set<Set<LockStatisticsMutex>>, Set<Integer>> LocksCount = new HashMap<Set<Set<LockStatisticsMutex>>, Set<Integer>>();
+    for (String name : locks.keySet()) {
+      MutexToAction.clear();
+      Set<ActionInfo> Actions = locks.get(name);
 
-      for (Integer line : Cases.keySet()) {
-        DifferentLocks = Cases.get(line);
-        if (!LocksCount.containsKey(DifferentLocks)) {
-          Set<Integer> lines = new HashSet<Integer>();
-          lines.add(line);
-          LocksCount.put(DifferentLocks, lines);
+      for (ActionInfo action : Actions) {
+        if (!MutexToAction.containsKey(action.getLocks())) {
+          Set<ActionInfo> lines = new HashSet<ActionInfo>();
+          lines.add(action);
+          MutexToAction.put(action.getLocks(), lines);
         }
         else {
-          Set<Integer> lines = LocksCount.get(DifferentLocks);
-          lines.add(line);
+          Set<ActionInfo> lines = MutexToAction.get(action.getLocks());
+          if (!lines.contains(action.getLine()))
+            lines.add(action);
         }
       }
 
       Set<ActionInfo> UnsafeActions = new HashSet<ActionInfo>();
 
-      boolean isDifferent = false;
-      int FirstLine = -1;
-
-      for (ActionInfo action : GlobalLockStatistics.get(name)) {
-        if (LocksCount.get(Cases.get(action.getLine())).size() == 1 &&
-            LocksCount.size() > 1) {
-          UnsafeActions.add(action);
-          if (FirstLine == -1) {
-            FirstLine = action.getLine();
-          }
-          else {
-            if (FirstLine != action.getLine()) {
-              isDifferent = true;
-            }
+      for (Set<LockStatisticsMutex> mutexes : MutexToAction.keySet()) {
+        if (MutexToAction.get(mutexes).size() == 1 && MutexToAction.size() > 1) {
+          for (ActionInfo action : MutexToAction.get(mutexes)) {
+            //only one mutex is here
+            UnsafeActions.add(action);
           }
         }
       }
-      if (UnsafeActions.size() > 0 && isDifferent){
-        GlobalCases.add(name);
-        GlobalUnsafeStatistics.put(name, UnsafeActions);
+
+
+      //check all unsafe actions
+      Boolean isDifferent = false;
+      Set<ActionInfo> ToRemove = new HashSet<ActionInfo>();
+      for (ActionInfo action : UnsafeActions) {
+        for (ActionInfo action2 : locks.get(name)) {
+          if (action.getLine() != action2.getLine()) {
+            isDifferent = true;
+            break;
+          }
+        }
+        if (!isDifferent)
+          ToRemove.add(action);
+      }
+
+      if (ToRemove.size() > 0) {
+        for (ActionInfo action : ToRemove){
+          UnsafeActions.remove(action);
+        }
+      }
+      if (UnsafeActions.size() > 0) {
+        unsafe.put(name, UnsafeActions);
       }
     }
-  }
-
-  private void FindLocalUnsafeCases() throws Exception {
-    LocalUnsafeStatistics = new HashMap<String, Set<ActionInfo>>();
-
-    Map<Integer, Set<Set<LockStatisticsMutex>>> Cases = new HashMap<Integer, Set<Set<LockStatisticsMutex>>>();
-
-    for (String name : LocalLockStatistics.keySet()) {
-      Cases.clear();
-
-      Set<ActionInfo> Actions = LocalLockStatistics.get(name);
-      Set<Set<LockStatisticsMutex>> DifferentLocks;
-
-      for (ActionInfo action : Actions) {
-        if (Cases.containsKey(action.getLine())) {
-          DifferentLocks = Cases.get(action.getLine());
-          if (!DifferentLocks.contains(action.getLocks())) {
-            DifferentLocks.add(action.getLocks());
-          }
-        }
-        else {
-          DifferentLocks = new HashSet<Set<LockStatisticsMutex>>();
-          DifferentLocks.add(action.getLocks());
-          Cases.put(action.getLine(), DifferentLocks);
-        }
-      }
-
-      Map<Set<Set<LockStatisticsMutex>>, Set<Integer>> LocksCount = new HashMap<Set<Set<LockStatisticsMutex>>, Set<Integer>>();
-
-      for (Integer line : Cases.keySet()) {
-        DifferentLocks = Cases.get(line);
-        if (!LocksCount.containsKey(DifferentLocks)) {
-          Set<Integer> lines = new HashSet<Integer>();
-          lines.add(line);
-          LocksCount.put(DifferentLocks, lines);
-        }
-        else {
-          Set<Integer> lines = LocksCount.get(DifferentLocks);
-          lines.add(line);
-        }
-      }
-
-      //find most common case
-
-      Set<ActionInfo> UnsafeActions = new HashSet<ActionInfo>();
-
-      boolean isDifferent = false;
-      int FirstLine = -1;
-
-      for (ActionInfo action : LocalLockStatistics.get(name)) {
-        if (LocksCount.get(Cases.get(action.getLine())).size() == 1 &&
-            LocksCount.size() > 1) {
-          UnsafeActions.add(action);
-          if (FirstLine == -1) {
-            FirstLine = action.getLine();
-          }
-          else {
-            if (FirstLine != action.getLine()) {
-              isDifferent = true;
-            }
-          }
-        }
-      }
-      if (UnsafeActions.size() > 0 && isDifferent){
-        LocalCases.add(name);
-        LocalUnsafeStatistics.put(name, UnsafeActions);
-      }
-    }
+    return unsafe;
   }*/
 
+  /*private void printUnsafeCases(String comment, boolean details) {
+    writer.println("-------------------------------------------------");
+    writer.println("");
+    writer.println(comment);
+    writer.println("");
+    writer.println("Total unsafe cases:     " + (GlobalUnsafeStatistics.size() +
+                                                LocalUnsafeStatistics.size()));
+    writer.println("--Global:               " + GlobalUnsafeStatistics.size());
+    writer.println("--Local:                " + LocalUnsafeStatistics.size());
+    writer.println("");
 
-  private void FindUnsafeCases() {
-    GlobalUnsafeStatistics = new HashMap<String, Set<ActionInfo>>();
-    LocalUnsafeStatistics = new HashMap<String, Set<ActionInfo>>();
+    if (GlobalUnsafeStatistics.size() > 0 && details){
+      writer.println("Global unsafe cases: ");
 
-    for (String name : GlobalLockStatistics.keySet()) {
-      Set<ActionInfo> Actions = GlobalLockStatistics.get(name);
-      Set<ActionInfo> UnsafeActions = new HashSet<ActionInfo>();
-
-      for (ActionInfo action : Actions) {
-        for (ActionInfo action2 : Actions) {
-          if (action.getLine() != action2.getLine() &&
-              !action.getLocks().equals(action2.getLocks())) {
-            if (!UnsafeActions.contains(action))
-              UnsafeActions.add(action);
-            if (!UnsafeActions.contains(action2))
-              UnsafeActions.add(action2);
-          }
-        }
+      for (VariableInfo var : GlobalUnsafeStatistics) {
+        writer.println(var.toString());
       }
 
-      if (UnsafeActions.size() > 0) {
-        GlobalUnsafeStatistics.put(name, UnsafeActions);
-      }
+      writer.println("");
     }
 
-    for (String name : LocalLockStatistics.keySet()) {
-      Set<ActionInfo> Actions = LocalLockStatistics.get(name);
-      Set<ActionInfo> UnsafeActions = new HashSet<ActionInfo>();
+    if (LocalUnsafeStatistics.size() > 0 && details){
+      writer.println("Local unsafe cases: ");
 
-      for (ActionInfo action : Actions) {
-        for (ActionInfo action2 : Actions) {
-          if (action.getLine() != action2.getLine() &&
-              !action.getLocks().equals(action2.getLocks())) {
-            if (!UnsafeActions.contains(action))
-              UnsafeActions.add(action);
-            if (!UnsafeActions.contains(action2))
-              UnsafeActions.add(action2);
-          }
-        }
+      for (VariableInfo var : LocalUnsafeStatistics) {
+        writer.println(var.toString());
       }
 
-      if (UnsafeActions.size() > 0)
-        LocalUnsafeStatistics.put(name, UnsafeActions);
+      writer.println("");
     }
-  }
-
-  private void FindUnsafeCases2() {
-    GlobalUnsafeStatistics = new HashMap<String, Set<ActionInfo>>();
-    LocalUnsafeStatistics = new HashMap<String, Set<ActionInfo>>();
-    Map<Integer, Set<Set<LockStatisticsMutex>>> Cases = new HashMap<Integer, Set<Set<LockStatisticsMutex>>>();
-
-    for (String name : GlobalLockStatistics.keySet()) {
-      Cases.clear();
-
-      Set<ActionInfo> Actions = GlobalLockStatistics.get(name);
-      Set<Set<LockStatisticsMutex>> DifferentLocks;
-
-      for (ActionInfo action : Actions) {
-        if (Cases.containsKey(action.getLine())) {
-          DifferentLocks = Cases.get(action.getLine());
-          if (!DifferentLocks.contains(action.getLocks())) {
-            DifferentLocks.add(action.getLocks());
-          }
-        }
-        else {
-          DifferentLocks = new HashSet<Set<LockStatisticsMutex>>();
-          DifferentLocks.add(action.getLocks());
-          Cases.put(action.getLine(), DifferentLocks);
-        }
-      }
-
-      Set<Integer> LinesToSave = new HashSet<Integer>();
-
-      for (Integer line : Cases.keySet()) {
-        for (Integer line2 : Cases.keySet()) {
-          if (!Cases.get(line).equals(Cases.get(line2)) && !line.equals(line2)) {
-            if (!LinesToSave.contains(line))
-              LinesToSave.add(line);
-            if (!LinesToSave.contains(line2))
-              LinesToSave.add(line2);
-          }
-        }
-      }
-
-      Set<ActionInfo> UnsafeCases = new HashSet<ActionInfo>();
-
-      for (ActionInfo action : Actions){
-        if (LinesToSave.contains(action.getLine())) {
-          UnsafeCases.add(action);
-        }
-      }
-
-      if (UnsafeCases.size() > 0) {
-        GlobalUnsafeStatistics.put(name, UnsafeCases);
-      }
-    }
-
-
-    for (String name : LocalLockStatistics.keySet()) {
-      Cases.clear();
-
-      Set<ActionInfo> Actions = LocalLockStatistics.get(name);
-      Set<Set<LockStatisticsMutex>> DifferentLocks;
-
-      for (ActionInfo action : Actions) {
-        if (Cases.containsKey(action.getLine())) {
-          DifferentLocks = Cases.get(action.getLine());
-          if (!DifferentLocks.contains(action.getLocks())) {
-            DifferentLocks.add(action.getLocks());
-          }
-        }
-        else {
-          DifferentLocks = new HashSet<Set<LockStatisticsMutex>>();
-          DifferentLocks.add(action.getLocks());
-          Cases.put(action.getLine(), DifferentLocks);
-        }
-      }
-
-      Set<Integer> LinesToSave = new HashSet<Integer>();
-
-      for (Integer line : Cases.keySet()) {
-        for (Integer line2 : Cases.keySet()) {
-          if (!Cases.get(line).equals(Cases.get(line2)) && !line.equals(line2)) {
-            if (!LinesToSave.contains(line))
-              LinesToSave.add(line);
-            if (!LinesToSave.contains(line2))
-              LinesToSave.add(line2);
-          }
-        }
-      }
-
-      Set<ActionInfo> UnsafeCases = new HashSet<ActionInfo>();
-
-      for (ActionInfo action : Actions){
-        if (LinesToSave.contains(action.getLine())) {
-          UnsafeCases.add(action);
-        }
-      }
-
-      if (UnsafeCases.size() > 0) {
-        LocalUnsafeStatistics.put(name, UnsafeCases);
-      }
-    }
-  }
+  }*/
 
   @Override
   public void printStatistics(PrintStream out, Result result, ReachedSet reached) {
 
-    try {
-      file = new FileOutputStream ("output/race_results.txt", true);
-      writer = new PrintWriter(file);
+    /*boolean NeedForDetails = true;
+
+    writer.println("General statistics");
+    writer.println("");
+    writer.println("Total variables:        " + (GlobalLockStatistics.size() +
+                                                LocalLockStatistics.size()));
+    writer.println("--Global:               " + GlobalLockStatistics.size());
+    writer.println("--Local:                " + LocalLockStatistics.size());
+    writer.println("");
+
+    Set<LockStatisticsMutex> mutexes = FindMutexes();
+
+    writer.println("Number of used mutexes: " + mutexes.size());
+
+    if (mutexes.size() > 0)
+      writer.println("  " + mutexes.toString());
+
+    /*GlobalUnsafeStatistics = FindUnsafeCases(GlobalLockStatistics);
+    LocalUnsafeStatistics = FindUnsafeCases(LocalLockStatistics);
+    printUnsafeCases("Prints actions, that have unique set of mutexes", NeedForDetails);
+
+    GlobalUnsafeStatistics = FindUnsafeCases1(GlobalLockStatistics);
+    LocalUnsafeStatistics = FindUnsafeCases1(LocalLockStatistics);
+    printUnsafeCases("Prints actions, that have (different lines & mutexes) & equal types",NeedForDetails);
+
+    GlobalUnsafeStatistics = FindUnsafeCases2(GlobalUnsafeStatistics);
+    LocalUnsafeStatistics = FindUnsafeCases2(LocalUnsafeStatistics);
+    printUnsafeCases("Prints actions, that have (different lines & set of mutexes) & equal types",NeedForDetails);
+
+    /*GlobalUnsafeStatistics = FindUnsafeCases3(GlobalLockStatistics);
+    LocalUnsafeStatistics = FindUnsafeCases3(LocalLockStatistics);
+    printUnsafeCases("Prints actions, that have unique mutexes",true);
+
+    writer.println("");
+    writer.println("=============================================");
+    writer.println("");
+    writer.println("Full statistics");
+    writer.println("");
+    writer.println("Global variables:");
+    for (VariableInfo var : GlobalLockStatistics) {
+      writer.println(var.toString());
+      writer.println("");
     }
-    catch(FileNotFoundException e)
-    {
-      System.out.println("Ошибка открытия файла race_results.txt");
-      System.exit(0);
+    writer.println("----------------------------------------------");
+    writer.println("Local variables:");
+    for (VariableInfo var : LocalLockStatistics) {
+      writer.println(var.toString());
     }
-
-    //FindSuspiciousCases();
-    //try {
-      /*if (GlobalLockStatistics.size() > 0)
-        FindGlobalUnsafeCases();
-      if (LocalLockStatistics.size() > 0)
-        FindLocalUnsafeCases();*/
-      FindUnsafeCases2();
-
-      writer.println("General statistics");
-      writer.println("");
-      writer.println("Total variables:        " + (GlobalLockStatistics.keySet().size() +
-                                                LocalLockStatistics.keySet().size()));
-      writer.println("--Global:               " + GlobalLockStatistics.keySet().size());
-      writer.println("--Local:                " + LocalLockStatistics.keySet().size());
-      writer.println("");
-
-      Set<LockStatisticsMutex> mutexes = FindMutexes();
-
-      writer.println("Number of used mutexes: " + mutexes.size());
-
-      if (mutexes.size() > 0)
-        writer.println("  " + mutexes.toString());
-
-      writer.println("");
-      writer.println("Total unsafe cases:     " + (GlobalUnsafeStatistics.size() +
-                                                  LocalUnsafeStatistics.size()));
-      writer.println("--Global:               " + GlobalUnsafeStatistics.size());
-      writer.println("--Local:                " + LocalUnsafeStatistics.size());
-      writer.println("");
-
-      if (GlobalUnsafeStatistics.size() > 0){
-        writer.println("Global unsafe cases: ");
-
-        for (String name : GlobalUnsafeStatistics.keySet()) {
-          if (NameToType.containsKey(name))
-            writer.println("  " + NameToType.get(name));
-          else
-            writer.println("  " + name);
-
-          Set<ActionInfo> tmpActions = GlobalUnsafeStatistics.get(name);
-
-          for (ActionInfo action : tmpActions) {
-            writer.println("    " + action.toString());
-          }
-          writer.println("");
-        }
-
-        writer.println("");
-        writer.println("");
-      }
-
-      if (LocalUnsafeStatistics.size() > 0){
-        writer.println("Local unsafe cases: ");
-
-        for (String name : LocalUnsafeStatistics.keySet()) {
-          if (NameToType.containsKey(name))
-            writer.println("  " + NameToType.get(name));
-          else
-            writer.println("  " + name);
-
-          Set<ActionInfo> tmpActions = LocalUnsafeStatistics.get(name);
-
-          for (ActionInfo action : tmpActions) {
-            writer.println("    " + action.toString());
-          }
-          writer.println("");
-        }
-
-        writer.println("");
-      }
-      writer.println("");
-      writer.println("=============================================");
-      writer.println("");
-      writer.println("Full statistics");
-      writer.println("");
-      writer.println("Global variables:");
-
-      for (String name : GlobalLockStatistics.keySet()) {
-        if (NameToType.containsKey(name))
-          writer.println("  " + NameToType.get(name));
-        else
-          writer.println("  " + name);
-
-        Set<ActionInfo> tmpActions = GlobalLockStatistics.get(name);
-
-        for (ActionInfo action : tmpActions) {
-          writer.println("    " + action.toString());
-        }
-        writer.println("");
-      }
-
-      writer.println("----------------------------------------------");
-      writer.println("Local variables:");
-
-      for (String name : LocalLockStatistics.keySet()) {
-        if (NameToType.containsKey(name))
-          writer.println("  " + NameToType.get(name));
-        else
-          writer.println("  " + name);
-
-        Set<ActionInfo> tmpActions = LocalLockStatistics.get(name);
-
-        for (ActionInfo action : tmpActions) {
-          writer.println("    " + action.toString());
-        }
-        writer.println("");
-      }
-   /* }
-    catch (Exception e) {
-      writer.println("Statistics is unavaliable.");
-      e.printStackTrace();
-    }
-    finally {*/
-      if(file != null)
-        writer.close();
-    //}
+    if(file != null)
+      writer.close();*/
   }
 }

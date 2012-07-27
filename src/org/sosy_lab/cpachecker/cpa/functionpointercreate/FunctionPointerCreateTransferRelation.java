@@ -60,9 +60,9 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CSimpleDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStringLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression.UnaryOperator;
 import org.sosy_lab.cpachecker.cfa.ast.c.CVariableDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.DefaultCExpressionVisitor;
+import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression.UnaryOperator;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdgeType;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
@@ -372,6 +372,7 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
 
     if (pStatement instanceof CAssignment) {
       // assignment like "a = b" or "a = foo()"
+      //System.out.println(((CAssignment)pStatement).getLeftHandSide().toASTString());
       String functionName = pCfaEdge.getPredecessor().getFunctionName();
 
       CAssignment assignment = (CAssignment)pStatement;
