@@ -23,8 +23,6 @@
  */
 package org.sosy_lab.cpachecker.cpa.lockStatistics;
 
-import java.util.Collection;
-
 import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
@@ -46,13 +44,11 @@ import org.sosy_lab.cpachecker.core.interfaces.MergeOperator;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustment;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
-import org.sosy_lab.cpachecker.core.interfaces.Statistics;
-import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
 import org.sosy_lab.cpachecker.core.interfaces.StopOperator;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 
 @Options(prefix="cpa.lockstatistics")
-public class LockStatisticsCPA implements ConfigurableProgramAnalysisWithABM, StatisticsProvider{
+public class LockStatisticsCPA implements ConfigurableProgramAnalysisWithABM/*, StatisticsProvider*/{
 
   public static CPAFactory factory() {
     return AutomaticCPAFactory.forType(LockStatisticsCPA.class);
@@ -78,7 +74,7 @@ public class LockStatisticsCPA implements ConfigurableProgramAnalysisWithABM, St
   private LockStatisticsTransferRelation transferRelation;
   private PrecisionAdjustment precisionAdjustment;
   private final LockStatisticsReducer reducer;
-  private final LockStatisticsCPAStatistics statistics;
+  //private final LockStatisticsCPAStatistics statistics;
 
   private final Configuration config;
   private final LogManager logger;
@@ -96,7 +92,7 @@ public class LockStatisticsCPA implements ConfigurableProgramAnalysisWithABM, St
     stopOperator        = initializeStopOperator();
     precisionAdjustment = StaticPrecisionAdjustment.getInstance();
     reducer             = new LockStatisticsReducer();
-    statistics          = new LockStatisticsCPAStatistics();
+    //statistics          = new LockStatisticsCPAStatistics();
 
   }
 
@@ -183,12 +179,12 @@ public class LockStatisticsCPA implements ConfigurableProgramAnalysisWithABM, St
     return reducer;
   }
 
-  @Override
+  /*@Override
   public void collectStatistics(Collection<Statistics> pStatsCollection) {
     pStatsCollection.add(statistics);
   }
 
   public LockStatisticsCPAStatistics getStats() {
     return statistics;
-  }
+  }*/
 }

@@ -274,6 +274,15 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
     } else if (nameExp instanceof CFieldReference) {
       // TODO This is a function pointer call "(s->f)()" or "(s.f)()"
       return null;
+    } else if (nameExp instanceof CArraySubscriptExpression) {
+      // a = (*f[i])(b)
+      CExpression array = ((CArraySubscriptExpression)nameExp).getArrayExpression();
+      if (array instanceof CIdExpression) {
+        return scopedIfNecessary((CIdExpression)array, currentFunction);
+      }
+      else
+        //TODO sure?
+        return null;
     } else {
       throw new UnrecognizedCCodeException("unknown function call expression", pCfaEdge, nameExp);
     }

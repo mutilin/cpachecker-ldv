@@ -72,7 +72,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   DataProcessing dataProcess = null;
 
   @Option(name="output", description="file to write results")
-  private String FileName = "output/race_results.txt";
+  private String FileName = "race_results.txt";
 
   @Option(values={"SIMPLE", "SET"},toUppercase=true,
       description="which data process we should use")
@@ -219,6 +219,141 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
   }
 
+  /*private Collection<VariableInfo> FindUnsafeCases(Collection<VariableInfo> locks) {
+  Map<Integer, Set<Set<LockStatisticsMutex>>> Cases = new HashMap<Integer, Set<Set<LockStatisticsMutex>>>();
+
+  Collection<VariableInfo> unsafe = new HashSet<VariableInfo>();
+
+  for (VariableInfo var : locks) {
+    VariableInfo UnsafeTypes = new VariableInfo(var.getName());
+
+    for (String type : var.keySet()) {
+      TypeInfo typeInfo = var.get(type);
+
+      Cases.clear();
+      Set<Set<LockStatisticsMutex>> DifferentLocks;
+
+      for (LineInfo line : typeInfo.getLines()) {
+        if (Cases.containsKey(line.getLine())) {
+          DifferentLocks = Cases.get(line.getLine());
+          if (!DifferentLocks.contains(line.getLocks())) {
+            DifferentLocks.add(line.getLocks());
+          }
+        }
+        else {
+          DifferentLocks = new HashSet<Set<LockStatisticsMutex>>();
+          DifferentLocks.add(line.getLocks());
+          Cases.put(line.getLine(), DifferentLocks);
+        }
+      }
+
+      Map<Set<Set<LockStatisticsMutex>>, Set<Integer>> LocksCount = new HashMap<Set<Set<LockStatisticsMutex>>, Set<Integer>>();
+
+      for (Integer line : Cases.keySet()) {
+        DifferentLocks = Cases.get(line);
+        if (!LocksCount.containsKey(DifferentLocks)) {
+          Set<Integer> lines = new HashSet<Integer>();
+          lines.add(line);
+          LocksCount.put(DifferentLocks, lines);
+        }
+        else {
+          Set<Integer> lines = LocksCount.get(DifferentLocks);
+          lines.add(line);
+        }
+      }
+
+      TypeInfo UnsafeLines = UnsafeTypes.new TypeInfo(type);
+
+      boolean isDifferent = false;
+      int FirstLine = -1;
+
+      for (LineInfo line : typeInfo.getLines()) {
+        if (LocksCount.get(Cases.get(line.getLine())).size() == 1 &&
+          LocksCount.size() > 1) {
+          UnsafeLines.add(line);
+          if (FirstLine == -1) {
+            FirstLine = line.getLine();
+          }
+          else {
+            if (FirstLine != line.getLine()) {
+              isDifferent = true;
+            }
+          }
+        }
+      }
+      if (UnsafeLines.size() > 0 && isDifferent){
+        UnsafeTypes.add(UnsafeLines);
+      }
+    }
+    if (UnsafeTypes.size() > 0) {
+      unsafe.add(UnsafeTypes);
+    }
+  }
+
+  return unsafe;
+}
+
+/*private Map<String, Set<ActionInfo>> FindUnsafeCases3(Map<String, Set<ActionInfo>> locks) {
+
+  Map<String, Set<ActionInfo>> unsafe = new HashMap<String, Set<ActionInfo>>();
+  Map<Set<LockStatisticsMutex>, Set<ActionInfo>> MutexToAction =
+    new HashMap<Set<LockStatisticsMutex>, Set<ActionInfo>>();
+
+  for (String name : locks.keySet()) {
+    MutexToAction.clear();
+    Set<ActionInfo> Actions = locks.get(name);
+
+    for (ActionInfo action : Actions) {
+      if (!MutexToAction.containsKey(action.getLocks())) {
+        Set<ActionInfo> lines = new HashSet<ActionInfo>();
+        lines.add(action);
+        MutexToAction.put(action.getLocks(), lines);
+      }
+      else {
+        Set<ActionInfo> lines = MutexToAction.get(action.getLocks());
+        if (!lines.contains(action.getLine()))
+          lines.add(action);
+      }
+    }
+
+    Set<ActionInfo> UnsafeActions = new HashSet<ActionInfo>();
+
+    for (Set<LockStatisticsMutex> mutexes : MutexToAction.keySet()) {
+      if (MutexToAction.get(mutexes).size() == 1 && MutexToAction.size() > 1) {
+        for (ActionInfo action : MutexToAction.get(mutexes)) {
+          //only one mutex is here
+          UnsafeActions.add(action);
+        }
+      }
+    }
+
+
+    //check all unsafe actions
+    Boolean isDifferent = false;
+    Set<ActionInfo> ToRemove = new HashSet<ActionInfo>();
+    for (ActionInfo action : UnsafeActions) {
+      for (ActionInfo action2 : locks.get(name)) {
+        if (action.getLine() != action2.getLine()) {
+          isDifferent = true;
+          break;
+        }
+      }
+      if (!isDifferent)
+        ToRemove.add(action);
+    }
+
+    if (ToRemove.size() > 0) {
+      for (ActionInfo action : ToRemove){
+        UnsafeActions.remove(action);
+      }
+    }
+    if (UnsafeActions.size() > 0) {
+      unsafe.put(name, UnsafeActions);
+    }
+  }
+  return unsafe;
+}*/
+
   private Set<LockStatisticsLock> FindMutexes() {
     Set<LockStatisticsLock> mutexes = new HashSet<LockStatisticsLock>();
 
@@ -271,7 +406,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   public void printStatistics(PrintStream out, Result result, ReachedSet reached) {
 
     int global = 0, local = 0;
-
     for (String name : Stat.keySet()){
       VariableInfo variable = Stat.get(name);
 
@@ -313,10 +447,10 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       for (String var : Stat.keySet()) {
         writer.println(Stat.get(var).toString());
       }
-
-      if(file != null)
-        writer.close();
     }
+
+    if(file != null)
+      writer.close();
   }
 
   @Override
