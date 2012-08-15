@@ -55,6 +55,17 @@ public class CallstackTransferRelation implements TransferRelation {
         CallstackState e = element;
         while (e != null) {
           if (e.getCurrentFunction().equals(functionName)) {
+            CallstackState g = element;
+            System.out.println("----");
+            while (!g.getCurrentFunction().equals(functionName)) {
+              System.out.println(g.getCurrentFunction() + " -> ");
+              g = g.getPreviousState();
+            }
+            //Collection<CallstackState> s = new HashSet<CallstackState>();
+            //s.add(element);
+            //new CallstackState(element, functionName, callNode)
+            //return Collections.singleton(element);
+            //break;
             throw new UnsupportedCCodeException("recursion", pCfaEdge);
           }
           e = e.getPreviousState();
@@ -74,6 +85,8 @@ public class CallstackTransferRelation implements TransferRelation {
         CFANode returnNode = cfaEdge.getSuccessor();
         CFANode callNode = returnNode.getEnteringSummaryEdge().getPredecessor();
 
+        System.out.println("calledFunction:  " + calledFunction);
+        System.out.println("elementFunction: " + element.getCurrentFunction());
         assert calledFunction.equals(element.getCurrentFunction());
 
         if (!callNode.equals(element.getCallNode())) {
@@ -82,6 +95,8 @@ public class CallstackTransferRelation implements TransferRelation {
         }
 
         CallstackState returnElement = element.getPreviousState();
+        System.out.println("callerFunction:  " + callerFunction);
+        System.out.println("elementFunction: " + returnElement.getCurrentFunction());
 
         assert callerFunction.equals(returnElement.getCurrentFunction());
 

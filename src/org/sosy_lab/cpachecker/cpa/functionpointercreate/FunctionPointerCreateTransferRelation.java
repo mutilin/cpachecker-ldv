@@ -60,9 +60,9 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CSimpleDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStringLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression.UnaryOperator;
 import org.sosy_lab.cpachecker.cfa.ast.c.CVariableDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.DefaultCExpressionVisitor;
-import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression.UnaryOperator;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdgeType;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
@@ -85,6 +85,7 @@ import org.sosy_lab.cpachecker.cpa.functionpointercreate.FunctionPointerCreateSt
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCCodeException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCFAEdgeException;
+import org.sosy_lab.cpachecker.exceptions.UnsupportedCCodeException;
 
 @Options(prefix="cpa.functionpointer")
 class FunctionPointerCreateTransferRelation implements TransferRelation {
@@ -126,14 +127,27 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
         CFAEdge edge = node.getLeavingEdge(edgeIdx);
         if (!(edge instanceof FunctionPointerCreateCallEdge)) {
           // ignore FunctionPointerCallEdges, they are from previous passes
-          getAbstractSuccessorForEdge(oldState, pPrecision, edge, results);
+          try{
+            getAbstractSuccessorForEdge(oldState, pPrecision, edge, results);
+          }
+          catch (UnsupportedCCodeException e) {
+            System.out.println("we are here1!!!");
+            e.printStackTrace();
+            throw e;
+          }
         }
       }
 
     } else {
       results = new ArrayList<FunctionPointerCreateState>(1);
-      getAbstractSuccessorForEdge(oldState, pPrecision, pCfaEdge, results);
-
+      try{
+        getAbstractSuccessorForEdge(oldState, pPrecision, pCfaEdge, results);
+      }
+      catch (UnsupportedCCodeException e) {
+        System.out.println("we are here2!!!");
+        e.printStackTrace();
+        throw e;
+      }
     }
     return results;
   }

@@ -33,24 +33,17 @@ import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
-import org.sosy_lab.cpachecker.cfa.ast.c.CAssignment;
-import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CExpressionStatement;
-import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallStatement;
-import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
-import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CVariableDeclaration;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
 import org.sosy_lab.cpachecker.cfa.types.c.CNamedType;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
-import org.sosy_lab.cpachecker.cpa.lockStatistics.LockStatisticsLock.LockType;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCCodeException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCFAEdgeException;
@@ -68,8 +61,22 @@ public class LockStatisticsTransferRelation implements TransferRelation
       description="functions, that unlocks synchronization primitives")
   private Set<String> unlock;
 
+
+  @Option(name="functionhandler", values={"LINUX", "OS"},toUppercase=true,
+      description="which type of function handler we should use")
+  private String HandleType = "LINUX";
+
+  private FunctionHandler handler;
+
   public LockStatisticsTransferRelation(Configuration config) throws InvalidConfigurationException {
     config.inject(this);
+
+    if (HandleType.equals("LINUX")) {
+      handler = new FunctionHandlerLinux(lock, unlock);
+    }
+    else if (HandleType.equals("OS")) {
+      handler = new FunctionHandlerOS(lock, unlock);
+    }
   }
 
   @Override
@@ -84,7 +91,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
     switch (cfaEdge.getEdgeType()) {
 
     case FunctionCallEdge:
-      successor = lockStatisticsElement.clone();
+      successor = handler.handleFunctionCall(lockStatisticsElement, (CFunctionCallEdge)cfaEdge);
       break;
 
     case FunctionReturnEdge:
@@ -108,7 +115,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
     switch(cfaEdge.getEdgeType()) {
     case StatementEdge:
       CStatementEdge statementEdge = (CStatementEdge) cfaEdge;
-      return handleStatement(element, statementEdge.getStatement(), cfaEdge, precision);
+      return handler.handleStatement(element, statementEdge.getStatement());
 
     case BlankEdge:
     case AssumeEdge:
@@ -129,54 +136,6 @@ public class LockStatisticsTransferRelation implements TransferRelation
 
     default:
       throw new UnrecognizedCFAEdgeException(cfaEdge);
-    }
-  }
-
-  private LockStatisticsState handleStatement(LockStatisticsState element, CStatement expression, CFAEdge cfaEdge, LockStatisticsPrecision precision)
-    throws UnrecognizedCCodeException {
-
-    LockStatisticsState newElement = element.clone();
-
-    if (expression instanceof CAssignment) {
-      CRightHandSide op2 = ((CAssignment)expression).getRightHandSide();
-
-      if (op2 instanceof CFunctionCallExpression) {
-        String functionName = ((CFunctionCallExpression) op2).getFunctionNameExpression().toASTString();
-        List <CExpression> params = ((CFunctionCallExpression) op2).getParameterExpressions();
-
-        if (lock.contains(functionName)) {
-          assert !params.isEmpty();
-          String paramName = params.get(0).toASTString();
-          newElement.add(paramName, cfaEdge.getLineNumber(), LockType.MUTEX);
-        }
-        else if (unlock.contains(functionName)) {
-          assert !params.isEmpty();
-          String paramName = params.get(0).toASTString();
-          newElement.delete(paramName);
-        }
-      }
-      return newElement;
-    }
-    else if (expression instanceof CFunctionCallStatement) {
-      String functionName = ((CFunctionCallStatement) expression).getFunctionCallExpression().getFunctionNameExpression().toASTString();
-      List <CExpression> params = ((CFunctionCallStatement) expression).getFunctionCallExpression().getParameterExpressions();
-      if (lock.contains(functionName)) {
-        assert !params.isEmpty();
-        String paramName = params.get(0).toASTString();
-        newElement.add(paramName, cfaEdge.getLineNumber(), LockType.MUTEX);
-      }
-      else if (unlock.contains(functionName)) {
-        assert !params.isEmpty();
-        String paramName = params.get(0).toASTString();
-        newElement.delete(paramName);
-      }
-      return newElement;
-
-    }
-    else if (expression instanceof CExpressionStatement) {
-      return newElement;
-    } else {
-      throw new UnrecognizedCCodeException(cfaEdge, expression);
     }
   }
 
