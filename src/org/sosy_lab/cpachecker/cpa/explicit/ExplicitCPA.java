@@ -30,6 +30,7 @@ import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
+import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
 import org.sosy_lab.cpachecker.core.defaults.MergeJoinOperator;
@@ -83,7 +84,7 @@ public class ExplicitCPA implements ConfigurableProgramAnalysisWithABM, Statisti
   private final Configuration config;
   private final LogManager logger;
 
-  private ExplicitCPA(Configuration config, LogManager logger) throws InvalidConfigurationException {
+  private ExplicitCPA(Configuration config, LogManager logger, CFA cfa) throws InvalidConfigurationException {
     this.config = config;
     this.logger = logger;
 
@@ -91,13 +92,16 @@ public class ExplicitCPA implements ConfigurableProgramAnalysisWithABM, Statisti
 
     abstractDomain      = new ExplicitDomain();
     transferRelation    = new ExplicitTransferRelation(config);
-    precision           = initializePrecision(config);
+    precision           = initializePrecision(config, cfa);
     mergeOperator       = initializeMergeOperator();
     stopOperator        = initializeStopOperator();
     precisionAdjustment = StaticPrecisionAdjustment.getInstance();
     reducer             = new ExplicitReducer();
     statistics          = new ExplicitCPAStatistics();
+
+    static_stats = statistics;
   }
+  public static ExplicitCPAStatistics static_stats = null;
 
   private MergeOperator initializeMergeOperator() {
     if (mergeType.equals("SEP")) {
@@ -127,8 +131,8 @@ public class ExplicitCPA implements ConfigurableProgramAnalysisWithABM, Statisti
     return null;
   }
 
-  private ExplicitPrecision initializePrecision(Configuration config) throws InvalidConfigurationException {
-    return new ExplicitPrecision(variableBlacklist, config);
+  private ExplicitPrecision initializePrecision(Configuration config, CFA cfa) throws InvalidConfigurationException {
+    return new ExplicitPrecision(variableBlacklist, config, cfa.getVarClassification());
   }
 
   @Override

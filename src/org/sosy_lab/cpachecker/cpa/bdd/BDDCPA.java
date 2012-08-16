@@ -30,8 +30,6 @@ import java.util.LinkedHashSet;
 import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
-import org.sosy_lab.common.configuration.Option;
-import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
@@ -51,16 +49,11 @@ import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
 import org.sosy_lab.cpachecker.core.interfaces.StopOperator;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
-import org.sosy_lab.cpachecker.exceptions.UnrecognizedCCodeException;
 import org.sosy_lab.cpachecker.util.predicates.NamedRegionManager;
 import org.sosy_lab.cpachecker.util.predicates.bdd.BDDRegionManager;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.Region;
 
-@Options(prefix = "cpa.bdd")
 public class BDDCPA implements ConfigurableProgramAnalysis, StatisticsProvider {
-
-  @Option(description = "either use one bit to know if a value is 0 (or not 0)" +
-      "or use a vector to store all memory cells of a variable")
-  private boolean useBitvector = false;
 
   public static CPAFactory factory() {
     return AutomaticCPAFactory.forType(BDDCPA.class);
@@ -71,26 +64,16 @@ public class BDDCPA implements ConfigurableProgramAnalysis, StatisticsProvider {
   private final BDDPrecision precision;
   private final MergeOperator mergeOperator;
   private final StopOperator stopOperator;
-  private final BDDTransferRelation transferRelation;
+  private final TransferRelation transferRelation;
 
-  private BDDCPA(CFA cfa, Configuration config, LogManager logger) throws InvalidConfigurationException,
-      UnrecognizedCCodeException {
-    config.inject(this);
-
-    VarCollector vc = new VarCollector(cfa);
-    vc.collectBooleanVars();
-    System.out.println(vc);
-
-    manager = new NamedRegionManager(BDDRegionManager.getInstance());
+  private BDDCPA(CFA cfa, Configuration config, LogManager logger)
+      throws InvalidConfigurationException {
+    manager = new NamedRegionManager(BDDRegionManager.getInstance(config));
     abstractDomain = new BDDDomain();
-    precision = new BDDPrecision(config);
     mergeOperator = new MergeJoinOperator(abstractDomain);
     stopOperator = new StopSepOperator(abstractDomain);
-    if (!useBitvector) {
-      transferRelation = new BDDTransferRelation(manager, config);
-    } else {
-      transferRelation = new BDDVectorTransferRelation(manager, config);
-    }
+    precision = new BDDPrecision(config, cfa.getVarClassification());
+    transferRelation = new BDDTransferRelation(manager, config, cfa, precision);
   }
 
   @Override
@@ -116,7 +99,7 @@ public class BDDCPA implements ConfigurableProgramAnalysis, StatisticsProvider {
   @Override
   public AbstractState getInitialState(CFANode node) {
     return new BDDState(manager, null, manager.makeTrue(),
-        new LinkedHashSet<String>(), node.getFunctionName());
+        new LinkedHashSet<Region>(), node.getFunctionName());
   }
 
   @Override
@@ -135,8 +118,7 @@ public class BDDCPA implements ConfigurableProgramAnalysis, StatisticsProvider {
 
       @Override
       public void printStatistics(PrintStream out, Result result, ReachedSet reached) {
-        out.append("Number of created predicates: " + transferRelation.createdPredicates + "\n");
-        out.append("Number of deleted predicates: " + transferRelation.deletedPredicates + "\n");
+        out.append(transferRelation.toString());
       }
 
       @Override

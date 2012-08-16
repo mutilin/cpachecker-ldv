@@ -145,8 +145,6 @@ class ASTConverter {
 
   private final LogManager logger;
 
-  private final boolean ignoreCasts;
-
   private Scope scope;
 
   private LinkedList<CAstNode> preSideAssignments = new LinkedList<CAstNode>();
@@ -155,9 +153,8 @@ class ASTConverter {
   private CIdExpression conditionalTemporaryVariable = null;
 
 
-  public ASTConverter(Scope pScope, boolean pIgnoreCasts, LogManager pLogger) {
+  public ASTConverter(Scope pScope, LogManager pLogger) {
     scope = pScope;
-    ignoreCasts = pIgnoreCasts;
     logger = pLogger;
   }
 
@@ -317,7 +314,7 @@ class ASTConverter {
       return convert((IASTConditionalExpression)e);
 
     } else {
-      throw new CFAGenerationRuntimeException("", e);
+      throw new CFAGenerationRuntimeException("Unknown expression type " + e.getClass().getSimpleName(), e);
     }
   }
 
@@ -525,11 +522,7 @@ class ASTConverter {
   }
 
   private CAstNode convert(IASTCastExpression e) {
-    if (ignoreCasts) {
-      return convertExpressionWithSideEffects(e.getOperand());
-    } else {
-      return new CCastExpression(convert(e.getFileLocation()), convert(e.getExpressionType()), convertExpressionWithoutSideEffects(e.getOperand()), convert(e.getTypeId()));
-    }
+    return new CCastExpression(convert(e.getFileLocation()), convert(e.getExpressionType()), convertExpressionWithoutSideEffects(e.getOperand()), convert(e.getTypeId()));
   }
 
   private CFieldReference convert(IASTFieldReference e) {
@@ -666,12 +659,13 @@ class ASTConverter {
         // something like '\n'
         check(s.length() == 1, "character literal too long", e);
         switch (c) {
+        case 'a'  : result = 7   ; break;
         case 'b'  : result = '\b'; break;
+        case 'f'  : result = '\f'; break;
+        case 'n'  : result = '\n'; break;
+        case 'r'  : result = '\r'; break;
         case 't'  : result = '\t'; break;
         case 'v'  : result = 11; break;
-        case 'n'  : result = '\n'; break;
-        case 'f'  : result = '\f'; break;
-        case 'r'  : result = '\r'; break;
         case '"'  : result = '\"'; break;
         case '\'' : result = '\''; break;
         case '\\' : result = '\\'; break;
@@ -1300,7 +1294,7 @@ class ASTConverter {
     return new CNamedType(d.isConst(), d.isVolatile(), convert(d.getName()));
   }
 
-  private CSimpleType convert(IASTSimpleDeclSpecifier d) {
+  private CType convert(IASTSimpleDeclSpecifier d) {
     if (!(d instanceof org.eclipse.cdt.core.dom.ast.c.ICASTSimpleDeclSpecifier)) {
       throw new CFAGenerationRuntimeException("Unsupported type", d);
     }
@@ -1330,12 +1324,11 @@ class ASTConverter {
       type = CBasicType.VOID;
       break;
     case IASTSimpleDeclSpecifier.t_typeof:
-      //System.out.println("Typeof " + dd.getClass());
-      //System.out.println("Typeof expression " + dd.getDeclTypeExpression().getRawSignature());
-      type = CBasicType.UNSPECIFIED;
-      break;
+      // TODO This might loose some information of dd or dd.getDeclTypeExpression()
+      // (the latter should be of type IASTTypeIdExpression)
+      return convert(dd.getDeclTypeExpression().getExpressionType());
     default:
-      throw new CFAGenerationRuntimeException("Unknown basic type " + dd.getType(), d);
+      throw new CFAGenerationRuntimeException("Unknown basic type " + dd.getType() + " " + dd.getClass().getSimpleName(), d);
     }
 
     if ((dd.isShort() && dd.isLong())

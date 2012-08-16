@@ -26,14 +26,16 @@ package org.sosy_lab.cpachecker.cpa.explicit;
 import java.io.PrintStream;
 
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
+import org.sosy_lab.cpachecker.cpa.arg.AbstractARGBasedRefiner;
 import org.sosy_lab.cpachecker.cpa.explicit.refiner.DelegatingExplicitRefiner;
-import org.sosy_lab.cpachecker.util.predicates.interpolation.AbstractInterpolationBasedRefiner;
+import org.sosy_lab.cpachecker.util.AbstractStates;
 
 public class ExplicitCPAStatistics implements Statistics {
 
-  private AbstractInterpolationBasedRefiner<?, ?> refiner = null;
+  private AbstractARGBasedRefiner refiner = null;
 
   public ExplicitCPAStatistics() {}
 
@@ -42,16 +44,53 @@ public class ExplicitCPAStatistics implements Statistics {
     return "ExplicitCPA";
   }
 
-  public void addRefiner(AbstractInterpolationBasedRefiner<?, ?> refiner) {
+  public void addRefiner(AbstractARGBasedRefiner refiner) {
     this.refiner = refiner;
   }
 
   @Override
   public void printStatistics(PrintStream out, Result result, ReachedSet reached) {
+    int maxNumberOfVariables            = 0;
+    int maxNumberOfGlobalVariables      = 0;
+
+    long totalNumberOfVariables         = 0;
+    long totalNumberOfGlobalVariables   = 0;
+
+    for (AbstractState currentAbstractState : reached.getReached()) {
+      ExplicitState currentState = AbstractStates.extractStateByType(currentAbstractState, ExplicitState.class);
+
+      int numberOfVariables         = currentState.getConstantsMap().size();
+      int numberOfGlobalVariables   = getNumberOfGlobalVariables(currentState);
+
+      totalNumberOfVariables        = totalNumberOfGlobalVariables + numberOfVariables;
+      totalNumberOfGlobalVariables  = totalNumberOfGlobalVariables + numberOfGlobalVariables;
+
+      maxNumberOfVariables          = Math.max(maxNumberOfVariables, numberOfVariables);
+      maxNumberOfGlobalVariables    = Math.max(maxNumberOfGlobalVariables, numberOfGlobalVariables);
+    }
+
+    out.println("Max. number of variables: " + maxNumberOfVariables);
+    out.println("Max. number of globals variables: " + maxNumberOfGlobalVariables);
+
+    out.println("Avg. number of variables: " + ((totalNumberOfVariables * 10000) / reached.size()) / 10000.0);
+    out.println("Avg. number of global variables: " + ((totalNumberOfGlobalVariables * 10000) / reached.size()) / 10000.0);
+
     if (refiner != null) {
       if (refiner instanceof DelegatingExplicitRefiner) {
         ((DelegatingExplicitRefiner)refiner).printStatistics(out, result, reached);
       }
     }
+  }
+
+  private int getNumberOfGlobalVariables(ExplicitState state) {
+    int numberOfGlobalVariables = 0;
+
+    for(String variableName : state.getConstantsMap().keySet()) {
+      if(variableName.contains("::")) {
+        numberOfGlobalVariables++;
+      }
+    }
+
+    return numberOfGlobalVariables;
   }
 }

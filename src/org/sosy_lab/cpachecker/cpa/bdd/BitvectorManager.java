@@ -24,43 +24,24 @@
 package org.sosy_lab.cpachecker.cpa.bdd;
 
 import java.math.BigInteger;
-import java.util.Arrays;
 
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
-import org.sosy_lab.common.configuration.Option;
-import org.sosy_lab.common.configuration.Options;
-import org.sosy_lab.cpachecker.util.predicates.NamedRegionManager;
+import org.sosy_lab.cpachecker.util.predicates.bdd.BDDRegionManager;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.Region;
 
-@Options(prefix = "cpa.bdd")
 public class BitvectorManager {
 
-  private NamedRegionManager rmgr;
+  private BDDRegionManager rmgr;
 
-  @Option(description = "bitsize for values")
-  private int bitsize = 8;
-
-  public BitvectorManager(NamedRegionManager rmgr, Configuration config)
+  public BitvectorManager(Configuration config)
       throws InvalidConfigurationException {
-    config.inject(this);
-    this.rmgr = rmgr;
+    this.rmgr = BDDRegionManager.getInstance(config);
   }
 
-  // checks whether one of the regions is true
-  public boolean isTrue(Region[] regions) {
-    for (Region r : regions) {
-      if (r.isTrue()) { return true; }
-    }
-    return false;
-  }
-
-  // checks whether all regions are false
-  public boolean isFalse(Region[] regions) {
-    for (Region r : regions) {
-      if (!r.isFalse()) { return false; }
-    }
-    return true;
+  private int getBitSize(Region[] r1, Region[] r2) {
+    assert r1.length == r2.length;
+    return r1.length;
   }
 
   /** returns OR of regions */
@@ -72,58 +53,34 @@ public class BitvectorManager {
     return tmp;
   }
 
-  /** returns 0001 */
-  public Region[] makeTrue() {
-    return wrapLast(rmgr.makeFalse(), rmgr.makeTrue());
-  }
-
-  /** returns 0000 */
-  public Region[] makeFalse() {
-    return wrapLast(rmgr.makeFalse(), rmgr.makeFalse());
-  }
-
   /** returns bitRepresentation of number, 5 --> 00101 --> [0,0,1,0,1] */
-  public Region[] makeNumber(BigInteger n) {
-    Region[] newRegions = new Region[bitsize];
-    for (int i = 0; i < bitsize; i++) {
-      // TODO simplify?
-      if (BigInteger.ZERO.equals(n.and(BigInteger.valueOf(1 << (bitsize - i - 1))))) {
-        newRegions[i] = rmgr.makeFalse();
-      } else {
+  public Region[] makeNumber(BigInteger n, int size) {
+    Region[] newRegions = new Region[size];
+    for (int i = 0; i < size; i++) {
+      if (n.testBit(i)) {
         newRegions[i] = rmgr.makeTrue();
+      } else {
+        newRegions[i] = rmgr.makeFalse();
       }
     }
     return newRegions;
   }
 
-  /** returns regions for positions of a variable, s --> [s@1, s@2, s@3, ...] */
-  public Region[] createPredicate(String s) {
-    Region[] newRegions = new Region[bitsize];
-    for (int i = 0; i < bitsize; i++) {
-      newRegions[i] = rmgr.createPredicate(s + "@" + (bitsize - i - 1));
-    }
-    return newRegions;
-  }
-
-  /** removes predicate from region */
-  public Region makeExists(Region region, Region[] existing) {
-    for (int i = 0; i < bitsize; i++) {
-      region = rmgr.makeExists(region, existing[i]);
-    }
-    return region;
-  }
-
   /** 1100 --> 0000, 0000 --> 0001 */
   public Region[] makeNot(Region[] r) {
+    int bitsize = r.length;
+
     Region tmp = rmgr.makeFalse(); // neutral region for OR
     for (int i = 0; i < bitsize; i++) {
       tmp = rmgr.makeOr(tmp, r[i]);
     }
-    return wrapLast(rmgr.makeFalse(), rmgr.makeNot(tmp));
+    return wrapLast(rmgr.makeNot(tmp), bitsize);
   }
 
   /** 1100 & 1010 --> 1000 */
   public Region[] makeBinaryAnd(Region[] r1, Region[] r2) {
+    int bitsize = getBitSize(r1, r2);
+
     Region[] newRegions = new Region[bitsize];
     for (int i = 0; i < bitsize; i++) {
       newRegions[i] = rmgr.makeAnd(r1[i], r2[i]);
@@ -133,17 +90,21 @@ public class BitvectorManager {
 
   /** 1100 && 1010 --> 0001 */
   public Region[] makeLogicalAnd(Region[] r1, Region[] r2) {
+    int bitsize = getBitSize(r1, r2);
+
     Region tmp1 = rmgr.makeFalse(); // neutral region for OR
     Region tmp2 = rmgr.makeFalse();
     for (int i = 0; i < bitsize; i++) {
       tmp1 = rmgr.makeOr(tmp1, r1[i]);
       tmp2 = rmgr.makeOr(tmp2, r2[i]);
     }
-    return wrapLast(rmgr.makeFalse(), rmgr.makeAnd(tmp1, tmp2));
+    return wrapLast(rmgr.makeAnd(tmp1, tmp2), bitsize);
   }
 
   /** 1100 | 1010 --> 1110 */
   public Region[] makeBinaryOr(Region[] r1, Region[] r2) {
+    int bitsize = getBitSize(r1, r2);
+
     Region[] newRegions = new Region[bitsize];
     for (int i = 0; i < bitsize; i++) {
       newRegions[i] = rmgr.makeOr(r1[i], r2[i]);
@@ -153,17 +114,21 @@ public class BitvectorManager {
 
   /** 1100 || 1010 --> 0001 */
   public Region[] makeLogicalOr(Region[] r1, Region[] r2) {
+    int bitsize = getBitSize(r1, r2);
+
     Region tmp1 = rmgr.makeFalse(); // neutral region for OR
     Region tmp2 = rmgr.makeFalse();
     for (int i = 0; i < bitsize; i++) {
       tmp1 = rmgr.makeOr(tmp1, r1[i]);
       tmp2 = rmgr.makeOr(tmp2, r2[i]);
     }
-    return wrapLast(rmgr.makeFalse(), rmgr.makeOr(tmp1, tmp2));
+    return wrapLast(rmgr.makeOr(tmp1, tmp2), bitsize);
   }
 
   /** 1100 <==> 1010 --> 1001 */
   public Region[] makeBinaryEqual(Region[] r1, Region[] r2) {
+    int bitsize = getBitSize(r1, r2);
+
     Region[] newRegions = new Region[bitsize];
     for (int i = 0; i < bitsize; i++) {
       newRegions[i] = rmgr.makeEqual(r1[i], r2[i]);
@@ -173,17 +138,21 @@ public class BitvectorManager {
 
   /** 1100 == 1010 --> 0000 */
   public Region[] makeLogicalEqual(Region[] r1, Region[] r2) {
+    int bitsize = getBitSize(r1, r2);
+
     Region equality = rmgr.makeTrue();
     for (int i = 0; i < bitsize; i++) {
       Region equalPos = rmgr.makeEqual(r1[i], r2[i]);
       equality = rmgr.makeAnd(equality, equalPos);
     }
-    return wrapLast(rmgr.makeFalse(), equality);
+    return wrapLast(equality, bitsize);
 
   }
 
   /** 1100 ^ 1010 --> 0110 */
   public Region[] makeXor(Region[] r1, Region[] r2) {
+    int bitsize = getBitSize(r1, r2);
+
     Region[] newRegions = new Region[bitsize];
     for (int i = 0; i < bitsize; i++) {
       newRegions[i] = rmgr.makeUnequal(r1[i], r2[i]);
@@ -199,14 +168,18 @@ public class BitvectorManager {
 
   /** 0111 - 0011 --> 0100 */
   public Region[] makeSub(Region[] r1, Region[] r2) {
-    Region[] r2tmp = makeBinaryEqual(r2, makeFalse());
+    int bitsize = getBitSize(r1, r2);
+
+    Region[] r2tmp = makeBinaryEqual(r2, makeNumber(BigInteger.ZERO, bitsize));
     Region carrier = rmgr.makeTrue();
     return fullAdder(r1, r2tmp, carrier);
   }
 
   private Region[] fullAdder(Region[] r1, Region[] r2, Region carrier) {
+    int bitsize = getBitSize(r1, r2);
+
     Region[] newRegions = new Region[bitsize];
-    for (int i = bitsize - 1; i >= 0; i--) {// reverse iteration order!
+    for (int i = 0; i < bitsize; i++) {
 
       // first half-adder
       Region xor = rmgr.makeUnequal(r1[i], r2[i]);
@@ -222,17 +195,22 @@ public class BitvectorManager {
     return newRegions;
   }
 
-  /** A<B,  */
+  /** A<B */
   public Region[] makeLess(Region[] A, Region[] B) {
+    int bitsize = getBitSize(A, B);
+
     Region[] diff = makeSub(A, B);
-    return wrapLast(rmgr.makeFalse(), diff[0]);
+    return wrapLast(diff[0], bitsize);
   }
 
-  /** returns an Array filled with (n-1)*first and 1*last */
-  private Region[] wrapLast(Region first, Region last) {
+  /** returns an Array filled with FALSE at positions 1 to bitsize-1
+   * and LAST at position 0. */
+  private Region[] wrapLast(Region last, int bitsize) {
     Region[] newRegions = new Region[bitsize];
-    Arrays.fill(newRegions, 0, bitsize - 1, first);
-    newRegions[bitsize - 1] = last;
+    newRegions[0] = last;
+    for (int i = 1; i < bitsize; i++) {
+      newRegions[i] = rmgr.makeFalse();
+    }
     return newRegions;
   }
 }

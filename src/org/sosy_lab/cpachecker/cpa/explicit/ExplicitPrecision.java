@@ -28,14 +28,17 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.regex.Pattern;
 
+import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
+import org.sosy_lab.cpachecker.util.VariableClassification;
 
 import com.google.common.base.Joiner;
+import com.google.common.base.Optional;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Multimap;
 
@@ -69,10 +72,24 @@ public class ExplicitPrecision implements Precision {
 
   private Ignore ignore = null;
 
-  public ExplicitPrecision(String variableBlacklist, Configuration config) throws InvalidConfigurationException {
+  @Option(description = "ignore boolean variables. if this option is used, "
+      + "booleans from the cfa should tracked with another CPA, "
+      + "i.e. with BDDCPA.")
+  private boolean ignoreBooleans = false;
+
+  @Option(description = "ignore variables with only simple numbers. "
+      + "if this option is used, these variables from the cfa should "
+      + "tracked with another CPA, i.e. with BDDCPA.")
+  private boolean ignoreSimpleNumbers = false;
+
+  private Optional<VariableClassification> varClass;
+
+  public ExplicitPrecision(String variableBlacklist, Configuration config,
+      Optional<VariableClassification> vc) throws InvalidConfigurationException {
     config.inject(this);
 
     blackListPattern = Pattern.compile(variableBlacklist);
+    this.varClass = vc;
 
     cegarPrecision        = new CegarPrecision(config);
     reachedSetThresholds  = new ReachedSetThresholds(config);
@@ -122,7 +139,8 @@ public class ExplicitPrecision implements Precision {
   /**
    * This method tells if the precision demands the given variable to be tracked.
    *
-   * A variable is demanded to be tracked if it does not exceed a threshold (when given), it is on the white-list (when not null), and is not on the black-list.
+   * A variable is demanded to be tracked if it does not exceed a threshold (when given),
+   * it is on the white-list (when not null), and is not on the black-list.
    *
    * @param variable the scoped name of the variable to check
    * @return true, if the variable has to be tracked, else false
@@ -132,15 +150,36 @@ public class ExplicitPrecision implements Precision {
         && pathThresholds.allowsTrackingOf(variable)
         && cegarPrecision.allowsTrackingOf(variable)
         && ignore.allowsTrackingOf(variable)
-        && !blackListPattern.matcher(variable).matches();
+        && !isOnBlacklist(variable)
+        && !(ignoreBooleans && isBoolean(variable))
+        && !(ignoreSimpleNumbers && isSimpleNumber(variable));
   }
 
-  public boolean isNotTracking(String variable) {
-    return !isTracking(variable);
+  private boolean isBoolean(String variable) {
+    Pair<String,String> var = splitVar(variable);
+    return varClass.isPresent()
+        && varClass.get().getBooleanVars().containsEntry(var.getFirst(), var.getSecond());
   }
 
-  public String getBlackListPattern() {
-    return blackListPattern.pattern();
+  private boolean isSimpleNumber(String variable) {
+    Pair<String,String> var = splitVar(variable);
+    return varClass.isPresent()
+        && varClass.get().getSimpleNumberVars().containsEntry(var.getFirst(), var.getSecond());
+  }
+
+  /** split var into function and varName */
+  private Pair<String, String> splitVar(String variable) {
+    int i = variable.indexOf("::");
+    String function;
+    String varName;
+    if (i == -1) { // global variable, no splitting
+      function = null;
+      varName = variable;
+    } else { // split function::varName
+      function = variable.substring(0, i);
+      varName = variable.substring(i + 2);
+    }
+    return Pair.of(function, varName);
   }
 
   @Options(prefix="cpa.explicit.precision.ignore")

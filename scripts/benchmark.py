@@ -24,6 +24,12 @@ CPAchecker web page:
   http://cpachecker.sosy-lab.org
 """
 
+# prepare for Python 3
+from __future__ import absolute_import, print_function, unicode_literals
+
+import sys
+sys.dont_write_bytecode = True # prevent creation of .pyc files
+
 from datetime import date
 
 try:
@@ -41,7 +47,6 @@ import re
 import resource
 import signal
 import subprocess
-import sys
 import threading
 import xml.etree.ElementTree as ET
 
@@ -1391,8 +1396,16 @@ def run_cbmc(exe, options, sourcefile, columns, rlimits, numberOfThread, file):
                 def isErrorMessage(msg):
                     return msg.get('type', None) == 'ERROR'
 
-                if any(map(isErrorMessage, tree.getiterator('message'))):
-                    status = 'ERROR'
+                messages = list(filter(isErrorMessage, tree.getiterator('message')))
+                if messages:
+                    # for now, use only the first error message if there are several
+                    msg = messages[0].findtext('text')
+                    if msg == 'Out of memory':
+                        status = 'OUT OF MEMORY'
+                    elif msg:
+                        status = 'ERROR (%s)'.format(msg)
+                    else:
+                        status = 'ERROR'
                 else:
                     status = 'INVALID OUTPUT'
                     
@@ -1716,9 +1729,11 @@ def getCPAcheckerStatus(returncode, returnsignal, output, rlimits, cpuTimeDelta)
 
     for line in output.splitlines():
         if 'java.lang.OutOfMemoryError' in line:
-            status = 'OUT OF MEMORY'
+            status = 'OUT OF JAVA MEMORY'
         elif isOutOfNativeMemory(line):
             status = 'OUT OF NATIVE MEMORY'
+        elif 'There is insufficient memory for the Java Runtime Environment to continue.' in line:
+            status = 'OUT OF MEMORY'
         elif 'SIGSEGV' in line:
             status = 'SEGMENTATION FAULT'
         elif ((returncode == 0 or returncode == 1)
@@ -1727,15 +1742,18 @@ def getCPAcheckerStatus(returncode, returnsignal, output, rlimits, cpuTimeDelta)
             status = 'ASSERTION' if 'java.lang.AssertionError' in line else 'EXCEPTION'
         elif 'Could not reserve enough space for object heap' in line:
             status = 'JAVA HEAP ERROR'
-        elif (status is None) and line.startswith('Verification result: '):
+        
+        elif line.startswith('Verification result: '):
             line = line[21:].strip()
             if line.startswith('SAFE'):
-                status = 'SAFE'
+                newStatus = 'SAFE'
             elif line.startswith('UNSAFE'):
-                status = 'UNSAFE'
+                newStatus = 'UNSAFE'
             else:
-                status = 'UNKNOWN'
-        if (status is None) and line.startswith('#Test cases computed:'):
+                newStatus = 'UNKNOWN'
+            status = newStatus if status is None else "%s (%s)".format(status, newStatus) 
+            
+        elif (status is None) and line.startswith('#Test cases computed:'):
             status = 'OK'
     if status is None:
         status = "UNKNOWN"
@@ -1937,7 +1955,7 @@ from the output of this script.""")
 
     global options, OUTPUT_PATH
     (options, args) = parser.parse_args(argv)
-    OUTPUT_PATH = options.output_path
+    OUTPUT_PATH = os.path.normpath(options.output_path) + os.sep
     
     if len(args) < 2:
         parser.error("invalid number of arguments")

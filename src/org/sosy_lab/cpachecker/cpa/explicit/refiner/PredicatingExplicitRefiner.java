@@ -23,7 +23,9 @@
  */
 package org.sosy_lab.cpachecker.cpa.explicit.refiner;
 
+import static com.google.common.collect.FluentIterable.from;
 import static com.google.common.collect.Lists.transform;
+import static org.sosy_lab.cpachecker.util.AbstractStates.toState;
 
 import java.io.PrintStream;
 import java.util.Collection;
@@ -52,19 +54,17 @@ import org.sosy_lab.cpachecker.util.predicates.interfaces.Formula;
 import org.sosy_lab.cpachecker.util.predicates.interpolation.CounterexampleTraceInfo;
 
 import com.google.common.base.Function;
-import com.google.common.base.Functions;
 import com.google.common.collect.ImmutableSetMultimap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
 
-public class PredicatingExplicitRefiner implements IExplicitRefiner {
+public class PredicatingExplicitRefiner {
 
   protected List<Pair<ARGState, CFAEdge>> currentErrorPath  = null;
 
   private int numberOfPredicateRefinements                    = 0;
   private int numberOfPredicateRefinementsDone                = 0;
 
-  @Override
   public final List<Pair<ARGState, CFANode>> transformPath(Path errorPath) {
     numberOfPredicateRefinements++;
 
@@ -82,19 +82,14 @@ public class PredicatingExplicitRefiner implements IExplicitRefiner {
     return result;
   }
 
-  @Override
   public List<Formula> getFormulasForPath(List<Pair<ARGState, CFANode>> errorPath, ARGState initialElement) throws CPATransferException {
-    List<Formula> formulas = transform(errorPath,
-        Functions.compose(
-            GET_BLOCK_FORMULA,
-        Functions.compose(
-            AbstractStates.extractStateByTypeFunction(PredicateAbstractState.class),
-            Pair.<ARGState>getProjectionToFirst())));
-
-    return formulas;
+    return from(errorPath)
+            .transform(Pair.<ARGState>getProjectionToFirst())
+            .transform(toState(PredicateAbstractState.class))
+            .transform(GET_BLOCK_FORMULA)
+            .toImmutableList();
   }
 
-  @Override
   public Pair<ARGState, Precision> performRefinement(
       UnmodifiableReachedSet reachedSet,
       Precision oldPrecision,
@@ -158,17 +153,6 @@ public class PredicatingExplicitRefiner implements IExplicitRefiner {
     return new PredicatePrecision(pmapBuilder.build(), globalPredicates);
   }
 
-  @Override
-  public boolean hasMadeProgress(List<Pair<ARGState, CFAEdge>> currentErrorPath, Precision currentPrecision) {
-    return true;
-  }
-
-  @Override
-  public void setCurrentErrorPath(List<Pair<ARGState, CFAEdge>> currentErrorPath) {
-    this.currentErrorPath = currentErrorPath;
-  }
-
-  @Override
   public void printStatistics(PrintStream out, Result result, ReachedSet reached) {
     out.println(this.getClass().getSimpleName() + ":");
     out.println("  number of predicate refinements:           " + numberOfPredicateRefinements);

@@ -37,7 +37,7 @@ public class ASTConverterTest {
 
   @Before
   public final void setup() throws InvalidConfigurationException {
-    converter = new ASTConverter(new Scope(), false, new LogManager(Configuration.defaultConfiguration()));
+    converter = new ASTConverter(new Scope(), new LogManager(Configuration.defaultConfiguration()));
   }
 
   @Test
@@ -52,9 +52,13 @@ public class ASTConverterTest {
     assertEquals('\'', converter.parseCharacterLiteral("'\\''", null));
     assertEquals('"',  converter.parseCharacterLiteral("'\\\"'", null));
     assertEquals('\0', converter.parseCharacterLiteral("'\\0'", null));
-    assertEquals('\t', converter.parseCharacterLiteral("'\\t'", null));
+    assertEquals(7,    converter.parseCharacterLiteral("'\\a'", null));
+    assertEquals('\b', converter.parseCharacterLiteral("'\\b'", null));
+    assertEquals('\f', converter.parseCharacterLiteral("'\\f'", null));
     assertEquals('\n', converter.parseCharacterLiteral("'\\n'", null));
     assertEquals('\r', converter.parseCharacterLiteral("'\\r'", null));
+    assertEquals('\t', converter.parseCharacterLiteral("'\\t'", null));
+    assertEquals(11,   converter.parseCharacterLiteral("'\\v'", null));
     assertEquals('a', converter.parseCharacterLiteral("'a'", null));
     assertEquals(' ', converter.parseCharacterLiteral("' '", null));
     assertEquals('9', converter.parseCharacterLiteral("'9'", null));
