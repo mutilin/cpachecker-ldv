@@ -27,6 +27,8 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
+import org.sosy_lab.common.configuration.Option;
+import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
@@ -35,9 +37,13 @@ import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
-import org.sosy_lab.cpachecker.exceptions.UnsupportedCCodeException;
+import org.sosy_lab.cpachecker.exceptions.StopRecursionException;
 
+@Options(prefix="cpa.callstack")
 public class CallstackTransferRelation implements TransferRelation {
+
+  @Option(name="depth", description = "depth of call graph")
+  private final int depth = 0;
 
   @Override
   public Collection<? extends AbstractState> getAbstractSuccessors(
@@ -53,20 +59,23 @@ public class CallstackTransferRelation implements TransferRelation {
         CFANode callNode = cfaEdge.getPredecessor();
 
         CallstackState e = element;
+        int counter = 0;
         while (e != null) {
           if (e.getCurrentFunction().equals(functionName)) {
-            CallstackState g = element;
+            counter++;
+            /*CallstackState g = element;
             System.out.println("----");
             while (!g.getCurrentFunction().equals(functionName)) {
               System.out.println(g.getCurrentFunction() + " -> ");
               g = g.getPreviousState();
-            }
+            }*/
             //Collection<CallstackState> s = new HashSet<CallstackState>();
             //s.add(element);
             //new CallstackState(element, functionName, callNode)
             //return Collections.singleton(element);
             //break;
-            throw new UnsupportedCCodeException("recursion", pCfaEdge);
+            if (counter > depth)
+              throw new StopRecursionException("recursion", pCfaEdge);
           }
           e = e.getPreviousState();
         }
@@ -85,8 +94,8 @@ public class CallstackTransferRelation implements TransferRelation {
         CFANode returnNode = cfaEdge.getSuccessor();
         CFANode callNode = returnNode.getEnteringSummaryEdge().getPredecessor();
 
-        System.out.println("calledFunction:  " + calledFunction);
-        System.out.println("elementFunction: " + element.getCurrentFunction());
+        //System.out.println("calledFunction:  " + calledFunction);
+        //System.out.println("elementFunction: " + element.getCurrentFunction());
         assert calledFunction.equals(element.getCurrentFunction());
 
         if (!callNode.equals(element.getCallNode())) {
@@ -95,8 +104,8 @@ public class CallstackTransferRelation implements TransferRelation {
         }
 
         CallstackState returnElement = element.getPreviousState();
-        System.out.println("callerFunction:  " + callerFunction);
-        System.out.println("elementFunction: " + returnElement.getCurrentFunction());
+        //System.out.println("callerFunction:  " + callerFunction);
+        //System.out.println("elementFunction: " + returnElement.getCurrentFunction());
 
         assert callerFunction.equals(returnElement.getCurrentFunction());
 

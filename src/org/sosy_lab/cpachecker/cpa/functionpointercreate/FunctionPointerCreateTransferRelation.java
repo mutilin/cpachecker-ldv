@@ -27,7 +27,10 @@ import static org.sosy_lab.cpachecker.util.AbstractStates.extractLocation;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Set;
 import java.util.logging.Level;
 
 import org.sosy_lab.common.LogManager;
@@ -63,6 +66,7 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression.UnaryOperator;
 import org.sosy_lab.cpachecker.cfa.ast.c.CVariableDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.DefaultCExpressionVisitor;
+import org.sosy_lab.cpachecker.cfa.model.BlankEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdgeType;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
@@ -83,6 +87,7 @@ import org.sosy_lab.cpachecker.cpa.functionpointercreate.FunctionPointerCreateSt
 import org.sosy_lab.cpachecker.cpa.functionpointercreate.FunctionPointerCreateState.NamedFunctionTarget;
 import org.sosy_lab.cpachecker.cpa.functionpointercreate.FunctionPointerCreateState.UnknownTarget;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
+import org.sosy_lab.cpachecker.exceptions.StopRecursionException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCCodeException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCFAEdgeException;
 import org.sosy_lab.cpachecker.exceptions.UnsupportedCCodeException;
@@ -130,10 +135,49 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
           try{
             getAbstractSuccessorForEdge(oldState, pPrecision, edge, results);
           }
-          catch (UnsupportedCCodeException e) {
-            System.out.println("we are here1!!!");
-            e.printStackTrace();
-            throw e;
+          catch (StopRecursionException e) {
+            /*
+             * Recursion
+             */
+            CFANode tmpSuccessor, newSuccessor = null;
+            CFAEdge tmpEdge;
+            LinkedList<CFANode> queue = new LinkedList<CFANode>();
+            Set<Integer> VisitedNodes = new HashSet<Integer>();
+            queue.add(edge.getSuccessor());
+
+            //System.out.println("Search " +edge.getPredecessor().getNodeNumber() +" starts...");
+            while (!queue.isEmpty()){
+              tmpSuccessor = queue.pop();
+              for (int i = 0; i < tmpSuccessor.getNumLeavingEdges(); i++) {
+                tmpEdge = tmpSuccessor.getLeavingEdge(i);
+                if (tmpEdge.getSuccessor().getNodeNumber() ==
+                    edge.getPredecessor().getNodeNumber() + 1)
+                {
+                  newSuccessor = tmpEdge.getSuccessor();
+                  //System.out.println("Node found");
+                  queue.clear();
+                  VisitedNodes.clear();
+                  break;
+                }
+                else {
+                  if (!VisitedNodes.contains(tmpEdge.getSuccessor().getNodeNumber())){
+                    queue.add(tmpEdge.getSuccessor());
+                    //System.out.println(queue.size() + ": " +
+                    //  tmpEdge.getSuccessor().getNodeNumber());
+                    VisitedNodes.add(tmpEdge.getSuccessor().getNodeNumber());
+                  }
+                }
+              }
+            }
+
+            CFAEdge newEdge = new BlankEdge(edge.getRawStatement(),
+                  edge.getLineNumber(), edge.getPredecessor(), newSuccessor,
+                  "recursion edge");
+            edge.getPredecessor().addLeavingEdge(newEdge);
+            newSuccessor.addEnteringEdge(newEdge);
+
+            getAbstractSuccessorForEdge(oldState, pPrecision, newEdge, results);
+
           }
         }
       }
@@ -297,6 +341,9 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
       else
         //TODO sure?
         return null;
+    } else if (nameExp instanceof CUnaryExpression) {
+      //smth like a = (*(*(f)))(b)
+      return null;
     } else {
       throw new UnrecognizedCCodeException("unknown function call expression", pCfaEdge, nameExp);
     }
