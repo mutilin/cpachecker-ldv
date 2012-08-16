@@ -436,6 +436,12 @@ cpa.interval.threshold = 0
 cpa.invariants.merge = "JOIN"
   allowed values: [JOIN, SEP]
 
+# functions, that locks synchronization primitives
+cpa.lockStatistics.lockfunctions = no default value
+
+# functions, that unlocks synchronization primitives
+cpa.lockStatistics.unlockfunctions = no default value
+
 # which merge operator to use for LockStatisticsCPA
 cpa.lockstatistics.merge = "SEP"
   allowed values: [SEP, JOIN]
@@ -695,8 +701,22 @@ cpa.uninitvars.printWarnings = "true"
 cpa.uninitvars.stop = "sep"
   allowed values: [sep, join]
 
+# if we need to print all variables, not only unsafe cases
+cpa.usagestatistics.fullstatistics = true
+
+# file to write results
+cpa.usagestatistics.output = "race_results.txt"
+
+# which data process we should use
+cpa.usagestatistics.process = "SIMPLE"
+  allowed values: [SIMPLE, SET]
+
 # enable the Forced Covering optimization
 impact.useForcedCovering = true
+
+# which merge operator to use for LockStatisticsCPA
+merge = "SEP"
+  allowed values: [SEP, JOIN]
 
 # C dialect for parser
 parser.dialect = GNUC
@@ -730,4 +750,8 @@ statistics.memory = true
 
 # print statistics to console
 statistics.print = false
+
+# which stop operator to use for LockStatisticsCPA
+stop = "SEP"
+  allowed values: [SEP, JOIN, NEVER]
 

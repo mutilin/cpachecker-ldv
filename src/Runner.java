@@ -33,7 +33,7 @@ public class Runner {
   public static void main(String[] args) {
     CPAMain.main(new String[] {"-config",
         "/home/alpha/git/cpachecker/test/config/lockStatistics.properties"
-        , "/home/alpha/git/cpachecker/test/Recursion.c"});
+        , "/home/alpha/git/cpachecker/test/cil.out.i"});
 
   }
 

@@ -88,19 +88,24 @@ public class CompositeState implements AbstractWrapperState, Targetable, Partiti
   @Override
   public Object getPartitionKey() {
     if (partitionKey == null) {
+      //System.out.println("Start creating");
       Object[] keys = new Object[states.size()];
+
+      //System.out.println("Size: " + states.size());
 
       int i = 0;
       for (AbstractState element : states) {
+        //System.out.println("Analyze key " + i);
         if (element instanceof Partitionable) {
           keys[i] = ((Partitionable)element).getPartitionKey();
         }
         i++;
       }
-
+      //System.out.println("Prepared partitionKey");
       // wrap array of keys in object to enable overriding of equals and hashCode
       partitionKey = new CompositePartitionKey(keys);
     }
+    //System.out.println("Return");
 
     return partitionKey;
   }
