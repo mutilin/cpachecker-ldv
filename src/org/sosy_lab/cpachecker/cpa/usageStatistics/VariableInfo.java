@@ -136,18 +136,22 @@ public class VariableInfo
   private String name;
   private Map<String, Set<LineInfo>> usageList;
   private boolean isGlobal;
+  private String usedFunction; //if it is local variable, here was information about using function
 
-  VariableInfo(String n){
+  VariableInfo(String n, String func){
     name = n;
+    usedFunction = func;
     usageList = new HashMap<String, Set<LineInfo>>();
   }
 
+
   VariableInfo(String n, int l, Set<LockStatisticsLock> lo, boolean write, String t,
-              List<String> stack, EdgeType type, boolean global)
+              List<String> stack, EdgeType type, boolean global, String func)
   {
     name = n;
     usageList = new HashMap<String, Set<LineInfo>>();
     isGlobal = global;
+    usedFunction = func;
 
     Set<LineInfo> tmpSet = new HashSet<LineInfo>();
     LineInfo tmpLine = new LineInfo(l, lo, write, stack, type);
@@ -156,7 +160,10 @@ public class VariableInfo
   }
 
   public String getName() {
-    return name;
+   // if (isGlobal)
+      return name;
+   // else
+   //   return name + " from " + function +"()";
   }
 
   public boolean isGlobal() {
@@ -223,6 +230,10 @@ public class VariableInfo
     return usageList.size();
   }
 
+  public String getFunctionName() {
+    return usedFunction;
+  }
+
   public int lines() {
     int lines = 0;
 
@@ -231,6 +242,14 @@ public class VariableInfo
       lines += tmpInfo.size();
     }
     return lines;
+  }
+
+  public int getUniqueUsages() {
+    int counter = 0;
+    for (String type : this.usageList.keySet()) {
+      counter += this.usageList.get(type).size();
+    }
+    return counter;
   }
 
 
@@ -243,8 +262,8 @@ public class VariableInfo
     if (isGlobal)
       sb.append(" is global, ");
     else
-      sb.append(" is local, ");
-    sb.append(usageList.size() + " types\n");
+      sb.append(" is local from " + this.usedFunction + "()" + ", ");
+    sb.append(usageList.size() + " types, " + this.getUniqueUsages() + " unique usages\n");
     sb.append("[\n");
     for (String type : usageList.keySet()) {
       sb.append("  Type: (" + type + "), " + usageList.get(type).size() + " usages\n");

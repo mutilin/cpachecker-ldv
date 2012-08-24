@@ -61,6 +61,10 @@ public class LockStatisticsTransferRelation implements TransferRelation
       description="functions, that unlocks synchronization primitives")
   private Set<String> unlock;
 
+  @Option(name="exceptions",
+      description="functions wuth parameters, which we don't need to use")
+  private Set<String> exceptions;
+
 
   @Option(name="functionhandler", values={"LINUX", "OS"},toUppercase=true,
       description="which type of function handler we should use")
@@ -72,10 +76,10 @@ public class LockStatisticsTransferRelation implements TransferRelation
     config.inject(this);
 
     if (HandleType.equals("LINUX")) {
-      handler = new FunctionHandlerLinux(lock, unlock);
+      handler = new FunctionHandlerLinux(lock, unlock, exceptions);
     }
     else if (HandleType.equals("OS")) {
-      handler = new FunctionHandlerOS(lock, unlock);
+      handler = new FunctionHandlerOS(lock, unlock, exceptions);
     }
   }
 

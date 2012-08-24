@@ -27,10 +27,7 @@ import static org.sosy_lab.cpachecker.util.AbstractStates.extractLocation;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
-import java.util.Set;
 import java.util.logging.Level;
 
 import org.sosy_lab.common.LogManager;
@@ -124,6 +121,9 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
     final FunctionPointerCreateState oldState = (FunctionPointerCreateState)pElement;
     Collection<FunctionPointerCreateState> results;
 
+    //LinkedList<CFANode> queue = new LinkedList<CFANode>();
+    //Set<Integer> VisitedNodes = new HashSet<Integer>();
+
     if (pCfaEdge == null) {
       CFANode node = extractLocation(oldState);
       results = new ArrayList<FunctionPointerCreateState>(node.getNumLeavingEdges());
@@ -139,45 +139,30 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
             /*
              * Recursion
              */
-            CFANode tmpSuccessor, newSuccessor = null;
-            CFAEdge tmpEdge;
-            LinkedList<CFANode> queue = new LinkedList<CFANode>();
-            Set<Integer> VisitedNodes = new HashSet<Integer>();
-            queue.add(edge.getSuccessor());
+            //System.out.println("Search " +edge.getPredecessor().getNodeNumber() + " \"" + edge.getCode()+"\"\t" +"(" + edge.getLineNumber() + ")");
 
-            //System.out.println("Search " +edge.getPredecessor().getNodeNumber() +" starts...");
-            while (!queue.isEmpty()){
-              tmpSuccessor = queue.pop();
-              for (int i = 0; i < tmpSuccessor.getNumLeavingEdges(); i++) {
-                tmpEdge = tmpSuccessor.getLeavingEdge(i);
-                if (tmpEdge.getSuccessor().getNodeNumber() ==
-                    edge.getPredecessor().getNodeNumber() + 1)
-                {
-                  newSuccessor = tmpEdge.getSuccessor();
-                  //System.out.println("Node found");
-                  queue.clear();
-                  VisitedNodes.clear();
-                  break;
-                }
-                else {
-                  if (!VisitedNodes.contains(tmpEdge.getSuccessor().getNodeNumber())){
-                    queue.add(tmpEdge.getSuccessor());
-                    //System.out.println(queue.size() + ": " +
-                    //  tmpEdge.getSuccessor().getNodeNumber());
-                    VisitedNodes.add(tmpEdge.getSuccessor().getNodeNumber());
-                  }
-                }
-              }
+            assert (edge instanceof CFunctionCallEdge);
+
+            CFunctionSummaryEdge sEdge = ((CFunctionCallEdge)edge).getSummaryEdge();
+            CFAEdge newEdge;
+            /*
+            try {
+              newEdge = edge.getPredecessor().getEdgeTo(sEdge.getSuccessor());
+              System.out.println("Find old edge");
             }
-
-            CFAEdge newEdge = new BlankEdge(edge.getRawStatement(),
-                  edge.getLineNumber(), edge.getPredecessor(), newSuccessor,
+            catch (IllegalArgumentException f) {
+              newEdge = new BlankEdge(edge.getRawStatement(),
+                  edge.getLineNumber(), edge.getPredecessor(), sEdge.getSuccessor(),
                   "recursion edge");
-            edge.getPredecessor().addLeavingEdge(newEdge);
-            newSuccessor.addEnteringEdge(newEdge);
-
+              edge.getPredecessor().addLeavingEdge(newEdge);
+              sEdge.getSuccessor().addEnteringEdge(newEdge);
+            }
+            */
+            newEdge = new BlankEdge(edge.getRawStatement(),
+                edge.getLineNumber(), edge.getPredecessor(), sEdge.getSuccessor(),
+                "recursion edge");
             getAbstractSuccessorForEdge(oldState, pPrecision, newEdge, results);
-
+            //CFACreationUtils.removeEdgeFromNodes(newEdge);
           }
         }
       }

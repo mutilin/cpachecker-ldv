@@ -25,6 +25,7 @@ package org.sosy_lab.cpachecker.cpa.usageStatistics;
 
 import java.util.Collection;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Interface for data processing, that was collected in
@@ -38,7 +39,7 @@ public interface DataProcessing {
    * @param variables - all collected variables
    * @return collection of unsafe variables
    */
-  public Collection<VariableInfo> process(Map<String, VariableInfo> variables);
+  public Collection<VariableInfo> process(Map<String, Set<VariableInfo>> variables);
 
   /**
    * function to get simple description, its useful to write it in

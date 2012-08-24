@@ -669,7 +669,6 @@ class ASTConverter {
         case '"'  : result = '\"'; break;
         case '\'' : result = '\''; break;
         case '\\' : result = '\\'; break;
-        case 'a' : result = 7   ; break;
         default   : throw new CFAGenerationRuntimeException("unknown character literal", e);
         }
       }

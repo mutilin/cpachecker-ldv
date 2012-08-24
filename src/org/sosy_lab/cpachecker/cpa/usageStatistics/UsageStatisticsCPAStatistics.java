@@ -47,8 +47,8 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.c.CSimpleDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CVariableDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression.UnaryOperator;
+import org.sosy_lab.cpachecker.cfa.ast.c.CVariableDeclaration;
 import org.sosy_lab.cpachecker.cfa.types.c.CPointerType;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
@@ -65,7 +65,8 @@ import org.sosy_lab.cpachecker.cpa.usageStatistics.VariableInfo.LineInfo;
 
 @Options(prefix="cpa.usagestatistics")
 public class UsageStatisticsCPAStatistics implements Statistics {
-  private Map<String, VariableInfo> Stat;
+  private Map<String, Set<VariableInfo>> Stat;
+  private int FullCounter = 0;
 
   PrintWriter writer = null;
   FileOutputStream file = null;
@@ -82,7 +83,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   private boolean fullstatistics = true;
 
   UsageStatisticsCPAStatistics(Configuration config) throws InvalidConfigurationException{
-    Stat = new HashMap<String, VariableInfo>();
+    Stat = new HashMap<String, Set<VariableInfo>>();
     config.inject(this);
 
     if (process.equals("SIMPLE"))
@@ -104,9 +105,12 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       System.out.println("Cannot open file " + FileName);
       System.exit(0);
     }
+    //writer.close();
   }
 
   public void add(UsageStatisticsState state, CDeclaration decl){
+
+    String usedFunction = "";
 
     AbstractState wrappedState = state.getWrappedState();
     if (wrappedState instanceof CompositeState) {
@@ -125,6 +129,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         }
         else if (s instanceof CallstackState) {
           CallstackState callStack = (CallstackState)s;
+          usedFunction = callStack.getCurrentFunction();
           while (callStack != null) {
             stack.add(callStack.getCurrentFunction());
             callStack = callStack.getPreviousState();
@@ -133,13 +138,24 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       }
       if (!Stat.containsKey(name)) {
         VariableInfo variable = new VariableInfo(name,line, mutex, false,
-                        decl.getType().toASTString(""), stack, EdgeType.DECLARATION, decl.isGlobal());
-        Stat.put(name, variable);
+                        decl.getType().toASTString(""), stack, EdgeType.DECLARATION, decl.isGlobal(), usedFunction);
+        Set<VariableInfo> variables = new HashSet<VariableInfo>();
+        variables.add(variable);
+        Stat.put(name, variables);
       }
       else {
-        VariableInfo variable = Stat.get(name);
-        variable.add(decl.getType().toASTString(""), line, mutex, false, stack, EdgeType.DECLARATION);
+        Set<VariableInfo> variables = Stat.get(name);
+        for (VariableInfo variable : variables){
+          if (variable.getFunctionName().equals(usedFunction)) {
+            variable.add(decl.getType().toASTString(""), line, mutex, false, stack, EdgeType.DECLARATION);
+            return;
+          }
+        }
+        VariableInfo variable = new VariableInfo(name,line, mutex, false,
+            decl.getType().toASTString(""), stack, EdgeType.DECLARATION, decl.isGlobal(), usedFunction);
+        variables.add(variable);
       }
+      FullCounter++;
     }
   }
 
@@ -147,6 +163,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
                   boolean isWrite, EdgeType ptype) {
 
     AbstractState wrappedState = state.getWrappedState();
+    String usedFunction = "";
 
     if (wrappedState instanceof CompositeState) {
       List<AbstractState> wrappedStates = ((CompositeState)wrappedState).getWrappedStates();
@@ -164,6 +181,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         }
         else if (s instanceof CallstackState) {
           CallstackState callStack = (CallstackState)s;
+          usedFunction = callStack.getCurrentFunction();
           while (callStack != null) {
             stack.add(callStack.getCurrentFunction());
             callStack = callStack.getPreviousState();
@@ -176,13 +194,25 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       if (!Stat.containsKey(name)) {
         VariableInfo variable = new VariableInfo(name,line, mutex, isWrite,
                         decl.getType().toASTString(""), stack, ptype,
-                        ((CVariableDeclaration)decl).isGlobal());
-        Stat.put(name, variable);
+                        ((CVariableDeclaration)decl).isGlobal(), usedFunction);
+        Set<VariableInfo> variables = new HashSet<VariableInfo>();
+        variables.add(variable);
+        Stat.put(name, variables);
       }
       else {
-        VariableInfo variable = Stat.get(name);
-        variable.add(decl.getType().toASTString(""), line, mutex, isWrite, stack, ptype);
+        Set<VariableInfo> variables = Stat.get(name);
+        for (VariableInfo variable : variables){
+          if (variable.getFunctionName().equals(usedFunction)) {
+            variable.add(decl.getType().toASTString(""), line, mutex, isWrite, stack, ptype);
+            return;
+          }
+        }
+        VariableInfo variable = new VariableInfo(name,line, mutex, isWrite,
+            decl.getType().toASTString(""), stack, ptype,
+            ((CVariableDeclaration)decl).isGlobal(), usedFunction);
+        variables.add(variable);
       }
+      FullCounter++;
     }
   }
 
@@ -358,12 +388,14 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     Set<LockStatisticsLock> mutexes = new HashSet<LockStatisticsLock>();
 
     for (String var : Stat.keySet()) {
-      VariableInfo variable = Stat.get(var);
-      for (String type : variable.getLines().keySet()) {
-        for (LineInfo line : variable.getLines().get(type)) {
-          for (LockStatisticsLock mutex : line.getLocks()) {
-            if (!mutexes.contains(mutex))
-              mutexes.add(mutex);
+      Set<VariableInfo> variables = Stat.get(var);
+      for (VariableInfo variable : variables){
+        for (String type : variable.getLines().keySet()) {
+          for (LineInfo line : variable.getLines().get(type)) {
+            for (LockStatisticsLock mutex : line.getLocks()) {
+              if (!mutexes.contains(mutex))
+                mutexes.add(mutex);
+            }
           }
         }
       }
@@ -405,14 +437,19 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   @Override
   public void printStatistics(PrintStream out, Result result, ReachedSet reached) {
 
-    int global = 0, local = 0;
-    for (String name : Stat.keySet()){
-      VariableInfo variable = Stat.get(name);
+    int global = 0, local = 0, counter = 0;
 
-      if (variable.isGlobal())
-        global++;
-      else
-        local++;
+    for (String name : Stat.keySet()){
+      Set<VariableInfo> variables = Stat.get(name);
+      for (VariableInfo variable : variables) {
+
+        counter += variable.getUniqueUsages();
+
+        if (variable.isGlobal())
+          global++;
+        else
+          local++;
+      }
     }
 
     writer.println("General statistics");
@@ -421,6 +458,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     writer.println("--Global:               " + global);
     writer.println("--Local:                " + local);
     writer.println("");
+
+    writer.println("Total usages:           " + FullCounter);
+    writer.println("Total unique usages:    " + counter);
 
     Set<LockStatisticsLock> mutexes = FindMutexes();
 
@@ -445,6 +485,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       writer.println("");
 
       for (String var : Stat.keySet()) {
+        System.out.println("Prints " + var);
         writer.println(Stat.get(var).toString());
       }
     }

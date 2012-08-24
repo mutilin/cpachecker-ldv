@@ -39,8 +39,8 @@ import org.sosy_lab.cpachecker.cpa.lockStatistics.LockStatisticsLock.LockType;
 
 public class FunctionHandlerLinux extends FunctionHandler{
 
-  public FunctionHandlerLinux(Set<String> pLock, Set<String> pUnlock) {
-    super(pLock, pUnlock);
+  public FunctionHandlerLinux(Set<String> pLock, Set<String> pUnlock, Set<String> pExceptions) {
+    super(pLock, pUnlock, pExceptions);
   }
 
   @Override

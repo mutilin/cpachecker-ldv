@@ -39,9 +39,16 @@ public abstract class FunctionHandler {
 
   protected Set<String> unlock;
 
-  public FunctionHandler(Set<String> pLock, Set<String> pUnlock) {
+  /**
+   * There were those functions, that are called with a parameters, but
+   * we don't need to use it. F.e, intUnlock(level).
+   */
+  protected Set<String> exceptions;
+
+  public FunctionHandler(Set<String> pLock, Set<String> pUnlock, Set<String> pExceptions) {
     lock = pLock;
     unlock = pUnlock;
+    exceptions = pExceptions;
   }
 
   /**

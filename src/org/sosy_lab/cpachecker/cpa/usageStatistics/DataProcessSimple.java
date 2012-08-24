@@ -39,37 +39,40 @@ import org.sosy_lab.cpachecker.cpa.usageStatistics.VariableInfo.LineInfo;
 public class DataProcessSimple implements DataProcessing{
 
   @Override
-  public Collection<VariableInfo> process(Map<String, VariableInfo> variables) {
+  public Collection<VariableInfo> process(Map<String, Set<VariableInfo>> variables) {
     Collection<VariableInfo> unsafe = new HashSet<VariableInfo>();
 
     for (String name : variables.keySet()) {
-      VariableInfo UnsafeTypes = new VariableInfo(name);
-      VariableInfo var = variables.get(name);
 
-      for (String type : var.keySet()) {
-        Set<LineInfo> UsageList = var.get(type);
+      Set<VariableInfo> vars = variables.get(name);
+      for (VariableInfo var : vars) {
+        VariableInfo UnsafeTypes = new VariableInfo(name, var.getFunctionName());
+        for (String type : var.keySet()) {
+          Set<LineInfo> UsageList = var.get(type);
 
-        Set<LineInfo> UnsafeLines = new HashSet<LineInfo>();
-        if (UsageList.size() < 2)
-          continue;
-        for (LineInfo line : UsageList) {
-          for (LineInfo line2 : UsageList) {
-            if (/*line.getLine() != line2.getLine() &&*/
-              !line.intersect(line2) /*&&
-              line.getCallStack().equals(line2.getCallStack())*/) {
-              if (!UnsafeLines.contains(line))
-                UnsafeLines.add(line);
-              if (!UnsafeLines.contains(line2))
-                UnsafeLines.add(line2);
+          Set<LineInfo> UnsafeLines = new HashSet<LineInfo>();
+          if (UsageList.size() < 2)
+            continue;
+          for (LineInfo line : UsageList) {
+            for (LineInfo line2 : UsageList) {
+              if (/*line.getLine() != line2.getLine() &&*/
+                !line.intersect(line2) /*&&
+                line.getCallStack().equals(line2.getCallStack())*/) {
+                if (!UnsafeLines.contains(line))
+                  UnsafeLines.add(line);
+                if (!UnsafeLines.contains(line2))
+                  UnsafeLines.add(line2);
+              }
             }
           }
+          if (UnsafeLines.size() > 0) {
+            UnsafeTypes.add(type, UnsafeLines);
+          }
         }
-        if (UnsafeLines.size() > 0) {
-          UnsafeTypes.add(type, UnsafeLines);
+
+        if (UnsafeTypes.size() > 0) {
+          unsafe.add(UnsafeTypes);
         }
-      }
-      if (UnsafeTypes.size() > 0) {
-        unsafe.add(UnsafeTypes);
       }
     }
 

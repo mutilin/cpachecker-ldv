@@ -36,59 +36,61 @@ import org.sosy_lab.cpachecker.cpa.usageStatistics.VariableInfo.LineInfo;
 public class DataProcessSetAnalysis implements DataProcessing{
 
   @Override
-  public Collection<VariableInfo> process(Map<String, VariableInfo> variables) {
+  public Collection<VariableInfo> process(Map<String, Set<VariableInfo>> variables) {
     Collection<VariableInfo> unsafe = new HashSet<VariableInfo>();
     Map<Integer, Set<Set<LockStatisticsLock>>> Cases = new HashMap<Integer, Set<Set<LockStatisticsLock>>>();
 
     for (String name : variables.keySet()) {
-      VariableInfo UnsafeTypes = new VariableInfo(name);
-      VariableInfo var = variables.get(name);
+      Set<VariableInfo> vars = variables.get(name);
 
-      for (String type : var.keySet()) {
-        Set<LineInfo> UsageList = var.get(type);
+      for (VariableInfo var : vars) {
+        VariableInfo UnsafeTypes = new VariableInfo(name, var.getFunctionName());
+        for (String type : var.keySet()) {
+          Set<LineInfo> UsageList = var.get(type);
 
-        Cases.clear();
-        Set<Set<LockStatisticsLock>> DifferentLocks;
+          Cases.clear();
+          Set<Set<LockStatisticsLock>> DifferentLocks;
 
-        for (LineInfo line : UsageList) {
-          if (Cases.containsKey(line.getLine())) {
-            DifferentLocks = Cases.get(line.getLine());
-            if (!DifferentLocks.contains(line.getLocks())) {
+          for (LineInfo line : UsageList) {
+            if (Cases.containsKey(line.getLine())) {
+              DifferentLocks = Cases.get(line.getLine());
+              if (!DifferentLocks.contains(line.getLocks())) {
+                DifferentLocks.add(line.getLocks());
+              }
+            }
+            else {
+              DifferentLocks = new HashSet<Set<LockStatisticsLock>>();
               DifferentLocks.add(line.getLocks());
+              Cases.put(line.getLine(), DifferentLocks);
             }
           }
-          else {
-            DifferentLocks = new HashSet<Set<LockStatisticsLock>>();
-            DifferentLocks.add(line.getLocks());
-            Cases.put(line.getLine(), DifferentLocks);
-          }
-        }
 
-        Set<Integer> LinesToSave = new HashSet<Integer>();
+          Set<Integer> LinesToSave = new HashSet<Integer>();
 
-        for (Integer line : Cases.keySet()) {
-          for (Integer line2 : Cases.keySet()) {
-            if (!Cases.get(line).equals(Cases.get(line2)) && !line.equals(line2)) {
-              if (!LinesToSave.contains(line))
-                LinesToSave.add(line);
-              if (!LinesToSave.contains(line2))
-                LinesToSave.add(line2);
+          for (Integer line : Cases.keySet()) {
+            for (Integer line2 : Cases.keySet()) {
+              if (!Cases.get(line).equals(Cases.get(line2)) && !line.equals(line2)) {
+                if (!LinesToSave.contains(line))
+                  LinesToSave.add(line);
+                if (!LinesToSave.contains(line2))
+                  LinesToSave.add(line2);
+              }
             }
           }
-        }
-        Set<LineInfo> UnsafeLines = new HashSet<LineInfo>();
+          Set<LineInfo> UnsafeLines = new HashSet<LineInfo>();
 
-        for (LineInfo line : UsageList){
-          if (LinesToSave.contains(line.getLine())) {
-            UnsafeLines.add(line);
+          for (LineInfo line : UsageList){
+            if (LinesToSave.contains(line.getLine())) {
+              UnsafeLines.add(line);
+            }
+          }
+          if (UnsafeLines.size() > 0) {
+            UnsafeTypes.add(type, UnsafeLines);
           }
         }
-        if (UnsafeLines.size() > 0) {
-          UnsafeTypes.add(type, UnsafeLines);
+        if (UnsafeTypes.size() > 0) {
+          unsafe.add(UnsafeTypes);
         }
-      }
-      if (UnsafeTypes.size() > 0) {
-        unsafe.add(UnsafeTypes);
       }
     }
 

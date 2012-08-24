@@ -28,6 +28,8 @@ public class LockStatisticsLock {
 
   public static enum LockType {
     MUTEX,
+    GLOBAL_LOCK,
+    LOCAL_LOCK,
     SPINLOCK;
 
     public String toASTString() {
