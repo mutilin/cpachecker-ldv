@@ -87,7 +87,6 @@ import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.StopRecursionException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCCodeException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCFAEdgeException;
-import org.sosy_lab.cpachecker.exceptions.UnsupportedCCodeException;
 
 @Options(prefix="cpa.functionpointer")
 class FunctionPointerCreateTransferRelation implements TransferRelation {
@@ -172,10 +171,33 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
       try{
         getAbstractSuccessorForEdge(oldState, pPrecision, pCfaEdge, results);
       }
-      catch (UnsupportedCCodeException e) {
-        System.out.println("we are here2!!!");
-        e.printStackTrace();
-        throw e;
+      catch (StopRecursionException e) {
+        /*
+         * Recursion
+         */
+        //System.out.println("Search " +edge.getPredecessor().getNodeNumber() + " \"" + edge.getCode()+"\"\t" +"(" + edge.getLineNumber() + ")");
+        assert (pCfaEdge instanceof CFunctionCallEdge);
+
+        CFunctionSummaryEdge sEdge = ((CFunctionCallEdge)pCfaEdge).getSummaryEdge();
+        CFAEdge newEdge;
+        /*
+        try {
+          newEdge = edge.getPredecessor().getEdgeTo(sEdge.getSuccessor());
+          System.out.println("Find old edge");
+        }
+        catch (IllegalArgumentException f) {
+          newEdge = new BlankEdge(edge.getRawStatement(),
+              edge.getLineNumber(), edge.getPredecessor(), sEdge.getSuccessor(),
+              "recursion edge");
+          edge.getPredecessor().addLeavingEdge(newEdge);
+          sEdge.getSuccessor().addEnteringEdge(newEdge);
+        }
+        */
+        newEdge = new BlankEdge(pCfaEdge.getRawStatement(),
+            pCfaEdge.getLineNumber(), pCfaEdge.getPredecessor(), sEdge.getSuccessor(),
+            "recursion edge");
+        getAbstractSuccessorForEdge(oldState, pPrecision, newEdge, results);
+        //CFACreationUtils.removeEdgeFromNodes(newEdge);
       }
     }
     return results;

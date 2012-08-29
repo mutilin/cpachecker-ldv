@@ -62,7 +62,10 @@ public class VariableInfo
     {
       line = l;
       isWrite = write;
-      locks = new HashSet<LockStatisticsLock>(lo);
+      if (lo != null)
+        locks = new HashSet<LockStatisticsLock>(lo);
+      else
+        locks = new HashSet<LockStatisticsLock>();
       callStack = new LinkedList<String>(stack);
       type = t;
     }

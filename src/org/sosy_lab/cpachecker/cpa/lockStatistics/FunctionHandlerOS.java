@@ -57,7 +57,7 @@ public class FunctionHandlerOS extends FunctionHandler{
         String functionName = ((CFunctionCallExpression) op2).getFunctionNameExpression().toASTString();
 
         //System.out.println("FunctionExpression: " + expression.toASTString());
-        if (lock.contains(functionName)) {
+        if (lock != null && lock.contains(functionName)) {
           if (exceptions.contains(functionName)) {
             newElement.add("lock", op2.getFileLocation().getStartingLineNumber(), LockType.GLOBAL_LOCK);
           }
@@ -68,7 +68,7 @@ public class FunctionHandlerOS extends FunctionHandler{
             newElement.add(params.get(0).toASTString(), op2.getFileLocation().getStartingLineNumber(), LockType.LOCAL_LOCK);
           }
         }
-        else if (unlock.contains(functionName)) {
+        else if (unlock != null && unlock.contains(functionName)) {
           if (exceptions.contains(functionName)) {
             newElement.delete("lock");
           }
@@ -99,7 +99,7 @@ public class FunctionHandlerOS extends FunctionHandler{
       }
     }
     else {
-      if (lock.contains(functionName)) {
+      if (lock != null && lock.contains(functionName)) {
         if (exceptions.contains(functionName)) {
           newElement.add("lock", callEdge.getLineNumber(), LockType.GLOBAL_LOCK);
         }
@@ -110,7 +110,7 @@ public class FunctionHandlerOS extends FunctionHandler{
           newElement.add(params.get(0).toASTString(), callEdge.getLineNumber(), LockType.LOCAL_LOCK);
         }
       }
-      else if (unlock.contains(functionName)) {
+      else if (unlock != null && unlock.contains(functionName)) {
         if (exceptions.contains(functionName)) {
           newElement.delete("lock");
         }
