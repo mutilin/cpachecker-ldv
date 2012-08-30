@@ -148,6 +148,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         for (VariableInfo variable : variables){
           if (variable.getFunctionName().equals(usedFunction)) {
             variable.add(decl.getType().toASTString(""), line, mutex, false, stack, EdgeType.DECLARATION);
+            FullCounter++;
             return;
           }
         }
@@ -204,6 +205,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         for (VariableInfo variable : variables){
           if (variable.getFunctionName().equals(usedFunction)) {
             variable.add(decl.getType().toASTString(""), line, mutex, isWrite, stack, ptype);
+            FullCounter++;
             return;
           }
         }
@@ -486,7 +488,11 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
       for (String var : Stat.keySet()) {
         System.out.println("Prints " + var);
-        writer.println(Stat.get(var).toString());
+        writer.println("");
+        for (VariableInfo varInfo : Stat.get(var)) {
+          writer.println("");
+          writer.println(varInfo.toString());
+        }
       }
     }
 

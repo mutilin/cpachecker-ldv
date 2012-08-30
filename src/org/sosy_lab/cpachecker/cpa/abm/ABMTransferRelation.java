@@ -887,8 +887,11 @@ public class ABMTransferRelation implements TransferRelation {
     Block rootSubtree = partitioning.getBlockForCallNode(rootNode);
 
     ReachedSet reachSet = abstractStateToReachedSet.get(root);
-    assert reachSet != null;
-    return Pair.of(rootSubtree, reachSet);
+    //assert reachSet != null;  now 'null' means, that we found a recursion
+    if (reachSet != null)
+      return Pair.of(rootSubtree, reachSet);
+    else
+      return null;
   }
 
   @Override

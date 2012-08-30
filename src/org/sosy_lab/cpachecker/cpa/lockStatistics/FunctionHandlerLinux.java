@@ -56,11 +56,11 @@ public class FunctionHandlerLinux extends FunctionHandler{
         List<CExpression> params = ((CFunctionCallExpression) op2).getParameterExpressions();
 
         //System.out.println("--" + functionName);
-        if (lock.contains(functionName)) {
+        if (lock != null && lock.contains(functionName)) {
           assert (params.size() == 1);
           newElement.add(params.get(0).toASTString(), op2.getFileLocation().getStartingLineNumber(), LockType.MUTEX);
         }
-        else if (unlock.contains(functionName)) {
+        else if (unlock != null && unlock.contains(functionName)) {
           assert (params.size() == 1);
           newElement.delete(params.get(0).toASTString());
         }
@@ -70,11 +70,11 @@ public class FunctionHandlerLinux extends FunctionHandler{
       String functionName = ((CFunctionCallStatement) expression).getFunctionCallExpression().getFunctionNameExpression().toASTString();
       List <CExpression> params = ((CFunctionCallStatement) expression).getFunctionCallExpression().getParameterExpressions();
 
-      if (lock.contains(functionName)) {
+      if (lock != null && lock.contains(functionName)) {
         assert (params.size() == 1);
         newElement.add(params.get(0).toASTString(), expression.getFileLocation().getStartingLineNumber(), LockType.MUTEX);
       }
-      else if (unlock.contains(functionName)) {
+      else if (unlock != null && unlock.contains(functionName)) {
         assert (params.size() == 1);
         newElement.delete(params.get(0).toASTString());
       }

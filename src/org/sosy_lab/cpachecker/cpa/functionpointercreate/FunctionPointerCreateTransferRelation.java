@@ -138,7 +138,7 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
             /*
              * Recursion
              */
-            //System.out.println("Search " +edge.getPredecessor().getNodeNumber() + " \"" + edge.getCode()+"\"\t" +"(" + edge.getLineNumber() + ")");
+            //System.out.println("Recursion skipped: " +edge.getPredecessor().getNodeNumber() + " \"" + edge.getCode()+"\"\t" +"(" + edge.getLineNumber() + ")");
 
             assert (edge instanceof CFunctionCallEdge);
 
@@ -175,7 +175,7 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
         /*
          * Recursion
          */
-        //System.out.println("Search " +edge.getPredecessor().getNodeNumber() + " \"" + edge.getCode()+"\"\t" +"(" + edge.getLineNumber() + ")");
+        //System.out.println("Recursion skipped: " +pCfaEdge.getPredecessor().getNodeNumber() + " \"" + pCfaEdge.getCode()+"\"\t" +"(" + pCfaEdge.getLineNumber() + ")");
         assert (pCfaEdge instanceof CFunctionCallEdge);
 
         CFunctionSummaryEdge sEdge = ((CFunctionCallEdge)pCfaEdge).getSummaryEdge();
