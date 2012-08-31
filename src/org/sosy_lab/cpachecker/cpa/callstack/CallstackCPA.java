@@ -25,6 +25,8 @@ package org.sosy_lab.cpachecker.cpa.callstack;
 
 import java.util.Collection;
 
+import org.sosy_lab.common.configuration.Configuration;
+import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.defaults.AbstractCPA;
@@ -45,8 +47,8 @@ public class CallstackCPA extends AbstractCPA implements ConfigurableProgramAnal
     return AutomaticCPAFactory.forType(CallstackCPA.class);
   }
 
-  public CallstackCPA() {
-    super("sep", "sep", new CallstackTransferRelation());
+  public CallstackCPA(Configuration config) throws InvalidConfigurationException {
+    super("sep", "sep", new CallstackTransferRelation(config));
   }
 
   @Override

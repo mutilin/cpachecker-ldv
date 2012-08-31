@@ -27,6 +27,10 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
+import org.sosy_lab.common.configuration.Configuration;
+import org.sosy_lab.common.configuration.InvalidConfigurationException;
+import org.sosy_lab.common.configuration.Option;
+import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
@@ -35,9 +39,17 @@ import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
-import org.sosy_lab.cpachecker.exceptions.UnsupportedCCodeException;
+import org.sosy_lab.cpachecker.exceptions.StopRecursionException;
 
+@Options(prefix="callstack")
 public class CallstackTransferRelation implements TransferRelation {
+
+  @Option(name="depth", description = "depth of recursion bound")
+  private int recursionBoundDepth = 0;
+
+  CallstackTransferRelation(Configuration config) throws InvalidConfigurationException {
+    config.inject(this);
+  }
 
   @Override
   public Collection<? extends AbstractState> getAbstractSuccessors(
@@ -53,9 +65,14 @@ public class CallstackTransferRelation implements TransferRelation {
         CFANode callNode = cfaEdge.getPredecessor();
 
         CallstackState e = element;
+        int counter = 0;
+
         while (e != null) {
           if (e.getCurrentFunction().equals(functionName)) {
-            throw new UnsupportedCCodeException("recursion", pCfaEdge);
+            counter++;
+
+            if (counter > recursionBoundDepth)
+              throw new StopRecursionException("Recursion with depth " + recursionBoundDepth, pCfaEdge);
           }
           e = e.getPreviousState();
         }
