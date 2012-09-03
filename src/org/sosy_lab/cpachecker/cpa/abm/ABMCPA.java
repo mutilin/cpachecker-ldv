@@ -67,20 +67,20 @@ public class ABMCPA extends AbstractSingleWrapperCPA implements StatisticsProvid
     return AutomaticCPAFactory.forType(ABMCPA.class);
   }
 
-  private BlockPartitioning blockPartitioning;
+  protected BlockPartitioning blockPartitioning;
 
-  private final LogManager logger;
-  private final TimedReducer reducer;
-  private final ABMTransferRelation transfer;
-  private final ABMPrecisionAdjustment prec;
-  private final ABMCPAStatistics stats;
-  private final PartitioningHeuristic heuristic;
-  private final CFA cfa;
+  protected final LogManager logger;
+  protected final TimedReducer reducer;
+  protected final ABMTransferRelation transfer;
+  protected final ABMPrecisionAdjustment prec;
+  protected final ABMCPAStatistics stats;
+  protected final PartitioningHeuristic heuristic;
+  protected final CFA cfa;
 
   @Option(description="Type of partitioning (FunctionAndLoopPartitioning or DelayedFunctionAndLoopPartitioning)\n"
                     + "or any class that implements a PartitioningHeuristic")
   @ClassOption(packagePrefix="org.sosy_lab.cpachecker.cfa.blocks.builder")
-  private Class<? extends PartitioningHeuristic> blockHeuristic = FunctionAndLoopPartitioning.class;
+  protected Class<? extends PartitioningHeuristic> blockHeuristic = FunctionAndLoopPartitioning.class;
 
   public ABMCPA(ConfigurableProgramAnalysis pCpa, Configuration config, LogManager pLogger, ReachedSetFactory pReachedSetFactory, CFA pCfa) throws InvalidConfigurationException, CPAException {
     super(pCpa);
@@ -127,7 +127,7 @@ public class ABMCPA extends AbstractSingleWrapperCPA implements StatisticsProvid
     return getWrappedCpa().getInitialPrecision(pNode);
   }
 
-  private PartitioningHeuristic getPartitioningHeuristic() throws CPAException, InvalidConfigurationException {
+  protected PartitioningHeuristic getPartitioningHeuristic() throws CPAException, InvalidConfigurationException {
     return Classes.createInstance(PartitioningHeuristic.class, blockHeuristic, new Class[]{LogManager.class, CFA.class}, new Object[]{logger, cfa}, CPAException.class);
   }
 
