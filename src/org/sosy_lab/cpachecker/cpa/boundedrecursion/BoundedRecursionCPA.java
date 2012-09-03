@@ -62,7 +62,7 @@ public class BoundedRecursionCPA extends AbstractSingleWrapperCPA implements Con
     this.abstractDomain = new BoundedRecursionDomain(pCpa.getAbstractDomain());
     this.mergeOperator = initializeMergeOperator();
     this.stopOperator = initializeStopOperator();
-    this.transferRelation = new BoundedRecursionTransferRelation(pCpa.getTransferRelation(), pConfig);
+    this.transferRelation = new BoundedRecursionTransferRelation(pCpa.getTransferRelation(), pConfig, pLogger);
     this.precisionAdjustment = new BoundedRecursionPrecisionAdjustment(pCpa.getPrecisionAdjustment());
     if (pCpa instanceof ConfigurableProgramAnalysisWithABM) {
       Reducer wrappedReducer = ((ConfigurableProgramAnalysisWithABM)pCpa).getReducer();

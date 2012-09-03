@@ -28,7 +28,9 @@ import static org.sosy_lab.cpachecker.util.AbstractStates.extractLocation;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.logging.Level;
 
+import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.cpachecker.cfa.model.BlankEdge;
@@ -45,10 +47,12 @@ import org.sosy_lab.cpachecker.exceptions.StopRecursionException;
 class BoundedRecursionTransferRelation implements TransferRelation {
 
   private final TransferRelation wrappedTransfer;
+  private final LogManager logger;
 
   BoundedRecursionTransferRelation(TransferRelation pWrappedTransfer,
-      Configuration config) throws InvalidConfigurationException {
+      Configuration config, LogManager pLogManager) throws InvalidConfigurationException {
     wrappedTransfer = pWrappedTransfer;
+    logger = pLogManager;
     }
 
   @Override
@@ -71,7 +75,7 @@ class BoundedRecursionTransferRelation implements TransferRelation {
         catch (StopRecursionException e) {
           assert (edge instanceof CFunctionCallEdge);
 
-          System.out.println("Recursion found: " + edge.getCode() + ", (" + edge.getLineNumber() + ")");
+          logger.log(Level.INFO, "Recursion found: " + edge.getCode() + ", (" + edge.getLineNumber() + ")");
 
           CFunctionSummaryEdge sEdge = ((CFunctionCallEdge)edge).getSummaryEdge();
           CFAEdge newEdge;
@@ -90,7 +94,7 @@ class BoundedRecursionTransferRelation implements TransferRelation {
       catch (StopRecursionException e) {
         assert (pCfaEdge instanceof CFunctionCallEdge);
 
-        System.out.println("Recursion found: " + pCfaEdge.getCode() + ", (" + pCfaEdge.getLineNumber() + ")");
+        logger.log(Level.INFO, "Recursion found: " + pCfaEdge.getCode() + ", (" + pCfaEdge.getLineNumber() + ")");
 
         CFunctionSummaryEdge sEdge = ((CFunctionCallEdge)pCfaEdge).getSummaryEdge();
         CFAEdge newEdge;
