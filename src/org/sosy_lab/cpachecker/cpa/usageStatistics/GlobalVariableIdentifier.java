@@ -23,29 +23,15 @@
  */
 package org.sosy_lab.cpachecker.cpa.usageStatistics;
 
-import java.util.Collection;
-import java.util.Map;
-import java.util.Set;
 
-/**
- * Interface for data processing, that was collected in
- * UsageStatistics CPA.
- */
+public class GlobalVariableIdentifier extends VariableIdentifier{
 
-public interface DataProcessing {
+  public GlobalVariableIdentifier(String nm, String t) {
+    super(nm,t);
+  }
 
-  /**
-   * main function to process the data
-   * @param variables - all collected variables
-   * @return collection of unsafe variables
-   */
-  public Collection<Identifier> process(Map<Identifier, Set<UsageInfo>> variables);
-
-  /**
-   * function to get simple description, its useful to write it in
-   * statistics
-   * @return description
-   */
-
-  public String getDescription();
+  @Override
+  public String toString() {
+    return "Variable " + name + " is global, type: " + type;
+  }
 }

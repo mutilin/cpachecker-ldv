@@ -50,7 +50,7 @@ import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
-import org.sosy_lab.cpachecker.cpa.usageStatistics.VariableInfo.EdgeType;
+import org.sosy_lab.cpachecker.cpa.usageStatistics.AccessType.EdgeType;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCCodeException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCFAEdgeException;
@@ -197,7 +197,7 @@ class UsageStatisticsTransferRelation implements TransferRelation {
       covering.addFunctionUsage(expression.toASTString());
       covering.addLine(edge.getLineNumber());
       CExpression variable = ((CFunctionCallAssignmentStatement)statement).getLeftHandSide();
-      statistics.add(pNewState, variable, false, true, EdgeType.ASSIGNMENT);
+      statistics.add(pNewState, variable, false, true, AccessType.EdgeType.ASSIGNMENT);
     }
     else if (statement instanceof CFunctionCallStatement) {
       CExpression expression = ((CFunctionCallStatement)statement).getFunctionCallExpression().getFunctionNameExpression();

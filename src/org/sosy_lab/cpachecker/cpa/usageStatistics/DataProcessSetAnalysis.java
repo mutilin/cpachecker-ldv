@@ -30,16 +30,15 @@ import java.util.Map;
 import java.util.Set;
 
 import org.sosy_lab.cpachecker.cpa.lockStatistics.LockStatisticsLock;
-import org.sosy_lab.cpachecker.cpa.usageStatistics.VariableInfo.LineInfo;
 
 
 public class DataProcessSetAnalysis implements DataProcessing{
 
   @Override
-  public Collection<VariableInfo> process(Map<String, Set<VariableInfo>> variables) {
-    Collection<VariableInfo> unsafe = new HashSet<VariableInfo>();
+  public Collection<Identifier> process(Map<Identifier, Set<UsageInfo>> variables) {
+    Collection<Identifier> unsafe = new HashSet<Identifier>();
     Map<Integer, Set<Set<LockStatisticsLock>>> Cases = new HashMap<Integer, Set<Set<LockStatisticsLock>>>();
-
+/*
     for (String name : variables.keySet()) {
       Set<VariableInfo> vars = variables.get(name);
 
@@ -93,7 +92,7 @@ public class DataProcessSetAnalysis implements DataProcessing{
         }
       }
     }
-
+*/
     return unsafe;
   }
 

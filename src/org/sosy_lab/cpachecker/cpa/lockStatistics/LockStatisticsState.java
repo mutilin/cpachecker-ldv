@@ -160,7 +160,7 @@ public class LockStatisticsState implements AbstractQueryableState, FormulaRepor
   @Override
   public String toString() {
     StringBuilder sb = new StringBuilder();
-    sb.append("[");
+    sb.append("{");
     for (LockStatisticsLock lock : Locks) {
       sb.append(lock);
       sb.append(", ");
@@ -168,7 +168,8 @@ public class LockStatisticsState implements AbstractQueryableState, FormulaRepor
     //if we have added something, we need to remove last ", "
     if (sb.length() > 2)
       sb.delete(sb.length() - 2, sb.length());
-    return sb.append("] size->  ").append(Locks.size()).toString();
+    sb.append("}");
+    return sb.toString();
   }
 
   @Override

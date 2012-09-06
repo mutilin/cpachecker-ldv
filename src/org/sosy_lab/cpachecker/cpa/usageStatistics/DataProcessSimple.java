@@ -28,8 +28,6 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-import org.sosy_lab.cpachecker.cpa.usageStatistics.VariableInfo.LineInfo;
-
 /**
  * This class implements simple analysis, when all lines are compared
  * pairwise only with set of mutexes, and all different ones are written
@@ -39,39 +37,18 @@ import org.sosy_lab.cpachecker.cpa.usageStatistics.VariableInfo.LineInfo;
 public class DataProcessSimple implements DataProcessing{
 
   @Override
-  public Collection<VariableInfo> process(Map<String, Set<VariableInfo>> variables) {
-    Collection<VariableInfo> unsafe = new HashSet<VariableInfo>();
+  public Collection<Identifier> process(Map<Identifier, Set<UsageInfo>> stat) {
+    Collection<Identifier> unsafe = new HashSet<Identifier>();
 
-    for (String name : variables.keySet()) {
+nextId:for (Identifier id : stat.keySet()) {
 
-      Set<VariableInfo> vars = variables.get(name);
-      for (VariableInfo var : vars) {
-        VariableInfo UnsafeTypes = new VariableInfo(name, var.getFunctionName());
-        for (String type : var.keySet()) {
-          Set<LineInfo> UsageList = var.get(type);
-
-          Set<LineInfo> UnsafeLines = new HashSet<LineInfo>();
-          if (UsageList.size() < 2)
-            continue;
-          for (LineInfo line : UsageList) {
-            for (LineInfo line2 : UsageList) {
-              if (/*line.getLine() != line2.getLine() &&*/
-                !line.intersect(line2) /*&&
-                line.getCallStack().equals(line2.getCallStack())*/) {
-                if (!UnsafeLines.contains(line))
-                  UnsafeLines.add(line);
-                if (!UnsafeLines.contains(line2))
-                  UnsafeLines.add(line2);
-              }
-            }
+      Set<UsageInfo> uset = stat.get(id);
+      for (UsageInfo uinfo : uset) {
+        for (UsageInfo uinfo2 : uset) {
+          if (!uinfo.intersect(uinfo2) && !unsafe.contains(id)) {
+            unsafe.add(id);
+            continue nextId;
           }
-          if (UnsafeLines.size() > 0) {
-            UnsafeTypes.add(type, UnsafeLines);
-          }
-        }
-
-        if (UnsafeTypes.size() > 0) {
-          unsafe.add(UnsafeTypes);
         }
       }
     }

@@ -23,29 +23,39 @@
  */
 package org.sosy_lab.cpachecker.cpa.usageStatistics;
 
-import java.util.Collection;
-import java.util.Map;
-import java.util.Set;
 
-/**
- * Interface for data processing, that was collected in
- * UsageStatistics CPA.
- */
+public class LineInfo {
+  int line;
 
-public interface DataProcessing {
+  public LineInfo(int l) {
+    line = l;
+  }
 
-  /**
-   * main function to process the data
-   * @param variables - all collected variables
-   * @return collection of unsafe variables
-   */
-  public Collection<Identifier> process(Map<Identifier, Set<UsageInfo>> variables);
+  @Override
+  public String toString() {
+    return Integer.toString(line);
+  }
 
-  /**
-   * function to get simple description, its useful to write it in
-   * statistics
-   * @return description
-   */
+  @Override
+  public int hashCode() {
+    final int prime = 31;
+    int result = 1;
+    result = prime * result + line;
+    return result;
+  }
 
-  public String getDescription();
+  @Override
+  public boolean equals(Object obj) {
+    if (this == obj)
+      return true;
+    if (obj == null)
+      return false;
+    if (getClass() != obj.getClass())
+      return false;
+    LineInfo other = (LineInfo) obj;
+    if (line != other.line)
+      return false;
+    return true;
+  }
+
 }
