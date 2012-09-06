@@ -197,7 +197,7 @@ class UsageStatisticsTransferRelation implements TransferRelation {
       covering.addFunctionUsage(expression.toASTString());
       covering.addLine(edge.getLineNumber());
       CExpression variable = ((CFunctionCallAssignmentStatement)statement).getLeftHandSide();
-      statistics.add(pNewState, variable, false, true, AccessType.EdgeType.ASSIGNMENT);
+      statistics.add(pNewState, variable, false, true, EdgeType.ASSIGNMENT);
     }
     else if (statement instanceof CFunctionCallStatement) {
       CExpression expression = ((CFunctionCallStatement)statement).getFunctionCallExpression().getFunctionNameExpression();
@@ -239,6 +239,7 @@ class UsageStatisticsTransferRelation implements TransferRelation {
       return;
     }
     statistics.add(pNewState, declEdge.getDeclaration());
+    //TODO right hand side
   }
 
   private void handleStatement(UsageStatisticsState pNewState, CStatement pStatement,

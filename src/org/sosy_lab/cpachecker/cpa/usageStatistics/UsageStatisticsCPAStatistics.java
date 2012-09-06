@@ -109,13 +109,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     //writer.close();
   }
 
-  public boolean addUsageDecl(Identifier id, AbstractState wrappedState) {
-    LocationState locationState = AbstractStates.extractStateByType(wrappedState, LocationState.class);
+  public boolean addUsageDecl(Identifier id, LineInfo lineInfo, AccessType acc, AbstractState wrappedState) {
     LockStatisticsState lockState = AbstractStates.extractStateByType(wrappedState, LockStatisticsState.class);
     CallstackState callstackState = AbstractStates.extractStateByType(wrappedState, CallstackState.class);
-
-    LineInfo lineInfo = new LineInfo(locationState.getLocationNode().getLineNumber());
-    AccessType acc = new AccessType(false, AccessType.EdgeType.DECLARATION);
 
     UsageInfo usage = new UsageInfo(lineInfo, acc, lockState, callstackState);
 
@@ -130,16 +126,22 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     return uset.add(usage);
   }
 
-  Identifier createIdentifierFromDecl(CDeclaration decl, AbstractState wrappedState) {
+  Identifier createIdentifierFromDecl(CSimpleDeclaration decl, AbstractState wrappedState) {
     CallstackState callstackState = AbstractStates.extractStateByType(wrappedState, CallstackState.class);
 
     String name = decl.getName();
     String type = decl.getType().toASTString("");
-    if(decl.isGlobal()) {
-      //generate global variable id
-      return new GlobalVariableIdentifier(name, type);
-    } else {
-      //generate local variable id
+    if (decl instanceof CDeclaration){
+      if(((CDeclaration)decl).isGlobal()) {
+        //generate global variable id
+        return new GlobalVariableIdentifier(name, type);
+      } else {
+        //generate local variable id
+        String func = callstackState.getCurrentFunction();
+        return new LocalVariableIdentifier(name, type, func);
+      }
+    }
+    else {
       String func = callstackState.getCurrentFunction();
       return new LocalVariableIdentifier(name, type, func);
     }
@@ -150,7 +152,10 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     AbstractState wrappedState = state.getWrappedState();
     Identifier id = createIdentifierFromDecl(decl, wrappedState);
 
-    addUsageDecl(id, wrappedState);
+    LocationState locationState = AbstractStates.extractStateByType(wrappedState, LocationState.class);
+    LineInfo lineInfo = new LineInfo(locationState.getLocationNode().getLineNumber());
+    AccessType acc = new AccessType(false, AccessType.EdgeType.DECLARATION);
+    addUsageDecl(id, lineInfo, acc, wrappedState);
     FullCounter++;
   }
 
@@ -162,41 +167,25 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     Identifier id = createIdentifier(pStatement, wrappedState);
     int line = pStatement.getFileLocation().getStartingLineNumber();
 
-    LockStatisticsState lockState = AbstractStates.extractStateByType(wrappedState, LockStatisticsState.class);
-    CallstackState callstackState = AbstractStates.extractStateByType(wrappedState, CallstackState.class);
-
     LineInfo lineInfo = new LineInfo(line);
     AccessType acc = new AccessType(isWrite, ptype);
 
-    UsageInfo usage = new UsageInfo(lineInfo, acc, lockState, callstackState);
-
-    Set<UsageInfo> uset;
-    if (!Stat.containsKey(id)) {
-      uset = new HashSet<UsageInfo>();
-      Stat.put(id, uset);
-    } else {
-      uset = Stat.get(id);
-    }
-
-    uset.add(usage);
-
+    addUsageDecl(id, lineInfo, acc, wrappedState);
     FullCounter++;
   }
 
   String getType(CExpression e) {
+    System.out.println(e.toASTString());
     if (e instanceof CIdExpression) {
-      CType type = ((CDeclaration)((CIdExpression)e).getDeclaration()).getType();
-      if (type instanceof CPointerType)
-        return ((CPointerType)type).toASTString("");
-      else
-        return type.toASTString("");
+      CType type = ((CIdExpression)e).getDeclaration().getType();
+      return type.toASTString("");
     }
     else if (e instanceof CUnaryExpression)
       return getType(((CUnaryExpression) e).getOperand());
     else if (e instanceof CFieldReference)
       return getType(((CFieldReference) e).getFieldOwner());
     else {
-      assert true;
+      assert false : e.getClass() + " " + e.getExpressionType().toASTString("") + " " + e.getFileLocation().getStartingLineNumber();
       return null;
       //TODO make it carefully
     }
@@ -212,9 +201,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   Identifier createIdentifier(CExpression expression, AbstractState wrappedState) {
     if (expression instanceof CIdExpression) {
       CSimpleDeclaration decl = ((CIdExpression)expression).getDeclaration();
-      assert (decl instanceof CDeclaration);
+      //assert (decl instanceof CDeclaration) : decl.getType().toASTString("") + " " + decl.getFileLocation().getStartingLineNumber();
 
-      return createIdentifierFromDecl((CDeclaration)decl, wrappedState);
+      return createIdentifierFromDecl(decl, wrappedState);
     }
     else if (expression instanceof CFieldReference) {
       return createIdentifierForStructure((CFieldReference)expression, wrappedState);
@@ -224,7 +213,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
     else {
       System.err.println(expression.toASTString() + " " + expression.getClass());
-      assert true;
+      assert false : expression.getClass() + " " + expression.getExpressionType().toASTString("") + " " + expression.getFileLocation().getStartingLineNumber();
       return null;
     }
   }
@@ -253,7 +242,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       add(pNewState, ((CUnaryExpression)pStatement).getOperand(), true, isWrite, ptype);
     else if (pStatement instanceof CFieldReference && (!onlypointers || ((CFieldReference)pStatement).isPointerDereference())) {
     //a->b
-      add(pNewState, ((CFieldReference)pStatement), isWrite, ptype);
+      add(pNewState, ((CFieldReference)pStatement).getFieldOwner(), isWrite, ptype);
     }
     else if (pStatement instanceof CFieldReference) {
     // it can be smth like (*a).b
