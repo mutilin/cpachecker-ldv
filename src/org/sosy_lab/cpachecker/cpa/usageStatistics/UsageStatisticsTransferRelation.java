@@ -36,13 +36,16 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CAssignment;
 import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpressionStatement;
+import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallAssignmentStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallStatement;
+import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CVariableDeclaration;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
@@ -57,13 +60,14 @@ class UsageStatisticsTransferRelation implements TransferRelation {
 
   private final TransferRelation wrappedTransfer;
   private final UsageStatisticsCPAStatistics statistics;
+  private final CodeCovering covering;
 
   UsageStatisticsTransferRelation(TransferRelation pWrappedTransfer,
-      Configuration config, UsageStatisticsCPAStatistics s) throws InvalidConfigurationException {
+      Configuration config, UsageStatisticsCPAStatistics s, CodeCovering cover) throws InvalidConfigurationException {
     config.inject(this);
     wrappedTransfer = pWrappedTransfer;
     statistics = s;
-
+    covering = cover;
     }
 
   @Override
@@ -133,12 +137,43 @@ class UsageStatisticsTransferRelation implements TransferRelation {
         break;
       }
 
+
+      case FunctionCallEdge: {
+        handleFunctionCall(newState, (CFunctionCallEdge)pCfaEdge);
+        break;
+      }
+
+      case FunctionReturnEdge: {
+        covering.addLine(pCfaEdge.getLineNumber());
+        break;
+      }
+
+
+      case ReturnStatementEdge: {
+        covering.addLine(pCfaEdge.getLineNumber());
+        break;
+      }
+
+      case BlankEdge: {
+        //here can be 'switch' or 'default'
+        /*
+         * strange, but in this case (switch, else or default) getLineNumber
+         * returns number of next line
+         */
+        /*if (pCfaEdge.getCode().contains("switch") ||
+            pCfaEdge.getCode().contains("else") ||
+            pCfaEdge.getCode().contains("default") ||
+            pCfaEdge.getCode().contains("goto"))
+           covering.addLine(pCfaEdge.getLineNumber() - 1);
+        else*/
+          covering.addLine(pCfaEdge.getLineNumber());
+        break;
+      }
+
       // nothing to do.
-      case FunctionCallEdge:
-      case ReturnStatementEdge:
-      case FunctionReturnEdge:
-      case BlankEdge:
+
       case CallToReturnEdge: {
+        //handleFunctionCall(newState, (CFunctionCallEdge)pCfaEdge);
         break;
       }
 
@@ -146,15 +181,50 @@ class UsageStatisticsTransferRelation implements TransferRelation {
         throw new UnrecognizedCFAEdgeException(pCfaEdge);
     }
 
+
     return newState;
   }
 
-  private void handleDeclaration(UsageStatisticsState pNewState, CDeclarationEdge declEdge) throws UnrecognizedCCodeException {
+  private void handleFunctionCall(UsageStatisticsState pNewState, CFunctionCallEdge edge) throws CPATransferException {
+    CStatement statement = edge.getRawAST().get();
+    if (statement instanceof CFunctionCallAssignmentStatement) {
+      /*
+       * a = f(b)
+       */
+      CExpression expression = ((CFunctionCallAssignmentStatement)statement).getRightHandSide().getFunctionNameExpression();
+      //System.out.println(expression.toASTString());
+      // expression - only name of function
+      covering.addFunctionUsage(expression.toASTString());
+      covering.addLine(edge.getLineNumber());
+      CExpression variable = ((CFunctionCallAssignmentStatement)statement).getLeftHandSide();
+      statistics.add(pNewState, variable, false, true, EdgeType.ASSIGNMENT);
+    }
+    else if (statement instanceof CFunctionCallStatement) {
+      CExpression expression = ((CFunctionCallStatement)statement).getFunctionCallExpression().getFunctionNameExpression();
+      covering.addFunctionUsage(expression.toASTString());
+      covering.addLine(edge.getLineNumber());
+    }
+    /*else {
+      System.out.println(statement.toASTString() + " : " + statement.getClass());
+    }*/
+  }
 
-    if (!(declEdge.getDeclaration() instanceof CVariableDeclaration)) {
+
+  private void handleDeclaration(UsageStatisticsState pNewState, CDeclarationEdge declEdge) throws CPATransferException {
+
+    if (declEdge.getDeclaration() instanceof CFunctionDeclaration) {
+      if (!declEdge.getRawStatement().contains(";"))
+        covering.addFunction(declEdge.getLineNumber(), ((CFunctionDeclaration)declEdge.getDeclaration()).getName());
+      else
+        covering.addException(declEdge.getLineNumber());
+      return;
+    }
+    else if (!(declEdge.getDeclaration() instanceof CVariableDeclaration)) {
       // not a variable declaration
       return;
     }
+    covering.addLine(declEdge.getLineNumber());
+
     CVariableDeclaration decl = (CVariableDeclaration)declEdge.getDeclaration();
 
     String name = decl.getName();
@@ -173,6 +243,8 @@ class UsageStatisticsTransferRelation implements TransferRelation {
 
   private void handleStatement(UsageStatisticsState pNewState, CStatement pStatement,
         CFAEdge pCfaEdge) throws UnrecognizedCCodeException {
+
+    covering.addLine(pCfaEdge.getLineNumber());
 
     if (pStatement instanceof CAssignment) {
       // assignment like "a = b" or "a = foo()"
@@ -194,7 +266,7 @@ class UsageStatisticsTransferRelation implements TransferRelation {
 
   private void handleAssumption(UsageStatisticsState element,
                                   CExpression pExpression, CFAEdge cfaEdge) {
-
+    covering.addLine(cfaEdge.getLineNumber());
     if (pExpression instanceof CBinaryExpression) {
       CExpression op1 = ((CBinaryExpression)pExpression).getOperand1();
       CExpression op2 = ((CBinaryExpression)pExpression).getOperand2();

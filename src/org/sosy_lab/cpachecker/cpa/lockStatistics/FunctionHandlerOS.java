@@ -29,15 +29,15 @@ import java.util.Set;
 import org.sosy_lab.cpachecker.cfa.ast.c.CAssignment;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
-import org.sosy_lab.cpachecker.cfa.model.c.CFunctionEntryNode;
 import org.sosy_lab.cpachecker.cpa.lockStatistics.LockStatisticsLock.LockType;
 
 
 public class FunctionHandlerOS extends FunctionHandler{
-  public FunctionHandlerOS(Set<String> pLock, Set<String> pUnlock, Set<String> pExceptions) {
+  public FunctionHandlerOS(List<String> pLock, List<String> pUnlock, Set<String> pExceptions) {
     super(pLock, pUnlock, pExceptions);
   }
 
@@ -46,49 +46,38 @@ public class FunctionHandlerOS extends FunctionHandler{
 
     LockStatisticsState newElement = element.clone();
 
-    /*
-     * level = intLock();
-     * intUnlock(level);
-     */
     if (expression instanceof CAssignment) {
+      /*
+       * level = intLock();
+       */
       CRightHandSide op2 = ((CAssignment)expression).getRightHandSide();
 
       if (op2 instanceof CFunctionCallExpression) {
-        String functionName = ((CFunctionCallExpression) op2).getFunctionNameExpression().toASTString();
-
-        //System.out.println("FunctionExpression: " + expression.toASTString());
-        if (lock != null && lock.contains(functionName)) {
-          if (exceptions.contains(functionName)) {
-            newElement.add("lock", op2.getFileLocation().getStartingLineNumber(), LockType.GLOBAL_LOCK);
-          }
-          else {
-            List<CExpression> params = ((CFunctionCallExpression) op2).getParameterExpressions();
-
-            assert (params.size() == 1);
-            newElement.add(params.get(0).toASTString(), op2.getFileLocation().getStartingLineNumber(), LockType.LOCAL_LOCK);
-          }
-        }
-        else if (unlock != null && unlock.contains(functionName)) {
-          if (exceptions.contains(functionName)) {
-            newElement.delete("lock");
-          }
-          else {
-            List<CExpression> params = ((CFunctionCallExpression) op2).getParameterExpressions();
-
-            assert (params.size() == 1);
-            newElement.delete(params.get(0).toASTString());
-          }
-        }
+        return CheckIsLock(newElement, ((CFunctionCallExpression) op2).getFunctionNameExpression().toASTString(),
+                           op2.getFileLocation().getStartingLineNumber(), ((CFunctionCallExpression) op2).getParameterExpressions());
       }
+      else
+        return newElement;
+
     }
-    return newElement;
+    else if (expression instanceof CFunctionCallStatement) {
+      /*
+       * queLock(que);
+       */
+      return CheckIsLock(newElement,
+          ((CFunctionCallStatement) expression).getFunctionCallExpression().getFunctionNameExpression().toASTString(),
+          ((CFunctionCallStatement) expression).getFileLocation().getStartingLineNumber(),
+          ((CFunctionCallStatement) expression).getFunctionCallExpression().getParameterExpressions());
+    }
+    else {
+      return newElement;
+    }
+
+
   }
 
   @Override
   public LockStatisticsState handleFunctionCall(LockStatisticsState element, CFunctionCallEdge callEdge) {
-
-    CFunctionEntryNode functionEntryNode = callEdge.getSuccessor();
-    String functionName = functionEntryNode.getFunctionName();
     Set<CStatement> expressions = callEdge.getRawAST().asSet();
 
     LockStatisticsState newElement = element.clone();
@@ -99,30 +88,31 @@ public class FunctionHandlerOS extends FunctionHandler{
       }
     }
     else {
-      if (lock != null && lock.contains(functionName)) {
-        if (exceptions.contains(functionName)) {
-          newElement.add("lock", callEdge.getLineNumber(), LockType.GLOBAL_LOCK);
-        }
-        else {
-          List<CExpression> params = callEdge.getArguments();
-
-          assert (params.size() == 1);
-          newElement.add(params.get(0).toASTString(), callEdge.getLineNumber(), LockType.LOCAL_LOCK);
-        }
-      }
-      else if (unlock != null && unlock.contains(functionName)) {
-        if (exceptions.contains(functionName)) {
-          newElement.delete("lock");
-        }
-        else {
-          List<CExpression> params = callEdge.getArguments();
-
-          assert (params.size() == 1);
-          newElement.delete(params.get(0).toASTString());
-        }
-      }
+      return CheckIsLock(newElement, callEdge.getSuccessor().getFunctionName(), callEdge.getLineNumber(), callEdge.getArguments());
     }
     return newElement;
   }
 
+  private LockStatisticsState CheckIsLock(LockStatisticsState newElement, String functionName, int lineNumber, List<CExpression> params) {
+    if (lock != null && lock.contains(functionName)) {
+      if (exceptions.contains(functionName)) {
+        newElement.add(functionName, lineNumber, LockType.GLOBAL_LOCK);
+      }
+      else {
+        assert (params.size() == 1);
+        newElement.add(params.get(0).toASTString(), lineNumber, LockType.LOCAL_LOCK);
+      }
+    }
+    else if (unlock != null && unlock.contains(functionName)) {
+      if (exceptions.contains(functionName)) {
+        String lockName = lock.get(unlock.indexOf(functionName));
+        newElement.delete(lockName);
+      }
+      else {
+        assert (params.size() == 1);
+        newElement.delete(params.get(0).toASTString());
+      }
+    }
+    return newElement;
+  }
 }

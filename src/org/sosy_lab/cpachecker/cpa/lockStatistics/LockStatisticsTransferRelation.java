@@ -55,11 +55,11 @@ public class LockStatisticsTransferRelation implements TransferRelation
 
   @Option(name="lockfunctions",
       description="functions, that locks synchronization primitives")
-  private Set<String> lock;
+  private List<String> lock;
 
   @Option(name="unlockfunctions",
       description="functions, that unlocks synchronization primitives")
-  private Set<String> unlock;
+  private List<String> unlock;
 
   @Option(name="exceptions",
       description="functions wuth parameters, which we don't need to use")
@@ -91,7 +91,6 @@ public class LockStatisticsTransferRelation implements TransferRelation
     LockStatisticsPrecision lockStatisticsPrecision = (LockStatisticsPrecision)pPrecision;
 
     LockStatisticsState successor;
-
     switch (cfaEdge.getEdgeType()) {
 
     case FunctionCallEdge:

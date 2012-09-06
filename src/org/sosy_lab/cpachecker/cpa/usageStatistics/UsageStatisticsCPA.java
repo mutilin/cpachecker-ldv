@@ -29,6 +29,7 @@ import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
+import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.defaults.AbstractSingleWrapperCPA;
@@ -50,7 +51,7 @@ import org.sosy_lab.cpachecker.core.interfaces.Reducer;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.interfaces.StopOperator;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
-
+@Options(prefix="cpa.usagestatistics")
 public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements ConfigurableProgramAnalysisWithABM {
 
   private UsageStatisticsDomain abstractDomain;
@@ -73,13 +74,25 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
       description="which stop operator to use for LockStatisticsCPA")
   private String stopType = "SEP";
 
+  @Option(description="do we need to collect statistics to generate file for Lcov")
+  private boolean covering = false;
+
   private UsageStatisticsCPA(ConfigurableProgramAnalysis pCpa, CFA pCfa, LogManager pLogger, Configuration pConfig) throws InvalidConfigurationException {
     super(pCpa);
+    pConfig.inject(this);
     this.abstractDomain = new UsageStatisticsDomain(pCpa.getAbstractDomain());
     this.mergeOperator = initializeMergeOperator();
     this.stopOperator = initializeStopOperator();
-    this.statistics = new UsageStatisticsCPAStatistics(pConfig);
-    this.transferRelation = new UsageStatisticsTransferRelation(pCpa.getTransferRelation(), pConfig, statistics);
+
+    CodeCovering coverGenerator;
+    if (!covering){
+      coverGenerator = new CodeCoveringEmpty();
+    }
+    else {
+      coverGenerator = new CodeCoveringSimple();
+    }
+    this.statistics = new UsageStatisticsCPAStatistics(pConfig, coverGenerator);
+    this.transferRelation = new UsageStatisticsTransferRelation(pCpa.getTransferRelation(), pConfig, statistics, coverGenerator);
     this.precisionAdjustment = new UsageStatisticsPrecisionAdjustment(pCpa.getPrecisionAdjustment());
     if (pCpa instanceof ConfigurableProgramAnalysisWithABM) {
       Reducer wrappedReducer = ((ConfigurableProgramAnalysisWithABM)pCpa).getReducer();

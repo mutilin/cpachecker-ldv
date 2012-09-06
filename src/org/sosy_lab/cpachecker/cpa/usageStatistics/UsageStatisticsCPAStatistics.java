@@ -71,6 +71,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   PrintWriter writer = null;
   FileOutputStream file = null;
   DataProcessing dataProcess = null;
+  CodeCovering covering;
 
   @Option(name="output", description="file to write results")
   private String FileName = "race_results.txt";
@@ -82,7 +83,10 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   @Option(description="if we need to print all variables, not only unsafe cases")
   private boolean fullstatistics = true;
 
-  UsageStatisticsCPAStatistics(Configuration config) throws InvalidConfigurationException{
+  @Option(description="Do we need to store statistics of all variables or only pointers")
+  private boolean onlypointers = true;
+
+  UsageStatisticsCPAStatistics(Configuration config, CodeCovering cover) throws InvalidConfigurationException{
     Stat = new HashMap<String, Set<VariableInfo>>();
     config.inject(this);
 
@@ -94,6 +98,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       System.out.println("Unknown data procession " + process);
       System.exit(0);
     }
+    covering = cover;
 
 
     try {
@@ -121,6 +126,13 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       String name = decl.getName();
 
       for (AbstractState s : wrappedStates) {
+        /*
+         * Can't use location cpa, because of in if ... else ... it gives wrong results.
+         * It happens, because for these constructions there are two nodes for start and for end
+         * and line was return as for end of it.
+         *
+         * I don't know, how it works here, but it needs in the same method below
+         */
         if (s instanceof LocationState) {
           line = ((LocationState)s).getLocationNode().getLineNumber();
         }
@@ -168,16 +180,18 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
     if (wrappedState instanceof CompositeState) {
       List<AbstractState> wrappedStates = ((CompositeState)wrappedState).getWrappedStates();
-      int line = 0;
+      int line = pStatement.getFileLocation().getStartingLineNumber();
       Set<LockStatisticsLock> mutex = null;
       List<String> stack = new LinkedList<String>();
       String name = pStatement.getName();
 
       for (AbstractState s : wrappedStates) {
-        if (s instanceof LocationState) {
-          line = ((LocationState)s).getLocationNode().getLineNumber();
-        }
-        else if (s instanceof LockStatisticsState){
+        /*
+         * Can't use location cpa, because of in if ... else ... it gives wrong results.
+         * It happens, because for these constructions there are two nodes for start and for end
+         * and line was return as for end of it.
+         */
+        if (s instanceof LockStatisticsState){
           mutex = ((LockStatisticsState)s).getLocks();
         }
         else if (s instanceof CallstackState) {
@@ -220,21 +234,27 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
   public void add(UsageStatisticsState pNewState, CRightHandSide pStatement,
                   boolean isKnownPointer, boolean isWrite, EdgeType ptype) {
+
     if (pStatement instanceof CIdExpression) {
       CSimpleDeclaration decl = ((CIdExpression)pStatement).getDeclaration();
-
-      CType type = decl.getType();
-      if (decl instanceof CDeclaration && type instanceof CPointerType) {
-        add(pNewState, (CIdExpression)pStatement, isWrite, ptype);
+      if (decl != null){
+        CType type = decl.getType();
+        if (decl instanceof CDeclaration &&(!onlypointers || type instanceof CPointerType)) {
+          add(pNewState, (CIdExpression)pStatement, isWrite, ptype);
+        }
+        else if (decl instanceof CDeclaration && (!onlypointers || isKnownPointer)) {
+          add(pNewState, (CIdExpression)pStatement, isWrite, ptype);
+        }
       }
-      else if (decl instanceof CDeclaration && isKnownPointer) {
+      else if (!onlypointers){
+        //real situation
         add(pNewState, (CIdExpression)pStatement, isWrite, ptype);
       }
     }
-    else if (pStatement instanceof CUnaryExpression && ((CUnaryExpression)pStatement).getOperator() == UnaryOperator.STAR)
+    else if (pStatement instanceof CUnaryExpression && (!onlypointers || ((CUnaryExpression)pStatement).getOperator() == UnaryOperator.STAR))
     //*a
       add(pNewState, ((CUnaryExpression)pStatement).getOperand(), true, isWrite, ptype);
-    else if (pStatement instanceof CFieldReference && ((CFieldReference)pStatement).isPointerDereference())
+    else if (pStatement instanceof CFieldReference && (!onlypointers || ((CFieldReference)pStatement).isPointerDereference()))
     //a->b
       add(pNewState, ((CFieldReference)pStatement).getFieldOwner(), true, isWrite, ptype);
     else if (pStatement instanceof CFieldReference) {
@@ -487,7 +507,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       writer.println("");
 
       for (String var : Stat.keySet()) {
-        System.out.println("Prints " + var);
+        //System.out.println("Prints " + var);
         writer.println("");
         for (VariableInfo varInfo : Stat.get(var)) {
           writer.println("");
@@ -498,6 +518,8 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
     if(file != null)
       writer.close();
+
+    covering.generate();
   }
 
   @Override

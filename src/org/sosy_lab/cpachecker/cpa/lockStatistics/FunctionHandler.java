@@ -23,21 +23,20 @@
  */
 package org.sosy_lab.cpachecker.cpa.lockStatistics;
 
+import java.util.List;
 import java.util.Set;
 
-import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
 
 /**Method of handling/searching lock functions
  *
  */
-@Options(prefix="cpa.functionhandler")
 public abstract class FunctionHandler {
 
-  protected Set<String> lock;
+  protected List<String> lock;
 
-  protected Set<String> unlock;
+  protected List<String> unlock;
 
   /**
    * There were those functions, that are called with a parameters, but
@@ -45,7 +44,7 @@ public abstract class FunctionHandler {
    */
   protected Set<String> exceptions;
 
-  public FunctionHandler(Set<String> pLock, Set<String> pUnlock, Set<String> pExceptions) {
+  public FunctionHandler(List<String> pLock, List<String> pUnlock, Set<String> pExceptions) {
     lock = pLock;
     unlock = pUnlock;
     exceptions = pExceptions;
