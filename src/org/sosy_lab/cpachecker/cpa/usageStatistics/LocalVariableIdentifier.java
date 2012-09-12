@@ -27,8 +27,8 @@ package org.sosy_lab.cpachecker.cpa.usageStatistics;
 public class LocalVariableIdentifier extends VariableIdentifier{
   private String function;//function, where this variable was declarated
 
-  public LocalVariableIdentifier(String nm, String t, String func) {
-    super(nm, t);
+  public LocalVariableIdentifier(String nm, String t, String func, boolean ref) {
+    super(nm, t, ref);
     function = func;
   }
 
@@ -59,6 +59,6 @@ public class LocalVariableIdentifier extends VariableIdentifier{
 
   @Override
   public String toString() {
-    return "Variable " + name + " is local, type: " + type + ", used in function " + function;
+    return (isDereference ? "*" : "") + name + "\n    |- Local\n    |- Type: " + type + "\n    |- Used in function " + function;
   }
 }

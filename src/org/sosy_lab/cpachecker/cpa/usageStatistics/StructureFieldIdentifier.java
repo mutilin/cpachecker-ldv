@@ -24,37 +24,18 @@
 package org.sosy_lab.cpachecker.cpa.usageStatistics;
 
 
-public class AccessType {
-
-  public static enum EdgeType {
-    DECLARATION,
-    ASSUMPTION,
-    ASSIGNMENT;
-
-    public String toASTString() {
-      return name().toLowerCase();
-    }
-  }
-
-  private boolean isWrite;
-  private EdgeType type;
-
-  public AccessType(boolean write, EdgeType t) {
-    type = t;
-    isWrite = write;
-  }
-
-  @Override
-  public String toString(){
-    return ((isWrite) ? " Write access " : " Read access ") + "in " + type.toASTString();
+public class StructureFieldIdentifier extends VariableIdentifier{
+  private String fieldType;
+  public StructureFieldIdentifier(String pNm, String pTp, String Ftype, boolean ref) {
+    super(pNm, pTp, ref);
+    fieldType = Ftype;
   }
 
   @Override
   public int hashCode() {
     final int prime = 31;
-    int result = 1;
-    result = prime * result + (isWrite ? 1231 : 1237);
-    result = prime * result + ((type == null) ? 0 : type.hashCode());
+    int result = super.hashCode();
+    result = prime * result + ((fieldType == null) ? 0 : fieldType.hashCode());
     return result;
   }
 
@@ -62,16 +43,21 @@ public class AccessType {
   public boolean equals(Object obj) {
     if (this == obj)
       return true;
-    if (obj == null)
+    if (!super.equals(obj))
       return false;
     if (getClass() != obj.getClass())
       return false;
-    AccessType other = (AccessType) obj;
-    if (isWrite != other.isWrite)
-      return false;
-    if (type != other.type)
+    StructureFieldIdentifier other = (StructureFieldIdentifier) obj;
+    if (fieldType == null) {
+      if (other.fieldType != null)
+        return false;
+    } else if (!fieldType.equals(other.fieldType))
       return false;
     return true;
   }
 
+  @Override
+  public String toString() {
+    return (isDereference ? "*" : "") + name + "\n    |- Structure field\n    |- Structure type: " + type + "\n    |- Field type: "+ fieldType;
+  }
 }

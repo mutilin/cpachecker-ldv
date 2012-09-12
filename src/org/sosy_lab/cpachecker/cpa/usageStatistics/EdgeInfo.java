@@ -24,14 +24,52 @@
 package org.sosy_lab.cpachecker.cpa.usageStatistics;
 
 
-public class StructureIdentifier extends VariableIdentifier{
+public class EdgeInfo {
 
-  public StructureIdentifier(String pNm, String pTp, boolean ref) {
-    super(pNm, pTp, ref);
+  public static enum EdgeType {
+    FUNCTION_CALL,
+    DECLARATION,
+    ASSUMPTION,
+    ASSIGNMENT,
+    STATEMENT;
+
+    public String toASTString() {
+      return name().toLowerCase();
+    }
+  }
+
+  private EdgeType type;
+
+  public EdgeInfo(EdgeType t) {
+    type = t;
   }
 
   @Override
-  public String toString() {
-    return (isDereference ? "*" : "") + name + "\n    |- Structure\n    |- Type: " + type;
+  public String toString(){
+    return (type.toASTString());
   }
+
+  @Override
+  public int hashCode() {
+    final int prime = 31;
+    int result = 1;
+    result = prime * result + ((type == null) ? 0 : type.hashCode());
+    return result;
+  }
+
+  @Override
+  public boolean equals(Object obj) {
+    if (this == obj)
+      return true;
+    if (obj == null)
+      return false;
+    if (getClass() != obj.getClass())
+      return false;
+    EdgeInfo other = (EdgeInfo) obj;
+    if (type != other.type)
+      return false;
+    return true;
+  }
+
+
 }

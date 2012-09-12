@@ -26,12 +26,12 @@ package org.sosy_lab.cpachecker.cpa.usageStatistics;
 
 public class GlobalVariableIdentifier extends VariableIdentifier{
 
-  public GlobalVariableIdentifier(String nm, String t) {
-    super(nm,t);
+  public GlobalVariableIdentifier(String nm, String t, boolean ref) {
+    super(nm, t, ref);
   }
 
   @Override
   public String toString() {
-    return "Variable " + name + " is global, type: " + type;
+    return (isDereference ? "*" : "") + name + "\n    |- Global\n    |- Type: " + type;
   }
 }

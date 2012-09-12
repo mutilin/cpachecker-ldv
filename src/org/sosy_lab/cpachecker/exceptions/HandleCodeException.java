@@ -1,6 +1,3 @@
-import org.sosy_lab.cpachecker.cmdline.CPAMain;
-
-
 /*
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
@@ -24,17 +21,14 @@ import org.sosy_lab.cpachecker.cmdline.CPAMain;
  *  CPAchecker web page:
  *    http://cpachecker.sosy-lab.org
  */
+package org.sosy_lab.cpachecker.exceptions;
 
-public class Runner {
 
-  /**
-   * @param args
-   */
-  public static void main(String[] args) {
-    CPAMain.main(new String[] {"-config",
-        "/home/alpha/git/cpachecker/test/config/lockStatistics.properties"
-        , "/home/alpha/git/cpachecker/test/cil.out.i"});
+public class HandleCodeException extends CPATransferException {
 
+  private static final long serialVersionUID = 7157121592860303914L;
+
+  public HandleCodeException(String pMsg) {
+    super(pMsg);
   }
-
 }

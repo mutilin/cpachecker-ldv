@@ -31,16 +31,27 @@ import org.sosy_lab.cpachecker.cpa.lockStatistics.LockStatisticsState;
 
 
 public class UsageInfo {
+  public static enum Access {
+    WRITE,
+    READ;
+
+    public String toASTString() {
+      return name().toLowerCase() + " access";
+    }
+  }
+
   private LineInfo line;
-  private AccessType type;
+  private EdgeInfo info;
   private LockStatisticsState locks;
   private CallstackState callstack;
+  private Access accessType;
 
-  public UsageInfo(LineInfo l, AccessType t, LockStatisticsState lock, CallstackState call) {
+  public UsageInfo(Access atype, LineInfo l, EdgeInfo t, LockStatisticsState lock, CallstackState call) {
     line = l;
-    type = t;
+    info = t;
     locks = lock;
     callstack = call;
+    accessType = atype;
   }
 
   public Set<LockStatisticsLock> getLocks() {
@@ -58,15 +69,15 @@ public class UsageInfo {
     return false;
   }
 
-
   @Override
   public int hashCode() {
     final int prime = 31;
     int result = 1;
+    result = prime * result + ((accessType == null) ? 0 : accessType.hashCode());
     result = prime * result + ((callstack == null) ? 0 : callstack.hashCode());
     result = prime * result + ((line == null) ? 0 : line.hashCode());
     result = prime * result + ((locks == null) ? 0 : locks.hashCode());
-    result = prime * result + ((type == null) ? 0 : type.hashCode());
+    result = prime * result + ((info == null) ? 0 : info.hashCode());
     return result;
   }
 
@@ -79,6 +90,8 @@ public class UsageInfo {
     if (getClass() != obj.getClass())
       return false;
     UsageInfo other = (UsageInfo) obj;
+    if (accessType != other.accessType)
+      return false;
     if (callstack == null) {
       if (other.callstack != null)
         return false;
@@ -94,10 +107,10 @@ public class UsageInfo {
         return false;
     } else if (!locks.equals(other.locks))
       return false;
-    if (type == null) {
-      if (other.type != null)
+    if (info == null) {
+      if (other.info != null)
         return false;
-    } else if (!type.equals(other.type))
+    } else if (!info.equals(other.info))
       return false;
     return true;
   }
@@ -106,13 +119,14 @@ public class UsageInfo {
   public String toString(){
     StringBuilder sb = new StringBuilder();
 
-    sb.append("    In line ");
+    sb.append("      In line ");
     sb.append(line.toString());
-    sb.append(" was locked " + locks.toString()+ ".");
+    sb.append(" (" + info.toString() + ")");
+    sb.append(" was locked with " + locks.toString()+ ", ");
+    sb.append(accessType.toASTString());
+    //sb.append(" in " + info.toString());
 
-    sb.append(type.toString());
-
-    sb.append("\n      Call stack: ");
+    sb.append("\n        Call stack: ");
 
     CallstackState e = callstack;
     while (e != null) {

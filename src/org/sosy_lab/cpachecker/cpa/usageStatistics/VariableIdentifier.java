@@ -26,23 +26,25 @@ package org.sosy_lab.cpachecker.cpa.usageStatistics;
 
 public abstract class VariableIdentifier implements Identifier {
 
-  public VariableIdentifier(String nm, String tp) {
+  public VariableIdentifier(String nm, String tp, boolean ref) {
     name = nm;
     type = tp;
+    isDereference = ref;
   }
 
   protected String name;
   protected String type;
+  protected boolean isDereference;
 
   @Override
   public int hashCode() {
     final int prime = 31;
     int result = 1;
+    result = prime * result + (isDereference ? 1231 : 1237);
     result = prime * result + ((name == null) ? 0 : name.hashCode());
     result = prime * result + ((type == null) ? 0 : type.hashCode());
     return result;
   }
-
   @Override
   public boolean equals(Object obj) {
     if (this == obj)
@@ -52,6 +54,8 @@ public abstract class VariableIdentifier implements Identifier {
     if (getClass() != obj.getClass())
       return false;
     VariableIdentifier other = (VariableIdentifier) obj;
+    if (isDereference != other.isDereference)
+      return false;
     if (name == null) {
       if (other.name != null)
         return false;
@@ -64,5 +68,7 @@ public abstract class VariableIdentifier implements Identifier {
       return false;
     return true;
   }
+
+
 
 }

@@ -33,36 +33,27 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
-import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CDeclaration;
-import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CFieldReference;
-import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
-import org.sosy_lab.cpachecker.cfa.ast.c.CSimpleDeclaration;
-import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression.UnaryOperator;
-import org.sosy_lab.cpachecker.cfa.types.c.CPointerType;
-import org.sosy_lab.cpachecker.cfa.types.c.CType;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
-import org.sosy_lab.cpachecker.cpa.location.LocationState;
 import org.sosy_lab.cpachecker.cpa.lockStatistics.LockStatisticsLock;
 import org.sosy_lab.cpachecker.cpa.lockStatistics.LockStatisticsState;
-import org.sosy_lab.cpachecker.cpa.usageStatistics.AccessType.EdgeType;
+import org.sosy_lab.cpachecker.cpa.usageStatistics.EdgeInfo.EdgeType;
+import org.sosy_lab.cpachecker.cpa.usageStatistics.UsageInfo.Access;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 
 @Options(prefix="cpa.usagestatistics")
 public class UsageStatisticsCPAStatistics implements Statistics {
   private Map<Identifier, Set<UsageInfo>> Stat;
   private int FullCounter = 0;
+  private int skippedCases = 0;
 
   PrintWriter writer = null;
   FileOutputStream file = null;
@@ -96,167 +87,37 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
     covering = cover;
 
-
-    try {
-      file = new FileOutputStream (FileName);
-      writer = new PrintWriter(file);
-    }
-    catch(FileNotFoundException e)
-    {
-      System.out.println("Cannot open file " + FileName);
-      System.exit(0);
-    }
-    //writer.close();
   }
 
-  public boolean addUsageDecl(Identifier id, LineInfo lineInfo, AccessType acc, AbstractState wrappedState) {
-    LockStatisticsState lockState = AbstractStates.extractStateByType(wrappedState, LockStatisticsState.class);
-    CallstackState callstackState = AbstractStates.extractStateByType(wrappedState, CallstackState.class);
-
-    UsageInfo usage = new UsageInfo(lineInfo, acc, lockState, callstackState);
-
+  public void add(Set<Pair<Identifier, Access>> result, AbstractState state, int line, EdgeType type) {
     Set<UsageInfo> uset;
-    if (!Stat.containsKey(id)) {
-      uset = new HashSet<UsageInfo>();
-      Stat.put(id, uset);
-    } else {
-      uset = Stat.get(id);
-    }
+    Identifier id;
 
-    return uset.add(usage);
-  }
-
-  Identifier createIdentifierFromDecl(CSimpleDeclaration decl, AbstractState wrappedState) {
-    CallstackState callstackState = AbstractStates.extractStateByType(wrappedState, CallstackState.class);
-
-    String name = decl.getName();
-    String type = decl.getType().toASTString("");
-    if (decl instanceof CDeclaration){
-      if(((CDeclaration)decl).isGlobal()) {
-        //generate global variable id
-        return new GlobalVariableIdentifier(name, type);
-      } else {
-        //generate local variable id
-        String func = callstackState.getCurrentFunction();
-        return new LocalVariableIdentifier(name, type, func);
-      }
-    }
-    else {
-      String func = callstackState.getCurrentFunction();
-      return new LocalVariableIdentifier(name, type, func);
-    }
-  }
-
-  public void add(UsageStatisticsState state, CDeclaration decl){
-
-    AbstractState wrappedState = state.getWrappedState();
-    Identifier id = createIdentifierFromDecl(decl, wrappedState);
-
-    LocationState locationState = AbstractStates.extractStateByType(wrappedState, LocationState.class);
-    LineInfo lineInfo = new LineInfo(locationState.getLocationNode().getLineNumber());
-    AccessType acc = new AccessType(false, AccessType.EdgeType.DECLARATION);
-    addUsageDecl(id, lineInfo, acc, wrappedState);
-    FullCounter++;
-  }
-
-  public void add(UsageStatisticsState state, CExpression pStatement,
-                  boolean isWrite, EdgeType ptype) {
-
-    AbstractState wrappedState = state.getWrappedState();
-
-    Identifier id = createIdentifier(pStatement, wrappedState);
-    int line = pStatement.getFileLocation().getStartingLineNumber();
+    LockStatisticsState lockState = AbstractStates.extractStateByType(state, LockStatisticsState.class);
+    CallstackState callstackState = AbstractStates.extractStateByType(state, CallstackState.class);
 
     LineInfo lineInfo = new LineInfo(line);
-    AccessType acc = new AccessType(isWrite, ptype);
+    EdgeInfo info = new EdgeInfo(type);
 
-    addUsageDecl(id, lineInfo, acc, wrappedState);
-    FullCounter++;
-  }
-
-  String getType(CExpression e) {
-    System.out.println(e.toASTString());
-    if (e instanceof CIdExpression) {
-      CType type = ((CIdExpression)e).getDeclaration().getType();
-      return type.toASTString("");
-    }
-    else if (e instanceof CUnaryExpression)
-      return getType(((CUnaryExpression) e).getOperand());
-    else if (e instanceof CFieldReference)
-      return getType(((CFieldReference) e).getFieldOwner());
-    else {
-      assert false : e.getClass() + " " + e.getExpressionType().toASTString("") + " " + e.getFileLocation().getStartingLineNumber();
-      return null;
-      //TODO make it carefully
-    }
-  }
-
-  Identifier createIdentifierForStructure(CFieldReference expression, AbstractState wrappedState) {
-    String name = expression.getFieldName();
-    String type = getType(expression);
-
-    return new StructureIdentifier(name, type);
-  }
-
-  Identifier createIdentifier(CExpression expression, AbstractState wrappedState) {
-    if (expression instanceof CIdExpression) {
-      CSimpleDeclaration decl = ((CIdExpression)expression).getDeclaration();
-      //assert (decl instanceof CDeclaration) : decl.getType().toASTString("") + " " + decl.getFileLocation().getStartingLineNumber();
-
-      return createIdentifierFromDecl(decl, wrappedState);
-    }
-    else if (expression instanceof CFieldReference) {
-      return createIdentifierForStructure((CFieldReference)expression, wrappedState);
-    }
-    else if (expression instanceof CUnaryExpression) {
-      return createIdentifier(((CUnaryExpression)expression).getOperand(), wrappedState);
-    }
-    else {
-      System.err.println(expression.toASTString() + " " + expression.getClass());
-      assert false : expression.getClass() + " " + expression.getExpressionType().toASTString("") + " " + expression.getFileLocation().getStartingLineNumber();
-      return null;
-    }
-  }
-
-  public void add(UsageStatisticsState pNewState, CRightHandSide pStatement,
-                  boolean isKnownPointer, boolean isWrite, EdgeType ptype) {
-
-    if (pStatement instanceof CIdExpression) {
-      CSimpleDeclaration decl = ((CIdExpression)pStatement).getDeclaration();
-      if (decl != null){
-        CType type = decl.getType();
-        if (decl instanceof CDeclaration &&(!onlypointers || type instanceof CPointerType)) {
-          add(pNewState, (CIdExpression)pStatement, isWrite, ptype);
-        }
-        else if (decl instanceof CDeclaration && (!onlypointers || isKnownPointer)) {
-          add(pNewState, (CIdExpression)pStatement, isWrite, ptype);
-        }
+    for (Pair<Identifier, Access> tmpPair : result) {
+      FullCounter++;
+      UsageInfo usage = new UsageInfo(tmpPair.getSecond(), lineInfo, info, lockState, callstackState);
+      id = tmpPair.getFirst();
+      if (id == null) {
+        skippedCases++;
+        continue;
       }
-      else if (!onlypointers){
-        //real situation
-        add(pNewState, (CIdExpression)pStatement, isWrite, ptype);
-      }
-    }
-    else if (pStatement instanceof CUnaryExpression && (!onlypointers || ((CUnaryExpression)pStatement).getOperator() == UnaryOperator.STAR))
-    //*a
-      add(pNewState, ((CUnaryExpression)pStatement).getOperand(), true, isWrite, ptype);
-    else if (pStatement instanceof CFieldReference && (!onlypointers || ((CFieldReference)pStatement).isPointerDereference())) {
-    //a->b
-      add(pNewState, ((CFieldReference)pStatement).getFieldOwner(), isWrite, ptype);
-    }
-    else if (pStatement instanceof CFieldReference) {
-    // it can be smth like (*a).b
-      CExpression tmpExpression = ((CFieldReference)pStatement).getFieldOwner();
 
-      if (tmpExpression instanceof CUnaryExpression &&
-         ((CUnaryExpression)tmpExpression).getOperator() == UnaryOperator.STAR)
-        add(pNewState, ((CUnaryExpression)tmpExpression).getOperand(), true, isWrite, ptype);
-    }
-    else if (pStatement instanceof CBinaryExpression) {
-      add(pNewState, ((CBinaryExpression)pStatement).getOperand1(), isKnownPointer, isWrite, ptype);
-      add(pNewState, ((CBinaryExpression)pStatement).getOperand2(), isKnownPointer, isWrite, ptype);
+      if (!Stat.containsKey(id)) {
+        uset = new HashSet<UsageInfo>();
+        Stat.put(id, uset);
+      } else {
+        uset = Stat.get(id);
+      }
+      uset.add(usage);
     }
   }
+
 
   /*private Collection<VariableInfo> FindUnsafeCases(Collection<VariableInfo> locks) {
   Map<Integer, Set<Set<LockStatisticsMutex>>> Cases = new HashMap<Integer, Set<Set<LockStatisticsMutex>>>();
@@ -413,33 +274,39 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   writer.println("-------------------------------------------------");
   writer.println("");
 
-  int local = 0, global = 0, structures = 0;
+  int local = 0, global = 0,/* structures = 0,*/ fields = 0;
 
   for (Identifier id : identifiers) {
     if (id instanceof GlobalVariableIdentifier)
       global++;
     else if (id instanceof LocalVariableIdentifier)
       local++;
-    else if (id instanceof StructureIdentifier)
-      structures++;
+   /* else if (id instanceof StructureIdentifier)
+      structures++;*/
+    else if (id instanceof StructureFieldIdentifier)
+      fields++;
   }
 
   writer.println(comment);
   writer.println("Total unsafe cases:     " + identifiers.size());
   writer.println("--Global:               " + global);
   writer.println("--Local:                " + local);
-  writer.println("--Structures:           " + structures);
+  //writer.println("--Structures:           " + structures);
+  writer.println("--Structure fields:     " + fields);
   writer.println("");
 
   if (details && identifiers.size() > 0){
-
+    int counter = 1;
     for (Identifier id : identifiers) {
       writer.println("");
-      writer.println(id.toString());
-      writer.println("[");
+      writer.println(counter + ") "+ id.toString());
+      writer.println("    |- Unique usages: " + Stat.get(id).size());
+      writer.println("    [");
       for (UsageInfo uinfo : Stat.get(id))
         writer.println(uinfo.toString());
-      writer.println("]");
+      writer.println("    ]");
+      counter++;
+      writer.println("_____________________________________________");
     }
     writer.println("");
   }
@@ -449,7 +316,17 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   @Override
   public void printStatistics(PrintStream out, Result result, ReachedSet reached) {
 
-    int global = 0, local = 0, counter = 0, structures = 0;
+    int global = 0, local = 0, counter = 0,/* structures = 0,*/ fields = 0;
+
+    try {
+      file = new FileOutputStream (FileName);
+      writer = new PrintWriter(file);
+    }
+    catch(FileNotFoundException e)
+    {
+      System.out.println("Cannot open file " + FileName);
+      System.exit(0);
+    }
 
     for (Identifier id : Stat.keySet()){
       Set<UsageInfo> uset = Stat.get(id);
@@ -459,8 +336,10 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         global++;
       else if (id instanceof LocalVariableIdentifier)
         local++;
-      else if (id instanceof StructureIdentifier)
-        structures++;
+      /*else if (id instanceof StructureIdentifier)
+        structures++;*/
+      else if (id instanceof StructureFieldIdentifier)
+        fields++;
     }
 
     writer.println("General statistics");
@@ -468,11 +347,14 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     writer.println("Total variables:        " + Stat.size());
     writer.println("--Global:               " + global);
     writer.println("--Local:                " + local);
-    writer.println("--Structures:           " + structures);
+    //writer.println("--Structures:           " + structures);
+    writer.println("--Structure fields:     " + fields);
     writer.println("");
 
     writer.println("Total usages:           " + FullCounter);
     writer.println("Total unique usages:    " + counter);
+    writer.println("Total skipped cases:    " + skippedCases);
+    writer.println("");
 
     Set<LockStatisticsLock> mutexes = FindMutexes();
 
@@ -495,14 +377,17 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       writer.println("");
       writer.println("Full statistics");
       writer.println("");
-
+      counter = 1;
       for (Identifier id : Stat.keySet()) {
         writer.println("");
-        writer.println(id.toString());
-        writer.println("[");
+        writer.println(counter + ") " + id.toString());
+        writer.println("    |- Unique usages: " + Stat.get(id).size());
+        writer.println("      [");
         for (UsageInfo uinfo : Stat.get(id))
           writer.println(uinfo.toString());
-        writer.println("]");
+        writer.println("      ]");
+        counter++;
+        writer.println("_____________________________________________");
       }
       writer.println("");
     }
