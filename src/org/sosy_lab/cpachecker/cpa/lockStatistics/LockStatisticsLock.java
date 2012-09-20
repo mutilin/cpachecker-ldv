@@ -56,18 +56,31 @@ public class LockStatisticsLock {
   }
 
   @Override
-  public boolean equals(Object mutex) {
-    if (mutex instanceof LockStatisticsLock)
-      return (name.equals(((LockStatisticsLock)mutex).name) &&
-          /*line == ((LockStatisticsLock)mutex).line &&*/
-          type == ((LockStatisticsLock)mutex).type);
-    else
-      return false;
+  public int hashCode() {
+    final int prime = 31;
+    int result = 1;
+    result = prime * result + ((name == null) ? 0 : name.hashCode());
+    result = prime * result + ((type == null) ? 0 : type.hashCode());
+    return result;
   }
 
   @Override
-  public int hashCode() {
-    return name.hashCode();
+  public boolean equals(Object obj) {
+    if (this == obj)
+      return true;
+    if (obj == null)
+      return false;
+    if (getClass() != obj.getClass())
+      return false;
+    LockStatisticsLock other = (LockStatisticsLock) obj;
+    if (name == null) {
+      if (other.name != null)
+        return false;
+    } else if (!name.equals(other.name))
+      return false;
+    if (type != other.type)
+      return false;
+    return true;
   }
 
   @Override

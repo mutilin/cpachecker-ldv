@@ -89,7 +89,7 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
       coverGenerator = new CodeCoveringEmpty();
     }
     else {
-      coverGenerator = new CodeCoveringSimple();
+      coverGenerator = new CodeCoveringSimple(pCfa);
     }
     this.statistics = new UsageStatisticsCPAStatistics(pConfig, coverGenerator);
     this.transferRelation = new UsageStatisticsTransferRelation(pCpa.getTransferRelation(), pConfig, statistics, coverGenerator);

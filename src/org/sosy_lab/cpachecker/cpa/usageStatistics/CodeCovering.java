@@ -23,8 +23,6 @@
  */
 package org.sosy_lab.cpachecker.cpa.usageStatistics;
 
-import org.sosy_lab.cpachecker.exceptions.CPAException;
-import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 
 /**
  * Interface for classes, which will generate input files for Lcov
@@ -37,7 +35,7 @@ public interface CodeCovering {
    * @param functionName - name of function
    * @throws CPAException
    */
-  public void addFunction(int line, String functionName) throws CPATransferException;
+  //public void addFunction(int line, String functionName) throws CPATransferException;
 
   /**
    * Increase counter of usage function @param functionName
@@ -47,14 +45,14 @@ public interface CodeCovering {
   /**
    * Increase counter of usage @param line
    */
-  public void addLine(int line);
+  //public void addLine(int line);
 
 
   /**
    * Marks line, as exception. Needs to show it white color, f.e. declarations
    * @param line
    */
-  public void addException(int line);
+  //public void addException(int line);
 
   /**
    * Generate file and finish work

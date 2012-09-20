@@ -31,7 +31,7 @@ public class StructureFieldIdentifier extends VariableIdentifier{
     fieldType = Ftype;
   }
 
-  @Override
+  /*@Override
   public int hashCode() {
     final int prime = 31;
     int result = super.hashCode();
@@ -54,7 +54,7 @@ public class StructureFieldIdentifier extends VariableIdentifier{
     } else if (!fieldType.equals(other.fieldType))
       return false;
     return true;
-  }
+  }*/
 
   @Override
   public String toString() {

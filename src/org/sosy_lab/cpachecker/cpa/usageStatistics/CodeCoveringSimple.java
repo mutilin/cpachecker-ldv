@@ -31,91 +31,49 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
-import org.sosy_lab.cpachecker.exceptions.CPATransferException;
+import org.sosy_lab.cpachecker.cfa.CFA;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
 
 
 public class CodeCoveringSimple implements CodeCovering{
 
-  private HashMap<String, Integer> FunctionUsage;
-  private HashMap<String, Integer> FunctionDeclaration;
-  private HashMap<Integer, Integer> LineUsage;
-  private Set<Integer> ExceptionLines;
+  private Set<String> UsedFunctions;
+  CFA cfa;
 
-  CodeCoveringSimple() {
-    FunctionUsage = new HashMap<String, Integer>();
-    FunctionDeclaration = new HashMap<String, Integer>();
-    LineUsage = new HashMap<Integer, Integer>();
-    ExceptionLines = new HashSet<Integer>();
-  }
-
-  @Override
-  public void addFunction(int pLine, String pFunctionName) throws CPATransferException {
-    if (!FunctionDeclaration.containsKey(pFunctionName)) {
-      FunctionDeclaration.put(pFunctionName, pLine);
-    }
-    else{
-      //it seems to be, that the second declaration is a realization of function
-      //TODO think about it
-      int l = FunctionDeclaration.get(pFunctionName);
-      ExceptionLines.add(l);
-      FunctionDeclaration.put(pFunctionName, pLine);
-      /*if (l != pLine)
-        throw new CPATransferException("Double declaration of function " + pFunctionName + ": in " + l + " and in " + pLine);*/
-    }
+  CodeCoveringSimple(CFA pCfa) {
+    UsedFunctions = new HashSet<String>();
+    cfa = pCfa;
   }
 
   @Override
   public void addFunctionUsage(String pFunctionName) {
-    if (FunctionUsage.containsKey(pFunctionName)) {
-      int counter = FunctionUsage.get(pFunctionName);
-      FunctionUsage.put(pFunctionName, counter++);
-    }
-    else {
-      FunctionUsage.put(pFunctionName, 1);
-    }
-  }
-
-  @Override
-  public void addException(int line) {
-    ExceptionLines.add(line);
-  }
-
-  @Override
-  public void addLine(int pLine) {
-    if (LineUsage.containsKey(pLine)) {
-      int counter = LineUsage.get(pLine);
-      LineUsage.put(pLine, counter++);
-    }
-    else {
-      LineUsage.put(pLine, 1);
-    }
+    UsedFunctions.add(pFunctionName);
   }
 
   @Override
   public void generate() {
     PrintWriter writer = null;
     FileOutputStream file = null;
-    boolean usedFunction = true;
+    boolean usedFunction = false, globalDeclaration = true;
     int lineCounter = 0;
     final String folder = "/home/alpha/git/cpachecker/test/";
     final String filename = "cil.out";
     final String inputFile = filename + ".i";
     final String outputFile = filename + ".info";
-    final String main = "ldv_main";
-    int FNF = 0, FNH = 0;
+    int FNH = 0;
+    Set<Integer> lineUsage = new HashSet<Integer>();
+    Map<Integer, String> functionHeads = new HashMap<Integer, String>();
 
-    if (FunctionDeclaration.containsKey(main)) {
-      //it can't be added automatically
-      FunctionUsage.put(main, 1);
-    }
+    UsedFunctions.add(cfa.getMainFunction().getFunctionName());
+
     try {
       file = new FileOutputStream (folder + outputFile);
       writer = new PrintWriter(file);
-    }
-    catch(FileNotFoundException e)
-    {
+    } catch(FileNotFoundException e) {
       System.out.println("Cannot open file " + folder + outputFile);
       System.exit(0);
     }
@@ -123,62 +81,56 @@ public class CodeCoveringSimple implements CodeCovering{
     writer.println("TN:");
     writer.println("SF:" + folder + inputFile);
 
-    for (String name : FunctionDeclaration.keySet()) {
-      writer.println("FN:" + FunctionDeclaration.get(name) + "," + name);
+    for (FunctionEntryNode entry : cfa.getAllFunctionHeads()) {
+      functionHeads.put(entry.getLineNumber(), entry.getFunctionName());
+      writer.println("FN:" + entry.getLineNumber() + "," + entry.getFunctionName());
     }
-    FNF = FunctionDeclaration.size();
-    for (String name : FunctionUsage.keySet()) {
-      writer.println("FNDA:" + FunctionUsage.get(name) + "," + name);
-      FNH++;
-      if (!FunctionDeclaration.containsKey(name))
-        FNF++;
+
+    for (String name : UsedFunctions) {
+      if (cfa.getAllFunctionNames().contains(name)) {
+        writer.println("FNDA:" + "1," + name);
+        FNH++;
+      }
     }
-    writer.println("FNF:" + FNF);
+
+    writer.println("FNF:" + cfa.getNumberOfFunctions());
     writer.println("FNH:" + FNH);
+
+    for (CFANode node : cfa.getAllNodes()) {
+      for (int i = 0; i < node.getNumEnteringEdges(); i++)
+        lineUsage.add(node.getEnteringEdge(i).getLineNumber());
+      for (int i = 0; i < node.getNumLeavingEdges(); i++)
+        lineUsage.add(node.getLeavingEdge(i).getLineNumber());
+    }
+
     try {
       BufferedReader in = new BufferedReader(new FileReader(folder + inputFile));
       String str;
       while ((str = in.readLine()) != null) {
-         lineCounter++;
-         /*if (lineCounter == 350669) {
-           lineCounter++;
-           lineCounter--;
-         }*/
+        lineCounter++;
 
-         if (FunctionDeclaration.containsValue(lineCounter)) {
-           String foundName = main;
-           for (String name : FunctionDeclaration.keySet()) {
-             if (FunctionDeclaration.get(name) == lineCounter){
-               foundName = name;
-               break;
-             }
-           }
-           if (FunctionUsage.containsKey(foundName)) {
-             writer.println("DA:" + lineCounter +"," + FunctionUsage.get(foundName));
-             usedFunction = true;
-           }
-           else {
-             writer.println("DA:" + lineCounter +",0");
-             usedFunction = false;
-           }
-         }
-         else if (LineUsage.containsKey(lineCounter)) {
-           writer.println("DA:" + lineCounter +"," + LineUsage.get(lineCounter));
-         }
-         else {
-           if ((!str.contains("#") &&
-               /* #include ...*/
-               (!str.equals("{")) &&
-               /* { */
-               !str.equals("}") &&
-               !str.equals("")
-               || (FunctionDeclaration.containsValue(lineCounter)))
-                && !ExceptionLines.contains(lineCounter))
-               /* not used functions */ {
-             if (!usedFunction)
-               writer.println("DA:" + lineCounter + ",0");
-           }
-         }
+        if (str.matches("#.*") || (str.matches(" *\\{ *")) || str.matches(" *\\} *") ||
+            str.matches(" *//.*") || str.matches(" */\\*.*\\*/ *") || str.matches(" *"))
+          continue;
+
+        if (functionHeads.containsKey(lineCounter)) {
+          String functionName = functionHeads.get(lineCounter);
+          globalDeclaration = false;
+          if ((usedFunction = UsedFunctions.contains(functionName)) == true) {
+            writer.println("DA:" + lineCounter +",1");
+          } else {
+            writer.println("DA:" + lineCounter +",0");
+          }
+
+        } else if (lineUsage.contains(lineCounter)) {
+          if (usedFunction)
+            writer.println("DA:" + lineCounter +",1");
+          else if (!globalDeclaration)
+            writer.println("DA:" + lineCounter +",0");
+
+        } else if (!str.contains("else") && !str.contains("goto") && !str.contains(":") && !str.equals("") && !globalDeclaration) {
+            writer.println("DA:" + lineCounter + ",0");
+        }
       }
       in.close();
     }
@@ -188,7 +140,7 @@ public class CodeCoveringSimple implements CodeCovering{
       System.exit(0);
     }
     writer.println("LF:" + lineCounter);
-    writer.println("LH:" + LineUsage.size());
+    writer.println("LH:" + lineUsage.size());
     writer.println("end_of_record");
     writer.close();
   }

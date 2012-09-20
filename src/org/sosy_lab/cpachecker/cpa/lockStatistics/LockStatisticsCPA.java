@@ -74,7 +74,6 @@ public class LockStatisticsCPA implements ConfigurableProgramAnalysisWithABM/*, 
   private LockStatisticsTransferRelation transferRelation;
   private PrecisionAdjustment precisionAdjustment;
   private final LockStatisticsReducer reducer;
-  //private final LockStatisticsCPAStatistics statistics;
 
   private final Configuration config;
   private final LogManager logger;
@@ -92,7 +91,6 @@ public class LockStatisticsCPA implements ConfigurableProgramAnalysisWithABM/*, 
     stopOperator        = initializeStopOperator();
     precisionAdjustment = StaticPrecisionAdjustment.getInstance();
     reducer             = new LockStatisticsReducer();
-    //statistics          = new LockStatisticsCPAStatistics();
 
   }
 
@@ -178,13 +176,4 @@ public class LockStatisticsCPA implements ConfigurableProgramAnalysisWithABM/*, 
   public Reducer getReducer() {
     return reducer;
   }
-
-  /*@Override
-  public void collectStatistics(Collection<Statistics> pStatsCollection) {
-    pStatsCollection.add(statistics);
-  }
-
-  public LockStatisticsCPAStatistics getStats() {
-    return statistics;
-  }*/
 }

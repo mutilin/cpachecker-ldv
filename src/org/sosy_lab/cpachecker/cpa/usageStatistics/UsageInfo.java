@@ -25,6 +25,8 @@ package org.sosy_lab.cpachecker.cpa.usageStatistics;
 
 import java.util.Set;
 
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdgeType;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.lockStatistics.LockStatisticsLock;
 import org.sosy_lab.cpachecker.cpa.lockStatistics.LockStatisticsState;
@@ -56,6 +58,14 @@ public class UsageInfo {
 
   public Set<LockStatisticsLock> getLocks() {
     return locks.getLocks();
+  }
+
+  public Access getAccess() {
+    return accessType;
+  }
+
+  public CallstackState getCallStack() {
+    return callstack;
   }
 
   public boolean intersect(UsageInfo other) {
@@ -130,7 +140,15 @@ public class UsageInfo {
 
     CallstackState e = callstack;
     while (e != null) {
-      sb.append(e.getCurrentFunction() + " <- ");
+      String lineN = "-";
+      for (int i = 0; i < e.getCallNode().getNumLeavingEdges(); i++) {
+        CFAEdge edge = e.getCallNode().getLeavingEdge(i);
+        if (edge.getEdgeType() == CFAEdgeType.FunctionCallEdge) {
+          lineN = Integer.toString(edge.getLineNumber());
+          break;
+        }
+      }
+      sb.append(e.getCurrentFunction() + "(" + lineN + ")" + " <- ");
       e = e.getPreviousState();
     }
     if (callstack != null)

@@ -47,6 +47,7 @@ import org.sosy_lab.cpachecker.cpa.lockStatistics.LockStatisticsLock;
 import org.sosy_lab.cpachecker.cpa.lockStatistics.LockStatisticsState;
 import org.sosy_lab.cpachecker.cpa.usageStatistics.EdgeInfo.EdgeType;
 import org.sosy_lab.cpachecker.cpa.usageStatistics.UsageInfo.Access;
+import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 
 @Options(prefix="cpa.usagestatistics")
@@ -270,37 +271,88 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     return locks;
   }
 
+  /*
+   * looks through all unsafe cases of current identifier and find the example of two lines with different locks, one of them must be 'write'
+   */
+  private Pair<UsageInfo, UsageInfo> findExamples(Identifier unsafeCase) throws HandleCodeException {
+    Set<UsageInfo> uinfo = Stat.get(unsafeCase);
+
+    for (UsageInfo info1 : uinfo) {
+      for (UsageInfo info2 : uinfo) {
+        if ((info1.getAccess() == Access.WRITE || info2.getAccess() == Access.WRITE) && !info1.intersect(info2)) {
+          return Pair.of(info1, info2);
+        }
+      }
+    }
+    throw new HandleCodeException("Can't find example of unsafe cases");
+  }
+
   private void printUnsafeCases(String comment, Collection<Identifier> identifiers, boolean details) {
   writer.println("-------------------------------------------------");
   writer.println("");
-
-  int local = 0, global = 0,/* structures = 0,*/ fields = 0;
+  Collection<Identifier> global = new HashSet<Identifier>();
+  Collection<Identifier> local = new HashSet<Identifier>();
+  Collection<Identifier> fields = new HashSet<Identifier>();
+  Pair<UsageInfo, UsageInfo> example;
 
   for (Identifier id : identifiers) {
     if (id instanceof GlobalVariableIdentifier)
-      global++;
+      global.add(id);
     else if (id instanceof LocalVariableIdentifier)
-      local++;
+      local.add(id);
    /* else if (id instanceof StructureIdentifier)
       structures++;*/
     else if (id instanceof StructureFieldIdentifier)
-      fields++;
+      fields.add(id);
   }
 
   writer.println(comment);
   writer.println("Total unsafe cases:     " + identifiers.size());
-  writer.println("--Global:               " + global);
-  writer.println("--Local:                " + local);
+  writer.println("--Global:               " + global.size());
+  writer.println("--Local:                " + local.size());
   //writer.println("--Structures:           " + structures);
-  writer.println("--Structure fields:     " + fields);
+  writer.println("--Structure fields:     " + fields.size());
   writer.println("");
 
   if (details && identifiers.size() > 0){
     int counter = 1;
-    for (Identifier id : identifiers) {
+    writer.println("");
+    writer.println("Global variables");
+    for (Identifier id : global) {
       writer.println("");
       writer.println(counter + ") "+ id.toString());
       writer.println("    |- Unique usages: " + Stat.get(id).size());
+      writer.println("    |- Two examples:");
+      try {
+        example = findExamples(id);
+        writer.println("    " + example.getFirst().toString());
+        writer.println("    " + example.getSecond().toString());
+      } catch (HandleCodeException e) {
+        writer.println(e.getMessage());
+      }
+      writer.println("    [");
+      writer.println("    ");
+      for (UsageInfo uinfo : Stat.get(id))
+        writer.println(uinfo.toString());
+      writer.println("    ]");
+      counter++;
+      writer.println("_____________________________________________");
+    }
+    writer.println("---------------------------------------------");
+    writer.println("");
+    writer.println("Local variables");
+    for (Identifier id : local) {
+      writer.println("");
+      writer.println(counter + ") "+ id.toString());
+      writer.println("    |- Unique usages: " + Stat.get(id).size());
+      writer.println("    |- Two examples:");
+      try {
+        example = findExamples(id);
+        writer.println("    " + example.getFirst().toString());
+        writer.println("    " + example.getSecond().toString());
+      } catch (HandleCodeException e) {
+        writer.println(e.getMessage());
+      }
       writer.println("    [");
       for (UsageInfo uinfo : Stat.get(id))
         writer.println(uinfo.toString());
@@ -308,6 +360,30 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       counter++;
       writer.println("_____________________________________________");
     }
+    writer.println("---------------------------------------------");
+    writer.println("");
+    writer.println("Structure fields");
+    for (Identifier id : fields) {
+      writer.println("");
+      writer.println(counter + ") "+ id.toString());
+      writer.println("    |- Unique usages: " + Stat.get(id).size());
+      writer.println("    |- Two examples:");
+      try {
+        example = findExamples(id);
+        writer.println("    " + example.getFirst().toString());
+        writer.println("    " + example.getSecond().toString());
+        writer.println("____");
+      } catch (HandleCodeException e) {
+        writer.println(e.getMessage());
+      }
+      writer.println("    [");
+      for (UsageInfo uinfo : Stat.get(id))
+        writer.println(uinfo.toString());
+      writer.println("    ]");
+      counter++;
+      writer.println("_____________________________________________");
+    }
+    writer.println("---------------------------------------------");
     writer.println("");
   }
 }

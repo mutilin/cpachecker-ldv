@@ -37,7 +37,7 @@ import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
-import org.sosy_lab.cpachecker.exceptions.StopRecursionException;
+import org.sosy_lab.cpachecker.exceptions.StopAnalysisException;
 
 @Options(prefix="cpa.callstack")
 public class CallstackTransferRelation implements TransferRelation {
@@ -75,7 +75,7 @@ public class CallstackTransferRelation implements TransferRelation {
             //return Collections.singleton(element);
             //break;
             if (counter > depth)
-              throw new StopRecursionException("recursion", pCfaEdge);
+              throw new StopAnalysisException("Recursion skipped " + functionName);
           }
           e = e.getPreviousState();
         }

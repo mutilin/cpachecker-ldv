@@ -84,7 +84,7 @@ import org.sosy_lab.cpachecker.cpa.functionpointercreate.FunctionPointerCreateSt
 import org.sosy_lab.cpachecker.cpa.functionpointercreate.FunctionPointerCreateState.NamedFunctionTarget;
 import org.sosy_lab.cpachecker.cpa.functionpointercreate.FunctionPointerCreateState.UnknownTarget;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
-import org.sosy_lab.cpachecker.exceptions.StopRecursionException;
+import org.sosy_lab.cpachecker.exceptions.StopAnalysisException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCCodeException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCFAEdgeException;
 
@@ -134,11 +134,11 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
           try{
             getAbstractSuccessorForEdge(oldState, pPrecision, edge, results);
           }
-          catch (StopRecursionException e) {
+          catch (StopAnalysisException e) {
             /*
              * Recursion
              */
-            //System.out.println("Recursion skipped: " +edge.getPredecessor().getNodeNumber() + " \"" + edge.getCode()+"\"\t" +"(" + edge.getLineNumber() + ")");
+            System.out.println(e.getMessage());
 
             assert (edge instanceof CFunctionCallEdge);
 
@@ -159,7 +159,7 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
             */
             newEdge = new BlankEdge(edge.getRawStatement(),
                 edge.getLineNumber(), edge.getPredecessor(), sEdge.getSuccessor(),
-                "recursion edge");
+                "new edge");
             getAbstractSuccessorForEdge(oldState, pPrecision, newEdge, results);
             //CFACreationUtils.removeEdgeFromNodes(newEdge);
           }
@@ -171,11 +171,11 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
       try{
         getAbstractSuccessorForEdge(oldState, pPrecision, pCfaEdge, results);
       }
-      catch (StopRecursionException e) {
+      catch (StopAnalysisException e) {
         /*
          * Recursion
          */
-        //System.out.println("Recursion skipped: " +pCfaEdge.getPredecessor().getNodeNumber() + " \"" + pCfaEdge.getCode()+"\"\t" +"(" + pCfaEdge.getLineNumber() + ")");
+        System.out.println(e.getMessage());
         assert (pCfaEdge instanceof CFunctionCallEdge);
 
         CFunctionSummaryEdge sEdge = ((CFunctionCallEdge)pCfaEdge).getSummaryEdge();
@@ -195,7 +195,7 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
         */
         newEdge = new BlankEdge(pCfaEdge.getRawStatement(),
             pCfaEdge.getLineNumber(), pCfaEdge.getPredecessor(), sEdge.getSuccessor(),
-            "recursion edge");
+            "new edge");
         getAbstractSuccessorForEdge(oldState, pPrecision, newEdge, results);
         //CFACreationUtils.removeEdgeFromNodes(newEdge);
       }

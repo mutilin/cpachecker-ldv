@@ -21,42 +21,16 @@
  *  CPAchecker web page:
  *    http://cpachecker.sosy-lab.org
  */
-package org.sosy_lab.cpachecker.cpa.lockStatistics;
+package org.sosy_lab.cpachecker.exceptions;
 
 
-public class LockStatisticsMutex {
 
-  private String name;
-  private int line;
+public class StopAnalysisException extends HandleCodeException {
 
-  LockStatisticsMutex(String n, int l) {
-    name = n;
-    line = l;
+  private static final long serialVersionUID = -6559132286640085407L;
+
+  public StopAnalysisException(String pMsg) {
+    super(pMsg);
   }
 
-  public String getName() {
-    return name;
-  }
-
-  public int getLine() {
-    return line;
-  }
-
-  @Override
-  public boolean equals(Object mutex) {
-    if (mutex instanceof LockStatisticsMutex)
-      return (name.equals(((LockStatisticsMutex)mutex).name));
-    else
-      return false;
-  }
-
-  @Override
-  public int hashCode() {
-    return name.hashCode();
-  }
-
-  @Override
-  public String toString() {
-    return name + "(" + line + " line)";
-  }
 }

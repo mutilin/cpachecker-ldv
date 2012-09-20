@@ -26,10 +26,10 @@ package org.sosy_lab.cpachecker.cpa.usageStatistics;
 
 public class CodeCoveringEmpty implements CodeCovering{
 
-  @Override
+  /*@Override
   public void addFunction(int pLine, String pFunctionName) {
     // Empty functions
-  }
+  }*/
 
   @Override
   public void addFunctionUsage(String pFunctionName) {
@@ -37,11 +37,11 @@ public class CodeCoveringEmpty implements CodeCovering{
 
   }
 
-  @Override
+  /*@Override
   public void addLine(int pLine) {
     // Empty function
 
-  }
+  }*/
 
   @Override
   public void generate() {
@@ -49,10 +49,10 @@ public class CodeCoveringEmpty implements CodeCovering{
 
   }
 
-  @Override
+  /*@Override
   public void addException(int pLine) {
     // Empty function
 
-  }
+  }*/
 
 }

@@ -25,7 +25,6 @@ package org.sosy_lab.cpachecker.cpa.lockStatistics;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -33,14 +32,10 @@ import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
-import org.sosy_lab.cpachecker.cfa.ast.c.CVariableDeclaration;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
-import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
-import org.sosy_lab.cpachecker.cfa.types.c.CNamedType;
-import org.sosy_lab.cpachecker.cfa.types.c.CType;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
@@ -51,7 +46,7 @@ import org.sosy_lab.cpachecker.exceptions.UnrecognizedCFAEdgeException;
 @Options(prefix="cpa.lockStatistics")
 public class LockStatisticsTransferRelation implements TransferRelation
 {
-  private final Set<String> globalMutex = new HashSet<String>();
+  //private final Set<String> globalMutex = new HashSet<String>();
 
   @Option(name="lockfunctions",
       description="functions, that locks synchronization primitives")
@@ -123,11 +118,8 @@ public class LockStatisticsTransferRelation implements TransferRelation
     case BlankEdge:
     case AssumeEdge:
     case ReturnStatementEdge:
-      return element.clone();
-
     case DeclarationEdge:
-      CDeclarationEdge declarationEdge = (CDeclarationEdge) cfaEdge;
-      return handleDeclaration(element.clone(), declarationEdge, precision, cfaEdge.getLineNumber());
+      return element.clone();
 
     case MultiEdge:
       LockStatisticsState tmpElement = element.clone();
@@ -140,26 +132,6 @@ public class LockStatisticsTransferRelation implements TransferRelation
     default:
       throw new UnrecognizedCFAEdgeException(cfaEdge);
     }
-  }
-
-  private LockStatisticsState handleDeclaration(LockStatisticsState newElement, CDeclarationEdge declarationEdge, LockStatisticsPrecision precision, int line)
-      throws UnrecognizedCCodeException {
-
-      if (!(declarationEdge.getDeclaration() instanceof CVariableDeclaration)) {
-        return newElement;
-      }
-
-      CVariableDeclaration decl = (CVariableDeclaration)declarationEdge.getDeclaration();
-
-      String varName = decl.getName();
-      CType type = decl.getType();
-
-      if(decl.isGlobal() && type instanceof CNamedType &&
-          ((CNamedType)type).getName().contentEquals("mutex")) {
-        globalMutex.add(varName);
-        return newElement;
-      }
-      return newElement;
   }
 
   @Override

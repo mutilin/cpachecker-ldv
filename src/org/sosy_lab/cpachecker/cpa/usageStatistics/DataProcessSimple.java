@@ -28,9 +28,11 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+import org.sosy_lab.cpachecker.cpa.usageStatistics.UsageInfo.Access;
+
 /**
  * This class implements simple analysis, when all lines are compared
- * pairwise only with set of mutexes, and all different ones are written
+ * pairwise only with set of locks, and all different ones are written
  * in statistics
  */
 
@@ -38,10 +40,11 @@ public class DataProcessSimple implements DataProcessing{
 
   @Override
   public Collection<Identifier> process(Map<Identifier, Set<UsageInfo>> stat) {
+
     Collection<Identifier> unsafe = new HashSet<Identifier>();
+    Collection<Identifier> toDelete = new HashSet<Identifier>();
 
 nextId:for (Identifier id : stat.keySet()) {
-
       Set<UsageInfo> uset = stat.get(id);
       for (UsageInfo uinfo : uset) {
         for (UsageInfo uinfo2 : uset) {
@@ -52,7 +55,22 @@ nextId:for (Identifier id : stat.keySet()) {
         }
       }
     }
+    //now we should check, that all unsafe cases have at least one write access
+next:for (Identifier id : unsafe) {
+      Set<UsageInfo> uset = stat.get(id);
+      for (UsageInfo uinfo : uset) {
+        if (uinfo.getAccess() == Access.WRITE && uinfo.getCallStack().getDepth() > 1)
+          continue next;
+      }
+      //no write access
+      //we couldn't delete from unsafe here, because we use it in cycle for
+      toDelete.add(id);
+    }
 
+    //deleting
+    for (Identifier id : toDelete) {
+      unsafe.remove(id);
+    }
     return unsafe;
   }
 
