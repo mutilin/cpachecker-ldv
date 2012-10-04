@@ -23,10 +23,18 @@
  */
 package org.sosy_lab.cpachecker.cpa.usageStatistics;
 
+import org.sosy_lab.cpachecker.cfa.types.c.CType;
+
+
 
 public class StructureFieldIdentifier extends VariableIdentifier{
   private String fieldType;
-  public StructureFieldIdentifier(String pNm, String pTp, String Ftype, boolean ref) {
+  public StructureFieldIdentifier(String pNm, CType pTp, String Ftype, Ref ref) {
+    super(pNm, pTp, ref);
+    fieldType = Ftype;
+  }
+
+  public StructureFieldIdentifier(String pNm, CType pTp, String Ftype, int ref) {
     super(pNm, pTp, ref);
     fieldType = Ftype;
   }
@@ -58,6 +66,27 @@ public class StructureFieldIdentifier extends VariableIdentifier{
 
   @Override
   public String toString() {
-    return (isDereference ? "*" : "") + name + "\n    |- Structure field\n    |- Structure type: " + type + "\n    |- Field type: "+ fieldType;
+    String info = "";
+
+    if (status == Ref.ADRESS)
+      info += "&" + name;
+    else if (status == Ref.VARIABLE)
+      info += name;
+    else if (status == Ref.REFERENCE)
+      info += "*" + name;
+    else
+      info += name;
+
+    String typeName = type.toASTString("");
+    typeName = typeName.replaceAll("\n", "");
+    typeName = typeName.replaceAll("\\{.*\\} ", ""); //for long structions
+
+
+    return info + "\n    |- Structure field\n    |- Structure type: " + typeName + "\n    |- Field type: "+ fieldType;
+  }
+
+  @Override
+  public StructureFieldIdentifier clone() {
+    return new StructureFieldIdentifier(name, type, fieldType, status);
   }
 }

@@ -52,7 +52,7 @@ public interface CodeCovering {
    * Marks line, as exception. Needs to show it white color, f.e. declarations
    * @param line
    */
-  //public void addException(int line);
+  public void addException(int line);
 
   /**
    * Generate file and finish work

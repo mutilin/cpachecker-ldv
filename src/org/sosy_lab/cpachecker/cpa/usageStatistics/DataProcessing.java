@@ -39,7 +39,7 @@ public interface DataProcessing {
    * @param variables - all collected variables
    * @return collection of unsafe variables
    */
-  public Collection<Identifier> process(Map<Identifier, Set<UsageInfo>> variables);
+  public Collection<VariableIdentifier> process(Map<VariableIdentifier, Set<UsageInfo>> variables);
 
   /**
    * function to get simple description, its useful to write it in

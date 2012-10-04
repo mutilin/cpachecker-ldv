@@ -21,48 +21,26 @@
  *  CPAchecker web page:
  *    http://cpachecker.sosy-lab.org
  */
-package org.sosy_lab.cpachecker.cpa.lockStatistics;
-
-import org.sosy_lab.cpachecker.cpa.usageStatistics.LineInfo;
+package org.sosy_lab.cpachecker.cpa.usageStatistics;
 
 
-public class LockStatisticsLock {
+public class ValueIdentifier implements Identifier {
 
-  public static enum LockType {
-    MUTEX,
-    GLOBAL_LOCK,
-    LOCAL_LOCK,
-    SPINLOCK;
+  private String value;
 
-    public String toASTString() {
-      return name().toLowerCase();
-    }
-  }
+  /*public ValueIdentifier() {
+    new ValueIdentifier("");
+  }*/
 
-  private String name;
-  private LineInfo line;
-  private LockType type;
-
-  LockStatisticsLock(String n, int l, LockType t) {
-    name = n;
-    line = new LineInfo(l);
-    type = t;
-  }
-
-  public String getName() {
-    return name;
-  }
-
-  public int getLine() {
-    return line.getLine();
+  public ValueIdentifier(String v) {
+    value = v;
   }
 
   @Override
   public int hashCode() {
     final int prime = 31;
     int result = 1;
-    result = prime * result + ((name == null) ? 0 : name.hashCode());
-    result = prime * result + ((type == null) ? 0 : type.hashCode());
+    result = prime * result + ((value == null) ? 0 : value.hashCode());
     return result;
   }
 
@@ -74,19 +52,22 @@ public class LockStatisticsLock {
       return false;
     if (getClass() != obj.getClass())
       return false;
-    LockStatisticsLock other = (LockStatisticsLock) obj;
-    if (name == null) {
-      if (other.name != null)
+    ValueIdentifier other = (ValueIdentifier) obj;
+    if (value == null) {
+      if (other.value != null)
         return false;
-    } else if (!name.equals(other.name))
-      return false;
-    if (type != other.type)
+    } else if (!value.equals(other.value))
       return false;
     return true;
   }
 
   @Override
   public String toString() {
-    return type.toASTString() + " "+ name + "(" + line.toString() + " line)";
+    return "Value is " + (value != null && value != "" ? "equal" + value : "empty");
+  }
+
+  @Override
+  public ValueIdentifier clone() {
+    return new ValueIdentifier(value);
   }
 }

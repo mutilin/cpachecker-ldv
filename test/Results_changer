@@ -1,0 +1,53 @@
+#!/usr/bin/perl -w
+
+use strict;
+
+my $results_fname = $ARGV[1] or die("File of results isn't specified"); 
+open(my $results_fh, "<", $results_fname) or die("Can't open file of results for read");
+open(my $new_results_fh, ">", "$results_fname.orig") or die("Can't open file for write");
+
+my %src_map;
+
+my $cil_fname = $ARGV[0];
+  
+open(my $cil_fh, "<", $cil_fname) or die("Can't open CIL file for read");
+
+my $src_cur = '';
+my $src_line_cur = 0;
+my $cil_line_cur = 1;
+
+while (<$cil_fh>)
+{
+  my $str = $_;
+
+  chomp($str);
+
+  if ($str =~ /^#line (\d+) "([^"]+)"$/)
+  {
+    $src_line_cur = $1;
+    $src_cur = $2;
+    $src_cur =~ s/^\/.+\/source\/(.+)/$1/g;
+    $src_cur =~ s/^\/.+\/oc2000-2.72.12\/(.+)/$1/g;
+  }
+  elsif ($str =~ /^#line (\d+)$/)
+  {
+    $src_line_cur = $1;
+  }
+  else
+  {
+    $src_map{$cil_line_cur} = {
+        'file' => $src_cur
+      , 'line' => $src_line_cur};
+    $src_line_cur++;
+  }
+  $cil_line_cur++;
+}
+
+while (<$results_fh>)
+{
+  my $str = $_;
+
+  $str =~ s/#([0-9]*)#/$1.", ".$src_map{$1}->{'file'}.":".$src_map{$1}->{'line'}/eg;
+
+  print($new_results_fh $str);
+}

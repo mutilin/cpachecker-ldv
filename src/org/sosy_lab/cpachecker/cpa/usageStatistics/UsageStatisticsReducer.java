@@ -42,12 +42,19 @@ public class UsageStatisticsReducer implements Reducer {
   @Override
   public AbstractState getVariableReducedState(AbstractState pExpandedElement,
                                           Block pContext, CFANode pLocation) {
+    //UsageStatisticsState funElement = (UsageStatisticsState)pExpandedElement;
+    //return funElement.clone(wrappedReducer.getVariableReducedState(funElement.getWrappedState(), pContext, pLocation));
     return pExpandedElement;
+
   }
 
   @Override
   public AbstractState getVariableExpandedState(AbstractState pRootElement,
                         Block pReducedContext, AbstractState pReducedElement) {
+    //UsageStatisticsState funRootState = (UsageStatisticsState)pRootElement;
+    //UsageStatisticsState funReducedState = (UsageStatisticsState)pReducedElement;
+
+    //return funReducedState.clone(wrappedReducer.getVariableExpandedState(funRootState.getWrappedState(), pReducedContext, funReducedState.getWrappedState()));
     return pRootElement;
   }
 
@@ -55,6 +62,7 @@ public class UsageStatisticsReducer implements Reducer {
   public Object getHashCodeForState(AbstractState pElementKey, Precision pPrecisionKey) {
     UsageStatisticsState funElement = (UsageStatisticsState)pElementKey;
     return wrappedReducer.getHashCodeForState(funElement.getWrappedState(), pPrecisionKey);
+    //return Pair.of(funElement.getMap(), wrappedReducer.getHashCodeForState(funElement.getWrappedState(), pPrecisionKey));
   }
 
   @Override

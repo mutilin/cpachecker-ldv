@@ -134,27 +134,28 @@ public class LockStatisticsState implements AbstractQueryableState, FormulaRepor
   }
 
   @Override
-  public boolean equals(Object other) {
-    if (this == other) {
-      return true;
-    }
-
-    if (other == null) {
-      return false;
-    }
-
-    if (!getClass().equals(other.getClass())) {
-      return false;
-    }
-
-    LockStatisticsState otherElement = (LockStatisticsState) other;
-
-    return otherElement.Locks.equals(Locks);
+  public int hashCode() {
+    final int prime = 31;
+    int result = 1;
+    result = prime * result + ((Locks == null) ? 0 : Locks.hashCode());
+    return result;
   }
 
   @Override
-  public int hashCode() {
-    return Locks.hashCode();
+  public boolean equals(Object obj) {
+    if (this == obj)
+      return true;
+    if (obj == null)
+      return false;
+    if (getClass() != obj.getClass())
+      return false;
+    LockStatisticsState other = (LockStatisticsState) obj;
+    if (Locks == null) {
+      if (other.Locks != null)
+        return false;
+    } else if (!Locks.equals(other.Locks))
+      return false;
+    return true;
   }
 
   @Override

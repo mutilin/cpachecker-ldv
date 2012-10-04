@@ -23,11 +23,20 @@
  */
 package org.sosy_lab.cpachecker.cpa.usageStatistics;
 
+import org.sosy_lab.cpachecker.cfa.types.c.CType;
+
+
+
 
 public class LocalVariableIdentifier extends VariableIdentifier{
   private String function;//function, where this variable was declarated
 
-  public LocalVariableIdentifier(String nm, String t, String func, boolean ref) {
+  public LocalVariableIdentifier(String nm, CType t, String func, Ref ref) {
+    super(nm, t, ref);
+    function = func;
+  }
+
+  public LocalVariableIdentifier(String nm, CType t, String func, int ref) {
     super(nm, t, ref);
     function = func;
   }
@@ -59,6 +68,26 @@ public class LocalVariableIdentifier extends VariableIdentifier{
 
   @Override
   public String toString() {
-    return (isDereference ? "*" : "") + name + "\n    |- Local\n    |- Type: " + type + "\n    |- Used in function " + function;
+    String info = "";
+
+    if (status == Ref.ADRESS)
+      info += "&" + name;
+    else if (status == Ref.VARIABLE)
+      info += name;
+    else if (status == Ref.REFERENCE)
+      info += "*" + name;
+    else
+      info += name;
+
+    String typeName = type.toASTString("");
+    typeName = typeName.replaceAll("\n", "");
+    typeName = typeName.replaceAll("\\{.*\\} ", ""); //for long structions
+
+    return info + "\n    |- Local\n    |- Type: " + typeName + "\n    |- Used in function " + function;
+  }
+
+  @Override
+  public LocalVariableIdentifier clone() {
+    return new LocalVariableIdentifier(name, type, function, status);
   }
 }

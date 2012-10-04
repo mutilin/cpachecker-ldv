@@ -49,10 +49,10 @@ public class CodeCoveringEmpty implements CodeCovering{
 
   }
 
-  /*@Override
+  @Override
   public void addException(int pLine) {
     // Empty function
 
-  }*/
+  }
 
 }

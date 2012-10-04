@@ -23,15 +23,41 @@
  */
 package org.sosy_lab.cpachecker.cpa.usageStatistics;
 
+import org.sosy_lab.cpachecker.cfa.types.c.CType;
+
+
 
 public class GlobalVariableIdentifier extends VariableIdentifier{
 
-  public GlobalVariableIdentifier(String nm, String t, boolean ref) {
+  public GlobalVariableIdentifier(String nm, CType t, Ref ref) {
+    super(nm, t, ref);
+  }
+
+  public GlobalVariableIdentifier(String nm, CType t, int ref) {
     super(nm, t, ref);
   }
 
   @Override
   public String toString() {
-    return (isDereference ? "*" : "") + name + "\n    |- Global\n    |- Type: " + type;
+    String info = "";
+
+    if (status == Ref.ADRESS)
+      info += "&" + name;
+    else if (status == Ref.VARIABLE)
+      info += name;
+    else if (status == Ref.REFERENCE)
+      info += "*" + name;
+    else
+      info += name;
+    String typeName = type.toASTString("");
+    typeName = typeName.replaceAll("\n", "");
+    typeName = typeName.replaceAll("\\{.*\\} ", ""); //for long structions
+
+    return info + "\n    |- Global\n    |- Type: " + typeName;
+  }
+
+  @Override
+  public GlobalVariableIdentifier clone() {
+    return new GlobalVariableIdentifier(name, type, status);
   }
 }

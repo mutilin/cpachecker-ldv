@@ -33,7 +33,11 @@ public class LineInfo {
 
   @Override
   public String toString() {
-    return Integer.toString(line);
+    return "#"+Integer.toString(line)+"#";
+  }
+
+  public int getLine() {
+    return line;
   }
 
   @Override

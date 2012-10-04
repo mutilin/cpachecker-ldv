@@ -37,7 +37,13 @@ class UsageStatisticsDomain implements AbstractDomain {
 
   @Override
   public AbstractState join(AbstractState pElement1, AbstractState pElement2) {
-    throw new UnsupportedOperationException();
+    //if (pElement1.getClass() != UsageStatisticsState.class || pElement2.getClass() != UsageStatisticsState.class)
+      throw new UnsupportedOperationException();
+
+    /*UsageStatisticsState state1 = (UsageStatisticsState) pElement1;
+    UsageStatisticsState state2 = (UsageStatisticsState) pElement2;
+
+    return state1.join(state2);*/
   }
 
   @Override
@@ -47,6 +53,7 @@ class UsageStatisticsDomain implements AbstractDomain {
     UsageStatisticsState elem1 = (UsageStatisticsState) pElement1;
     UsageStatisticsState elem2 = (UsageStatisticsState) pElement2;
 
-    return wrappedDomain.isLessOrEqual(elem1.getWrappedState(), elem2.getWrappedState());
+    return (wrappedDomain.isLessOrEqual(elem1.getWrappedState(), elem2.getWrappedState()) &&
+        elem1.isLessOrEqual(elem2));
   }
 }

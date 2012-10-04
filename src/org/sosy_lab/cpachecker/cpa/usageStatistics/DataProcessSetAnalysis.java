@@ -35,8 +35,8 @@ import org.sosy_lab.cpachecker.cpa.lockStatistics.LockStatisticsLock;
 public class DataProcessSetAnalysis implements DataProcessing{
 
   @Override
-  public Collection<Identifier> process(Map<Identifier, Set<UsageInfo>> variables) {
-    Collection<Identifier> unsafe = new HashSet<Identifier>();
+  public Collection<VariableIdentifier> process(Map<VariableIdentifier, Set<UsageInfo>> variables) {
+    Collection<VariableIdentifier> unsafe = new HashSet<VariableIdentifier>();
     Map<Integer, Set<Set<LockStatisticsLock>>> Cases = new HashMap<Integer, Set<Set<LockStatisticsLock>>>();
 /*
     for (String name : variables.keySet()) {

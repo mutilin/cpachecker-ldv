@@ -84,7 +84,7 @@ public class UsageInfo {
     final int prime = 31;
     int result = 1;
     result = prime * result + ((accessType == null) ? 0 : accessType.hashCode());
-    result = prime * result + ((callstack == null) ? 0 : callstack.hashCode());
+    //result = prime * result + ((callstack == null) ? 0 : callstack.hashCode());
     result = prime * result + ((line == null) ? 0 : line.hashCode());
     result = prime * result + ((locks == null) ? 0 : locks.hashCode());
     result = prime * result + ((info == null) ? 0 : info.hashCode());
@@ -102,11 +102,11 @@ public class UsageInfo {
     UsageInfo other = (UsageInfo) obj;
     if (accessType != other.accessType)
       return false;
-    if (callstack == null) {
+    /*if (callstack == null) {
       if (other.callstack != null)
         return false;
     } else if (!callstack.equals(other.callstack))
-      return false;
+      return false;*/
     if (line == null) {
       if (other.line != null)
         return false;
@@ -136,19 +136,19 @@ public class UsageInfo {
     sb.append(accessType.toASTString());
     //sb.append(" in " + info.toString());
 
-    sb.append("\n        Call stack: ");
+    sb.append("\n        Call stack: \n");
 
     CallstackState e = callstack;
     while (e != null) {
-      String lineN = "-";
+      LineInfo lineN = null;
       for (int i = 0; i < e.getCallNode().getNumLeavingEdges(); i++) {
         CFAEdge edge = e.getCallNode().getLeavingEdge(i);
         if (edge.getEdgeType() == CFAEdgeType.FunctionCallEdge) {
-          lineN = Integer.toString(edge.getLineNumber());
+          lineN = new LineInfo(edge.getLineNumber());
           break;
         }
       }
-      sb.append(e.getCurrentFunction() + "(" + lineN + ")" + " <- ");
+      sb.append("        " + e.getCurrentFunction() + "(" + (lineN != null ? lineN.toString() : "-") + ")" + " <- \n");
       e = e.getPreviousState();
     }
     if (callstack != null)

@@ -39,12 +39,12 @@ import org.sosy_lab.cpachecker.cpa.usageStatistics.UsageInfo.Access;
 public class DataProcessSimple implements DataProcessing{
 
   @Override
-  public Collection<Identifier> process(Map<Identifier, Set<UsageInfo>> stat) {
+  public Collection<VariableIdentifier> process(Map<VariableIdentifier, Set<UsageInfo>> stat) {
 
-    Collection<Identifier> unsafe = new HashSet<Identifier>();
-    Collection<Identifier> toDelete = new HashSet<Identifier>();
+    Collection<VariableIdentifier> unsafe = new HashSet<VariableIdentifier>();
+    Collection<VariableIdentifier> toDelete = new HashSet<VariableIdentifier>();
 
-nextId:for (Identifier id : stat.keySet()) {
+nextId:for (VariableIdentifier id : stat.keySet()) {
       Set<UsageInfo> uset = stat.get(id);
       for (UsageInfo uinfo : uset) {
         for (UsageInfo uinfo2 : uset) {
@@ -56,10 +56,10 @@ nextId:for (Identifier id : stat.keySet()) {
       }
     }
     //now we should check, that all unsafe cases have at least one write access
-next:for (Identifier id : unsafe) {
+next:for (VariableIdentifier id : unsafe) {
       Set<UsageInfo> uset = stat.get(id);
       for (UsageInfo uinfo : uset) {
-        if (uinfo.getAccess() == Access.WRITE && uinfo.getCallStack().getDepth() > 1)
+        if (uinfo.getAccess() == Access.WRITE /*&& uinfo.getCallStack().getDepth() > 1*/)
           continue next;
       }
       //no write access
@@ -68,7 +68,7 @@ next:for (Identifier id : unsafe) {
     }
 
     //deleting
-    for (Identifier id : toDelete) {
+    for (VariableIdentifier id : toDelete) {
       unsafe.remove(id);
     }
     return unsafe;

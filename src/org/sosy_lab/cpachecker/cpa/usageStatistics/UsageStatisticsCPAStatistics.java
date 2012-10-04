@@ -30,6 +30,7 @@ import java.io.PrintWriter;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -39,7 +40,6 @@ import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
@@ -47,12 +47,13 @@ import org.sosy_lab.cpachecker.cpa.lockStatistics.LockStatisticsLock;
 import org.sosy_lab.cpachecker.cpa.lockStatistics.LockStatisticsState;
 import org.sosy_lab.cpachecker.cpa.usageStatistics.EdgeInfo.EdgeType;
 import org.sosy_lab.cpachecker.cpa.usageStatistics.UsageInfo.Access;
+import org.sosy_lab.cpachecker.cpa.usageStatistics.VariableIdentifier.Ref;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 
 @Options(prefix="cpa.usagestatistics")
 public class UsageStatisticsCPAStatistics implements Statistics {
-  private Map<Identifier, Set<UsageInfo>> Stat;
+  private Map<VariableIdentifier, Set<UsageInfo>> Stat;
   private int FullCounter = 0;
   private int skippedCases = 0;
 
@@ -75,7 +76,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   private boolean onlypointers = true;
 
   UsageStatisticsCPAStatistics(Configuration config, CodeCovering cover) throws InvalidConfigurationException{
-    Stat = new HashMap<Identifier, Set<UsageInfo>>();
+    Stat = new HashMap<VariableIdentifier, Set<UsageInfo>>();
     config.inject(this);
 
     if (process.equals("SIMPLE"))
@@ -90,9 +91,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
   }
 
-  public void add(Set<Pair<Identifier, Access>> result, AbstractState state, int line, EdgeType type) {
+  public void add(List<Pair<VariableIdentifier, Access>> result, UsageStatisticsState state, int line, EdgeType type) {
     Set<UsageInfo> uset;
-    Identifier id;
+    VariableIdentifier id;
 
     LockStatisticsState lockState = AbstractStates.extractStateByType(state, LockStatisticsState.class);
     CallstackState callstackState = AbstractStates.extractStateByType(state, CallstackState.class);
@@ -100,14 +101,17 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     LineInfo lineInfo = new LineInfo(line);
     EdgeInfo info = new EdgeInfo(type);
 
-    for (Pair<Identifier, Access> tmpPair : result) {
+    for (Pair<VariableIdentifier, Access> tmpPair : result) {
       FullCounter++;
-      UsageInfo usage = new UsageInfo(tmpPair.getSecond(), lineInfo, info, lockState, callstackState);
       id = tmpPair.getFirst();
+      while (id != null && id.getStatus() == Ref.REFERENCE && state.contains(id.makeVariable())) {
+        id = state.get(id.makeVariable());
+      }
       if (id == null) {
         skippedCases++;
         continue;
       }
+      UsageInfo usage = new UsageInfo(tmpPair.getSecond(), lineInfo, info, lockState, callstackState);
 
       if (!Stat.containsKey(id)) {
         uset = new HashSet<UsageInfo>();
@@ -287,112 +291,103 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     throw new HandleCodeException("Can't find example of unsafe cases");
   }
 
-  private void printUnsafeCases(String comment, Collection<Identifier> identifiers, boolean details) {
+private void printCases(String comment, Collection<VariableIdentifier> identifiers) {
   writer.println("-------------------------------------------------");
   writer.println("");
-  Collection<Identifier> global = new HashSet<Identifier>();
-  Collection<Identifier> local = new HashSet<Identifier>();
-  Collection<Identifier> fields = new HashSet<Identifier>();
-  Pair<UsageInfo, UsageInfo> example;
+  Collection<VariableIdentifier> global = new HashSet<VariableIdentifier>();
+  Collection<VariableIdentifier> local = new HashSet<VariableIdentifier>();
+  Collection<VariableIdentifier> fields = new HashSet<VariableIdentifier>();
+  //Collection<Identifier> alreadyPrinted = new HashSet<Identifier>();
 
-  for (Identifier id : identifiers) {
-    if (id instanceof GlobalVariableIdentifier)
-      global.add(id);
-    else if (id instanceof LocalVariableIdentifier)
-      local.add(id);
-   /* else if (id instanceof StructureIdentifier)
-      structures++;*/
-    else if (id instanceof StructureFieldIdentifier)
-      fields.add(id);
+
+  for (VariableIdentifier id : identifiers) {
+    if (id.getStatus() == Ref.VARIABLE || !identifiers.contains(id.makeVariable())) {
+      if (id instanceof GlobalVariableIdentifier)
+        global.add(id);
+      else if (id instanceof LocalVariableIdentifier)
+        local.add(id);
+     /* else if (id instanceof StructureIdentifier)
+        structures++;*/
+      else if (id instanceof StructureFieldIdentifier)
+        fields.add(id);
+    }
   }
 
   writer.println(comment);
-  writer.println("Total unsafe cases:     " + identifiers.size());
+  writer.println("Total cases:            " + (global.size() + local.size() + fields.size()));
   writer.println("--Global:               " + global.size());
   writer.println("--Local:                " + local.size());
   //writer.println("--Structures:           " + structures);
   writer.println("--Structure fields:     " + fields.size());
   writer.println("");
+  writer.println("-------------------------------------------------");
 
-  if (details && identifiers.size() > 0){
-    int counter = 1;
-    writer.println("");
-    writer.println("Global variables");
-    for (Identifier id : global) {
+  int counter = 1;
+  counter = printCollection("Global variables", global, counter, identifiers);
+  counter = printCollection("Local variables", local, counter, identifiers);
+  counter = printCollection("Structure fields", fields, counter, identifiers);
+}
+  private int printCollection(String description, Collection<VariableIdentifier> identifiers, int counter,
+                              Collection<VariableIdentifier> allIdentifiers) {
+    if (identifiers.size() > 0) {
       writer.println("");
-      writer.println(counter + ") "+ id.toString());
-      writer.println("    |- Unique usages: " + Stat.get(id).size());
-      writer.println("    |- Two examples:");
-      try {
-        example = findExamples(id);
-        writer.println("    " + example.getFirst().toString());
-        writer.println("    " + example.getSecond().toString());
-      } catch (HandleCodeException e) {
-        writer.println(e.getMessage());
+      writer.println(description);
+      writer.println("________________");
+      for (VariableIdentifier id : identifiers) {
+        writer.println("");
+        writer.println(counter + ") "+ id.toString());
+        printId(id, allIdentifiers.contains(id.makeReference()));
+        counter++;
+        writer.println("_____________________________________________");
       }
+      writer.println("---------------------------------------------");
+      writer.println("");
+    }
+    return counter;
+  }
+
+  private void printExample(VariableIdentifier id) {
+    Pair<UsageInfo, UsageInfo> example;
+
+    writer.println("    |- Two examples:");
+    try {
+      example = findExamples(id);
+      writer.println("    " + example.getFirst().toString());
+      writer.println("    " + example.getSecond().toString());
+    } catch (HandleCodeException e) {
+      writer.println(e.getMessage());
+    }
+  }
+
+  private void printId(VariableIdentifier id, boolean ref) {
+    writer.println("    |- Unique usages: " + Stat.get(id).size());
+    printExample(id);
+    writer.println("    [");
+    writer.println("    ");
+    for (UsageInfo uinfo : Stat.get(id))
+      writer.println(uinfo.toString());
+    writer.println("    ]");
+
+    if (ref && id.getStatus() == Ref.VARIABLE) {
+      VariableIdentifier refId = id.makeReference();
+      writer.println("");
+      writer.println("    " + refId.getName());
+      writer.println("    |- Unique usages: " + Stat.get(refId).size());
+      printExample(id);
       writer.println("    [");
       writer.println("    ");
-      for (UsageInfo uinfo : Stat.get(id))
+      for (UsageInfo uinfo : Stat.get(refId))
         writer.println(uinfo.toString());
       writer.println("    ]");
-      counter++;
-      writer.println("_____________________________________________");
     }
-    writer.println("---------------------------------------------");
-    writer.println("");
-    writer.println("Local variables");
-    for (Identifier id : local) {
-      writer.println("");
-      writer.println(counter + ") "+ id.toString());
-      writer.println("    |- Unique usages: " + Stat.get(id).size());
-      writer.println("    |- Two examples:");
-      try {
-        example = findExamples(id);
-        writer.println("    " + example.getFirst().toString());
-        writer.println("    " + example.getSecond().toString());
-      } catch (HandleCodeException e) {
-        writer.println(e.getMessage());
-      }
-      writer.println("    [");
-      for (UsageInfo uinfo : Stat.get(id))
-        writer.println(uinfo.toString());
-      writer.println("    ]");
-      counter++;
-      writer.println("_____________________________________________");
-    }
-    writer.println("---------------------------------------------");
-    writer.println("");
-    writer.println("Structure fields");
-    for (Identifier id : fields) {
-      writer.println("");
-      writer.println(counter + ") "+ id.toString());
-      writer.println("    |- Unique usages: " + Stat.get(id).size());
-      writer.println("    |- Two examples:");
-      try {
-        example = findExamples(id);
-        writer.println("    " + example.getFirst().toString());
-        writer.println("    " + example.getSecond().toString());
-        writer.println("____");
-      } catch (HandleCodeException e) {
-        writer.println(e.getMessage());
-      }
-      writer.println("    [");
-      for (UsageInfo uinfo : Stat.get(id))
-        writer.println(uinfo.toString());
-      writer.println("    ]");
-      counter++;
-      writer.println("_____________________________________________");
-    }
-    writer.println("---------------------------------------------");
-    writer.println("");
   }
-}
-
 
   @Override
   public void printStatistics(PrintStream out, Result result, ReachedSet reached) {
 
-    int global = 0, local = 0, counter = 0,/* structures = 0,*/ fields = 0;
+    Collection<VariableIdentifier> global = new HashSet<VariableIdentifier>();
+    Collection<VariableIdentifier> local = new HashSet<VariableIdentifier>();
+    Collection<VariableIdentifier> fields = new HashSet<VariableIdentifier>();
 
     try {
       file = new FileOutputStream (FileName);
@@ -401,30 +396,31 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     catch(FileNotFoundException e)
     {
       System.out.println("Cannot open file " + FileName);
-      System.exit(0);
+      return;
     }
 
-    for (Identifier id : Stat.keySet()){
-      Set<UsageInfo> uset = Stat.get(id);
+    int counter = 0;
 
-      counter += uset.size();
-      if (id instanceof GlobalVariableIdentifier)
-        global++;
+    for (VariableIdentifier id : Stat.keySet()) {
+      counter += Stat.get(id).size();
+
+      if (id.getStatus() == Ref.VARIABLE || !Stat.keySet().contains(id.makeVariable())) {
+        if (id instanceof GlobalVariableIdentifier)
+        global.add(id);
       else if (id instanceof LocalVariableIdentifier)
-        local++;
-      /*else if (id instanceof StructureIdentifier)
-        structures++;*/
+        local.add(id);
       else if (id instanceof StructureFieldIdentifier)
-        fields++;
+        fields.add(id);
+      }
     }
 
     writer.println("General statistics");
     writer.println("");
-    writer.println("Total variables:        " + Stat.size());
-    writer.println("--Global:               " + global);
-    writer.println("--Local:                " + local);
+    writer.println("Total variables:        " + (global.size() + local.size() + fields.size()));
+    writer.println("--Global:               " + global.size());
+    writer.println("--Local:                " + local.size());
     //writer.println("--Structures:           " + structures);
-    writer.println("--Structure fields:     " + fields);
+    writer.println("--Structure fields:     " + fields.size());
     writer.println("");
 
     writer.println("Total usages:           " + FullCounter);
@@ -440,32 +436,15 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       writer.println("  " + mutexes.toString());
 
 
-    Collection<Identifier> unsafeCases = dataProcess.process(Stat);
-    printUnsafeCases(dataProcess.getDescription(), unsafeCases, true);
+    Collection<VariableIdentifier> unsafeCases = dataProcess.process(Stat);
+    printCases(dataProcess.getDescription(), unsafeCases);
 
     /*unsafeCases = FindDifferentSets(Stat);
     printUnsafeCases("Lines with different sets of mutexes were printed", unsafeCases, true);
 */
 
     if (fullstatistics) {
-      writer.println("");
-      writer.println("=============================================");
-      writer.println("");
-      writer.println("Full statistics");
-      writer.println("");
-      counter = 1;
-      for (Identifier id : Stat.keySet()) {
-        writer.println("");
-        writer.println(counter + ") " + id.toString());
-        writer.println("    |- Unique usages: " + Stat.get(id).size());
-        writer.println("      [");
-        for (UsageInfo uinfo : Stat.get(id))
-          writer.println(uinfo.toString());
-        writer.println("      ]");
-        counter++;
-        writer.println("_____________________________________________");
-      }
-      writer.println("");
+      printCases("Full statistics", Stat.keySet());
     }
 
     if(file != null)

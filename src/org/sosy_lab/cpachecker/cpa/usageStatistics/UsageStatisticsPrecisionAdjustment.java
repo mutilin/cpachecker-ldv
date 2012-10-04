@@ -66,7 +66,7 @@ class UsageStatisticsPrecisionAdjustment implements PrecisionAdjustment {
       return Triple.of(pElement, oldPrecision, action);
     }
 
-    AbstractState resultElement = element.createDuplicateWithNewWrappedState(newElement);
+    AbstractState resultElement = new UsageStatisticsState(newElement);
 
     return Triple.of(resultElement, newPrecision, action);
   }

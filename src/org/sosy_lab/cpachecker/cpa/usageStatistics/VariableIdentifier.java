@@ -23,26 +23,87 @@
  */
 package org.sosy_lab.cpachecker.cpa.usageStatistics;
 
+import org.sosy_lab.cpachecker.cfa.types.c.CType;
+
 
 public abstract class VariableIdentifier implements Identifier {
 
-  public VariableIdentifier(String nm, String tp, boolean ref) {
+  public static enum Ref {
+    VARIABLE,
+    ADRESS,
+    REFERENCE;
+
+    public String toASTString() {
+      return " is " + name().toLowerCase();
+    }
+  }
+
+  public VariableIdentifier(String nm, CType tp, int dereference) {
     name = nm;
     type = tp;
-    isDereference = ref;
+
+    if (dereference < 0)
+      status = Ref.ADRESS;
+    else if (dereference == 0)
+      status = Ref.VARIABLE;
+    else /*if (dereference > 0)*/
+      status = Ref.REFERENCE;
+  }
+
+  public VariableIdentifier(String nm, CType tp, Ref dereference) {
+    name = nm;
+    type = tp;
+    status = dereference;
   }
 
   protected String name;
-  protected String type;
-  protected boolean isDereference;
+  protected CType type;
+  protected Ref status;
+
+  public Ref getStatus() {
+    return status;
+  }
+
+  public CType getType() {
+    return type;
+  }
+
+  public VariableIdentifier makeAdress() {
+    VariableIdentifier newId = this.clone();
+    newId.status = Ref.ADRESS;
+    return newId;
+  }
+
+  public VariableIdentifier makeReference() {
+    VariableIdentifier newId = this.clone();
+    newId.status = Ref.REFERENCE;
+    return newId;
+  }
+
+  public VariableIdentifier makeVariable() {
+    VariableIdentifier newId = this.clone();
+    newId.status = Ref.VARIABLE;
+    return newId;
+  }
+
+  public String getName() {
+    if (status == Ref.ADRESS)
+      return "&" + name;
+    else if (status == Ref.VARIABLE)
+      return name;
+    else if (status == Ref.REFERENCE)
+      return "*" + name;
+    else
+      return name;
+  }
 
   @Override
   public int hashCode() {
     final int prime = 31;
     int result = 1;
-    result = prime * result + (isDereference ? 1231 : 1237);
     result = prime * result + ((name == null) ? 0 : name.hashCode());
-    result = prime * result + ((type == null) ? 0 : type.hashCode());
+    result = prime * result + ((status == null) ? 0 : status.hashCode());
+    result = prime * result + ((type == null) ? 0 : type.toASTString("").hashCode());
     return result;
   }
   @Override
@@ -54,21 +115,22 @@ public abstract class VariableIdentifier implements Identifier {
     if (getClass() != obj.getClass())
       return false;
     VariableIdentifier other = (VariableIdentifier) obj;
-    if (isDereference != other.isDereference)
-      return false;
     if (name == null) {
       if (other.name != null)
         return false;
     } else if (!name.equals(other.name))
       return false;
+    if (status != other.status)
+      return false;
     if (type == null) {
       if (other.type != null)
         return false;
-    } else if (!type.equals(other.type))
+    } else if (!type.toASTString("").equals(other.type.toASTString("")))
       return false;
     return true;
   }
 
-
+  @Override
+  public abstract VariableIdentifier clone();
 
 }

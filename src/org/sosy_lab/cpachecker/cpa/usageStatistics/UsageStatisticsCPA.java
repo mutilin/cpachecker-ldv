@@ -77,6 +77,9 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
   @Option(description="do we need to collect statistics to generate file for Lcov")
   private boolean covering = false;
 
+  @Option(description="path to file to analize")
+  private String path = "";
+
   private UsageStatisticsCPA(ConfigurableProgramAnalysis pCpa, CFA pCfa, LogManager pLogger, Configuration pConfig) throws InvalidConfigurationException {
     super(pCpa);
     pConfig.inject(this);
@@ -89,7 +92,10 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
       coverGenerator = new CodeCoveringEmpty();
     }
     else {
-      coverGenerator = new CodeCoveringSimple(pCfa);
+      if (path != "")
+        coverGenerator = new CodeCoveringSimple(pCfa, path);
+      else
+        throw new InvalidConfigurationException("Can't find path to file");
     }
     this.statistics = new UsageStatisticsCPAStatistics(pConfig, coverGenerator);
     this.transferRelation = new UsageStatisticsTransferRelation(pCpa.getTransferRelation(), pConfig, statistics, coverGenerator);
@@ -160,7 +166,7 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
 
   @Override
   public AbstractState getInitialState(CFANode pNode) {
-    return UsageStatisticsState.createEmptyState(getWrappedCpa().getInitialState(pNode));
+    return new UsageStatisticsState(getWrappedCpa().getInitialState(pNode));
   }
 
   @Override

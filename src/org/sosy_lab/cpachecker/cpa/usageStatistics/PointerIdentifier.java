@@ -23,33 +23,29 @@
  */
 package org.sosy_lab.cpachecker.cpa.usageStatistics;
 
-import org.sosy_lab.cpachecker.cfa.types.c.CType;
 
+public abstract class PointerIdentifier implements Identifier {
 
+  Identifier PointerTo;
 
-public class StructureIdentifier extends VariableIdentifier{
-
-  public StructureIdentifier(String pNm, CType pTp, Ref ref) {
-    super(pNm, pTp, ref);
+  public PointerIdentifier(Identifier id) {
+    PointerTo = id;
   }
 
   @Override
-  public String toString() { String info = "";
-
-    if (status == Ref.ADRESS)
-      info += "&" + name;
-    else if (status == Ref.VARIABLE)
-      info += name;
-    else if (status == Ref.REFERENCE)
-      info += "*" + name;
-    else
-      info += name;
-
-    return info + "\n    |- Structure\n    |- Type: " + type;
+  public int hashCode() {
+    return PointerTo.hashCode();
   }
+
 
   @Override
-  public StructureIdentifier clone() {
-    return new StructureIdentifier(name, type, status);
+  public boolean equals(Object obj) {
+    if (this == obj)
+      return true;
+    if (obj == null)
+      return false;
+
+    return PointerTo.equals(obj);
   }
+
 }
