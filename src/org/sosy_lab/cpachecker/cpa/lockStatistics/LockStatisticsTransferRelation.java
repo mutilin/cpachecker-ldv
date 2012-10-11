@@ -83,7 +83,6 @@ public class LockStatisticsTransferRelation implements TransferRelation
     throws CPATransferException {
 
     LockStatisticsState lockStatisticsElement     = (LockStatisticsState)element;
-    LockStatisticsPrecision lockStatisticsPrecision = (LockStatisticsPrecision)pPrecision;
 
     LockStatisticsState successor;
     switch (cfaEdge.getEdgeType()) {
@@ -97,7 +96,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
       break;
 
     default:
-      successor = handleSimpleEdge(lockStatisticsElement, lockStatisticsPrecision, cfaEdge);
+      successor = handleSimpleEdge(lockStatisticsElement, cfaEdge);
     }
 
     if (successor == null) {
@@ -107,7 +106,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
     }
   }
 
-  private LockStatisticsState handleSimpleEdge(LockStatisticsState element, LockStatisticsPrecision precision, CFAEdge cfaEdge)
+  private LockStatisticsState handleSimpleEdge(LockStatisticsState element, CFAEdge cfaEdge)
         throws CPATransferException {
 
     switch(cfaEdge.getEdgeType()) {
@@ -125,7 +124,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
       LockStatisticsState tmpElement = element.clone();
 
       for (CFAEdge edge : (MultiEdge)cfaEdge) {
-        tmpElement = handleSimpleEdge(tmpElement, precision, edge);
+        tmpElement = handleSimpleEdge(tmpElement, edge);
       }
       return tmpElement;
 

@@ -28,15 +28,12 @@ import java.util.HashSet;
 import java.util.Set;
 
 import org.sosy_lab.cpachecker.core.interfaces.AbstractQueryableState;
-import org.sosy_lab.cpachecker.core.interfaces.FormulaReportingState;
 import org.sosy_lab.cpachecker.cpa.lockStatistics.LockStatisticsLock.LockType;
 import org.sosy_lab.cpachecker.exceptions.InvalidQueryException;
-import org.sosy_lab.cpachecker.util.predicates.interfaces.Formula;
-import org.sosy_lab.cpachecker.util.predicates.interfaces.FormulaManager;
 
 import com.google.common.base.Preconditions;
 
-public class LockStatisticsState implements AbstractQueryableState, FormulaReportingState, Serializable {
+public class LockStatisticsState implements AbstractQueryableState, Serializable {
   private static final long serialVersionUID = -3152134511524554357L;
 
   private final Set<LockStatisticsLock> Locks;
@@ -99,6 +96,15 @@ public class LockStatisticsState implements AbstractQueryableState, FormulaRepor
       if (Locks.contains(otherLock)) {
         newLocks.add(otherLock);
       }
+    }
+
+    return new LockStatisticsState(newLocks);
+  }
+
+  LockStatisticsState combine(LockStatisticsState other) {
+    Set<LockStatisticsLock> newLocks = new HashSet<LockStatisticsLock>(this.Locks);
+    for (LockStatisticsLock lock : other.Locks) {
+      newLocks.add(lock);
     }
 
     return new LockStatisticsState(newLocks);
@@ -234,17 +240,4 @@ public class LockStatisticsState implements AbstractQueryableState, FormulaRepor
     return "LockStatisticsAnalysis";
   }
 
-  @Override
-  public Formula getFormulaApproximation(FormulaManager manager) {
-    Formula formula = manager.makeTrue();
-    //TODO understand this. Make it normally
-    for (LockStatisticsLock lock : Locks) {
-      Formula var = manager.makeVariable(lock.getName());
-      //1 is equal that lock is locked, but it is "ugly hack"
-      Formula val = manager.makeNumber("1");
-      formula = manager.makeAnd(formula, manager.makeEqual(var, val));
-    }
-
-    return formula;
-  }
 }

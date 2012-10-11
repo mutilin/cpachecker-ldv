@@ -97,8 +97,6 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
       else
         throw new InvalidConfigurationException("Can't find path to file");
     }
-    this.statistics = new UsageStatisticsCPAStatistics(pConfig, coverGenerator);
-    this.transferRelation = new UsageStatisticsTransferRelation(pCpa.getTransferRelation(), pConfig, statistics, coverGenerator);
     this.precisionAdjustment = new UsageStatisticsPrecisionAdjustment(pCpa.getPrecisionAdjustment());
     if (pCpa instanceof ConfigurableProgramAnalysisWithABM) {
       Reducer wrappedReducer = ((ConfigurableProgramAnalysisWithABM)pCpa).getReducer();
@@ -110,6 +108,9 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
     } else {
       reducer = null;
     }
+    this.statistics = new UsageStatisticsCPAStatistics(pConfig, coverGenerator);
+    this.transferRelation = new UsageStatisticsTransferRelation(pCpa.getTransferRelation(), pConfig, statistics, coverGenerator);
+
   }
 
   private MergeOperator initializeMergeOperator() {

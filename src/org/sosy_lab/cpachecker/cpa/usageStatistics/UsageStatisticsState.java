@@ -54,7 +54,7 @@ class UsageStatisticsState extends AbstractSingleWrapperState  {
   }
 
   public void put(VariableIdentifier id1, VariableIdentifier id2) {
-    System.out.println("Link " + (id1 == null ? "null" : id1.getName()) + " and " + (id2 == null ? "null" : id2.getName()));
+   // System.out.println("Link " + (id1 == null ? "null" : id1.getName()) + " and " + (id2 == null ? "null" : id2.getName()));
     if (!id1.equals(id2))
       PointerRelation.put(id1, id2);
   }

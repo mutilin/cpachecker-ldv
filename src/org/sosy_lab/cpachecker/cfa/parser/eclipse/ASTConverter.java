@@ -1525,6 +1525,9 @@ class ASTConverter {
     } else if (t instanceof org.eclipse.cdt.core.dom.ast.IBinding) {
       return new CComplexType(((org.eclipse.cdt.core.dom.ast.IBinding) t).getName());
 
+    } else if (t instanceof org.eclipse.cdt.core.dom.ast.IQualifierType) {
+      return convert(((org.eclipse.cdt.core.dom.ast.IQualifierType)t).getType());
+
     } else {
       return new CDummyType(t.toString());
     }

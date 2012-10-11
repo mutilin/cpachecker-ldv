@@ -101,6 +101,8 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
   private final CFA functions;
   private final LogManager logger;
 
+  //private LinkedList<String> FunctionStack = new LinkedList<String>();
+
   FunctionPointerCreateTransferRelation(TransferRelation pWrappedTransfer, CFA pCfa, LogManager pLogger, Configuration config) throws InvalidConfigurationException {
     config.inject(this);
     wrappedTransfer = pWrappedTransfer;
@@ -120,9 +122,6 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
     final FunctionPointerCreateState oldState = (FunctionPointerCreateState)pElement;
     Collection<FunctionPointerCreateState> results;
 
-    //LinkedList<CFANode> queue = new LinkedList<CFANode>();
-    //Set<Integer> VisitedNodes = new HashSet<Integer>();
-
     if (pCfaEdge == null) {
       CFANode node = extractLocation(oldState);
       results = new ArrayList<FunctionPointerCreateState>(node.getNumLeavingEdges());
@@ -133,35 +132,21 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
           // ignore FunctionPointerCallEdges, they are from previous passes
           try{
             getAbstractSuccessorForEdge(oldState, pPrecision, edge, results);
-          }
-          catch (StopAnalysisException e) {
+
+          } catch (StopAnalysisException e) {
             /*
              * Recursion
              */
             System.out.println(e.getMessage());
+            logger.log(Level.FINER, e.getMessage());
 
             assert (edge instanceof CFunctionCallEdge);
 
             CFunctionSummaryEdge sEdge = ((CFunctionCallEdge)edge).getSummaryEdge();
-            CFAEdge newEdge;
-            /*
-            try {
-              newEdge = edge.getPredecessor().getEdgeTo(sEdge.getSuccessor());
-              System.out.println("Find old edge");
-            }
-            catch (IllegalArgumentException f) {
-              newEdge = new BlankEdge(edge.getRawStatement(),
-                  edge.getLineNumber(), edge.getPredecessor(), sEdge.getSuccessor(),
-                  "recursion edge");
-              edge.getPredecessor().addLeavingEdge(newEdge);
-              sEdge.getSuccessor().addEnteringEdge(newEdge);
-            }
-            */
-            newEdge = new BlankEdge(edge.getRawStatement(),
+            CFAEdge newEdge = new BlankEdge(edge.getRawStatement(),
                 edge.getLineNumber(), edge.getPredecessor(), sEdge.getSuccessor(),
                 "new edge");
             getAbstractSuccessorForEdge(oldState, pPrecision, newEdge, results);
-            //CFACreationUtils.removeEdgeFromNodes(newEdge);
           }
         }
       }
@@ -170,34 +155,21 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
       results = new ArrayList<FunctionPointerCreateState>(1);
       try{
         getAbstractSuccessorForEdge(oldState, pPrecision, pCfaEdge, results);
-      }
-      catch (StopAnalysisException e) {
+
+      } catch (StopAnalysisException e) {
         /*
          * Recursion
          */
-        System.out.println(e.getMessage());
+        System.out.println(e.getMessage() + ", edge: " + pCfaEdge.getPredecessor().getFunctionName() + "[" +pCfaEdge.hashCode() +"]");
+        System.out.println("State: " + pElement);
+        logger.log(Level.FINER, e.getMessage());
         assert (pCfaEdge instanceof CFunctionCallEdge);
 
         CFunctionSummaryEdge sEdge = ((CFunctionCallEdge)pCfaEdge).getSummaryEdge();
-        CFAEdge newEdge;
-        /*
-        try {
-          newEdge = edge.getPredecessor().getEdgeTo(sEdge.getSuccessor());
-          System.out.println("Find old edge");
-        }
-        catch (IllegalArgumentException f) {
-          newEdge = new BlankEdge(edge.getRawStatement(),
-              edge.getLineNumber(), edge.getPredecessor(), sEdge.getSuccessor(),
-              "recursion edge");
-          edge.getPredecessor().addLeavingEdge(newEdge);
-          sEdge.getSuccessor().addEnteringEdge(newEdge);
-        }
-        */
-        newEdge = new BlankEdge(pCfaEdge.getRawStatement(),
+        CFAEdge newEdge = new BlankEdge(pCfaEdge.getRawStatement(),
             pCfaEdge.getLineNumber(), pCfaEdge.getPredecessor(), sEdge.getSuccessor(),
             "new edge");
         getAbstractSuccessorForEdge(oldState, pPrecision, newEdge, results);
-        //CFACreationUtils.removeEdgeFromNodes(newEdge);
       }
     }
     return results;
@@ -216,9 +188,6 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
       FunctionPointerCreateTarget target = oldState.getTarget(functionCallVariable);
       if (target instanceof NamedFunctionTarget) {
         String functionName = ((NamedFunctionTarget)target).getFunctionName();
-       // if (functionName == "create") {
-       //   int id = functionCallVariable.
-      //  }
         FunctionEntryNode fDefNode = functions.getFunctionHead(functionName);
         if (fDefNode != null) {
           logger.log(Level.FINEST, "Function pointer", functionCallVariable, "points to", target, "while it is used.");

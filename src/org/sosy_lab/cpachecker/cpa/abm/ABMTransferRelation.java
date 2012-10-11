@@ -258,6 +258,8 @@ public class ABMTransferRelation implements TransferRelation {
   private final Map<AbstractState, AbstractState> expandedToReducedCache = new HashMap<AbstractState, AbstractState>();
 
   private Block currentBlock;
+  private LinkedList<Block> BlockStack = new LinkedList<Block>();
+
   private BlockPartitioning partitioning;
   private int depth = 0;
 
@@ -322,20 +324,43 @@ public class ABMTransferRelation implements TransferRelation {
       AbstractState pElement, Precision pPrecision, CFAEdge edge)
       throws CPATransferException, InterruptedException {
 
+    Block nextBlock;
     forwardPrecisionToExpandedPrecision.clear();
 
     if (edge == null) {
       CFANode node = extractLocation(pElement);
 
-      if (partitioning.isCallNode(node)) {
+      if (partitioning.isCallNode(node) && BlockStack.size() < 25) {
         //we have to start a recursive analysis
-        if (partitioning.getBlockForCallNode(node).equals(currentBlock)) {
+        nextBlock = partitioning.getBlockForCallNode(node);
+        if (nextBlock.equals(currentBlock)) {
           //we are already in same context
           //thus we already did the recursive call or we a recursion in the cachedSubtrees
-          //the latter isnt supported yet, but in the the former case we can classicaly do the post operation
+          //the latter isn't supported yet, but in the the former case we can classically do the post operation
+          logger.log(Level.FINER, "\nnextBlock = currentBlock, get successors");
           return wrappedTransfer.getAbstractSuccessors(pElement, pPrecision, edge);
         }
-
+        if (BlockStack.contains(nextBlock)) {
+          logger.log(Level.FINER, "BlockStack contains nextBlock");
+          /*System.out.println("nextBlock function = " + nextBlock.getCallNode().getFunctionName() + "(" +
+              nextBlock.getCallNode().getLineNumber() + ")" + ", currentBlock function = " +
+              currentBlock.getCallNode().getFunctionName() + "(" + currentBlock.getCallNode().getLineNumber() + ")");
+*/
+          //if (BlockStack.size() < 6) {
+          //if(true){
+          System.out.println("Recursion in blocks, get successors");
+          return wrappedTransfer.getAbstractSuccessors(pElement, pPrecision, edge);
+          //} else {
+          //logger.log(Level.FINER, "Recursion in blocks, skipping it");
+          //FunctionSummaryEdge sEdge = node.getNumEnteringEdges();
+          //System.out.println("Summary edge: " + node.getNumLeavingEdges());
+          /*CFAEdge newEdge = new BlankEdge(edge.getRawStatement(),
+              edge.getLineNumber(), edge.getPredecessor(), sEdge.getSuccessor(),
+              "new edge");
+          getAbstractSuccessorForEdge(oldState, pPrecision, newEdge, results);*/
+          // return Collections.emptySet();
+          //}
+        }
         if (isHeadOfMainFunction(node)) {
           //skip main function
           return wrappedTransfer.getAbstractSuccessors(pElement, pPrecision, edge);
@@ -355,9 +380,14 @@ public class ABMTransferRelation implements TransferRelation {
         maxRecursiveDepth = Math.max(depth, maxRecursiveDepth);
 
         Block outerSubtree = currentBlock;
+        System.out.println("currentBlock.Func=" + currentBlock.getCallNode().getFunctionName());
+        System.out.println("nextBlock.Func=" + nextBlock.getCallNode().getFunctionName());
         currentBlock = partitioning.getBlockForCallNode(node);
+        BlockStack.add(currentBlock);
+        System.out.println("Current stack size = " + BlockStack.size());
         Collection<Pair<AbstractState, Precision>> reducedResult = performCompositeAnalysis(pElement, pPrecision, node);
-
+        BlockStack.removeLast();
+        logger.log(Level.FINER, "Current stack size = " + BlockStack.size());
         logger.log(Level.FINER, "Recursive analysis of depth", depth--, "finished");
         logger.log(Level.ALL, "Resulting elements:", reducedResult);
 
@@ -435,6 +465,7 @@ public class ABMTransferRelation implements TransferRelation {
       if (returnElements != null) {
         assert reached != null;
         fullCacheHits++;
+        logger.log(Level.FINER, "State is already traversed");
         return imbueAbstractStatesWithPrecision(reached, returnElements);
       }
 

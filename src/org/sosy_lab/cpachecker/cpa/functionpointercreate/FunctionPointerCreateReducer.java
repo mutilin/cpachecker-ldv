@@ -23,7 +23,6 @@
  */
 package org.sosy_lab.cpachecker.cpa.functionpointercreate;
 
-import org.sosy_lab.common.Pair;
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
@@ -46,7 +45,8 @@ public class FunctionPointerCreateReducer implements Reducer {
       CFANode pLocation) {
 
     FunctionPointerCreateState funElement = (FunctionPointerCreateState)pExpandedElement;
-    return funElement.createDuplicateWithNewWrappedState(wrappedReducer.getVariableReducedState(funElement.getWrappedState(), pContext, pLocation));
+    return FunctionPointerCreateState.createEmptyState(wrappedReducer.getVariableReducedState(funElement.getWrappedState(), pContext, pLocation));
+    //return funElement.createDuplicateWithNewWrappedState(wrappedReducer.getVariableReducedState(funElement.getWrappedState(), pContext, pLocation));
   }
 
   @Override
@@ -57,13 +57,13 @@ public class FunctionPointerCreateReducer implements Reducer {
     FunctionPointerCreateState funRootElement = (FunctionPointerCreateState)pRootElement;
     FunctionPointerCreateState funReducedElement = (FunctionPointerCreateState)pReducedElement;
 
-    return funReducedElement.createDuplicateWithNewWrappedState(wrappedReducer.getVariableExpandedState(funRootElement.getWrappedState(), pReducedContext, funReducedElement.getWrappedState()));
+    return funRootElement.createDuplicateWithNewWrappedState(wrappedReducer.getVariableExpandedState(funRootElement.getWrappedState(), pReducedContext, funReducedElement.getWrappedState()));
   }
 
   @Override
   public Object getHashCodeForState(AbstractState pElementKey, Precision pPrecisionKey) {
     FunctionPointerCreateState funElement = (FunctionPointerCreateState)pElementKey;
-    return Pair.of(funElement.getTargetMap(), wrappedReducer.getHashCodeForState(funElement.getWrappedState(), pPrecisionKey));
+    return wrappedReducer.getHashCodeForState(funElement.getWrappedState(), pPrecisionKey);
   }
 
   @Override

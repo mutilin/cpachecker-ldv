@@ -270,7 +270,7 @@ class UsageStatisticsTransferRelation implements TransferRelation {
     }
   }
 
-  void handleFunctionCallExpression(UsageStatisticsState pNewState, CExpression left, CFunctionCallExpression fcExpression) throws HandleCodeException {
+  private void handleFunctionCallExpression(UsageStatisticsState pNewState, CExpression left, CFunctionCallExpression fcExpression) throws HandleCodeException {
     List<Pair<VariableIdentifier, Access>> result;
     String functionName = AbstractStates.extractStateByType(pNewState, CallstackState.class).getCurrentFunction();
 
@@ -478,7 +478,7 @@ class UsageStatisticsTransferRelation implements TransferRelation {
     return result;
   }
 
-  List<Pair<VariableIdentifier, Access>> handleWrite(CExpression expression, String function, int derefenceCounter) throws HandleCodeException {
+  private List<Pair<VariableIdentifier, Access>> handleWrite(CExpression expression, String function, int derefenceCounter) throws HandleCodeException {
     List<Pair<VariableIdentifier, Access>> result = new LinkedList<Pair<VariableIdentifier, Access>>();
 
     if (expression instanceof CArraySubscriptExpression) {
@@ -490,6 +490,8 @@ class UsageStatisticsTransferRelation implements TransferRelation {
       //throw new HandleCodeException(expression.toASTString() + " can't be in left side of statement");
 
     } else if (expression instanceof CFieldReference) {
+      /*if (((CFieldReference)expression).getFieldName().equals("m_count"))
+        System.out.println("here");*/
       VariableIdentifier id = new StructureFieldIdentifier(((CFieldReference)expression).getFieldName(),
           ((CFieldReference)expression).getFieldOwner().getExpressionType(),
           ((CFieldReference)expression).getExpressionType().toASTString(""), derefenceCounter);

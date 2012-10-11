@@ -61,6 +61,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   FileOutputStream file = null;
   DataProcessing dataProcess = null;
   CodeCovering covering;
+  //private final Reducer reducer;
 
   @Option(name="output", description="file to write results")
   private String FileName = "race_results.txt";
@@ -88,7 +89,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       System.exit(0);
     }
     covering = cover;
-
+    //reducer = pReducer;
   }
 
   public void add(List<Pair<VariableIdentifier, Access>> result, UsageStatisticsState state, int line, EdgeType type) {

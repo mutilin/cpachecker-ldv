@@ -35,7 +35,6 @@ import java.util.Map.Entry;
 import org.sosy_lab.cpachecker.core.defaults.AbstractSingleWrapperState;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 
-import com.google.common.base.Joiner;
 import com.google.common.base.Objects;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
@@ -215,7 +214,9 @@ class FunctionPointerCreateState extends AbstractSingleWrapperState  {
   public String toString() {
     StringBuilder str = new StringBuilder();
     str.append("\n FunctionPointerState: [");
-    Joiner.on(", ").withKeyValueSeparator("=").appendTo(str, pointerVariableValues);
+    //Joiner.on(", ").withKeyValueSeparator("=").appendTo(str, pointerVariableValues);
+    str.append("size=");
+    str.append(pointerVariableValues.size());
     str.append("]\n ");
     str.append(getWrappedState());
     return str.toString();
