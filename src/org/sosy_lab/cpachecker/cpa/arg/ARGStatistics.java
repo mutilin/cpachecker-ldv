@@ -50,7 +50,7 @@ import org.sosy_lab.cpachecker.util.cwriter.PathToCTranslator;
 public class ARGStatistics implements Statistics {
 
   @Option(name="export", description="export final ARG as .dot file")
-  private boolean exportART = true;
+  private boolean exportARG = true;
 
   @Option(name="file",
       description="export final ARG as .dot file")
@@ -109,7 +109,7 @@ public class ARGStatistics implements Statistics {
 
 
     if (!(   (exportErrorPath && (errorPathFile != null))
-          || (exportART       && (argFile != null      ))
+          || (exportARG       && (argFile != null      ))
        )) {
 
       // do nothing, if !(exportErrorPath || exportART)
@@ -185,7 +185,7 @@ public class ARGStatistics implements Statistics {
       }
     }
 
-    if (exportART && argFile != null) {
+    if (exportARG && argFile != null) {
       try {
         ARGState rootState = (ARGState)pReached.getFirstState();
         Files.writeFile(argFile, ARGUtils.convertARTToDot(rootState, null, getEdgesOfPath(targetPath)));

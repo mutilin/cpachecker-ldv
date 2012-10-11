@@ -27,6 +27,8 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
+import org.sosy_lab.common.configuration.Configuration;
+import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
@@ -42,8 +44,12 @@ import org.sosy_lab.cpachecker.exceptions.StopAnalysisException;
 @Options(prefix="cpa.callstack")
 public class CallstackTransferRelation implements TransferRelation {
 
-  @Option(name="depth", description = "depth of call graph")
-  private final int depth = 0;
+  @Option(name="depth", description = "depth of recursion bound")
+  private int recursionBoundDepth = 0;
+
+  CallstackTransferRelation(Configuration config) throws InvalidConfigurationException {
+    config.inject(this);
+  }
 
   @Override
   public Collection<? extends AbstractState> getAbstractSuccessors(
@@ -60,22 +66,13 @@ public class CallstackTransferRelation implements TransferRelation {
 
         CallstackState e = element;
         int counter = 0;
+
         while (e != null) {
           if (e.getCurrentFunction().equals(functionName)) {
             counter++;
-            /*CallstackState g = element;
-            System.out.println("----");
-            while (!g.getCurrentFunction().equals(functionName)) {
-              System.out.println(g.getCurrentFunction() + " -> ");
-              g = g.getPreviousState();
-            }*/
-            //Collection<CallstackState> s = new HashSet<CallstackState>();
-            //s.add(element);
-            //new CallstackState(element, functionName, callNode)
-            //return Collections.singleton(element);
-            //break;
-            if (counter > depth)
-              throw new StopAnalysisException("Recursion skipped " + functionName);
+
+            if (counter > recursionBoundDepth)
+              throw new StopAnalysisException("Recursion with depth " + recursionBoundDepth + " in " + cfaEdge.getSuccessor().getFunctionName());
           }
           e = e.getPreviousState();
         }
