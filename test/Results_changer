@@ -26,7 +26,7 @@ while (<$cil_fh>)
   {
     $src_line_cur = $1;
     $src_cur = $2;
-    $src_cur =~ s/^\/.+\/source\/(.+)/$1/g;
+    $src_cur =~ s/^\/.+\/BZ_1\/(.+)/$1/g;
     $src_cur =~ s/^\/.+\/oc2000-2.72.12\/(.+)/$1/g;
   }
   elsif ($str =~ /^#line (\d+)$/)
@@ -47,7 +47,7 @@ while (<$results_fh>)
 {
   my $str = $_;
 
-  $str =~ s/#([0-9]*)#/$1.", ".$src_map{$1}->{'file'}.":".$src_map{$1}->{'line'}/eg;
+  $str =~ s/#([0-9]*)#/$cil_fname.":".$1.", ".$src_map{$1}->{'file'}.":".$src_map{$1}->{'line'}/eg;
 
   print($new_results_fh $str);
 }

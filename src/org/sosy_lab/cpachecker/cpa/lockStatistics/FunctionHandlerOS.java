@@ -26,23 +26,37 @@ package org.sosy_lab.cpachecker.cpa.lockStatistics;
 import java.util.List;
 import java.util.Set;
 
+import org.sosy_lab.cpachecker.cfa.ast.c.CArraySubscriptExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CAssignment;
+import org.sosy_lab.cpachecker.cfa.ast.c.CDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CFieldReference;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallStatement;
+import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CParameterDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
+import org.sosy_lab.cpachecker.cfa.ast.c.CSimpleDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
+import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
-import org.sosy_lab.cpachecker.cpa.lockStatistics.LockStatisticsLock.LockType;
+import org.sosy_lab.cpachecker.cfa.types.c.CPointerType;
+import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
+import org.sosy_lab.cpachecker.cpa.usageStatistics.UsageStatisticsCPA;
+import org.sosy_lab.cpachecker.cpa.usageStatistics.UsageStatisticsTransferRelation;
+import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
+import org.sosy_lab.cpachecker.util.AbstractStates;
 
 
 public class FunctionHandlerOS extends FunctionHandler{
+  private UsageStatisticsCPA stateGetter;
+
   public FunctionHandlerOS(List<String> pLock, List<String> pUnlock, Set<String> pExceptions) {
     super(pLock, pUnlock, pExceptions);
   }
 
   @Override
-  public LockStatisticsState handleStatement(LockStatisticsState element, CStatement expression) {
+  public LockStatisticsState handleStatement(LockStatisticsState element, CStatement expression, String currentFunction) throws HandleCodeException {
 
     LockStatisticsState newElement = element.clone();
 
@@ -54,7 +68,7 @@ public class FunctionHandlerOS extends FunctionHandler{
 
       if (op2 instanceof CFunctionCallExpression) {
         return CheckIsLock(newElement, ((CFunctionCallExpression) op2).getFunctionNameExpression().toASTString(),
-                           op2.getFileLocation().getStartingLineNumber(), ((CFunctionCallExpression) op2).getParameterExpressions());
+                           op2.getFileLocation().getStartingLineNumber(), currentFunction, ((CFunctionCallExpression) op2).getParameterExpressions());
       }
       else
         return newElement;
@@ -66,7 +80,7 @@ public class FunctionHandlerOS extends FunctionHandler{
        */
       return CheckIsLock(newElement,
           ((CFunctionCallStatement) expression).getFunctionCallExpression().getFunctionNameExpression().toASTString(),
-          ((CFunctionCallStatement) expression).getFileLocation().getStartingLineNumber(),
+          ((CFunctionCallStatement) expression).getFileLocation().getStartingLineNumber(), currentFunction,
           ((CFunctionCallStatement) expression).getFunctionCallExpression().getParameterExpressions());
     }
     else {
@@ -77,30 +91,68 @@ public class FunctionHandlerOS extends FunctionHandler{
   }
 
   @Override
-  public LockStatisticsState handleFunctionCall(LockStatisticsState element, CFunctionCallEdge callEdge) {
+  public LockStatisticsState handleFunctionCall(LockStatisticsState element, CFunctionCallEdge callEdge) throws HandleCodeException {
     Set<CStatement> expressions = callEdge.getRawAST().asSet();
 
     LockStatisticsState newElement = element.clone();
 
     if (expressions.size() > 0) {
       for (CStatement statement : expressions) {
-        newElement = handleStatement(newElement, statement);
+        newElement = handleStatement(newElement, statement, callEdge.getPredecessor().getFunctionName());
       }
     }
     else {
-      return CheckIsLock(newElement, callEdge.getSuccessor().getFunctionName(), callEdge.getLineNumber(), callEdge.getArguments());
+      return CheckIsLock(newElement, callEdge.getSuccessor().getFunctionName(), callEdge.getLineNumber(), callEdge.getPredecessor().getFunctionName(),
+          callEdge.getArguments());
     }
     return newElement;
   }
 
-  private LockStatisticsState CheckIsLock(LockStatisticsState newElement, String functionName, int lineNumber, List<CExpression> params) {
+  private boolean isGlobal(CExpression expression) throws HandleCodeException {
+    if (expression instanceof CArraySubscriptExpression) {
+      return isGlobal(((CArraySubscriptExpression)expression).getArrayExpression());
+
+    } else if (expression instanceof CFieldReference) {
+      return isGlobal(((CFieldReference)expression).getFieldOwner());
+
+    } else if (expression instanceof CIdExpression) {
+      CSimpleDeclaration decl = ((CIdExpression)expression).getDeclaration();
+      if (decl instanceof CDeclaration)
+        return (((CDeclaration)decl).isGlobal());
+      else if (decl instanceof CParameterDeclaration) {
+        CParameterDeclaration pDecl = (CParameterDeclaration) decl;
+        if (pDecl.getType() instanceof CPointerType)
+          return true;
+        else
+          return false;
+      } else
+        throw new HandleCodeException("Can't handle expression " + expression.toASTString() + " as lock parameter");
+
+    } else if (expression instanceof CUnaryExpression) {
+      return isGlobal(((CUnaryExpression)expression).getOperand());
+    } else {
+      throw new HandleCodeException("Can't handle expression " + expression.toASTString() + " as lock parameter");
+    }
+  }
+
+  private LockStatisticsState CheckIsLock(LockStatisticsState newElement, String functionName, int lineNumber, String currentFunction,
+      List<CExpression> params) throws HandleCodeException {
+    CallstackState callstack =
+        AbstractStates.extractStateByType(((UsageStatisticsTransferRelation)stateGetter.getTransferRelation()).getOldState(),
+            CallstackState.class);
+    callstack = stateGetter.getStats().createStack(callstack);
+
     if (lock != null && lock.contains(functionName)) {
       if (exceptions.contains(functionName)) {
-        newElement.add(functionName, lineNumber, LockType.GLOBAL_LOCK);
+        newElement.addGlobal(functionName, lineNumber, callstack);
       }
       else {
         assert (params.size() == 1);
-        newElement.add(params.get(0).toASTString(), lineNumber, LockType.LOCAL_LOCK);
+        //CExpression param = params.get(0);
+        //if (isGlobal(param))
+          newElement.addGlobal(params.get(0).toASTString(), lineNumber, callstack);
+        //else
+        //  newElement.addLocal(params.get(0).toASTString(), lineNumber, currentFunction);
       }
     }
     else if (unlock != null && unlock.contains(functionName)) {
@@ -114,5 +166,9 @@ public class FunctionHandlerOS extends FunctionHandler{
       }
     }
     return newElement;
+  }
+
+  public void setUsCPA(UsageStatisticsCPA cpa) {
+    stateGetter = cpa;
   }
 }

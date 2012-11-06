@@ -29,17 +29,33 @@ import java.util.Map;
 import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
+import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
+import org.sosy_lab.cpachecker.core.interfaces.CPAFactory;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
+import org.sosy_lab.cpachecker.core.interfaces.WrapperCPA;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSetFactory;
+import org.sosy_lab.cpachecker.cpa.usageStatistics.UsageStatisticsCPA;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 
+@Options(prefix="cpa.abm")
 public class ABMLockCPA extends ABMCPA {
 
-  public ABMLockCPA(ConfigurableProgramAnalysis pCpa, Configuration config, LogManager pLogger, ReachedSetFactory pReachedSetFactory, CFA pCfa) throws InvalidConfigurationException, CPAException {
+  public static CPAFactory factory() {
+    return AutomaticCPAFactory.forType(ABMLockCPA.class);
+  }
+
+  /*@Option(description="Type of partitioning (FunctionAndLoopPartitioning or DelayedFunctionAndLoopPartitioning)\n"
+      + "or any class that implements a PartitioningHeuristic")
+  @ClassOption(packagePrefix="org.sosy_lab.cpachecker.cfa.blocks.builder")
+  protected Class<? extends PartitioningHeuristic> blockHeuristic = FunctionAndLoopPartitioning.class;*/
+
+  public ABMLockCPA(ConfigurableProgramAnalysis pCpa, Configuration config, LogManager pLogger,
+    ReachedSetFactory pReachedSetFactory, CFA pCfa) throws InvalidConfigurationException, CPAException {
     super(pCpa, config, pLogger, pReachedSetFactory, pCfa);
     config.inject(this);
   }
@@ -49,6 +65,11 @@ public class ABMLockCPA extends ABMCPA {
     if (blockPartitioning == null) {
       blockPartitioning = heuristic.buildPartitioning(node);
       transfer.setBlockPartitioning(blockPartitioning);
+
+      UsageStatisticsCPA usCpa = ((WrapperCPA) getWrappedCpa()).retrieveWrappedCpa(UsageStatisticsCPA.class);
+      if (usCpa != null) {
+        usCpa.getStats().setBlockStack(transfer.getBlockStack());
+      }
 
       Map<AbstractState, Precision> forwardPrecisionToExpandedPrecision = new HashMap<AbstractState, Precision>();
       transfer.setForwardPrecisionToExpandedPrecision(forwardPrecisionToExpandedPrecision);

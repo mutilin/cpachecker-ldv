@@ -63,7 +63,6 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression.UnaryOperator;
 import org.sosy_lab.cpachecker.cfa.ast.c.CVariableDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.DefaultCExpressionVisitor;
-import org.sosy_lab.cpachecker.cfa.model.BlankEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdgeType;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
@@ -84,7 +83,6 @@ import org.sosy_lab.cpachecker.cpa.functionpointercreate.FunctionPointerCreateSt
 import org.sosy_lab.cpachecker.cpa.functionpointercreate.FunctionPointerCreateState.NamedFunctionTarget;
 import org.sosy_lab.cpachecker.cpa.functionpointercreate.FunctionPointerCreateState.UnknownTarget;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
-import org.sosy_lab.cpachecker.exceptions.StopAnalysisException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCCodeException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCFAEdgeException;
 
@@ -130,13 +128,13 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
         CFAEdge edge = node.getLeavingEdge(edgeIdx);
         if (!(edge instanceof FunctionPointerCreateCallEdge)) {
           // ignore FunctionPointerCallEdges, they are from previous passes
-          try{
+         // try{
             getAbstractSuccessorForEdge(oldState, pPrecision, edge, results);
 
-          } catch (StopAnalysisException e) {
-            /*
+          /*} catch (StopAnalysisException e) {
+
              * Recursion
-             */
+
             System.out.println(e.getMessage());
             logger.log(Level.FINER, e.getMessage());
 
@@ -147,19 +145,19 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
                 edge.getLineNumber(), edge.getPredecessor(), sEdge.getSuccessor(),
                 "new edge");
             getAbstractSuccessorForEdge(oldState, pPrecision, newEdge, results);
-          }
+          }*/
         }
       }
 
     } else {
       results = new ArrayList<FunctionPointerCreateState>(1);
-      try{
+      //try{
         getAbstractSuccessorForEdge(oldState, pPrecision, pCfaEdge, results);
 
-      } catch (StopAnalysisException e) {
-        /*
+      /*} catch (StopAnalysisException e) {
+
          * Recursion
-         */
+
         System.out.println(e.getMessage() + ", edge: " + pCfaEdge.getPredecessor().getFunctionName() + "[" +pCfaEdge.hashCode() +"]");
         System.out.println("State: " + pElement);
         logger.log(Level.FINER, e.getMessage());
@@ -169,8 +167,8 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
         CFAEdge newEdge = new BlankEdge(pCfaEdge.getRawStatement(),
             pCfaEdge.getLineNumber(), pCfaEdge.getPredecessor(), sEdge.getSuccessor(),
             "new edge");
-        getAbstractSuccessorForEdge(oldState, pPrecision, newEdge, results);
-      }
+        getAbstractSuccessorForEdge(oldState, pPrecision, newEdge, results);*/
+      //}
     }
     return results;
   }

@@ -28,6 +28,7 @@ import java.util.Set;
 
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
+import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 
 /**Method of handling/searching lock functions
  *
@@ -55,9 +56,10 @@ public abstract class FunctionHandler {
    * @param element - state in CPA
    * @param expressionl
    * @return new state (successor)
+   * @throws HandleCodeException
    */
   public abstract LockStatisticsState handleStatement(LockStatisticsState element,
-      CStatement expression);
+      CStatement expression, String currentFunction) throws HandleCodeException;
 
   /**
    * Handling Function call in expression
@@ -73,8 +75,9 @@ public abstract class FunctionHandler {
    * @param element - state in CPA
    * @param callEdge - function call
    * @return new state (successor)
+   * @throws HandleCodeException
    */
-  public abstract LockStatisticsState handleFunctionCall(LockStatisticsState element, CFunctionCallEdge callEdge);
+  public abstract LockStatisticsState handleFunctionCall(LockStatisticsState element, CFunctionCallEdge callEdge) throws HandleCodeException;
 
 
 }

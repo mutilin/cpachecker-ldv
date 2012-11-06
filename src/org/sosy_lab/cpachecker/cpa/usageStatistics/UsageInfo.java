@@ -23,6 +23,7 @@
  */
 package org.sosy_lab.cpachecker.cpa.usageStatistics;
 
+import java.util.HashSet;
 import java.util.Set;
 
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
@@ -57,7 +58,9 @@ public class UsageInfo {
   }
 
   public Set<LockStatisticsLock> getLocks() {
-    return locks.getLocks();
+    Set<LockStatisticsLock> allLocks  = new HashSet<LockStatisticsLock>(locks.getGlobalLocks());
+    allLocks.addAll(locks.getLocalLocks());
+    return allLocks;
   }
 
   public Access getAccess() {
@@ -68,14 +71,25 @@ public class UsageInfo {
     return callstack;
   }
 
+  public LineInfo getLine() {
+    return line;
+  }
+
   public boolean intersect(UsageInfo other) {
-    if (other.locks.getLocks().size() == 0 && this.locks.getLocks().size() == 0)
+    if (other.locks.getGlobalLocks().size() == 0 && this.locks.getGlobalLocks().size() == 0 &&
+        other.locks.getLocalLocks().size() == 0 && this.locks.getLocalLocks().size() == 0)
       return true;
 
-    for (LockStatisticsLock lock : other.locks.getLocks()) {
-      if (this.locks.getLocks().contains(lock))
+    for (LockStatisticsLock lock : other.locks.getGlobalLocks()) {
+      if (this.locks.getGlobalLocks().contains(lock))
         return true;
     }
+
+    /*for (LockStatisticsLock lock : other.locks.getLocalLocks()) {
+      if (this.locks.getLocalLocks().contains(lock))
+        return true;
+    }*/
+
     return false;
   }
 
@@ -129,16 +143,11 @@ public class UsageInfo {
   public String toString(){
     StringBuilder sb = new StringBuilder();
 
-    sb.append("      In line ");
+    sb.append("------Line ");
     sb.append(line.toString());
-    sb.append(" (" + info.toString() + ")");
-    sb.append(" was locked with " + locks.toString()+ ", ");
-    sb.append(accessType.toASTString());
-    //sb.append(" in " + info.toString());
-
-    sb.append("\n        Call stack: \n");
-
+    sb.append(" (" + info.toString() + ", " + accessType.toASTString() + ")\n");
     CallstackState e = callstack;
+    sb.append("      ");
     while (e != null) {
       LineInfo lineN = null;
       for (int i = 0; i < e.getCallNode().getNumLeavingEdges(); i++) {
@@ -148,12 +157,25 @@ public class UsageInfo {
           break;
         }
       }
-      sb.append("        " + e.getCurrentFunction() + "(" + (lineN != null ? lineN.toString() : "-") + ")" + " <- \n");
+      if (lineN == null || lineN.line != line.line)
+        sb.append(e.getCurrentFunction() + "(" + (lineN != null ? lineN.toString() : "-") + ")" + " <- ");
       e = e.getPreviousState();
     }
     if (callstack != null)
       sb.delete(sb.length() - 3, sb.length());
-    sb.append("\n");
+    sb.append("\n      {\n");
+    for (LockStatisticsLock lock : locks.getGlobalLocks()) {
+      sb.append("    " + lock.toString() + "\n\n");
+    }
+    if (locks.getGlobalSize() > 0) {
+      sb.delete(sb.length() - 2, sb.length());
+      sb.append("      }\n\n");
+    } else {
+      sb.delete(sb.length() - 1, sb.length());
+      sb.append("}\n\n");
+    }
+
+
     return sb.toString();
   }
 

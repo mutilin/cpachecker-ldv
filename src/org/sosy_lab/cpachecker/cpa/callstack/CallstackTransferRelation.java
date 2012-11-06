@@ -71,8 +71,9 @@ public class CallstackTransferRelation implements TransferRelation {
           if (e.getCurrentFunction().equals(functionName)) {
             counter++;
 
-            if (counter > recursionBoundDepth)
-              throw new StopAnalysisException("Recursion with depth " + recursionBoundDepth + " in " + cfaEdge.getSuccessor().getFunctionName());
+            if (counter > recursionBoundDepth) {
+              throw new StopAnalysisException("Recursion with depth " + recursionBoundDepth + " in " + functionName, cfaEdge);
+            }
           }
           e = e.getPreviousState();
         }
@@ -104,8 +105,13 @@ public class CallstackTransferRelation implements TransferRelation {
         //System.out.println("callerFunction:  " + callerFunction);
         //System.out.println("elementFunction: " + returnElement.getCurrentFunction());
 
-        assert callerFunction.equals(returnElement.getCurrentFunction());
-
+        assert (callerFunction.equals(returnElement.getCurrentFunction()));
+        /*try {
+          if (!callerFunction.equals(returnElement.getCurrentFunction()))
+            System.out.println("here1");
+        } catch (NullPointerException e) {
+          System.out.println("here2");
+        }*/
         return Collections.singleton(returnElement);
       }
     }

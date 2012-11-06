@@ -32,6 +32,8 @@ import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
+import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallStatement;
+import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
@@ -47,6 +49,10 @@ import org.sosy_lab.cpachecker.exceptions.UnrecognizedCFAEdgeException;
 public class LockStatisticsTransferRelation implements TransferRelation
 {
   //private final Set<String> globalMutex = new HashSet<String>();
+
+  @Option(name="lockreset",
+      description="function to reset state")
+  private String lockreset;
 
   @Option(name="lockfunctions",
       description="functions, that locks synchronization primitives")
@@ -70,11 +76,13 @@ public class LockStatisticsTransferRelation implements TransferRelation
   public LockStatisticsTransferRelation(Configuration config) throws InvalidConfigurationException {
     config.inject(this);
 
-    if (HandleType.equals("LINUX")) {
+   /* if (HandleType.equals("LINUX")) {
       handler = new FunctionHandlerLinux(lock, unlock, exceptions);
     }
-    else if (HandleType.equals("OS")) {
+    else */if (HandleType.equals("OS")) {
       handler = new FunctionHandlerOS(lock, unlock, exceptions);
+    } else {
+      throw new InvalidConfigurationException("Unsupported function handler");
     }
   }
 
@@ -92,9 +100,18 @@ public class LockStatisticsTransferRelation implements TransferRelation
       break;
 
     case FunctionReturnEdge:
-      successor = lockStatisticsElement.clone();
+      successor = lockStatisticsElement.clone();//removeLocal(cfaEdge.getPredecessor().getFunctionName());
       break;
 
+    case StatementEdge:
+      CStatement statement = ((CStatementEdge)cfaEdge).getStatement();
+      if (statement instanceof CFunctionCallStatement && lockreset != null &&
+        ((CFunctionCallStatement)statement).getFunctionCallExpression().getFunctionNameExpression().toASTString().equals(lockreset)) {
+        successor = new LockStatisticsState();
+        break;
+      }
+
+      //$FALL-THROUGH$
     default:
       successor = handleSimpleEdge(lockStatisticsElement, cfaEdge);
     }
@@ -112,7 +129,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
     switch(cfaEdge.getEdgeType()) {
     case StatementEdge:
       CStatementEdge statementEdge = (CStatementEdge) cfaEdge;
-      return handler.handleStatement(element, statementEdge.getStatement());
+      return handler.handleStatement(element, statementEdge.getStatement(), cfaEdge.getPredecessor().getFunctionName());
 
     case BlankEdge:
     case AssumeEdge:
@@ -137,5 +154,9 @@ public class LockStatisticsTransferRelation implements TransferRelation
   public Collection<? extends AbstractState> strengthen(AbstractState element, List<AbstractState> elements, CFAEdge cfaEdge, Precision precision)
     throws UnrecognizedCCodeException {
     return null;
+  }
+
+  public FunctionHandlerOS getFunctionHandler() {
+    return (FunctionHandlerOS)handler;
   }
 }

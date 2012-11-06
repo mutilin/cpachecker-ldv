@@ -38,12 +38,12 @@ import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 public final class CallstackState implements AbstractState, Partitionable, AbstractQueryableState, Serializable {
 
   private static final long serialVersionUID = 3629687385150064994L;
-  private final CallstackState previousState;
+  private CallstackState previousState;
   private final String currentFunction;
   private transient CFANode callerNode;
   private final int depth;
 
-  CallstackState(CallstackState previousElement, String function, CFANode callerNode) {
+  public CallstackState(CallstackState previousElement, String function, CFANode callerNode) {
     this.previousState = previousElement;
     this.currentFunction = checkNotNull(function);
     this.callerNode = checkNotNull(callerNode);
@@ -80,7 +80,7 @@ public final class CallstackState implements AbstractState, Partitionable, Abstr
     return "Function " + getCurrentFunction()
          + " called from node " + getCallNode()
          + ", stack depth " + getDepth()
-         + " [" + Integer.toHexString(super.hashCode()) + "]";
+         + " [" + Integer.toHexString(this.hashCode()) + "]";
   }
 
   @Override
@@ -126,6 +126,18 @@ public final class CallstackState implements AbstractState, Partitionable, Abstr
     }
 
     throw new InvalidQueryException(String.format("Evaluating %s not supported by %s", pProperty, this.getClass().getCanonicalName()));
+  }
+
+  public void setPreviousState(CallstackState prev) {
+    previousState = prev;
+  }
+
+  @Override
+  public CallstackState clone() {
+    if (this.previousState != null)
+      return new CallstackState(this.previousState.clone(), this.currentFunction, this.callerNode);
+    else
+      return new CallstackState(null, this.currentFunction, this.callerNode);
   }
 
   @Override

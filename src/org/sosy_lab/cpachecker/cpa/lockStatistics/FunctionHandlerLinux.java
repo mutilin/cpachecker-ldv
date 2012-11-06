@@ -23,22 +23,10 @@
  */
 package org.sosy_lab.cpachecker.cpa.lockStatistics;
 
-import java.util.List;
-import java.util.Set;
-
-import org.sosy_lab.cpachecker.cfa.ast.c.CAssignment;
-import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallStatement;
-import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
-import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
-import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
-import org.sosy_lab.cpachecker.cfa.model.c.CFunctionEntryNode;
-import org.sosy_lab.cpachecker.cpa.lockStatistics.LockStatisticsLock.LockType;
 
 
-public class FunctionHandlerLinux extends FunctionHandler{
-
+public class FunctionHandlerLinux{
+/*
   public FunctionHandlerLinux(List<String> pLock, List<String> pUnlock, Set<String> pExceptions) {
     super(pLock, pUnlock, pExceptions);
   }
@@ -94,13 +82,13 @@ public class FunctionHandlerLinux extends FunctionHandler{
     //System.out.println("--" + functionName);
     if (lock.contains(functionName)) {
       assert (paramNames.size() == 1);
-      newElement.add(paramNames.get(0), callEdge.getLineNumber(), LockType.MUTEX);
+      newElement.addLocal(paramNames.get(0), callEdge.getLineNumber(), LockType.MUTEX);
     }
     else if (unlock.contains(functionName)) {
       assert (paramNames.size() == 1);
       newElement.delete(paramNames.get(0));
     }
     return newElement;
-  }
+  }*/
 
 }

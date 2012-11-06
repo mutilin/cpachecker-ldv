@@ -30,6 +30,7 @@ import java.io.PrintWriter;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -39,6 +40,9 @@ import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
+import org.sosy_lab.cpachecker.cfa.blocks.Block;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
@@ -56,6 +60,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   private Map<VariableIdentifier, Set<UsageInfo>> Stat;
   private int FullCounter = 0;
   private int skippedCases = 0;
+  private LinkedList<Block> BlockStack;
 
   PrintWriter writer = null;
   FileOutputStream file = null;
@@ -65,6 +70,10 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
   @Option(name="output", description="file to write results")
   private String FileName = "race_results.txt";
+
+  private String VisualName = "visualize";
+
+  //private String OrigName;
 
   @Option(values={"SIMPLE", "SET"},toUppercase=true,
       description="which data process we should use")
@@ -89,15 +98,19 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       System.exit(0);
     }
     covering = cover;
+
+    //OrigName = config.getProperty("cpa.usagestatistics.path");
     //reducer = pReducer;
   }
 
-  public void add(List<Pair<VariableIdentifier, Access>> result, UsageStatisticsState state, int line, EdgeType type) {
+  public void add(List<Pair<VariableIdentifier, Access>> result, UsageStatisticsState state, int line, EdgeType type) throws HandleCodeException {
     Set<UsageInfo> uset;
     VariableIdentifier id;
 
     LockStatisticsState lockState = AbstractStates.extractStateByType(state, LockStatisticsState.class);
     CallstackState callstackState = AbstractStates.extractStateByType(state, CallstackState.class);
+
+    callstackState = createStack(callstackState);
 
     LineInfo lineInfo = new LineInfo(line);
     EdgeInfo info = new EdgeInfo(type);
@@ -353,8 +366,8 @@ private void printCases(String comment, Collection<VariableIdentifier> identifie
     writer.println("    |- Two examples:");
     try {
       example = findExamples(id);
-      writer.println("    " + example.getFirst().toString());
-      writer.println("    " + example.getSecond().toString());
+      writer.println(example.getFirst().toString());
+      writer.println(example.getSecond().toString());
     } catch (HandleCodeException e) {
       writer.println(e.getMessage());
     }
@@ -383,12 +396,64 @@ private void printCases(String comment, Collection<VariableIdentifier> identifie
     }
   }
 
+  private void createVisualization(VariableIdentifier id) {
+    Set<UsageInfo> uinfo = Stat.get(id);
+    UsageInfo info = null;
+    LinkedList<CallstackState> reversedList = new LinkedList<CallstackState>();
+    CallstackState tmpState;
+    PrintWriter vWriter;
+    int line;
+
+    if (uinfo == null || uinfo.size() == 0)
+      return;
+    for (UsageInfo ui : uinfo) {
+      info = ui;
+      break;
+    }
+    tmpState = info.getCallStack();
+    try {
+      FileOutputStream vFile = new FileOutputStream (VisualName);
+      vWriter = new PrintWriter(vFile);
+    }
+    catch(FileNotFoundException e)
+    {
+      System.out.println("Cannot open file " + FileName);
+      return;
+    }
+    vWriter.println("BLAST error trace v2.7");
+    while (tmpState != null) {
+      reversedList.push(tmpState);
+      tmpState = tmpState.getPreviousState();
+    }
+
+    CFANode tmpNode;
+    line = 0;
+    for (CallstackState currentState : reversedList) {
+      tmpNode = currentState.getCallNode();
+      vWriter.println("FunctionCall(" + tmpNode.getFunctionName() + "()/*" + line + "*/)");
+      line = tmpNode.getLineNumber();
+    }
+    String name = id.name;
+    if (id.status == Ref.REFERENCE)
+      name = "*" + name;
+    else if (id.status == Ref.ADRESS)
+      name = "&" + name;
+    name = id.type.toASTString(name);
+    if (info.getAccess() == Access.READ)
+      name = "... = " + name;
+    else
+      name += " = ...;";
+    name += ("/*" + line + "*/");
+    vWriter.println("Block(" + name + ")");
+    vWriter.close();
+  }
+
   @Override
   public void printStatistics(PrintStream out, Result result, ReachedSet reached) {
 
-    Collection<VariableIdentifier> global = new HashSet<VariableIdentifier>();
-    Collection<VariableIdentifier> local = new HashSet<VariableIdentifier>();
-    Collection<VariableIdentifier> fields = new HashSet<VariableIdentifier>();
+    Collection<GlobalVariableIdentifier> global = new HashSet<GlobalVariableIdentifier>();
+    Collection<LocalVariableIdentifier> local = new HashSet<LocalVariableIdentifier>();
+    Collection<StructureFieldIdentifier> fields = new HashSet<StructureFieldIdentifier>();
 
     try {
       file = new FileOutputStream (FileName);
@@ -407,11 +472,11 @@ private void printCases(String comment, Collection<VariableIdentifier> identifie
 
       if (id.getStatus() == Ref.VARIABLE || !Stat.keySet().contains(id.makeVariable())) {
         if (id instanceof GlobalVariableIdentifier)
-        global.add(id);
+        global.add((GlobalVariableIdentifier)id);
       else if (id instanceof LocalVariableIdentifier)
-        local.add(id);
+        local.add((LocalVariableIdentifier)id);
       else if (id instanceof StructureFieldIdentifier)
-        fields.add(id);
+        fields.add((StructureFieldIdentifier)id);
       }
     }
 
@@ -433,8 +498,9 @@ private void printCases(String comment, Collection<VariableIdentifier> identifie
 
     writer.println("Number of used mutexes: " + mutexes.size());
 
-    if (mutexes.size() > 0)
-      writer.println("  " + mutexes.toString());
+    for (LockStatisticsLock lock : mutexes) {
+      writer.println("  " + lock.toString());
+    }
 
 
     Collection<VariableIdentifier> unsafeCases = dataProcess.process(Stat);
@@ -443,7 +509,10 @@ private void printCases(String comment, Collection<VariableIdentifier> identifie
     /*unsafeCases = FindDifferentSets(Stat);
     printUnsafeCases("Lines with different sets of mutexes were printed", unsafeCases, true);
 */
-
+    for (VariableIdentifier id : fields) {
+      createVisualization(id);
+      break;
+    }
     if (fullstatistics) {
       printCases("Full statistics", Stat.keySet());
     }
@@ -457,5 +526,46 @@ private void printCases(String comment, Collection<VariableIdentifier> identifie
   @Override
   public String getName() {
     return "UsageStatisticsCPA";
+  }
+
+  public CallstackState createStack(CallstackState state) throws HandleCodeException {
+    CallstackState fullState = null, tmpState;
+    CFANode currentNode, previousNode, predecessor;
+    CFAEdge edge;
+
+    previousNode = null;
+    for (int i = 0; i < BlockStack.size(); i++) {
+      currentNode = BlockStack.get(i).getCallNode();
+      predecessor = currentNode;
+      for (int j = 0; j < currentNode.getNumEnteringEdges(); j++) {
+        edge = currentNode.getEnteringEdge(j);
+        predecessor = edge.getPredecessor();
+        if (previousNode == null || predecessor.getFunctionName().equals(previousNode.getFunctionName())) break;
+      }
+      fullState = new CallstackState(fullState, currentNode.getFunctionName(), predecessor);
+      previousNode = currentNode;
+    }
+    CallstackState newState = state.clone();
+    tmpState = newState;
+    if (fullState != null) {
+      if (tmpState.getCurrentFunction().equals(fullState.getCurrentFunction()) && tmpState.getPreviousState() == null)
+        return fullState;
+      else if (!tmpState.getCurrentFunction().equals(fullState.getCurrentFunction()) && tmpState.getPreviousState() != null) {
+        while (!tmpState.getPreviousState().getCurrentFunction().equals(fullState.getCurrentFunction()))
+          tmpState = tmpState.getPreviousState();
+        tmpState.setPreviousState(fullState);
+        return newState;
+      } else if (tmpState.getCurrentFunction().equals(fullState.getCurrentFunction()) && tmpState.getPreviousState() != null) {
+        return fullState;
+      } else /*if (!tmpState.getCurrentFunction().equals(fullState.getCurrentFunction()) && tmpState.getPreviousState() == null)*/ {
+        throw new HandleCodeException("Strange situation in creating call stack");
+      }
+    } else {
+      return newState;
+    }
+  }
+
+  public void setBlockStack(LinkedList<Block> stack) {
+    BlockStack = stack;
   }
 }

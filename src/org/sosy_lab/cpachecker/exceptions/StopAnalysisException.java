@@ -23,14 +23,40 @@
  */
 package org.sosy_lab.cpachecker.exceptions;
 
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
+
 
 
 public class StopAnalysisException extends HandleCodeException {
 
   private static final long serialVersionUID = -6559132286640085407L;
+  private final CFANode node;
+  private final CFAEdge edge;
 
-  public StopAnalysisException(String pMsg) {
+  public StopAnalysisException(String pMsg, CFANode n) {
     super(pMsg);
+    node = n;
+    edge = null;
   }
 
+  public StopAnalysisException(String pMsg, CFAEdge n) {
+    super(pMsg);
+    node = null;
+    edge = n;
+  }
+
+  public StopAnalysisException(String pMsg, CFANode n, CFAEdge e) {
+    super(pMsg);
+    node = n;
+    edge = e;
+  }
+
+  public CFANode getNode() {
+    return node;
+  }
+
+  public CFAEdge getEdge() {
+    return edge;
+  }
 }

@@ -23,6 +23,9 @@
  */
 package org.sosy_lab.cpachecker.cpa.lockStatistics;
 
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdgeType;
+import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.usageStatistics.LineInfo;
 
 
@@ -40,13 +43,25 @@ public class LockStatisticsLock {
   }
 
   private String name;
+  private String functionName;
+  private CallstackState callstack;
   private LineInfo line;
   private LockType type;
 
-  LockStatisticsLock(String n, int l, LockType t) {
+  LockStatisticsLock(String n, int l, LockType t, String fName, CallstackState s) {
     name = n;
     line = new LineInfo(l);
     type = t;
+    functionName = fName;
+    callstack = s;
+  }
+
+  LockStatisticsLock(String n, int l, LockType t, CallstackState s) {
+    name = n;
+    line = new LineInfo(l);
+    type = t;
+    functionName = "";
+    callstack = s;
   }
 
   public String getName() {
@@ -61,6 +76,8 @@ public class LockStatisticsLock {
   public int hashCode() {
     final int prime = 31;
     int result = 1;
+    result = prime * result + ((functionName == null) ? 0 : functionName.hashCode());
+    //result = prime * result + ((line == null) ? 0 : line.hashCode());
     result = prime * result + ((name == null) ? 0 : name.hashCode());
     result = prime * result + ((type == null) ? 0 : type.hashCode());
     return result;
@@ -75,6 +92,16 @@ public class LockStatisticsLock {
     if (getClass() != obj.getClass())
       return false;
     LockStatisticsLock other = (LockStatisticsLock) obj;
+    if (functionName == null) {
+      if (other.functionName != null)
+        return false;
+    } else if (!functionName.equals(other.functionName))
+      return false;
+    /*if (line == null) {
+      if (other.line != null)
+        return false;
+    } else if (!line.equals(other.line))
+      return false;*/
     if (name == null) {
       if (other.name != null)
         return false;
@@ -87,6 +114,32 @@ public class LockStatisticsLock {
 
   @Override
   public String toString() {
-    return type.toASTString() + " "+ name + "(" + line.toString() + " line)";
+    StringBuilder sb = new StringBuilder();
+
+    sb.append("  " + type.toASTString() + " "+ name + (functionName != "" ? " in " : "") + functionName + "(" + line.toString()
+        + " line)\n");
+
+    CallstackState e = callstack;
+    sb.append("        ");
+    while (e != null) {
+      LineInfo lineN = null;
+      for (int i = 0; i < e.getCallNode().getNumLeavingEdges(); i++) {
+        CFAEdge edge = e.getCallNode().getLeavingEdge(i);
+        if (edge.getEdgeType() == CFAEdgeType.FunctionCallEdge) {
+          lineN = new LineInfo(edge.getLineNumber());
+          break;
+        }
+      }
+      sb.append(e.getCurrentFunction() + "(" + (lineN != null ? lineN.toString() : "-") + ")" + " <- ");
+      e = e.getPreviousState();
+    }
+    if (callstack != null)
+      sb.delete(sb.length() - 3, sb.length());
+    sb.append("\n");
+    return sb.toString();
+  }
+
+  public Object getFunctionName() {
+    return functionName;
   }
 }

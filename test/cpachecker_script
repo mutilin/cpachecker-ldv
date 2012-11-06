@@ -53,7 +53,7 @@ my %info_fn;
 my %info_fnda;
 my %info_da;
 
-while (<$lcov_info_fh>)
+top:while (<$lcov_info_fh>)
 {
   my $str = $_;
   
@@ -80,6 +80,17 @@ while (<$lcov_info_fh>)
   if ($str =~ /^DA:(\d+),(.+)$/)
   {
     my $orig_location = $src_map{$1} or die("Can't get original location for line '$1'");
+    
+#     if ($orig_location->{'file'} =~ /.+validation.c/  && $orig_location->{'line'} == 224)
+#     {
+#       print($orig_location->{'file'}."$2\n");
+#     }
+    
+    foreach my $info (@{$info_da{$orig_location->{'file'}}})
+    {
+      next top if ($info->{'line'} == $orig_location->{'line'} && $info->{'used'} == $2) 
+    }
+    
     push(@{$info_da{$orig_location->{'file'}}}, {'line' => $orig_location->{'line'}, 'used'=>$2});
   }
 }

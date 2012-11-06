@@ -44,9 +44,6 @@ class BoundedRecursionDomain implements AbstractDomain {
   public boolean isLessOrEqual(AbstractState pElement1, AbstractState pElement2) throws CPAException {
     // returns true if element1 < element2 on lattice
 
-    BoundedRecursionState elem1 = (BoundedRecursionState) pElement1;
-    BoundedRecursionState elem2 = (BoundedRecursionState) pElement2;
-
-    return wrappedDomain.isLessOrEqual(elem1.getWrappedState(), elem2.getWrappedState());
+    return wrappedDomain.isLessOrEqual(pElement1, pElement2);
   }
 }

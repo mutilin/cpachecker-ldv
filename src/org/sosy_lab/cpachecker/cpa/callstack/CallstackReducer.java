@@ -69,7 +69,11 @@ public class CallstackReducer implements Reducer {
   private CallstackState copyCallstackExceptLast(CallstackState target, CallstackState source) {
     if (source.getDepth() == 1) {
       assert source.getPreviousState() == null;
-      assert source.getCurrentFunction().equals(target.getCurrentFunction());
+      try {
+        assert source.getCurrentFunction().equals(target.getCurrentFunction());
+      } catch (AssertionError e) {
+        System.out.println("here");
+      }
       return target;
     } else {
       CallstackState recursiveResult = copyCallstackExceptLast(target, source.getPreviousState());

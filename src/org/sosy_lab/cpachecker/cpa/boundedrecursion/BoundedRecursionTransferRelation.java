@@ -23,10 +23,8 @@
  */
 package org.sosy_lab.cpachecker.cpa.boundedrecursion;
 
-import static org.sosy_lab.cpachecker.util.AbstractStates.extractLocation;
-
-import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.logging.Level;
 
@@ -41,8 +39,11 @@ import org.sosy_lab.cpachecker.cfa.model.c.CFunctionSummaryEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
+import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
-import org.sosy_lab.cpachecker.exceptions.StopRecursionException;
+import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
+import org.sosy_lab.cpachecker.exceptions.StopAnalysisException;
+
 
 class BoundedRecursionTransferRelation implements TransferRelation {
 
@@ -60,66 +61,43 @@ class BoundedRecursionTransferRelation implements TransferRelation {
       AbstractState pElement, Precision pPrecision, CFAEdge pCfaEdge)
       throws CPATransferException, InterruptedException {
 
-    final BoundedRecursionState oldState = (BoundedRecursionState)pElement;
-    Collection<BoundedRecursionState> results;
+    ARGState oldState = (ARGState)pElement;
+    //LocationState state = AbstractStates.extractStateByType(oldState, LocationState.class);
+    //if (state.getCurrentFunction().equals("vsyslog"))*/
+    //  System.out.println(state.getLocationNode().getLineNumber());
+    Collection<? extends AbstractState> results = Collections.emptySet();
 
     if (pCfaEdge == null) {
-      CFANode node = extractLocation(oldState);
-      results = new ArrayList<BoundedRecursionState>(node.getNumLeavingEdges());
+      try {
+        results = wrappedTransfer.getAbstractSuccessors(pElement, pPrecision, pCfaEdge);
 
-      for (int edgeIdx = 0; edgeIdx < node.getNumLeavingEdges(); edgeIdx++) {
-        CFAEdge edge = node.getLeavingEdge(edgeIdx);
-        try {
-          getAbstractSuccessorForEdge(oldState, pPrecision, edge, results);
+      } catch (StopAnalysisException e) {
+        CFANode node = e.getNode();
+        CFAEdge edge = e.getEdge();
+
+        logger.log(Level.INFO, "Stop analisys: " + e.getMessage());
+
+        if (edge == null) {
+          for (int edgeIdx = 0; edgeIdx < node.getNumLeavingEdges(); edgeIdx++) {
+
+            edge = node.getLeavingEdge(edgeIdx);
+
+            if (edge instanceof CFunctionCallEdge)
+              break;
+          }
         }
-        catch (StopRecursionException e) {
-          assert (edge instanceof CFunctionCallEdge);
 
-          logger.log(Level.INFO, "Recursion found: " + edge.getCode() + ", (" + edge.getLineNumber() + ")");
+        assert edge != null;
 
-          CFunctionSummaryEdge sEdge = ((CFunctionCallEdge)edge).getSummaryEdge();
-          CFAEdge newEdge;
-          newEdge = new BlankEdge(edge.getRawStatement(),
-              edge.getLineNumber(), edge.getPredecessor(), sEdge.getSuccessor(),
-              "recursion edge");
-          getAbstractSuccessorForEdge(oldState, pPrecision, newEdge, results);
-        }
+        CFunctionSummaryEdge sEdge = ((CFunctionCallEdge)edge).getSummaryEdge();
+        CFAEdge newEdge = new BlankEdge(edge.getRawStatement(), edge.getLineNumber(), edge.getPredecessor(), sEdge.getSuccessor(), "recursion edge");
+        results = wrappedTransfer.getAbstractSuccessors(oldState, pPrecision, newEdge);
       }
 
     } else {
-      results = new ArrayList<BoundedRecursionState>(1);
-      try{
-        getAbstractSuccessorForEdge(oldState, pPrecision, pCfaEdge, results);
-      }
-      catch (StopRecursionException e) {
-        assert (pCfaEdge instanceof CFunctionCallEdge);
-
-        logger.log(Level.INFO, "Recursion found: " + pCfaEdge.getCode() + ", (" + pCfaEdge.getLineNumber() + ")");
-
-        CFunctionSummaryEdge sEdge = ((CFunctionCallEdge)pCfaEdge).getSummaryEdge();
-        CFAEdge newEdge;
-        newEdge = new BlankEdge(pCfaEdge.getRawStatement(),
-            pCfaEdge.getLineNumber(), pCfaEdge.getPredecessor(), sEdge.getSuccessor(),
-            "recursion edge");
-        getAbstractSuccessorForEdge(oldState, pPrecision, newEdge, results);
-      }
+      throw new HandleCodeException("Not first CPA");
     }
     return results;
-  }
-
-  private void getAbstractSuccessorForEdge(BoundedRecursionState oldState,
-      Precision pPrecision, CFAEdge pCfaEdge, Collection<BoundedRecursionState> results)
-      throws CPATransferException, InterruptedException {
-
-    Collection<? extends AbstractState> newWrappedStates = wrappedTransfer.getAbstractSuccessors(oldState.getWrappedState(), pPrecision, pCfaEdge);
-
-    for (AbstractState newWrappedState : newWrappedStates) {
-      BoundedRecursionState newState = oldState.createDuplicateWithNewWrappedState(newWrappedState);
-
-      if (newState != null) {
-        results.add(newState);
-      }
-    }
   }
 
   @Override

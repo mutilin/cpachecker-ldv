@@ -84,7 +84,7 @@ import org.sosy_lab.cpachecker.exceptions.UnrecognizedCFAEdgeException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 
 @Options(prefix="cpa.usagestatistics")
-class UsageStatisticsTransferRelation implements TransferRelation {
+public class UsageStatisticsTransferRelation implements TransferRelation {
 
   private final TransferRelation wrappedTransfer;
   private final UsageStatisticsCPAStatistics statistics;
@@ -98,10 +98,11 @@ class UsageStatisticsTransferRelation implements TransferRelation {
 
   private Map<String, FunctionInfo> functionInfo;
 
-  //@Option(description = "functions, which we analize special way: simple pointer analisys")
+  private UsageStatisticsState oldState;
+  //@Option(description = "functions, which we analyze special way: simple pointer analysis")
   //private FunctionInfo testOption = null;
 
-  UsageStatisticsTransferRelation(TransferRelation pWrappedTransfer,
+  public UsageStatisticsTransferRelation(TransferRelation pWrappedTransfer,
       Configuration config, UsageStatisticsCPAStatistics s, CodeCovering cover) throws InvalidConfigurationException {
     config.inject(this);
     wrappedTransfer = pWrappedTransfer;
@@ -121,9 +122,8 @@ class UsageStatisticsTransferRelation implements TransferRelation {
       AbstractState pElement, Precision pPrecision, CFAEdge pCfaEdge)
       throws InterruptedException, CPATransferException {
 
-    final UsageStatisticsState oldState = (UsageStatisticsState)pElement;
+    oldState = (UsageStatisticsState)pElement;
     Collection<UsageStatisticsState> results;
-
     if (pCfaEdge == null) {
       CFANode node = extractLocation(oldState);
       results = new ArrayList<UsageStatisticsState>(node.getNumLeavingEdges());
@@ -145,6 +145,7 @@ class UsageStatisticsTransferRelation implements TransferRelation {
       Precision pPrecision, CFAEdge pCfaEdge, Collection<UsageStatisticsState> results)
       throws InterruptedException, CPATransferException {
 
+    //System.out.println(pCfaEdge.getRawStatement());
     Collection<? extends AbstractState> newWrappedStates = wrappedTransfer.getAbstractSuccessors(oldState.getWrappedState(), pPrecision, pCfaEdge);
     for (AbstractState newWrappedState : newWrappedStates) {
       UsageStatisticsState newState = oldState.clone(newWrappedState);
@@ -157,7 +158,7 @@ class UsageStatisticsTransferRelation implements TransferRelation {
   }
 
   private UsageStatisticsState handleEdge(UsageStatisticsState newState, CFAEdge pCfaEdge) throws CPATransferException {
-    //System.out.println(pCfaEdge.getRawStatement());
+
     switch(pCfaEdge.getEdgeType()) {
 
       // declaration of a function pointer.
@@ -267,6 +268,11 @@ class UsageStatisticsTransferRelation implements TransferRelation {
           AbstractStates.extractStateByType(pNewState, CallstackState.class).getCurrentFunction(), 0, false);
 
       statistics.add(result, pNewState, initExpression.getFileLocation().getStartingLineNumber(), EdgeType.DECLARATION);
+
+      VariableIdentifier id = createIdentifier(decl, declEdge.getPredecessor().getFunctionName(), 0);
+      result.clear();
+      result.add(Pair.of(id, Access.WRITE));
+      statistics.add(result, pNewState, initExpression.getFileLocation().getStartingLineNumber(), EdgeType.DECLARATION);
     }
   }
 
@@ -305,16 +311,25 @@ class UsageStatisticsTransferRelation implements TransferRelation {
           statistics.add(result, pNewState, fcExpression.getFileLocation().getStartingLineNumber(), EdgeType.ASSIGNMENT);
         }
       }
-      return;
-    }
-
-    if (skippedfunctions != null && skippedfunctions.contains(functionName)) {
-      throw new StopAnalysisException("Function " + functionCallName + " is skipped.");
+      //return;
     }
 
     covering.addFunctionUsage(functionCallName);
-    List<CExpression> params = fcExpression.getParameterExpressions();
+    if (skippedfunctions != null && skippedfunctions.contains(functionName)) {
+      CallstackState callstack = AbstractStates.extractStateByType(pNewState, CallstackState.class);
+      throw new StopAnalysisException("Function " + functionCallName + " is skipped", callstack.getCallNode());
+    }
 
+    List<CExpression> params = fcExpression.getParameterExpressions();
+    //It's strange, but callstack thinks, that we are already in called function
+    /*CallstackState callstack = AbstractStates.extractStateByType(pNewState, CallstackState.class);
+    if (callstack.getPreviousState() != null)
+      //it means, that we call function
+      functionName = callstack.getPreviousState().getCurrentFunction();
+    else
+      //we already in function and look on it signature
+      //TODO now it works only with ABM
+      return;*/
     for (CExpression p : params) {
       result = handleRead(p, functionName, 0, false);
 
@@ -388,6 +403,11 @@ class UsageStatisticsTransferRelation implements TransferRelation {
       return null;
     }
 
+    return createIdentifier(decl, function, dereference);
+  }
+
+  private VariableIdentifier createIdentifier(CSimpleDeclaration decl, String function, int dereference) throws HandleCodeException
+  {
     String name = decl.getName();
     CType type = decl.getType();
 
@@ -574,5 +594,9 @@ class UsageStatisticsTransferRelation implements TransferRelation {
     // in this method we could access the abstract domains of other CPAs
     // if required.
     return null;
+  }
+
+  public UsageStatisticsState getOldState() {
+    return oldState;
   }
 }

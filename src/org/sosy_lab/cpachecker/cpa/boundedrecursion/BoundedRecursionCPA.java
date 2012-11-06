@@ -26,32 +26,31 @@ package org.sosy_lab.cpachecker.cpa.boundedrecursion;
 import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
+import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.defaults.AbstractSingleWrapperCPA;
 import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
 import org.sosy_lab.cpachecker.core.defaults.MergeSepOperator;
-import org.sosy_lab.cpachecker.core.defaults.StopSepOperator;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractDomain;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.CPAFactory;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
-import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysisWithABM;
 import org.sosy_lab.cpachecker.core.interfaces.MergeOperator;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustment;
-import org.sosy_lab.cpachecker.core.interfaces.Reducer;
 import org.sosy_lab.cpachecker.core.interfaces.StopOperator;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
+import org.sosy_lab.cpachecker.cpa.abm.ABMLockCPA;
 
-public class BoundedRecursionCPA extends AbstractSingleWrapperCPA implements ConfigurableProgramAnalysisWithABM {
+@Options(prefix="cpa.boundedrecursion")
+public class BoundedRecursionCPA extends AbstractSingleWrapperCPA {
 
   private BoundedRecursionDomain abstractDomain;
   private MergeOperator mergeOperator;
   private StopOperator stopOperator;
   private TransferRelation transferRelation;
   private PrecisionAdjustment precisionAdjustment;
-  private final Reducer reducer;
 
   public static CPAFactory factory() {
     return AutomaticCPAFactory.forType(BoundedRecursionCPA.class);
@@ -59,29 +58,17 @@ public class BoundedRecursionCPA extends AbstractSingleWrapperCPA implements Con
 
   private BoundedRecursionCPA(ConfigurableProgramAnalysis pCpa, CFA pCfa, LogManager pLogger, Configuration pConfig) throws InvalidConfigurationException {
     super(pCpa);
+    if (pCpa instanceof ABMLockCPA)
+      ((ABMLockCPA)pCpa).getTransferRelation().changeAlgorithm(this, pConfig);
     this.abstractDomain = new BoundedRecursionDomain(pCpa.getAbstractDomain());
     this.mergeOperator = initializeMergeOperator();
-    this.stopOperator = initializeStopOperator();
+    this.stopOperator = getWrappedCpa().getStopOperator();
     this.transferRelation = new BoundedRecursionTransferRelation(pCpa.getTransferRelation(), pConfig, pLogger);
     this.precisionAdjustment = new BoundedRecursionPrecisionAdjustment(pCpa.getPrecisionAdjustment());
-    if (pCpa instanceof ConfigurableProgramAnalysisWithABM) {
-      Reducer wrappedReducer = ((ConfigurableProgramAnalysisWithABM)pCpa).getReducer();
-      if (wrappedReducer != null) {
-        reducer = new BoundedRecursionReducer(wrappedReducer);
-      } else {
-        reducer = null;
-      }
-    } else {
-      reducer = null;
-    }
   }
 
   private MergeOperator initializeMergeOperator() {
     return MergeSepOperator.getInstance();
-  }
-
-  private StopOperator initializeStopOperator() {
-    return new StopSepOperator(abstractDomain);
   }
 
   @Override
@@ -111,16 +98,11 @@ public class BoundedRecursionCPA extends AbstractSingleWrapperCPA implements Con
 
   @Override
   public AbstractState getInitialState(CFANode pNode) {
-    return BoundedRecursionState.createEmptyState(getWrappedCpa().getInitialState(pNode));
+    return getWrappedCpa().getInitialState(pNode);
   }
 
   @Override
   public Precision getInitialPrecision(CFANode pNode) {
     return getWrappedCpa().getInitialPrecision(pNode);
-  }
-
-  @Override
-  public Reducer getReducer() {
-    return reducer;
   }
 }

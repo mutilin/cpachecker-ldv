@@ -47,13 +47,11 @@ class BoundedRecursionPrecisionAdjustment implements PrecisionAdjustment {
   public Triple<AbstractState, Precision, Action> prec(AbstractState pElement,
       Precision oldPrecision, UnmodifiableReachedSet pElements) throws CPAException {
 
-    Preconditions.checkArgument(pElement instanceof BoundedRecursionState);
-    BoundedRecursionState element = (BoundedRecursionState)pElement;
+    Preconditions.checkArgument(pElement instanceof ARGState);
+    ARGState oldElement = (ARGState)pElement;
 
     UnmodifiableReachedSet elements = new UnmodifiableReachedSetView(
         pElements,  ARGState.getUnwrapFunction(), Functions.<Precision>identity());
-
-    AbstractState oldElement = element.getWrappedState();
 
     Triple<AbstractState, Precision, Action> unwrappedResult = wrappedPrecAdjustment.prec(oldElement, oldPrecision, elements);
 
@@ -61,13 +59,11 @@ class BoundedRecursionPrecisionAdjustment implements PrecisionAdjustment {
     Precision newPrecision = unwrappedResult.getSecond();
     Action action = unwrappedResult.getThird();
 
-    if ((oldElement == newElement) && (oldPrecision == newPrecision)) {
+    if (oldElement.equals(newElement) && (oldPrecision.equals(newPrecision))) {
       // nothing has changed
       return Triple.of(pElement, oldPrecision, action);
     }
 
-    AbstractState resultElement = element.createDuplicateWithNewWrappedState(newElement);
-
-    return Triple.of(resultElement, newPrecision, action);
+    return Triple.of(newElement, newPrecision, action);
   }
 }

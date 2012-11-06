@@ -38,7 +38,7 @@ import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.blocks.BlockPartitioning;
-import org.sosy_lab.cpachecker.cfa.blocks.builder.FunctionAndLoopPartitioning;
+import org.sosy_lab.cpachecker.cfa.blocks.builder.FunctionPartitioning;
 import org.sosy_lab.cpachecker.cfa.blocks.builder.PartitioningHeuristic;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.defaults.AbstractSingleWrapperCPA;
@@ -80,9 +80,10 @@ public class ABMCPA extends AbstractSingleWrapperCPA implements StatisticsProvid
   @Option(description="Type of partitioning (FunctionAndLoopPartitioning or DelayedFunctionAndLoopPartitioning)\n"
                     + "or any class that implements a PartitioningHeuristic")
   @ClassOption(packagePrefix="org.sosy_lab.cpachecker.cfa.blocks.builder")
-  protected Class<? extends PartitioningHeuristic> blockHeuristic = FunctionAndLoopPartitioning.class;
+  protected Class<? extends PartitioningHeuristic> blockHeuristic = FunctionPartitioning.class;
 
-  public ABMCPA(ConfigurableProgramAnalysis pCpa, Configuration config, LogManager pLogger, ReachedSetFactory pReachedSetFactory, CFA pCfa) throws InvalidConfigurationException, CPAException {
+  public ABMCPA(ConfigurableProgramAnalysis pCpa, Configuration config, LogManager pLogger, ReachedSetFactory pReachedSetFactory,
+      CFA pCfa) throws InvalidConfigurationException, CPAException {
     super(pCpa);
     config.inject(this);
 

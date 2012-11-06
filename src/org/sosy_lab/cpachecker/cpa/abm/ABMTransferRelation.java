@@ -63,8 +63,11 @@ import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.arg.Path;
+import org.sosy_lab.cpachecker.cpa.boundedrecursion.BoundedRecursionCPA;
+import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
+import org.sosy_lab.cpachecker.exceptions.StopAnalysisException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Precisions;
 
@@ -259,12 +262,13 @@ public class ABMTransferRelation implements TransferRelation {
 
   private Block currentBlock;
   private LinkedList<Block> BlockStack = new LinkedList<Block>();
+  //private LinkedList<String> FuncStack = new LinkedList<String>();
 
   private BlockPartitioning partitioning;
   private int depth = 0;
 
   private final LogManager logger;
-  private final CPAAlgorithm algorithm;
+  private CPAAlgorithm algorithm;
   private final TransferRelation wrappedTransfer;
   private final ReachedSetFactory reachedSetFactory;
   private final Reducer wrappedReducer;
@@ -291,10 +295,14 @@ public class ABMTransferRelation implements TransferRelation {
   final Timer searchingTimer = new Timer();
 
 
+  public void changeAlgorithm(BoundedRecursionCPA brCpa, Configuration pConfig) throws InvalidConfigurationException {
+    algorithm = new CPAAlgorithm(brCpa, logger, pConfig);
+  }
 
   public ABMTransferRelation(Configuration pConfig, LogManager pLogger, ABMCPA abmCpa, ReachedSetFactory pReachedSetFactory) throws InvalidConfigurationException {
     pConfig.inject(this);
     logger = pLogger;
+    //TODO make it better
     algorithm = new CPAAlgorithm(abmCpa, logger, pConfig);
     reachedSetFactory = pReachedSetFactory;
     wrappedTransfer = abmCpa.getWrappedCpa().getTransferRelation();
@@ -302,7 +310,6 @@ public class ABMTransferRelation implements TransferRelation {
     prec = abmCpa.getPrecisionAdjustment();
     assert wrappedReducer != null;
   }
-
 
   void setForwardPrecisionToExpandedPrecision(
       Map<AbstractState, Precision> pForwardPrecisionToExpandedPrecision) {
@@ -330,7 +337,7 @@ public class ABMTransferRelation implements TransferRelation {
     if (edge == null) {
       CFANode node = extractLocation(pElement);
 
-      if (partitioning.isCallNode(node) && BlockStack.size() < 25) {
+      if (partitioning.isCallNode(node)) {
         //we have to start a recursive analysis
         nextBlock = partitioning.getBlockForCallNode(node);
         if (nextBlock.equals(currentBlock)) {
@@ -342,24 +349,9 @@ public class ABMTransferRelation implements TransferRelation {
         }
         if (BlockStack.contains(nextBlock)) {
           logger.log(Level.FINER, "BlockStack contains nextBlock");
-          /*System.out.println("nextBlock function = " + nextBlock.getCallNode().getFunctionName() + "(" +
-              nextBlock.getCallNode().getLineNumber() + ")" + ", currentBlock function = " +
-              currentBlock.getCallNode().getFunctionName() + "(" + currentBlock.getCallNode().getLineNumber() + ")");
-*/
-          //if (BlockStack.size() < 6) {
-          //if(true){
-          System.out.println("Recursion in blocks, get successors");
-          return wrappedTransfer.getAbstractSuccessors(pElement, pPrecision, edge);
-          //} else {
-          //logger.log(Level.FINER, "Recursion in blocks, skipping it");
-          //FunctionSummaryEdge sEdge = node.getNumEnteringEdges();
-          //System.out.println("Summary edge: " + node.getNumLeavingEdges());
-          /*CFAEdge newEdge = new BlankEdge(edge.getRawStatement(),
-              edge.getLineNumber(), edge.getPredecessor(), sEdge.getSuccessor(),
-              "new edge");
-          getAbstractSuccessorForEdge(oldState, pPrecision, newEdge, results);*/
-          // return Collections.emptySet();
-          //}
+          //TODO Always function calls here?
+          CallstackState callstack = AbstractStates.extractStateByType(pElement, CallstackState.class);
+          throw new StopAnalysisException("ABM detects recursion", callstack.getCallNode());
         }
         if (isHeadOfMainFunction(node)) {
           //skip main function
@@ -380,13 +372,23 @@ public class ABMTransferRelation implements TransferRelation {
         maxRecursiveDepth = Math.max(depth, maxRecursiveDepth);
 
         Block outerSubtree = currentBlock;
-        System.out.println("currentBlock.Func=" + currentBlock.getCallNode().getFunctionName());
-        System.out.println("nextBlock.Func=" + nextBlock.getCallNode().getFunctionName());
+        /*String name = currentBlock.getCallNode().getFunctionName();
+
+        if (name.equals("printExc")){
+          logger.log(Level.INFO, "currentBlock.Func=" + name);
+          logger.log(Level.INFO, "currentState: " + pElement);
+        }*/
+        //System.out.println("currentBlock.Func=" + currentBlock.getCallNode().getFunctionName());
         currentBlock = partitioning.getBlockForCallNode(node);
+        //FuncStack.add(currentBlock.getCallNode().getFunctionName());
         BlockStack.add(currentBlock);
-        System.out.println("Current stack size = " + BlockStack.size());
+        //System.out.println(FuncStack);
+        //System.out.println("Cash hits: " + fullCacheHits);
         Collection<Pair<AbstractState, Precision>> reducedResult = performCompositeAnalysis(pElement, pPrecision, node);
         BlockStack.removeLast();
+        //FuncStack.removeLast();
+        //System.out.println("remove block");
+
         logger.log(Level.FINER, "Current stack size = " + BlockStack.size());
         logger.log(Level.FINER, "Recursive analysis of depth", depth--, "finished");
         logger.log(Level.ALL, "Resulting elements:", reducedResult);
@@ -415,6 +417,7 @@ public class ABMTransferRelation implements TransferRelation {
       }
       else {
         List<AbstractState> result = new ArrayList<AbstractState>();
+
         for (int i = 0; i < node.getNumLeavingEdges(); i++) {
           CFAEdge e = node.getLeavingEdge(i);
           result.addAll(getAbstractSuccessors0(pElement, pPrecision, e));
@@ -435,14 +438,15 @@ public class ABMTransferRelation implements TransferRelation {
     if (currentNodeBlock != null && !currentBlock.equals(currentNodeBlock) && currentNodeBlock.getNodes().contains(edge.getSuccessor())) {
       // we are not analyzing the block corresponding to currentNode (currentNodeBlock) but the currentNodeBlock is inside of this block
       // avoid a reanalysis
+      //System.out.println("We've lost1");
       return Collections.emptySet();
     }
 
     if (currentBlock.isReturnNode(currentNode) && !currentBlock.getNodes().contains(edge.getSuccessor())) {
       // do not perform analysis beyond the current block
+      //System.out.println("We've lost2");
       return Collections.emptySet();
     }
-
     return wrappedTransfer.getAbstractSuccessors(pElement, pPrecision, edge);
   }
 
@@ -452,7 +456,7 @@ public class ABMTransferRelation implements TransferRelation {
   }
 
 
-  private Collection<Pair<AbstractState, Precision>> performCompositeAnalysis(AbstractState initialState, Precision initialPrecision, CFANode node) throws InterruptedException, RecursiveAnalysisFailedException {
+  private Collection<Pair<AbstractState, Precision>> performCompositeAnalysis(AbstractState initialState, Precision initialPrecision, CFANode node) throws InterruptedException, RecursiveAnalysisFailedException, StopAnalysisException {
     try {
       AbstractState reducedInitialState = wrappedReducer.getVariableReducedState(initialState, currentBlock, node);
       Precision reducedInitialPrecision = wrappedReducer.getVariableReducedPrecision(initialPrecision, currentBlock);
@@ -509,6 +513,8 @@ public class ABMTransferRelation implements TransferRelation {
       argCache.put(reducedInitialState, reached.getPrecision(reached.getFirstState()), currentBlock, returnElements);
 
       return imbueAbstractStatesWithPrecision(reached, returnElements);
+    } catch (StopAnalysisException e) {
+      throw e;
     } catch (CPAException e) {
       throw new RecursiveAnalysisFailedException(e);
     }
@@ -933,4 +939,7 @@ public class ABMTransferRelation implements TransferRelation {
     return wrappedTransfer.strengthen(pElement, pOtherElements, pCfaEdge, pPrecision);
   }
 
+  public LinkedList<Block> getBlockStack() {
+    return BlockStack;
+  }
 }
