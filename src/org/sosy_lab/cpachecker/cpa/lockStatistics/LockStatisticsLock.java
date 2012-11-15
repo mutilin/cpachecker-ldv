@@ -23,8 +23,6 @@
  */
 package org.sosy_lab.cpachecker.cpa.lockStatistics;
 
-import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
-import org.sosy_lab.cpachecker.cfa.model.CFAEdgeType;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.usageStatistics.LineInfo;
 
@@ -68,8 +66,8 @@ public class LockStatisticsLock {
     return name;
   }
 
-  public int getLine() {
-    return line.getLine();
+  public LineInfo getLine() {
+    return line;
   }
 
   @Override
@@ -116,10 +114,9 @@ public class LockStatisticsLock {
   public String toString() {
     StringBuilder sb = new StringBuilder();
 
-    sb.append("  " + type.toASTString() + " "+ name + (functionName != "" ? " in " : "") + functionName + "(" + line.toString()
-        + " line)\n");
+    sb.append(type.toASTString() + " "+ name);
 
-    CallstackState e = callstack;
+    /*CallstackState e = callstack;
     sb.append("        ");
     while (e != null) {
       LineInfo lineN = null;
@@ -135,11 +132,15 @@ public class LockStatisticsLock {
     }
     if (callstack != null)
       sb.delete(sb.length() - 3, sb.length());
-    sb.append("\n");
+    sb.append("\n");*/
     return sb.toString();
   }
 
   public Object getFunctionName() {
     return functionName;
+  }
+
+  public CallstackState getCallstack() {
+    return callstack;
   }
 }

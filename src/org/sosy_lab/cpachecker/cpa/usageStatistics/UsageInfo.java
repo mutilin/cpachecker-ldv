@@ -59,7 +59,7 @@ public class UsageInfo {
 
   public Set<LockStatisticsLock> getLocks() {
     Set<LockStatisticsLock> allLocks  = new HashSet<LockStatisticsLock>(locks.getGlobalLocks());
-    allLocks.addAll(locks.getLocalLocks());
+    //allLocks.addAll(locks.getLocalLocks());
     return allLocks;
   }
 

@@ -89,4 +89,8 @@ public class StructureFieldIdentifier extends VariableIdentifier{
   public StructureFieldIdentifier clone() {
     return new StructureFieldIdentifier(name, type, fieldType, status);
   }
+
+  public String getFieldType() {
+    return fieldType;
+  }
 }

@@ -86,13 +86,17 @@ public abstract class VariableIdentifier implements Identifier {
     return newId;
   }
 
+  public String getSimpleName() {
+    return name;
+  }
+
   public String getName() {
     if (status == Ref.ADRESS)
-      return "&" + name;
+      return "(&" + name + ")";
     else if (status == Ref.VARIABLE)
       return name;
     else if (status == Ref.REFERENCE)
-      return "*" + name;
+      return "(*" + name + ")";
     else
       return name;
   }

@@ -90,4 +90,8 @@ public class LocalVariableIdentifier extends VariableIdentifier{
   public LocalVariableIdentifier clone() {
     return new LocalVariableIdentifier(name, type, function, status);
   }
+
+  public String getFunction() {
+    return function;
+  }
 }

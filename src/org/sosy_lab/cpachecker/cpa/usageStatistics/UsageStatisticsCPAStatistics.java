@@ -57,6 +57,7 @@ import org.sosy_lab.cpachecker.util.AbstractStates;
 
 @Options(prefix="cpa.usagestatistics")
 public class UsageStatisticsCPAStatistics implements Statistics {
+
   private Map<VariableIdentifier, Set<UsageInfo>> Stat;
   private int FullCounter = 0;
   private int skippedCases = 0;
@@ -66,11 +67,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   FileOutputStream file = null;
   DataProcessing dataProcess = null;
   CodeCovering covering;
-  //private final Reducer reducer;
 
-  @Option(name="output", description="file to write results")
-  private String FileName = "race_results.txt";
-
+  @Option(name="output", description="directory to write results")
+  private String DirName = "test/";
   private String VisualName = "visualize";
 
   //private String OrigName;
@@ -99,6 +98,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
     covering = cover;
 
+    VisualName = DirName + VisualName;
     //OrigName = config.getProperty("cpa.usagestatistics.path");
     //reducer = pReducer;
   }
@@ -137,142 +137,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
   }
 
-
-  /*private Collection<VariableInfo> FindUnsafeCases(Collection<VariableInfo> locks) {
-  Map<Integer, Set<Set<LockStatisticsMutex>>> Cases = new HashMap<Integer, Set<Set<LockStatisticsMutex>>>();
-
-  Collection<VariableInfo> unsafe = new HashSet<VariableInfo>();
-
-  for (VariableInfo var : locks) {
-    VariableInfo UnsafeTypes = new VariableInfo(var.getName());
-
-    for (String type : var.keySet()) {
-      TypeInfo typeInfo = var.get(type);
-
-      Cases.clear();
-      Set<Set<LockStatisticsMutex>> DifferentLocks;
-
-      for (LineInfo line : typeInfo.getLines()) {
-        if (Cases.containsKey(line.getLine())) {
-          DifferentLocks = Cases.get(line.getLine());
-          if (!DifferentLocks.contains(line.getLocks())) {
-            DifferentLocks.add(line.getLocks());
-          }
-        }
-        else {
-          DifferentLocks = new HashSet<Set<LockStatisticsMutex>>();
-          DifferentLocks.add(line.getLocks());
-          Cases.put(line.getLine(), DifferentLocks);
-        }
-      }
-
-      Map<Set<Set<LockStatisticsMutex>>, Set<Integer>> LocksCount = new HashMap<Set<Set<LockStatisticsMutex>>, Set<Integer>>();
-
-      for (Integer line : Cases.keySet()) {
-        DifferentLocks = Cases.get(line);
-        if (!LocksCount.containsKey(DifferentLocks)) {
-          Set<Integer> lines = new HashSet<Integer>();
-          lines.add(line);
-          LocksCount.put(DifferentLocks, lines);
-        }
-        else {
-          Set<Integer> lines = LocksCount.get(DifferentLocks);
-          lines.add(line);
-        }
-      }
-
-      TypeInfo UnsafeLines = UnsafeTypes.new TypeInfo(type);
-
-      boolean isDifferent = false;
-      int FirstLine = -1;
-
-      for (LineInfo line : typeInfo.getLines()) {
-        if (LocksCount.get(Cases.get(line.getLine())).size() == 1 &&
-          LocksCount.size() > 1) {
-          UnsafeLines.add(line);
-          if (FirstLine == -1) {
-            FirstLine = line.getLine();
-          }
-          else {
-            if (FirstLine != line.getLine()) {
-              isDifferent = true;
-            }
-          }
-        }
-      }
-      if (UnsafeLines.size() > 0 && isDifferent){
-        UnsafeTypes.add(UnsafeLines);
-      }
-    }
-    if (UnsafeTypes.size() > 0) {
-      unsafe.add(UnsafeTypes);
-    }
-  }
-
-  return unsafe;
-}
-
-/*private Map<String, Set<ActionInfo>> FindUnsafeCases3(Map<String, Set<ActionInfo>> locks) {
-
-  Map<String, Set<ActionInfo>> unsafe = new HashMap<String, Set<ActionInfo>>();
-  Map<Set<LockStatisticsMutex>, Set<ActionInfo>> MutexToAction =
-    new HashMap<Set<LockStatisticsMutex>, Set<ActionInfo>>();
-
-  for (String name : locks.keySet()) {
-    MutexToAction.clear();
-    Set<ActionInfo> Actions = locks.get(name);
-
-    for (ActionInfo action : Actions) {
-      if (!MutexToAction.containsKey(action.getLocks())) {
-        Set<ActionInfo> lines = new HashSet<ActionInfo>();
-        lines.add(action);
-        MutexToAction.put(action.getLocks(), lines);
-      }
-      else {
-        Set<ActionInfo> lines = MutexToAction.get(action.getLocks());
-        if (!lines.contains(action.getLine()))
-          lines.add(action);
-      }
-    }
-
-    Set<ActionInfo> UnsafeActions = new HashSet<ActionInfo>();
-
-    for (Set<LockStatisticsMutex> mutexes : MutexToAction.keySet()) {
-      if (MutexToAction.get(mutexes).size() == 1 && MutexToAction.size() > 1) {
-        for (ActionInfo action : MutexToAction.get(mutexes)) {
-          //only one mutex is here
-          UnsafeActions.add(action);
-        }
-      }
-    }
-
-
-    //check all unsafe actions
-    Boolean isDifferent = false;
-    Set<ActionInfo> ToRemove = new HashSet<ActionInfo>();
-    for (ActionInfo action : UnsafeActions) {
-      for (ActionInfo action2 : locks.get(name)) {
-        if (action.getLine() != action2.getLine()) {
-          isDifferent = true;
-          break;
-        }
-      }
-      if (!isDifferent)
-        ToRemove.add(action);
-    }
-
-    if (ToRemove.size() > 0) {
-      for (ActionInfo action : ToRemove){
-        UnsafeActions.remove(action);
-      }
-    }
-    if (UnsafeActions.size() > 0) {
-      unsafe.put(name, UnsafeActions);
-    }
-  }
-  return unsafe;
-}*/
-
   private Set<LockStatisticsLock> FindMutexes() {
     Set<LockStatisticsLock> locks = new HashSet<LockStatisticsLock>();
 
@@ -292,7 +156,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   /*
    * looks through all unsafe cases of current identifier and find the example of two lines with different locks, one of them must be 'write'
    */
-  private Pair<UsageInfo, UsageInfo> findExamples(Identifier unsafeCase) throws HandleCodeException {
+  /*private Pair<UsageInfo, UsageInfo> findExamples(Identifier unsafeCase) throws HandleCodeException {
     Set<UsageInfo> uinfo = Stat.get(unsafeCase);
 
     for (UsageInfo info1 : uinfo) {
@@ -320,8 +184,8 @@ private void printCases(String comment, Collection<VariableIdentifier> identifie
         global.add(id);
       else if (id instanceof LocalVariableIdentifier)
         local.add(id);
-     /* else if (id instanceof StructureIdentifier)
-        structures++;*/
+      else if (id instanceof StructureIdentifier)
+        structures++;
       else if (id instanceof StructureFieldIdentifier)
         fields.add(id);
     }
@@ -394,74 +258,120 @@ private void printCases(String comment, Collection<VariableIdentifier> identifie
         writer.println(uinfo.toString());
       writer.println("    ]");
     }
-  }
+  }*/
 
   private void createVisualization(VariableIdentifier id) {
     Set<UsageInfo> uinfo = Stat.get(id);
-    UsageInfo info = null;
-    LinkedList<CallstackState> reversedList = new LinkedList<CallstackState>();
+    LinkedList<CallstackState> tmpList = new LinkedList<CallstackState>();
+    LinkedList<TreeLeaf> leafStack = new LinkedList<TreeLeaf>();
+    TreeLeaf tmpLeaf, currentLeaf;
     CallstackState tmpState;
-    PrintWriter vWriter;
-    int line;
+
+
 
     if (uinfo == null || uinfo.size() == 0)
       return;
+    if (id instanceof StructureFieldIdentifier)
+      writer.println("###" + id.getSimpleName());
+    else if (id instanceof GlobalVariableIdentifier)
+      writer.println("#" + id.getSimpleName());
+    else if (id instanceof LocalVariableIdentifier)
+      writer.println("##" + id.getSimpleName() + "_" + ((LocalVariableIdentifier)id).getFunction());
     for (UsageInfo ui : uinfo) {
-      info = ui;
-      break;
-    }
-    tmpState = info.getCallStack();
-    try {
-      FileOutputStream vFile = new FileOutputStream (VisualName);
-      vWriter = new PrintWriter(vFile);
-    }
-    catch(FileNotFoundException e)
-    {
-      System.out.println("Cannot open file " + FileName);
-      return;
-    }
-    vWriter.println("BLAST error trace v2.7");
-    while (tmpState != null) {
-      reversedList.push(tmpState);
-      tmpState = tmpState.getPreviousState();
-    }
+      Set<LockStatisticsLock> Locks = ui.getLocks();
+      currentLeaf = TreeLeaf.clearTrunkState();
+      for (LockStatisticsLock lock : Locks) {
+        currentLeaf = TreeLeaf.getTrunkState();
+        tmpState = lock.getCallstack();
+        tmpList.clear();
+        //revert callstacks of locks
+        while (tmpState != null) {
+          tmpList.push(tmpState);
+          tmpState = tmpState.getPreviousState();
+        }
+        //create tree of calls for locks
+        currentLeaf = currentLeaf.add(tmpList.getFirst().getCallNode().getFunctionName(), 0);
+        for (CallstackState callstack : tmpList) {
+          currentLeaf = currentLeaf.add(callstack);
+        }
+        //System.out.println("Add " + lock.getName());
+        currentLeaf.add(lock.getName() + "()", lock.getLine().line);
+      }
 
-    CFANode tmpNode;
-    line = 0;
-    for (CallstackState currentState : reversedList) {
-      tmpNode = currentState.getCallNode();
-      vWriter.println("FunctionCall(" + tmpNode.getFunctionName() + "()/*" + line + "*/)");
-      line = tmpNode.getLineNumber();
+      tmpState = ui.getCallStack();
+      tmpList.clear();
+      //revert call stack of error trace to variable
+      while (tmpState != null) {
+        tmpList.push(tmpState);
+        tmpState = tmpState.getPreviousState();
+      }
+      //add to tree of calls this path
+      currentLeaf = TreeLeaf.getTrunkState();
+      currentLeaf = currentLeaf.add(tmpList.getFirst().getCallNode().getFunctionName(), 0);
+      for (CallstackState callstack : tmpList) {
+        currentLeaf = currentLeaf.addLast(callstack);
+      }
+      String name = id.getName();
+      if (ui.getAccess() == Access.READ) {
+        name = "... = (" + id.type.toASTString("") +")" + name;
+      } else if (ui.getAccess() == Access.WRITE) {
+        name = "(" + id.type.toASTString("") +")" + name + " = ...";
+      }
+      currentLeaf.addLast(name, ui.getLine().line);
+
+      //print this tree with aide of dfs
+      currentLeaf = TreeLeaf.getTrunkState();
+      leafStack.clear();
+      if (currentLeaf.children.size() > 0) {
+        leafStack.push(currentLeaf);
+        currentLeaf = currentLeaf.children.getFirst();
+      } else {
+        //strange, but we don't have any stacks
+        continue;
+      }
+      writer.println("Line 0:     N0 -{/*" + ui.getLocks() + "*/}-> N0");
+      while (currentLeaf != null) {
+        if (currentLeaf.children.size() > 0) {
+          writer.println("Line " + currentLeaf.line + ":     N0 -{" + currentLeaf.code + "();}-> N0");
+          writer.println("Line 0:     N0 -{Function start dummy edge}-> N0");
+          leafStack.push(currentLeaf);
+          currentLeaf = currentLeaf.children.getFirst();
+        } else {
+          writer.println("Line " + currentLeaf.line + ":     N0 -{" + currentLeaf.code + ";}-> N0");
+          while (true) {
+            tmpLeaf = leafStack.pop();
+            if (tmpLeaf.equals(TreeLeaf.getTrunkState())) {
+              currentLeaf = null;
+              break;
+            }
+            if (tmpLeaf.children.size() > 1  && !tmpLeaf.children.getLast().equals(currentLeaf)) {
+              leafStack.push(tmpLeaf);
+              currentLeaf = tmpLeaf.children.get(tmpLeaf.children.indexOf(currentLeaf) + 1);
+              break;
+            }
+            writer.println("Line 0:     N0 -{return;}-> N0");
+            currentLeaf = tmpLeaf;
+          }
+        }
+      }
     }
-    String name = id.name;
-    if (id.status == Ref.REFERENCE)
-      name = "*" + name;
-    else if (id.status == Ref.ADRESS)
-      name = "&" + name;
-    name = id.type.toASTString(name);
-    if (info.getAccess() == Access.READ)
-      name = "... = " + name;
-    else
-      name += " = ...;";
-    name += ("/*" + line + "*/");
-    vWriter.println("Block(" + name + ")");
-    vWriter.close();
   }
 
   @Override
   public void printStatistics(PrintStream out, Result result, ReachedSet reached) {
 
-    Collection<GlobalVariableIdentifier> global = new HashSet<GlobalVariableIdentifier>();
+    /*Collection<GlobalVariableIdentifier> global = new HashSet<GlobalVariableIdentifier>();
     Collection<LocalVariableIdentifier> local = new HashSet<LocalVariableIdentifier>();
-    Collection<StructureFieldIdentifier> fields = new HashSet<StructureFieldIdentifier>();
+    Collection<StructureFieldIdentifier> fields = new HashSet<StructureFieldIdentifier>();*/
+    int global = 0, local = 0, fields = 0, pointers = 0;
 
     try {
-      file = new FileOutputStream (FileName);
+      file = new FileOutputStream (VisualName);
       writer = new PrintWriter(file);
     }
     catch(FileNotFoundException e)
     {
-      System.out.println("Cannot open file " + FileName);
+      System.out.println("Cannot open file " + VisualName);
       return;
     }
 
@@ -472,49 +382,71 @@ private void printCases(String comment, Collection<VariableIdentifier> identifie
 
       if (id.getStatus() == Ref.VARIABLE || !Stat.keySet().contains(id.makeVariable())) {
         if (id instanceof GlobalVariableIdentifier)
-        global.add((GlobalVariableIdentifier)id);
-      else if (id instanceof LocalVariableIdentifier)
-        local.add((LocalVariableIdentifier)id);
-      else if (id instanceof StructureFieldIdentifier)
-        fields.add((StructureFieldIdentifier)id);
+        //global.add((GlobalVariableIdentifier)id);
+          global++;
+        else if (id instanceof LocalVariableIdentifier)
+        //local.add((LocalVariableIdentifier)id);
+          local++;
+        else if (id instanceof StructureFieldIdentifier)
+        //fields.add((StructureFieldIdentifier)id);
+          fields++;
+        }
+      else {
+        pointers++;
       }
     }
 
-    writer.println("General statistics");
-    writer.println("");
-    writer.println("Total variables:        " + (global.size() + local.size() + fields.size()));
-    writer.println("--Global:               " + global.size());
-    writer.println("--Local:                " + local.size());
+    writer.println(global);
+    writer.println(local);
     //writer.println("--Structures:           " + structures);
-    writer.println("--Structure fields:     " + fields.size());
-    writer.println("");
+    writer.println(fields);
+    writer.println(pointers);
 
-    writer.println("Total usages:           " + FullCounter);
-    writer.println("Total unique usages:    " + counter);
-    writer.println("Total skipped cases:    " + skippedCases);
-    writer.println("");
+    writer.println(FullCounter);
+    writer.println(counter);
+    writer.println(skippedCases);
 
     Set<LockStatisticsLock> mutexes = FindMutexes();
 
-    writer.println("Number of used mutexes: " + mutexes.size());
+    writer.println(mutexes.size());
 
     for (LockStatisticsLock lock : mutexes) {
-      writer.println("  " + lock.toString());
+      writer.println(lock.toString());
     }
-
 
     Collection<VariableIdentifier> unsafeCases = dataProcess.process(Stat);
-    printCases(dataProcess.getDescription(), unsafeCases);
+    counter = global = local = fields = pointers = 0;
 
-    /*unsafeCases = FindDifferentSets(Stat);
-    printUnsafeCases("Lines with different sets of mutexes were printed", unsafeCases, true);
-*/
-    for (VariableIdentifier id : fields) {
-      createVisualization(id);
-      break;
+    for (VariableIdentifier id : unsafeCases) {
+      counter += Stat.get(id).size();
+
+      if (id.getStatus() == Ref.VARIABLE || !Stat.keySet().contains(id.makeVariable())) {
+        if (id instanceof GlobalVariableIdentifier)
+        //global.add((GlobalVariableIdentifier)id);
+          global++;
+        else if (id instanceof LocalVariableIdentifier)
+        //local.add((LocalVariableIdentifier)id);
+          local++;
+        else if (id instanceof StructureFieldIdentifier)
+        //fields.add((StructureFieldIdentifier)id);
+          fields++;
+        }
+      else {
+        pointers++;
+      }
     }
-    if (fullstatistics) {
-      printCases("Full statistics", Stat.keySet());
+    writer.println(global + local + fields + pointers);
+    writer.println(counter);
+    writer.println(global);
+    writer.println(local);
+    //writer.println("--Structures:           " + structures);
+    writer.println(fields);
+    writer.println(pointers);
+
+    //printCases(dataProcess.getDescription(), unsafeCases);
+
+    for (VariableIdentifier id : unsafeCases) {
+      createVisualization(id);
     }
 
     if(file != null)

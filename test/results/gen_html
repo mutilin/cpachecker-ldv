@@ -1,0 +1,122 @@
+#!/usr/bin/perl -w
+
+use strict;
+
+my $visualize_fname = $ARGV[0] or die("Can't find CPAChecker trace");
+open(my $visualize_fh, "<", $visualize_fname) or die("Can't open file for read");
+open(my $html_result, ">", "$visualize_fname.html") or die("Can't open file for write");
+
+`cp $ARGV[1] ./`;
+my $cilname = $ARGV[1];
+$cilname =~ m/\/*(.+)/;
+$cilname = $1;
+
+my $String='CPAchecker error trace v1.1\n-------';
+$String=$String.`pwd`;
+chomp($String);
+$String=$String."/$cilname-------";
+`echo -e \"$String\" | cat - $cilname > tmp_trace`;
+`echo "--------------" | cat tmp_trace - >> tmp_trace`;
+
+my $line = <$visualize_fh>;
+print ($html_result "<b>General statistics</b><p><table><tr><td>");
+print ($html_result "Global variables:</td><td>$line</td></tr><tr><td>");
+$line = <$visualize_fh>;
+print ($html_result "Local variables:</td><td>$line</td></tr><tr><td>");
+$line = <$visualize_fh>;
+print ($html_result "Structure fields:</td><td>$line</td></tr><tr><td>");
+$line = <$visualize_fh>;
+print ($html_result "Pointers (any types):</td><td>$line</td></tr>");
+$line = <$visualize_fh>;
+print ($html_result "<tr><td></td></tr>");
+print ($html_result "<tr><td>Total usage:</td><td>$line</td></tr><tr><td>");
+$line = <$visualize_fh>;
+print ($html_result "Unique usage:</td><td>$line</td></tr><tr><td>");
+$line = <$visualize_fh>;
+print ($html_result "Skipped cases:</td><td>$line</td></tr><tr><td></table><p>");
+my $number = <$visualize_fh>;
+print ($html_result "Finded locks:<ol>");
+for(my $i = 0; $i < $number; $i++) {
+	$line = <$visualize_fh>;
+	print ($html_result "<li>$line</li>");
+}
+print ($html_result "</ol><p>");
+$line = <$visualize_fh>;
+print ($html_result "<b>Unsafe statistics:</b><br><table><tr><td>Number of unsafes:</td><td>$line</td></tr><tr><td>");
+$line = <$visualize_fh>;
+print ($html_result "Total usage variables in unsafes:</td><td>$line</td></tr><tr><td>");
+$line = <$visualize_fh>;
+print ($html_result "Global unsafes:</td><td>$line</td></tr><tr><td>");
+$line = <$visualize_fh>;
+print ($html_result "Local unsafes:</td><td>$line</td></tr><tr><td>");
+$line = <$visualize_fh>;
+print ($html_result "Structure fields unsafes:</td><td>$line</td></tr><tr><td>");
+$line = <$visualize_fh>;
+print ($html_result "Pointers (any types):</td><td>$line</td></tr></table><br>");
+print ($html_result "<b>List of unsafes:</b><ol>");
+my $currentUnsafe;
+my $current_fname;
+
+while (<$visualize_fh>) {
+	$line = $_;
+	
+	if ($line =~ /^#(.+)/) {
+		if ($current_fname) {
+			`cat tmp_trace $current_fname > $current_fname.new`;
+			`rm $current_fname`;
+			$current_fname = $current_fname.".new";
+			`etv -c $current_fname --reqs-out reqs`;
+			`echo -e "\n" >> reqs`;
+			`rm -f srcs`;
+			`cat reqs | while read nextline
+			do
+			 echo "---LDV---\$nextline---LDV---" | cat - \$nextline >> srcs
+			done`;
+			$current_fname =~ m/(.+)\.tmp.new/;
+			print ($html_result "<li><a href = \"$1.html\">$1</a></li>");
+			`etv -c $current_fname --src-files srcs -o $1.html.tmp`;
+			`echo "<html><head><link href='/home/alpha/git/ldv-tools/stats-visualizer/vhosts/ldv-stats/public/css/etv.css' rel='stylesheet' type='text/css' /><link href='/home/alpha/git/ldv-tools/stats-visualizer/vhosts/ldv-stats/public/css/etv-analytics-center.css' rel='stylesheet' type='text/css' /><script type='text/javascript' src='/home/alpha/git/ldv-tools/stats-visualizer/vhosts/ldv-stats/public/jslib/jquery-1.4.2.min.js'></script><script type='text/javascript' src='/home/alpha/git/ldv-tools/stats-visualizer/vhosts/ldv-stats/public/jslib/etv.js'></script></head><body>" > $1.html && cat $1.html.tmp >> $1.html && echo "</body></html>" >> $1.html`;
+			`rm $1.html.tmp`;
+			`rm $1.tmp.new`;
+			print "Generate ".$1."\n";
+		}
+		if ($line =~ /^###(.+)/) {
+			if ( ! -d "struct" ) {
+				mkdir("struct") || die "Can't create directory\n";
+	    		}
+			$current_fname = "struct/$1.tmp";
+			open($currentUnsafe, ">", $current_fname) or die("Can't open file for write unsafe");		
+		} elsif ($line =~ /^##(.+)/) {
+			if ( ! -d "local" ) {
+				mkdir("local") || die "Can't create directory\n";
+	    		}
+			$current_fname = "local/$1.tmp";
+			open($currentUnsafe, ">", $current_fname) or die("Can't open file for write unsafe");
+		} elsif ($line =~ /^#(.+)/) {
+			if ( ! -d "global" ) {
+				mkdir("global") || die "Can't create directory\n";
+	    		}
+			$current_fname = "global/$1.tmp";
+			open($currentUnsafe, ">", $current_fname) or die("Can't open file for write unsafe");
+		}
+	} else {
+		print($currentUnsafe $line);
+	}
+}
+`cat tmp_trace $current_fname > $current_fname.new`;
+`rm $current_fname`;
+$current_fname = $current_fname.".new";
+`etv -c $current_fname --reqs-out reqs`;
+`echo -e "\n" >> reqs`;
+`rm srcs`;
+`cat reqs | while read nextline
+do
+ echo "---LDV---\$nextline---LDV---" | cat - \$nextline >> srcs
+done`;
+$current_fname =~ m/(.+)\.tmp.new/;
+print ($html_result "<li><a href = \"$1.html\">$1</a></li>");
+`etv -c $current_fname --src-files srcs -o $1.html.tmp`;
+`echo "<html><head><link href='/home/alpha/git/ldv-tools/stats-visualizer/vhosts/ldv-stats/public/css/etv.css' rel='stylesheet' type='text/css' /><link href='/home/alpha/git/ldv-tools/stats-visualizer/vhosts/ldv-stats/public/css/etv-analytics-center.css' rel='stylesheet' type='text/css' /><script type='text/javascript' src='/home/alpha/git/ldv-tools/stats-visualizer/vhosts/ldv-stats/public/jslib/jquery-1.4.2.min.js'></script><script type='text/javascript' src='/home/alpha/git/ldv-tools/stats-visualizer/vhosts/ldv-stats/public/jslib/etv.js'></script></head><body>" > $1.html && cat $1.html.tmp >> $1.html && echo "</body></html>" >> $1.html`;
+`rm $1.html.tmp`;
+`rm $1.tmp.new`;
+print "Generate ".$1."\n";
