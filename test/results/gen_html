@@ -6,17 +6,17 @@ my $visualize_fname = $ARGV[0] or die("Can't find CPAChecker trace");
 open(my $visualize_fh, "<", $visualize_fname) or die("Can't open file for read");
 open(my $html_result, ">", "index.html") or die("Can't open file for write");
 
-my $cilname = $ARGV[1] or die("Can't find cil-file");
-`cp $cilname ./`;
-$cilname =~ m/\/*(.+)/;
-$cilname = $1;
+my $cilpath = $ARGV[1] or die("Can't find cil-file");
+
+my $path_to_etv = $ARGV[2] or die("No path to etv folder");
+#/home/alpha/git/ldv-tools
 
 my $String='CPAchecker error trace v1.1\n-------';
 $String=$String.`pwd`;
 chomp($String);
-$String=$String."/$cilname-------";
-`echo -e \"$String\" | cat - $cilname > tmp_trace`;
-`echo "--------------" | cat tmp_trace - >> tmp_trace`;
+$String=$String."$cilpath-------";
+`echo -e \"$String\" | cat - $cilpath > tmp_trace`;
+`echo "--------------" >> tmp_trace`;
 
 my $line = <$visualize_fh>;
 print ($html_result "<b>General statistics</b><p><table><tr><td>");
@@ -56,67 +56,65 @@ print ($html_result "Pointers (any types):</td><td>$line</td></tr></table><br>")
 print ($html_result "<b>List of unsafes:</b><ol>");
 my $currentUnsafe;
 my $current_fname;
+my $current_varname;
+my %unsafe_list;
 
 while (<$visualize_fh>) {
 	$line = $_;
 	
 	if ($line =~ /^#(.+)/) {
 		if ($current_fname) {
-			`cat tmp_trace $current_fname > $current_fname.new`;
-			`rm $current_fname`;
-			$current_fname = $current_fname.".new";
-			`etv -c $current_fname --reqs-out reqs`;
-			`echo -e "\n" >> reqs`;
-			`rm -f srcs`;
-			`cat reqs | while read nextline
-			do
-			 echo "---LDV---\$nextline---LDV---" | cat - \$nextline >> srcs
-			done`;
-			$current_fname =~ m/(.+)\.tmp.new/;
-			print ($html_result "<li><a href = \"$1.html\">$1</a></li>");
-			`etv -c $current_fname --src-files srcs -o $1.html.tmp`;
-			`echo "<html><head><link href='/home/alpha/git/ldv-tools/stats-visualizer/vhosts/ldv-stats/public/css/etv.css' rel='stylesheet' type='text/css' /><link href='/home/alpha/git/ldv-tools/stats-visualizer/vhosts/ldv-stats/public/css/etv-analytics-center.css' rel='stylesheet' type='text/css' /><script type='text/javascript' src='/home/alpha/git/ldv-tools/stats-visualizer/vhosts/ldv-stats/public/jslib/jquery-1.4.2.min.js'></script><script type='text/javascript' src='/home/alpha/git/ldv-tools/stats-visualizer/vhosts/ldv-stats/public/jslib/etv.js'></script></head><body>" > $1.html && cat $1.html.tmp >> $1.html && echo "</body></html>" >> $1.html`;
-			`rm $1.html.tmp`;
-			`rm $1.tmp.new`;
-			print "Generate ".$1."\n";
+			push(@{$unsafe_list{$current_fname}}, $current_varname);
 		}
 		if ($line =~ /^###(.+)/) {
 			if ( ! -d "struct" ) {
 				mkdir("struct") || die "Can't create directory\n";
 	    		}
 			$current_fname = "struct/$1.tmp";
+			$current_varname = <$visualize_fh>;
 			open($currentUnsafe, ">", $current_fname) or die("Can't open file for write unsafe");		
 		} elsif ($line =~ /^##(.+)/) {
 			if ( ! -d "local" ) {
 				mkdir("local") || die "Can't create directory\n";
 	    		}
 			$current_fname = "local/$1.tmp";
+			$current_varname = <$visualize_fh>;
 			open($currentUnsafe, ">", $current_fname) or die("Can't open file for write unsafe");
 		} elsif ($line =~ /^#(.+)/) {
 			if ( ! -d "global" ) {
 				mkdir("global") || die "Can't create directory\n";
 	    		}
 			$current_fname = "global/$1.tmp";
+			$current_varname = <$visualize_fh>;
 			open($currentUnsafe, ">", $current_fname) or die("Can't open file for write unsafe");
 		}
 	} else {
 		print($currentUnsafe $line);
 	}
 }
-`cat tmp_trace $current_fname > $current_fname.new`;
-`rm $current_fname`;
-$current_fname = $current_fname.".new";
-`etv -c $current_fname --reqs-out reqs`;
-`echo -e "\n" >> reqs`;
-`rm srcs`;
-`cat reqs | while read nextline
-do
- echo "---LDV---\$nextline---LDV---" | cat - \$nextline >> srcs
-done`;
-$current_fname =~ m/(.+)\.tmp.new/;
-print ($html_result "<li><a href = \"$1.html\">$1</a></li>");
-`etv -c $current_fname --src-files srcs -o $1.html.tmp`;
-`echo "<html><head><link href='/home/alpha/git/ldv-tools/stats-visualizer/vhosts/ldv-stats/public/css/etv.css' rel='stylesheet' type='text/css' /><link href='/home/alpha/git/ldv-tools/stats-visualizer/vhosts/ldv-stats/public/css/etv-analytics-center.css' rel='stylesheet' type='text/css' /><script type='text/javascript' src='/home/alpha/git/ldv-tools/stats-visualizer/vhosts/ldv-stats/public/jslib/jquery-1.4.2.min.js'></script><script type='text/javascript' src='/home/alpha/git/ldv-tools/stats-visualizer/vhosts/ldv-stats/public/jslib/etv.js'></script></head><body>" > $1.html && cat $1.html.tmp >> $1.html && echo "</body></html>" >> $1.html`;
-`rm $1.html.tmp`;
-`rm $1.tmp.new`;
-print "Generate ".$1."\n";
+push(@{$unsafe_list{$current_fname}}, $current_varname);
+
+my $current_fname_new;
+foreach $current_fname(sort keys %unsafe_list)
+{
+	`cat tmp_trace $current_fname > $current_fname.new`;
+	`rm $current_fname`;
+	$current_fname_new = $current_fname.".new";
+	`etv -c $current_fname_new --reqs-out reqs`;
+	`echo -e "\n" >> reqs`;
+	`rm srcs`;
+	`cat reqs | while read nextline
+	do
+	 echo "---LDV---\$nextline---LDV---" | cat - \$nextline >> srcs
+	done`;
+	$current_fname_new =~ m/(.+)\.tmp.new/;
+	print ($html_result "<li><a href = \"$1.html\">$1</a></li>");
+	`etv -c $current_fname_new --src-files srcs -o $1.html.tmp`;
+	`echo "<html><head><link href='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/css/etv.css' rel='stylesheet' type='text/css' /><link href='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/css/etv-analytics-center.css' rel='stylesheet' type='text/css' /><script type='text/javascript' src='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/jslib/jquery-1.4.2.min.js'></script><script type='text/javascript' src='/home/alpha/git/ldv-tools/stats-visualizer/vhosts/ldv-stats/public/jslib/etv.js'></script></head><body> @{$unsafe_list{$current_fname}}"> $1.html && cat $1.html.tmp >> $1.html && echo "</body></html>" >> $1.html`;
+	#`rm $1.html.tmp`;
+	#`rm $1.tmp.new`;
+	#`rm $1.tmp`
+	print "Generate ".$1."\n";
+}
+
+

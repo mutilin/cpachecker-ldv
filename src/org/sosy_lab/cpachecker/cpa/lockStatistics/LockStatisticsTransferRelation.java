@@ -23,9 +23,13 @@
  */
 package org.sosy_lab.cpachecker.cpa.lockStatistics;
 
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.sosy_lab.common.configuration.Configuration;
@@ -54,11 +58,11 @@ public class LockStatisticsTransferRelation implements TransferRelation
       description="function to reset state")
   private String lockreset;
 
-  @Option(name="lockfunctions",
-      description="functions, that locks synchronization primitives")
-  private List<String> lock;
+  @Option(name="lockinfo",
+      description="contains all lock names")
+  private Set<String> lockinfo;
 
-  @Option(name="unlockfunctions",
+  /*@Option(name="unlockfunctions",
       description="functions, that unlocks synchronization primitives")
   private List<String> unlock;
 
@@ -69,21 +73,76 @@ public class LockStatisticsTransferRelation implements TransferRelation
 
   @Option(name="functionhandler", values={"LINUX", "OS"},toUppercase=true,
       description="which type of function handler we should use")
-  private String HandleType = "LINUX";
+  private String HandleType = "LINUX";*/
 
-  private FunctionHandler handler;
+  private FunctionHandlerOS handler;
 
   public LockStatisticsTransferRelation(Configuration config) throws InvalidConfigurationException {
     config.inject(this);
 
+    Set<LockInfo> tmpInfo = new HashSet<LockInfo>();
+    LockInfo tmpLockInfo;
+    Map<String, Integer> lockFunctions;
+    Map<String, Integer> unlockFunctions;
+    Map<String, Integer> resetFunctions;
+    Set<String> tmpStringSet;
+    String tmpString;
+    int num;
+
+    for (String lockName : lockinfo) {
+      tmpString = config.getProperty(lockName + ".lock");
+      tmpStringSet = new HashSet<String>(Arrays.asList(tmpString.split(",")));
+      lockFunctions = new HashMap<String, Integer>();
+      for (String funcName : tmpStringSet) {
+        try {
+          num = Integer.parseInt(config.getProperty(lockName + "." + funcName + ".parameters"));
+        } catch (NumberFormatException e) {
+          num = 0;
+        }
+        lockFunctions.put(funcName, num);
+      }
+      unlockFunctions = new HashMap<String, Integer>();
+      tmpString = config.getProperty(lockName + ".unlock");
+      tmpStringSet = new HashSet<String>(Arrays.asList(tmpString.split(",")));
+      for (String funcName : tmpStringSet) {
+        try {
+          num = Integer.parseInt(config.getProperty(lockName + "." + funcName + ".parameters"));
+        } catch (NumberFormatException e) {
+          num = 0;
+        }
+        unlockFunctions.put(funcName, num);
+      }
+      resetFunctions = new HashMap<String, Integer>();
+      tmpString = config.getProperty(lockName + ".reset");
+      if (tmpString != null) {
+        tmpStringSet = new HashSet<String>(Arrays.asList(tmpString.split(",")));
+        for (String funcName : tmpStringSet) {
+          try {
+            num = Integer.parseInt(config.getProperty(lockName + "." + funcName + ".parameters"));
+          } catch (NumberFormatException e) {
+            num = 0;
+          }
+          resetFunctions.put(funcName, num);
+        }
+      }
+      tmpString = config.getProperty(lockName + ".setlevel");
+      try {
+        num = Integer.parseInt(config.getProperty(lockName + ".maxDepth"));
+      } catch (NumberFormatException e) {
+        num = 100;
+      }
+      tmpLockInfo = new LockInfo(lockName, lockFunctions, unlockFunctions, resetFunctions, tmpString, num);
+      tmpInfo.add(tmpLockInfo);
+    }
+
    /* if (HandleType.equals("LINUX")) {
       handler = new FunctionHandlerLinux(lock, unlock, exceptions);
     }
-    else */if (HandleType.equals("OS")) {
-      handler = new FunctionHandlerOS(lock, unlock, exceptions);
-    } else {
+    else if (HandleType.equals("OS")) {*/
+    handler = new FunctionHandlerOS(tmpInfo);
+    /*} else {
       throw new InvalidConfigurationException("Unsupported function handler");
-    }
+    }*/
   }
 
   @Override
@@ -157,6 +216,6 @@ public class LockStatisticsTransferRelation implements TransferRelation
   }
 
   public FunctionHandlerOS getFunctionHandler() {
-    return (FunctionHandlerOS)handler;
+    return handler;
   }
 }

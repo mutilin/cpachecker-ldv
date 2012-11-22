@@ -37,58 +37,81 @@ import com.google.common.base.Preconditions;
 public class LockStatisticsState implements AbstractQueryableState, Serializable {
   private static final long serialVersionUID = -3152134511524554357L;
 
-  private final Set<LockStatisticsLock> GlobalLocks;
-  private final Set<LockStatisticsLock> LocalLocks;
+  private final Set<LockStatisticsLock> locks;
+  //private final Set<LockStatisticsLock> LocalLocks;
 
   public LockStatisticsState() {
-    GlobalLocks  = new HashSet<LockStatisticsLock>();
-    LocalLocks = new HashSet<LockStatisticsLock>();
+    locks  = new HashSet<LockStatisticsLock>();
+    //LocalLocks = new HashSet<LockStatisticsLock>();
   }
 
-  private LockStatisticsState(Set<LockStatisticsLock> gLocks, Set<LockStatisticsLock> lLocks) {
-    this.GlobalLocks  = gLocks;
-    this.LocalLocks  = lLocks;
+  private LockStatisticsState(Set<LockStatisticsLock> gLocks/*, Set<LockStatisticsLock> lLocks*/) {
+    this.locks  = gLocks;
+    //this.LocalLocks  = lLocks;
   }
 
   public boolean contains(String variableName) {
-    for (LockStatisticsLock mutex : GlobalLocks) {
+    for (LockStatisticsLock mutex : locks) {
       if (mutex.getName().equals(variableName))
         return true;
     }
-    for (LockStatisticsLock mutex : LocalLocks) {
+    /*for (LockStatisticsLock mutex : LocalLocks) {
       if (mutex.getName().equals(variableName))
         return true;
-    }
+    }*/
     return false;
   }
 
   public int getGlobalSize() {
-    return GlobalLocks.size();
+    return locks.size();
   }
 
-  public int getLocalSize() {
+  /*public int getLocalSize() {
     return LocalLocks.size();
+  }*/
+
+  public Set<LockStatisticsLock> getLocks() {
+    return locks;
   }
 
-  public Set<LockStatisticsLock> getGlobalLocks() {
-    return GlobalLocks;
+  @Override
+  public String toString() {
+    StringBuilder sb = new StringBuilder();
+
+    for (LockStatisticsLock lock : locks) {
+      //if (lock.getRecursiveCounter() == 0)
+        sb.append(lock.toString() + ", ");
+      //else
+    }
+    if (locks.size() > 0)
+      sb.delete(sb.length() - 2, sb.length());
+    return sb.toString();
   }
 
-  public Set<LockStatisticsLock> getLocalLocks() {
+  /*public Set<LockStatisticsLock> getLocalLocks() {
     return LocalLocks;
-  }
+  }*/
 
-  void addLocal(String lockName, int line, String pCurrentFunction, CallstackState state) {
+  /*void addLocal(String lockName, int line, String pCurrentFunction, CallstackState state) {
     LockStatisticsLock tmpMutex = new LockStatisticsLock(lockName, line, LockType.LOCAL_LOCK, pCurrentFunction, state);
     LocalLocks.add(tmpMutex);
+  }*/
+
+  void add(String lockName, int line, CallstackState state) {
+    LockStatisticsLock tmpMutex;
+    int counter = 0;
+    for (LockStatisticsLock tmpLock : locks) {
+      if (tmpLock.getName().equals(lockName)) {
+        counter++;
+      }
+    }
+    tmpMutex = new LockStatisticsLock(lockName, line, LockType.GLOBAL_LOCK, state, counter);
+    locks.add(tmpMutex);
+    if (counter > 0)
+      System.out.println("Add " + lockName + " " + counter + ", line " + line);
   }
 
-  void addGlobal(String lockName, int line, CallstackState state) {
-    LockStatisticsLock tmpMutex = new LockStatisticsLock(lockName, line, LockType.GLOBAL_LOCK, state);
-    GlobalLocks.add(tmpMutex);
-  }
-
-  LockStatisticsState removeLocal(String functionName) {
+  /*LockStatisticsState removeLocal(String functionName) {
     LockStatisticsState newLock = this.clone();
 
     for (LockStatisticsLock mutex : newLock.LocalLocks) {
@@ -98,25 +121,65 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
     }
 
     return newLock;
-  }
+  }*/
 
   void delete(String lockName) {
-    for (LockStatisticsLock mutex : GlobalLocks) {
-      if (mutex.getName().equals(lockName)){
-        GlobalLocks.remove(mutex);
-        return;
+    LockStatisticsLock lockToDelete = null;
+    int counter = 0;
+    for (LockStatisticsLock mutex : locks) {
+      if (mutex.getName().equals(lockName) && counter <= mutex.getRecursiveCounter()) {
+        lockToDelete = mutex;
+        counter = mutex.getRecursiveCounter();
       }
     }
-    for (LockStatisticsLock mutex : LocalLocks) {
+    if (lockToDelete != null)
+      locks.remove(lockToDelete);
+    if (counter > 0)
+      System.out.println("Delete " + lockName + " " + counter + ", line " + lockToDelete.getLine().getLine());
+    /*for (LockStatisticsLock mutex : LocalLocks) {
       if (mutex.getName().equals(lockName)){
         LocalLocks.remove(mutex);
         return;
       }
+    }*/
+  }
+
+  void reset(String lockName) {
+    Set<LockStatisticsLock> toDelete = new HashSet<LockStatisticsLock>();
+    for (LockStatisticsLock mutex : locks) {
+      if (mutex.getName().equals(lockName)) {
+        toDelete.add(mutex);
+      }
+    }
+    for (LockStatisticsLock lock : toDelete) {
+      locks.remove(lock);
     }
   }
 
+  void set(String lockName, int num, int line, CallstackState state) {
+    int counter = 0;
+
+    for (LockStatisticsLock lock : locks) {
+      if (lock.getName().equals(lockName)) {
+        counter++;
+      }
+    }
+
+    for (int i = counter; i < num; i++) {
+      locks.add(new LockStatisticsLock(lockName, line, LockType.GLOBAL_LOCK, state, i));
+    }
+  }
+
+  public int getCounter(String lockName) {
+    int counter = 0;
+    for (LockStatisticsLock lock : locks) {
+      if (lock.getName().equals(lockName)) counter++;
+    }
+    return counter;
+  }
+
   String print() {
-    return "Global locks: " + GlobalLocks.toString() + "\nLocal locks: " + LocalLocks.toString();
+    return "Global locks: " + locks.toString()/* + "\nLocal locks: " + LocalLocks.toString()*/;
   }
 
   /**
@@ -127,37 +190,37 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
    */
   LockStatisticsState join(LockStatisticsState other) {
     Set<LockStatisticsLock> newGlobalLocks = new HashSet<LockStatisticsLock>();
-    Set<LockStatisticsLock> newLocalLocks = new HashSet<LockStatisticsLock>();
+    //Set<LockStatisticsLock> newLocalLocks = new HashSet<LockStatisticsLock>();
 
-    for (LockStatisticsLock otherLock : other.GlobalLocks) {
+    for (LockStatisticsLock otherLock : other.locks) {
 
-      if (GlobalLocks.contains(otherLock)) {
+      if (locks.contains(otherLock)) {
         newGlobalLocks.add(otherLock);
       }
     }
 
-    for (LockStatisticsLock otherLock : other.LocalLocks) {
+    /*for (LockStatisticsLock otherLock : other.LocalLocks) {
 
       if (LocalLocks.contains(otherLock)) {
         newLocalLocks.add(otherLock);
       }
-    }
+    }*/
 
-    return new LockStatisticsState(newGlobalLocks, newLocalLocks);
+    return new LockStatisticsState(newGlobalLocks/*, newLocalLocks*/);
   }
 
-  LockStatisticsState combine(LockStatisticsState other) {
+  /*LockStatisticsState combine(LockStatisticsState other) {
     Set<LockStatisticsLock> newGlobalLocks = new HashSet<LockStatisticsLock>();
-    Set<LockStatisticsLock> newLocalLocks = new HashSet<LockStatisticsLock>();
+    //Set<LockStatisticsLock> newLocalLocks = new HashSet<LockStatisticsLock>();
 
-    for (LockStatisticsLock lock : other.GlobalLocks) {
+    for (LockStatisticsLock lock : other.locks) {
       newGlobalLocks.add(lock);
     }
-    for (LockStatisticsLock lock : other.LocalLocks) {
+    /*for (LockStatisticsLock lock : other.LocalLocks) {
       newLocalLocks.add(lock);
     }
-    return new LockStatisticsState(newGlobalLocks, newLocalLocks);
-  }
+    return new LockStatisticsState(newGlobalLocks/*, newLocalLocks);
+  }*/
 
   /**
    * This method decides if this element is less or equal than the other element, based on the order imposed by the lattice.
@@ -168,42 +231,45 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
   boolean isLessOrEqual(LockStatisticsState other) {
 
     // also, this element is not less or equal than the other element, if it contains less elements
-    if (GlobalLocks.size() < other.GlobalLocks.size()) {
+    /*if (locks.size() < other.locks.size()) {
       return false;
-    }
+    }*/
 
-    if (LocalLocks.size() < other.LocalLocks.size()) {
+    /*if (LocalLocks.size() < other.LocalLocks.size()) {
       return false;
-    }
+    }*/
+    if (locks.size() == 0 && other.locks.size() > 0)
+      return false;
 
     // also, this element is not less or equal than the other element,
     // if any one constant's value of the other element differs from the constant's value in this element
-    for (LockStatisticsLock Lock : GlobalLocks) {
-      if (!other.GlobalLocks.contains(Lock)) {
-        return false;
+ok: for (LockStatisticsLock Lock : locks) {
+      for (LockStatisticsLock lock : other.locks) {
+        if (Lock.getName().equals(lock.getName())) continue ok;
       }
+      return false;
     }
 
-    for (LockStatisticsLock Lock : LocalLocks) {
+    /*for (LockStatisticsLock Lock : LocalLocks) {
       if (!other.LocalLocks.contains(Lock)) {
         return false;
       }
-    }
+    }*/
 
     return true;
   }
 
   @Override
   public LockStatisticsState clone() {
-    return new LockStatisticsState(new HashSet<LockStatisticsLock>(GlobalLocks), new HashSet<LockStatisticsLock>(LocalLocks));
+    return new LockStatisticsState(new HashSet<LockStatisticsLock>(locks)/*, new HashSet<LockStatisticsLock>(LocalLocks)*/);
   }
 
   @Override
   public int hashCode() {
     final int prime = 31;
     int result = 1;
-    result = prime * result + ((GlobalLocks == null) ? 0 : GlobalLocks.hashCode());
-    result = prime * result + ((LocalLocks == null) ? 0 : LocalLocks.hashCode());
+    result = prime * result + ((locks == null) ? 0 : locks.hashCode());
+    //result = prime * result + ((LocalLocks == null) ? 0 : LocalLocks.hashCode());
     return result;
   }
 
@@ -216,36 +282,17 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
     if (getClass() != obj.getClass())
       return false;
     LockStatisticsState other = (LockStatisticsState) obj;
-    if (GlobalLocks == null) {
-      if (other.GlobalLocks != null)
+    if (locks == null) {
+      if (other.locks != null)
         return false;
-    } else if (!GlobalLocks.equals(other.GlobalLocks))
+    } else if (!locks.equals(other.locks))
       return false;
-    if (LocalLocks == null) {
+    /*if (LocalLocks == null) {
       if (other.LocalLocks != null)
         return false;
     } else if (!LocalLocks.equals(other.LocalLocks))
-      return false;
+      return false;*/
     return true;
-  }
-
-  @Override
-  public String toString() {
-    StringBuilder sb = new StringBuilder();
-    sb.append("{");
-    for (LockStatisticsLock lock : GlobalLocks) {
-      sb.append(lock);
-      sb.append(", ");
-    }
-    for (LockStatisticsLock lock : LocalLocks) {
-      sb.append(lock);
-      sb.append(", ");
-    }
-    //if we have added something, we need to remove last ", "
-    if (sb.length() > 2)
-      sb.delete(sb.length() - 2, sb.length());
-    sb.append("}");
-    return sb.toString();
   }
 
   @Override
@@ -283,9 +330,9 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
 
         String varName = statement.substring("deletelock(".length(), statement.length() - 1);
 
-        Object x = this.GlobalLocks.remove(varName);
+        Object x = this.locks.remove(varName);
 
-        if (x == null) x = this.LocalLocks.remove(varName);
+        //if (x == null) x = this.LocalLocks.remove(varName);
 
         if (x == null) {
           // varname was not present in one of the maps

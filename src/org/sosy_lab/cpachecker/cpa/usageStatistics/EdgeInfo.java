@@ -44,6 +44,10 @@ public class EdgeInfo {
     type = t;
   }
 
+  public EdgeType getEdgeType() {
+    return type;
+  }
+
   @Override
   public String toString(){
     return (type.toASTString());
@@ -70,6 +74,5 @@ public class EdgeInfo {
       return false;
     return true;
   }
-
 
 }

@@ -26,21 +26,13 @@ package org.sosy_lab.cpachecker.cpa.lockStatistics;
 import java.util.List;
 import java.util.Set;
 
-import org.sosy_lab.cpachecker.cfa.ast.c.CArraySubscriptExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CAssignment;
-import org.sosy_lab.cpachecker.cfa.ast.c.CDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CFieldReference;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallStatement;
-import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CParameterDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
-import org.sosy_lab.cpachecker.cfa.ast.c.CSimpleDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
-import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
-import org.sosy_lab.cpachecker.cfa.types.c.CPointerType;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.usageStatistics.UsageStatisticsCPA;
 import org.sosy_lab.cpachecker.cpa.usageStatistics.UsageStatisticsTransferRelation;
@@ -48,14 +40,14 @@ import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 
 
-public class FunctionHandlerOS extends FunctionHandler{
+public class FunctionHandlerOS {
   private UsageStatisticsCPA stateGetter;
+  public Set<LockInfo> locks;
 
-  public FunctionHandlerOS(List<String> pLock, List<String> pUnlock, Set<String> pExceptions) {
-    super(pLock, pUnlock, pExceptions);
+  public FunctionHandlerOS(Set<LockInfo> l) {
+    locks = l;
   }
 
-  @Override
   public LockStatisticsState handleStatement(LockStatisticsState element, CStatement expression, String currentFunction) throws HandleCodeException {
 
     LockStatisticsState newElement = element.clone();
@@ -90,7 +82,6 @@ public class FunctionHandlerOS extends FunctionHandler{
 
   }
 
-  @Override
   public LockStatisticsState handleFunctionCall(LockStatisticsState element, CFunctionCallEdge callEdge) throws HandleCodeException {
     Set<CStatement> expressions = callEdge.getRawAST().asSet();
 
@@ -108,7 +99,7 @@ public class FunctionHandlerOS extends FunctionHandler{
     return newElement;
   }
 
-  private boolean isGlobal(CExpression expression) throws HandleCodeException {
+  /*private boolean isGlobal(CExpression expression) throws HandleCodeException {
     if (expression instanceof CArraySubscriptExpression) {
       return isGlobal(((CArraySubscriptExpression)expression).getArrayExpression());
 
@@ -133,7 +124,7 @@ public class FunctionHandlerOS extends FunctionHandler{
     } else {
       throw new HandleCodeException("Can't handle expression " + expression.toASTString() + " as lock parameter");
     }
-  }
+  }*/
 
   private LockStatisticsState CheckIsLock(LockStatisticsState newElement, String functionName, int lineNumber, String currentFunction,
       List<CExpression> params) throws HandleCodeException {
@@ -142,27 +133,35 @@ public class FunctionHandlerOS extends FunctionHandler{
             CallstackState.class);
     callstack = stateGetter.getStats().createStack(callstack);
 
-    if (lock != null && lock.contains(functionName)) {
-      if (exceptions.contains(functionName)) {
-        newElement.addGlobal(functionName, lineNumber, callstack);
-      }
-      else {
-        assert (params.size() == 1);
+    for (LockInfo lock : locks) {
+      if (lock.LockFunctions.containsKey(functionName)) {
+        int p = lock.LockFunctions.get(functionName);
+        int d = newElement.getCounter(lock.lockName);
         //CExpression param = params.get(0);
         //if (isGlobal(param))
-          newElement.addGlobal(params.get(0).toASTString(), lineNumber, callstack);
-        //else
-        //  newElement.addLocal(params.get(0).toASTString(), lineNumber, currentFunction);
+        if (p == 0 && d < lock.maxLock)
+          newElement.add(lock.lockName, lineNumber, callstack);
+        else if (d < lock.maxLock)
+          newElement.add(params.get(p - 1).toASTString(), lineNumber, callstack);
+        else
+          System.err.println("Try to lock " + lock.lockName + " more, than " + lock.maxLock);
       }
-    }
-    else if (unlock != null && unlock.contains(functionName)) {
-      if (exceptions.contains(functionName)) {
-        String lockName = lock.get(unlock.indexOf(functionName));
-        newElement.delete(lockName);
+      else if (lock.UnlockFunctions.containsKey(functionName)) {
+        int p = lock.UnlockFunctions.get(functionName);
+        if (p == 0)
+          newElement.delete(lock.lockName);
+        else
+          newElement.delete(params.get(p - 1).toASTString());
       }
-      else {
-        assert (params.size() == 1);
-        newElement.delete(params.get(0).toASTString());
+      else if (lock.ResetFunctions != null && lock.ResetFunctions.containsKey(functionName)) {
+        int p = lock.ResetFunctions.get(functionName);
+        if (p == 0)
+          newElement.reset(lock.lockName);
+        else
+          newElement.reset(params.get(p - 1).toASTString());
+      } else if (lock.setLevel != null && lock.setLevel.equals(functionName)) {
+        int p = Integer.parseInt(params.get(0).toASTString()); //new level
+        newElement.set(lock.lockName, p, lineNumber, callstack);
       }
     }
     return newElement;

@@ -63,7 +63,7 @@ public class LockStatisticsReducer implements Reducer {
     LockStatisticsState elementKey = (LockStatisticsState)pElementKey;
 
     //return Pair.of(elementKey.getGlobalLocks(), elementKey.getLocalLocks());
-    return elementKey.getGlobalLocks();
+    return elementKey.getLocks();
   }
 
   @Override

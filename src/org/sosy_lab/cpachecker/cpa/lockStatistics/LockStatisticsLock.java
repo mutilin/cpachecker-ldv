@@ -45,38 +45,53 @@ public class LockStatisticsLock {
   private CallstackState callstack;
   private LineInfo line;
   private LockType type;
+  private int recursiveCounter;
 
-  LockStatisticsLock(String n, int l, LockType t, String fName, CallstackState s) {
+  LockStatisticsLock(String n, int l, LockType t, String fName, CallstackState s, int counter) {
     name = n;
     line = new LineInfo(l);
     type = t;
     functionName = fName;
     callstack = s;
+    recursiveCounter = counter;
   }
 
-  LockStatisticsLock(String n, int l, LockType t, CallstackState s) {
+  LockStatisticsLock(String n, int l, LockType t, CallstackState s, int counter) {
     name = n;
     line = new LineInfo(l);
     type = t;
     functionName = "";
     callstack = s;
+    recursiveCounter = counter;
   }
 
   public String getName() {
     return name;
   }
 
+  public void increase() {
+    recursiveCounter++;
+  }
+
+  public void decrease() {
+    recursiveCounter--;
+  }
+
   public LineInfo getLine() {
     return line;
+  }
+
+  public int getRecursiveCounter() {
+    return recursiveCounter;
   }
 
   @Override
   public int hashCode() {
     final int prime = 31;
     int result = 1;
-    result = prime * result + ((functionName == null) ? 0 : functionName.hashCode());
-    //result = prime * result + ((line == null) ? 0 : line.hashCode());
+    //result = prime * result + ((functionName == null) ? 0 : functionName.hashCode());
     result = prime * result + ((name == null) ? 0 : name.hashCode());
+    //result = prime * result + recursiveCounter;
     result = prime * result + ((type == null) ? 0 : type.hashCode());
     return result;
   }
@@ -90,21 +105,18 @@ public class LockStatisticsLock {
     if (getClass() != obj.getClass())
       return false;
     LockStatisticsLock other = (LockStatisticsLock) obj;
-    if (functionName == null) {
+    /*if (functionName == null) {
       if (other.functionName != null)
         return false;
     } else if (!functionName.equals(other.functionName))
-      return false;
-    /*if (line == null) {
-      if (other.line != null)
-        return false;
-    } else if (!line.equals(other.line))
       return false;*/
     if (name == null) {
       if (other.name != null)
         return false;
     } else if (!name.equals(other.name))
       return false;
+    /*if (recursiveCounter != other.recursiveCounter)
+      return false;*/
     if (type != other.type)
       return false;
     return true;

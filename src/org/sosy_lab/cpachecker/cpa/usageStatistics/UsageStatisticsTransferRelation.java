@@ -281,8 +281,6 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     String functionName = AbstractStates.extractStateByType(pNewState, CallstackState.class).getCurrentFunction();
 
     String functionCallName = fcExpression.getFunctionNameExpression().toASTString();
-    //if (functionCallName.equals("memNODE_TO_HDR"))
-    //  System.out.println("Here!");
     if (analizedfunctions != null && analizedfunctions.contains(functionCallName))
     {
       FunctionInfo currentInfo = functionInfo.get(functionCallName);
@@ -304,14 +302,13 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       for (int i = 0; i < params.size(); i++) {
         if (currentInfo.pInfo.get(i) == ParameterInfo.READ) {
           result = handleRead(params.get(i), functionName, 0, false);
-          statistics.add(result, pNewState, fcExpression.getFileLocation().getStartingLineNumber(), EdgeType.ASSIGNMENT);
+          statistics.add(result, pNewState, fcExpression.getFileLocation().getStartingLineNumber(), EdgeType.FUNCTION_CALL);
 
         } else if (currentInfo.pInfo.get(i) == ParameterInfo.WRITE) {
           result = handleWrite(params.get(i), functionName, 0);
-          statistics.add(result, pNewState, fcExpression.getFileLocation().getStartingLineNumber(), EdgeType.ASSIGNMENT);
+          statistics.add(result, pNewState, fcExpression.getFileLocation().getStartingLineNumber(), EdgeType.FUNCTION_CALL);
         }
       }
-      //return;
     }
 
     covering.addFunctionUsage(functionCallName);

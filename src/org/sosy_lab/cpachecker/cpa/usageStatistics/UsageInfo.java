@@ -23,9 +23,6 @@
  */
 package org.sosy_lab.cpachecker.cpa.usageStatistics;
 
-import java.util.HashSet;
-import java.util.Set;
-
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdgeType;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
@@ -57,10 +54,9 @@ public class UsageInfo {
     accessType = atype;
   }
 
-  public Set<LockStatisticsLock> getLocks() {
-    Set<LockStatisticsLock> allLocks  = new HashSet<LockStatisticsLock>(locks.getGlobalLocks());
+  public LockStatisticsState getLockState() {
     //allLocks.addAll(locks.getLocalLocks());
-    return allLocks;
+    return locks;
   }
 
   public Access getAccess() {
@@ -75,13 +71,18 @@ public class UsageInfo {
     return line;
   }
 
+  public EdgeInfo getEdgeInfo() {
+    return info;
+  }
+
   public boolean intersect(UsageInfo other) {
-    if (other.locks.getGlobalLocks().size() == 0 && this.locks.getGlobalLocks().size() == 0 &&
-        other.locks.getLocalLocks().size() == 0 && this.locks.getLocalLocks().size() == 0)
+    if (other.locks.getLocks().size() == 0 && this.locks.getLocks().size() == 0
+        //&& other.locks.getLocalLocks().size() == 0 && this.locks.getLocalLocks().size() == 0
+        )
       return true;
 
-    for (LockStatisticsLock lock : other.locks.getGlobalLocks()) {
-      if (this.locks.getGlobalLocks().contains(lock))
+    for (LockStatisticsLock lock : other.locks.getLocks()) {
+      if (this.locks.getLocks().contains(lock))
         return true;
     }
 
@@ -164,7 +165,7 @@ public class UsageInfo {
     if (callstack != null)
       sb.delete(sb.length() - 3, sb.length());
     sb.append("\n      {\n");
-    for (LockStatisticsLock lock : locks.getGlobalLocks()) {
+    for (LockStatisticsLock lock : locks.getLocks()) {
       sb.append("    " + lock.toString() + "\n\n");
     }
     if (locks.getGlobalSize() > 0) {

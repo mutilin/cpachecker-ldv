@@ -143,7 +143,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     for (Identifier id : Stat.keySet()) {
       Set<UsageInfo> uset = Stat.get(id);
       for (UsageInfo uinfo : uset){
-        for (LockStatisticsLock lock : uinfo.getLocks()) {
+        for (LockStatisticsLock lock : uinfo.getLockState().getLocks()) {
           if (!locks.contains(lock))
             locks.add(lock);
         }
@@ -277,10 +277,12 @@ private void printCases(String comment, Collection<VariableIdentifier> identifie
       writer.println("#" + id.getSimpleName());
     else if (id instanceof LocalVariableIdentifier)
       writer.println("##" + id.getSimpleName() + "_" + ((LocalVariableIdentifier)id).getFunction());
+    writer.println(id.type.toASTString(id.getSimpleName()));
+    writer.println("Line 0:     N0 -{/*Number of usages:" + uinfo.size() + "*/}-> N0");
     for (UsageInfo ui : uinfo) {
-      Set<LockStatisticsLock> Locks = ui.getLocks();
+      LockStatisticsState Locks = ui.getLockState();
       currentLeaf = TreeLeaf.clearTrunkState();
-      for (LockStatisticsLock lock : Locks) {
+      for (LockStatisticsLock lock : Locks.getLocks()) {
         currentLeaf = TreeLeaf.getTrunkState();
         tmpState = lock.getCallstack();
         tmpList.clear();
@@ -312,10 +314,18 @@ private void printCases(String comment, Collection<VariableIdentifier> identifie
         currentLeaf = currentLeaf.addLast(callstack);
       }
       String name = id.getName();
-      if (ui.getAccess() == Access.READ) {
-        name = "... = (" + id.type.toASTString("") +")" + name;
-      } else if (ui.getAccess() == Access.WRITE) {
-        name = "(" + id.type.toASTString("") +")" + name + " = ...";
+      if (ui.getEdgeInfo().getEdgeType() == EdgeType.ASSIGNMENT) {
+        if (ui.getAccess() == Access.READ) {
+          name = "... = " + name + ";";
+        } else if (ui.getAccess() == Access.WRITE) {
+          name += " = ...;";
+        }
+      } else if (ui.getEdgeInfo().getEdgeType() == EdgeType.ASSUMPTION) {
+        name = "if ("  + name + ") {}";
+      } else if (ui.getEdgeInfo().getEdgeType() == EdgeType.FUNCTION_CALL) {
+        name = "f("  + name + ");";
+      } else if (ui.getEdgeInfo().getEdgeType() == EdgeType.DECLARATION) {
+        name = id.type.toASTString(name);
       }
       currentLeaf.addLast(name, ui.getLine().line);
 
@@ -329,7 +339,8 @@ private void printCases(String comment, Collection<VariableIdentifier> identifie
         //strange, but we don't have any stacks
         continue;
       }
-      writer.println("Line 0:     N0 -{/*" + ui.getLocks() + "*/}-> N0");
+      writer.println("Line 0:     N0 -{/*_____________________*/}-> N0");
+      writer.println("Line 0:     N0 -{/*" + ui.getLockState().toString() + "*/}-> N0");
       while (currentLeaf != null) {
         if (currentLeaf.children.size() > 0) {
           writer.println("Line " + currentLeaf.line + ":     N0 -{" + currentLeaf.code + "();}-> N0");
@@ -337,7 +348,7 @@ private void printCases(String comment, Collection<VariableIdentifier> identifie
           leafStack.push(currentLeaf);
           currentLeaf = currentLeaf.children.getFirst();
         } else {
-          writer.println("Line " + currentLeaf.line + ":     N0 -{" + currentLeaf.code + ";}-> N0");
+          writer.println("Line " + currentLeaf.line + ":     N0 -{" + currentLeaf.code + "}-> N0");
           while (true) {
             tmpLeaf = leafStack.pop();
             if (tmpLeaf.equals(TreeLeaf.getTrunkState())) {
