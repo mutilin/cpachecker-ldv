@@ -8,14 +8,14 @@ open(my $html_result, ">", "index.html") or die("Can't open file for write");
 
 my $cilpath = $ARGV[1] or die("Can't find cil-file");
 
-my $path_to_etv = $ARGV[2] or die("No path to etv folder");
+my $path_to_etv = $ARGV[2] or die("No path to etv folder (you may specify path to local ldv-tools repository)");
 #/home/alpha/git/ldv-tools
 
 my $String='CPAchecker error trace v1.1\n-------';
 $String=$String.`pwd`;
 chomp($String);
-$String=$String."$cilpath-------";
-`echo -e \"$String\" | cat - $cilpath > tmp_trace`;
+$String=$String."/$cilpath-------";
+`echo \"$String\" | cat - $cilpath > tmp_trace`;
 `echo "--------------" >> tmp_trace`;
 
 my $line = <$visualize_fh>;
@@ -101,7 +101,7 @@ foreach $current_fname(sort keys %unsafe_list)
 	`rm $current_fname`;
 	$current_fname_new = $current_fname.".new";
 	`etv -c $current_fname_new --reqs-out reqs`;
-	`echo -e "\n" >> reqs`;
+	`echo "\n" >> reqs`;
 	`rm srcs`;
 	`cat reqs | while read nextline
 	do
@@ -110,7 +110,7 @@ foreach $current_fname(sort keys %unsafe_list)
 	$current_fname_new =~ m/(.+)\.tmp.new/;
 	print ($html_result "<li><a href = \"$1.html\">$1</a></li>");
 	`etv -c $current_fname_new --src-files srcs -o $1.html.tmp`;
-	`echo "<html><head><link href='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/css/etv.css' rel='stylesheet' type='text/css' /><link href='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/css/etv-analytics-center.css' rel='stylesheet' type='text/css' /><script type='text/javascript' src='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/jslib/jquery-1.4.2.min.js'></script><script type='text/javascript' src='/home/alpha/git/ldv-tools/stats-visualizer/vhosts/ldv-stats/public/jslib/etv.js'></script></head><body> @{$unsafe_list{$current_fname}}"> $1.html && cat $1.html.tmp >> $1.html && echo "</body></html>" >> $1.html`;
+	`echo "<html><head><link href='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/css/etv.css' rel='stylesheet' type='text/css' /><link href='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/css/etv-analytics-center.css' rel='stylesheet' type='text/css' /><script type='text/javascript' src='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/jslib/jquery-1.4.2.min.js'></script><script type='text/javascript' src='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/jslib/etv.js'></script></head><body> @{$unsafe_list{$current_fname}}"> $1.html && cat $1.html.tmp >> $1.html && echo "</body></html>" >> $1.html`;
 	#`rm $1.html.tmp`;
 	#`rm $1.tmp.new`;
 	#`rm $1.tmp`
