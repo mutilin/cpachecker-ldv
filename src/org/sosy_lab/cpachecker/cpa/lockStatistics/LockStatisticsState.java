@@ -24,7 +24,9 @@
 package org.sosy_lab.cpachecker.cpa.lockStatistics;
 
 import java.io.Serializable;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 import org.sosy_lab.cpachecker.core.interfaces.AbstractQueryableState;
@@ -77,11 +79,25 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
   @Override
   public String toString() {
     StringBuilder sb = new StringBuilder();
+    //Set<String> lockNames = new HashSet<String>();
+    LockStatisticsLock tmpLock;
+    Map<String, LockStatisticsLock> locksToString = new HashMap<String, LockStatisticsLock>();
 
     for (LockStatisticsLock lock : locks) {
+      if (!locksToString.containsKey(lock.getName())) {
+        locksToString.put(lock.getName(), lock);
+      } else {
+        tmpLock = locksToString.get(lock.getName());
+        if (tmpLock.getRecursiveCounter() < lock.getRecursiveCounter())
+          locksToString.put(lock.getName(), lock);
+      }
+    }
+
+    for (String lockName : locksToString.keySet()) {
       //if (lock.getRecursiveCounter() == 0)
-        sb.append(lock.toString() + ", ");
-      //else
+        sb.append(locksToString.get(lockName).toString() + ", ");
+     // else
+
     }
     if (locks.size() > 0)
       sb.delete(sb.length() - 2, sb.length());

@@ -143,9 +143,10 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     for (Identifier id : Stat.keySet()) {
       Set<UsageInfo> uset = Stat.get(id);
       for (UsageInfo uinfo : uset){
-        for (LockStatisticsLock lock : uinfo.getLockState().getLocks()) {
-          if (!locks.contains(lock))
-            locks.add(lock);
+nextLock:for (LockStatisticsLock lock : uinfo.getLockState().getLocks()) {
+          for (LockStatisticsLock usedLock : locks)
+            if ( usedLock.getName().equals(lock.getName())) continue nextLock;
+          locks.add(lock);
         }
       }
     }

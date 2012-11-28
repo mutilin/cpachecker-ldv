@@ -23,6 +23,8 @@
  */
 package org.sosy_lab.cpachecker.cpa.usageStatistics;
 
+import java.util.Set;
+
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdgeType;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
@@ -76,14 +78,18 @@ public class UsageInfo {
   }
 
   public boolean intersect(UsageInfo other) {
-    if (other.locks.getLocks().size() == 0 && this.locks.getLocks().size() == 0
-        //&& other.locks.getLocalLocks().size() == 0 && this.locks.getLocalLocks().size() == 0
-        )
+    Set<LockStatisticsLock> otherLocks = other.locks.getLocks();
+    if (otherLocks.size() == 0 && this.locks.getLocks().size() == 0)
       return true;
 
-    for (LockStatisticsLock lock : other.locks.getLocks()) {
-      if (this.locks.getLocks().contains(lock))
-        return true;
+    if (otherLocks.size() == 0 && this.locks.getLocks().size() > 0)
+      return false;
+
+    for (LockStatisticsLock lock : otherLocks) {
+      for (LockStatisticsLock myLock : this.locks.getLocks()) {
+        if (myLock.getName().equals(lock.getName()))
+          return true;
+      }
     }
 
     /*for (LockStatisticsLock lock : other.locks.getLocalLocks()) {

@@ -91,7 +91,7 @@ public class LockStatisticsLock {
     int result = 1;
     //result = prime * result + ((functionName == null) ? 0 : functionName.hashCode());
     result = prime * result + ((name == null) ? 0 : name.hashCode());
-    //result = prime * result + recursiveCounter;
+    result = prime * result + recursiveCounter;
     result = prime * result + ((type == null) ? 0 : type.hashCode());
     return result;
   }
@@ -115,8 +115,8 @@ public class LockStatisticsLock {
         return false;
     } else if (!name.equals(other.name))
       return false;
-    /*if (recursiveCounter != other.recursiveCounter)
-      return false;*/
+    if (recursiveCounter != other.recursiveCounter)
+      return false;
     if (type != other.type)
       return false;
     return true;
@@ -126,7 +126,7 @@ public class LockStatisticsLock {
   public String toString() {
     StringBuilder sb = new StringBuilder();
 
-    sb.append(type.toASTString() + " "+ name);
+    sb.append(type.toASTString() + " "+ name + "(" + recursiveCounter + ")");
 
     /*CallstackState e = callstack;
     sb.append("        ");

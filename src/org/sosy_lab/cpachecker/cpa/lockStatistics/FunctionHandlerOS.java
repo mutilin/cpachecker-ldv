@@ -42,7 +42,8 @@ import org.sosy_lab.cpachecker.util.AbstractStates;
 
 public class FunctionHandlerOS {
   private UsageStatisticsCPA stateGetter;
-  public Set<LockInfo> locks;
+  private final Set<LockInfo> locks;
+
 
   public FunctionHandlerOS(Set<LockInfo> l) {
     locks = l;
@@ -84,8 +85,8 @@ public class FunctionHandlerOS {
 
   public LockStatisticsState handleFunctionCall(LockStatisticsState element, CFunctionCallEdge callEdge) throws HandleCodeException {
     Set<CStatement> expressions = callEdge.getRawAST().asSet();
-
     LockStatisticsState newElement = element.clone();
+
 
     if (expressions.size() > 0) {
       for (CStatement statement : expressions) {
@@ -145,23 +146,28 @@ public class FunctionHandlerOS {
           newElement.add(params.get(p - 1).toASTString(), lineNumber, callstack);
         else
           System.err.println("Try to lock " + lock.lockName + " more, than " + lock.maxLock);
-      }
-      else if (lock.UnlockFunctions.containsKey(functionName)) {
+        return newElement;
+
+      } else if (lock.UnlockFunctions.containsKey(functionName)) {
         int p = lock.UnlockFunctions.get(functionName);
         if (p == 0)
           newElement.delete(lock.lockName);
         else
           newElement.delete(params.get(p - 1).toASTString());
-      }
-      else if (lock.ResetFunctions != null && lock.ResetFunctions.containsKey(functionName)) {
+        return newElement;
+
+      } else if (lock.ResetFunctions != null && lock.ResetFunctions.containsKey(functionName)) {
         int p = lock.ResetFunctions.get(functionName);
         if (p == 0)
           newElement.reset(lock.lockName);
         else
           newElement.reset(params.get(p - 1).toASTString());
+        return newElement;
+
       } else if (lock.setLevel != null && lock.setLevel.equals(functionName)) {
         int p = Integer.parseInt(params.get(0).toASTString()); //new level
         newElement.set(lock.lockName, p, lineNumber, callstack);
+        return newElement;
       }
     }
     return newElement;

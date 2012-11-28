@@ -39,8 +39,10 @@ import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionReturnEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
@@ -62,11 +64,17 @@ public class LockStatisticsTransferRelation implements TransferRelation
       description="contains all lock names")
   private Set<String> lockinfo;
 
-  /*@Option(name="unlockfunctions",
-      description="functions, that unlocks synchronization primitives")
-  private List<String> unlock;
+  @Option(name="annotated",
+      description="functions, which are known to works right")
+  private Set<String> annotated;
 
-  @Option(name="exceptions",
+  @Option(name="zero",
+      description="functions, which are returned without locks")
+  private Set<String> zero;
+
+  private Map<CFANode, LockStatisticsState> returnedStates = new HashMap<CFANode, LockStatisticsState>();
+
+  /*@Option(name="exceptions",
       description="functions wuth parameters, which we don't need to use")
   private Set<String> exceptions;
 
@@ -134,7 +142,6 @@ public class LockStatisticsTransferRelation implements TransferRelation
       tmpLockInfo = new LockInfo(lockName, lockFunctions, unlockFunctions, resetFunctions, tmpString, num);
       tmpInfo.add(tmpLockInfo);
     }
-
    /* if (HandleType.equals("LINUX")) {
       handler = new FunctionHandlerLinux(lock, unlock, exceptions);
     }
@@ -155,11 +162,24 @@ public class LockStatisticsTransferRelation implements TransferRelation
     switch (cfaEdge.getEdgeType()) {
 
     case FunctionCallEdge:
+
+      if (annotated.contains(((CFunctionCallEdge)cfaEdge).getSuccessor().getFunctionName())) {
+        //System.out.println("Put " + ((CFunctionCallEdge)cfaEdge).getPredecessor());
+        returnedStates.put(((CFunctionCallEdge)cfaEdge).getPredecessor(), lockStatisticsElement);
+      }
       successor = handler.handleFunctionCall(lockStatisticsElement, (CFunctionCallEdge)cfaEdge);
       break;
 
     case FunctionReturnEdge:
-      successor = lockStatisticsElement.clone();//removeLocal(cfaEdge.getPredecessor().getFunctionName());
+      CFANode tmpNode = ((CFunctionReturnEdge)cfaEdge).getSummaryEdge().getPredecessor();
+      if (returnedStates.containsKey(tmpNode)) {
+        //System.out.println("Get " + tmpNode);
+        successor = returnedStates.get(tmpNode);
+        returnedStates.remove(tmpNode);
+      } else if (zero.contains(((CFunctionReturnEdge)cfaEdge).getPredecessor().getFunctionName())) {
+        successor = new LockStatisticsState();
+      } else
+        successor = lockStatisticsElement.clone();//removeLocal(cfaEdge.getPredecessor().getFunctionName());
       break;
 
     case StatementEdge:
