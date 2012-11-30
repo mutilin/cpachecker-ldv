@@ -163,8 +163,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
 
     case FunctionCallEdge:
 
-      if (annotated.contains(((CFunctionCallEdge)cfaEdge).getSuccessor().getFunctionName())) {
-        //System.out.println("Put " + ((CFunctionCallEdge)cfaEdge).getPredecessor());
+      if (annotated != null && annotated.contains(((CFunctionCallEdge)cfaEdge).getSuccessor().getFunctionName())) {
         returnedStates.put(((CFunctionCallEdge)cfaEdge).getPredecessor(), lockStatisticsElement);
       }
       successor = handler.handleFunctionCall(lockStatisticsElement, (CFunctionCallEdge)cfaEdge);
@@ -172,11 +171,10 @@ public class LockStatisticsTransferRelation implements TransferRelation
 
     case FunctionReturnEdge:
       CFANode tmpNode = ((CFunctionReturnEdge)cfaEdge).getSummaryEdge().getPredecessor();
-      if (returnedStates.containsKey(tmpNode)) {
-        //System.out.println("Get " + tmpNode);
+      if (returnedStates != null && returnedStates.containsKey(tmpNode)) {
         successor = returnedStates.get(tmpNode);
         returnedStates.remove(tmpNode);
-      } else if (zero.contains(((CFunctionReturnEdge)cfaEdge).getPredecessor().getFunctionName())) {
+      } else if (zero != null && zero.contains(((CFunctionReturnEdge)cfaEdge).getPredecessor().getFunctionName())) {
         successor = new LockStatisticsState();
       } else
         successor = lockStatisticsElement.clone();//removeLocal(cfaEdge.getPredecessor().getFunctionName());

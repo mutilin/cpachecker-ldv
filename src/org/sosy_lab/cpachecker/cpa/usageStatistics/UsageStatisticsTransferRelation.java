@@ -281,6 +281,8 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     String functionName = AbstractStates.extractStateByType(pNewState, CallstackState.class).getCurrentFunction();
 
     String functionCallName = fcExpression.getFunctionNameExpression().toASTString();
+    if (functionCallName.equals("allThreadSuspend"))
+      System.out.println("allThreadSuspend!");
     if (analizedfunctions != null && analizedfunctions.contains(functionCallName))
     {
       FunctionInfo currentInfo = functionInfo.get(functionCallName);
