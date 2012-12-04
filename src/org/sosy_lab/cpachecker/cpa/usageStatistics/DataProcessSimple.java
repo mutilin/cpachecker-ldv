@@ -59,7 +59,7 @@ nextId:for (VariableIdentifier id : stat.keySet()) {
 next:for (VariableIdentifier id : unsafe) {
       Set<UsageInfo> uset = stat.get(id);
       for (UsageInfo uinfo : uset) {
-        if (uinfo.getAccess() == Access.WRITE /*&& uinfo.getCallStack().getDepth() > 1*/)
+        if (uinfo.getAccess() == Access.WRITE && uinfo.getCallStack().getDepth() > 1)
           continue next;
       }
       //no write access
