@@ -1,18 +1,39 @@
 #!/usr/bin/perl -w
 
-#script, which generate html-file with unsafe report.
-#Usage: ./gen_html <path to file with visual trace information> <relative path to cil-file> <path to git sources of ldv-tools>
-
+use Getopt::Long qw(GetOptions);
+Getopt::Long::Configure qw(posix_default no_ignore_case);
 use strict;
 
-my $visualize_fname = $ARGV[0] or die("Can't find CPAChecker trace");
+my $visualize_fname;
+my $cilpath;
+my $path_to_etv;
+my $root_html_file = "Unsafes.html";
+
+sub usage{ print STDERR<<usage_ends;
+
+Script, which generate html-file with the list of unsafe reports
+
+Usage:
+        gen-unsafes-report.pl --trace=path-to-unsafes-trace-file --cil=path-to-cil-file --ldvrepo=path-to-git-sources-of-ldv-tools
+
+Example: gen-unsafes-report.pl --trace=../test/results/visualize --cil=../cil.out.i --ldvrepo=/home/alpha/git/ldv-tools/
+
+usage_ends
+        die;
+}
+
+GetOptions(
+        'trace|t=s'=>\$visualize_fname,
+        'cil|c=s'=>\$cilpath,
+        'ldvrepo|r=s'=>\$path_to_etv,
+) or usage;
+
+# = $ARGV[0] or die("Can't find CPAChecker trace");
 open(my $visualize_fh, "<", $visualize_fname) or die("Can't open file for read");
-open(my $html_result, ">", "Unsafes.html") or die("Can't open file for write");
+open(my $html_result, ">", $root_html_file) or die("Can't open file for write");
 
-my $cilpath = $ARGV[1] or die("Can't find cil-file");
-
-my $path_to_etv = $ARGV[2] or die("No path to etv folder (you may specify path to local ldv-tools repository)");
-#/home/alpha/git/ldv-tools
+# = $ARGV[1] or die("Can't find cil-file");
+# = $ARGV[2] or die("No path to etv folder (you may specify path to local ldv-tools repository)");
 
 open(my $tmp_trace, ">", "tmp_trace") or die("Can't open file tmp_trace for write");
 print($tmp_trace "CPAchecker error trace v1.1\n");
