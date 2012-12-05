@@ -141,19 +141,21 @@ public class FunctionHandlerOS {
         //CExpression param = params.get(0);
         //if (isGlobal(param))
         if (p == 0 && d < lock.maxLock)
-          newElement.add(lock.lockName, lineNumber, callstack);
+          newElement.add(lock.lockName, lineNumber, callstack, "");
         else if (d < lock.maxLock)
-          newElement.add(params.get(p - 1).toASTString(), lineNumber, callstack);
-        else
-          System.err.println("Try to lock " + lock.lockName + " more, than " + lock.maxLock);
+          newElement.add(lock.lockName, lineNumber, callstack, params.get(p - 1).toASTString());
+        else {
+          System.err.println("Try to lock " + lock.lockName + " more, than " + lock.maxLock/* + " in " + lineNumber + " line"*/);
+          //System.err.println("Lines: " + newElement.getAllLines(lock.lockName));
+        }
         return newElement;
 
       } else if (lock.UnlockFunctions.containsKey(functionName)) {
         int p = lock.UnlockFunctions.get(functionName);
         if (p == 0)
-          newElement.delete(lock.lockName);
+          newElement.delete(lock.lockName, "", false);
         else
-          newElement.delete(params.get(p - 1).toASTString());
+          newElement.delete(lock.lockName, params.get(p - 1).toASTString(), false);
         return newElement;
 
       } else if (lock.ResetFunctions != null && lock.ResetFunctions.containsKey(functionName)) {
@@ -166,7 +168,7 @@ public class FunctionHandlerOS {
 
       } else if (lock.setLevel != null && lock.setLevel.equals(functionName)) {
         int p = Integer.parseInt(params.get(0).toASTString()); //new level
-        newElement.set(lock.lockName, p, lineNumber, callstack);
+        newElement.set(lock.lockName, p, lineNumber, callstack, "");
         return newElement;
       }
     }

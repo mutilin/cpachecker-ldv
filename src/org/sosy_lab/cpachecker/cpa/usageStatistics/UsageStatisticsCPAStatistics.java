@@ -72,6 +72,8 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   private String DirName = "test/";
   private String VisualName = "visualize";
 
+  @Option(description = "variables, which will be unsafes even only with read access (they can be changed invisibly)")
+  private Set<String> annotatedvariables = null;
   //private String OrigName;
 
   @Option(values={"SIMPLE", "SET"},toUppercase=true,
@@ -89,7 +91,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     config.inject(this);
 
     if (process.equals("SIMPLE"))
-      dataProcess = new DataProcessSimple();
+      dataProcess = new DataProcessSimple(annotatedvariables);
     else if (process.equals("SET"))
       dataProcess = new DataProcessSetAnalysis();
     else {
@@ -157,7 +159,7 @@ nextLock:for (LockStatisticsLock lock : uinfo.getLockState().getLocks()) {
   /*
    * looks through all unsafe cases of current identifier and find the example of two lines with different locks, one of them must be 'write'
    */
-  /*private Pair<UsageInfo, UsageInfo> findExamples(Identifier unsafeCase) throws HandleCodeException {
+  private Pair<UsageInfo, UsageInfo> findExamples(Identifier unsafeCase) throws HandleCodeException {
     Set<UsageInfo> uinfo = Stat.get(unsafeCase);
 
     for (UsageInfo info1 : uinfo) {
@@ -170,105 +172,101 @@ nextLock:for (LockStatisticsLock lock : uinfo.getLockState().getLocks()) {
     throw new HandleCodeException("Can't find example of unsafe cases");
   }
 
-private void printCases(String comment, Collection<VariableIdentifier> identifiers) {
-  writer.println("-------------------------------------------------");
-  writer.println("");
-  Collection<VariableIdentifier> global = new HashSet<VariableIdentifier>();
-  Collection<VariableIdentifier> local = new HashSet<VariableIdentifier>();
-  Collection<VariableIdentifier> fields = new HashSet<VariableIdentifier>();
-  //Collection<Identifier> alreadyPrinted = new HashSet<Identifier>();
-
-
-  for (VariableIdentifier id : identifiers) {
-    if (id.getStatus() == Ref.VARIABLE || !identifiers.contains(id.makeVariable())) {
-      if (id instanceof GlobalVariableIdentifier)
-        global.add(id);
-      else if (id instanceof LocalVariableIdentifier)
-        local.add(id);
-      else if (id instanceof StructureIdentifier)
-        structures++;
-      else if (id instanceof StructureFieldIdentifier)
-        fields.add(id);
-    }
-  }
-
-  writer.println(comment);
-  writer.println("Total cases:            " + (global.size() + local.size() + fields.size()));
-  writer.println("--Global:               " + global.size());
-  writer.println("--Local:                " + local.size());
-  //writer.println("--Structures:           " + structures);
-  writer.println("--Structure fields:     " + fields.size());
-  writer.println("");
-  writer.println("-------------------------------------------------");
-
-  int counter = 1;
-  counter = printCollection("Global variables", global, counter, identifiers);
-  counter = printCollection("Local variables", local, counter, identifiers);
-  counter = printCollection("Structure fields", fields, counter, identifiers);
-}
-  private int printCollection(String description, Collection<VariableIdentifier> identifiers, int counter,
-                              Collection<VariableIdentifier> allIdentifiers) {
-    if (identifiers.size() > 0) {
-      writer.println("");
-      writer.println(description);
-      writer.println("________________");
-      for (VariableIdentifier id : identifiers) {
-        writer.println("");
-        writer.println(counter + ") "+ id.toString());
-        printId(id, allIdentifiers.contains(id.makeReference()));
-        counter++;
-        writer.println("_____________________________________________");
-      }
-      writer.println("---------------------------------------------");
-      writer.println("");
-    }
-    return counter;
-  }
-
-  private void printExample(VariableIdentifier id) {
-    Pair<UsageInfo, UsageInfo> example;
-
-    writer.println("    |- Two examples:");
-    try {
-      example = findExamples(id);
-      writer.println(example.getFirst().toString());
-      writer.println(example.getSecond().toString());
-    } catch (HandleCodeException e) {
-      writer.println(e.getMessage());
-    }
-  }
-
-  private void printId(VariableIdentifier id, boolean ref) {
-    writer.println("    |- Unique usages: " + Stat.get(id).size());
-    printExample(id);
-    writer.println("    [");
-    writer.println("    ");
-    for (UsageInfo uinfo : Stat.get(id))
-      writer.println(uinfo.toString());
-    writer.println("    ]");
-
-    if (ref && id.getStatus() == Ref.VARIABLE) {
-      VariableIdentifier refId = id.makeReference();
-      writer.println("");
-      writer.println("    " + refId.getName());
-      writer.println("    |- Unique usages: " + Stat.get(refId).size());
-      printExample(id);
-      writer.println("    [");
-      writer.println("    ");
-      for (UsageInfo uinfo : Stat.get(refId))
-        writer.println(uinfo.toString());
-      writer.println("    ]");
-    }
-  }*/
-
-  private void createVisualization(VariableIdentifier id) {
-    Set<UsageInfo> uinfo = Stat.get(id);
+  private void createVisualization(VariableIdentifier id, UsageInfo ui) {
     LinkedList<CallstackState> tmpList = new LinkedList<CallstackState>();
     LinkedList<TreeLeaf> leafStack = new LinkedList<TreeLeaf>();
     TreeLeaf tmpLeaf, currentLeaf;
     CallstackState tmpState;
 
+    LockStatisticsState Locks = ui.getLockState();
+    currentLeaf = TreeLeaf.clearTrunkState();
+    for (LockStatisticsLock lock : Locks.getLocks()) {
+      currentLeaf = TreeLeaf.getTrunkState();
+      tmpState = lock.getCallstack();
+      tmpList.clear();
+      //revert callstacks of locks
+      while (tmpState != null) {
+        tmpList.push(tmpState);
+        tmpState = tmpState.getPreviousState();
+      }
+      //create tree of calls for locks
+      currentLeaf = currentLeaf.add(tmpList.getFirst().getCallNode().getFunctionName(), 0);
+      for (CallstackState callstack : tmpList) {
+        currentLeaf = currentLeaf.add(callstack);
+      }
+      //System.out.println("Add " + lock.getName());
+      currentLeaf.add(lock.getName() + "()", lock.getLine().line);
+    }
 
+    tmpState = ui.getCallStack();
+    tmpList.clear();
+    //revert call stack of error trace to variable
+    while (tmpState != null) {
+      tmpList.push(tmpState);
+      tmpState = tmpState.getPreviousState();
+    }
+    //add to tree of calls this path
+    currentLeaf = TreeLeaf.getTrunkState();
+    currentLeaf = currentLeaf.add(tmpList.getFirst().getCallNode().getFunctionName(), 0);
+    for (CallstackState callstack : tmpList) {
+      currentLeaf = currentLeaf.addLast(callstack);
+    }
+    String name = id.getName();
+    if (ui.getEdgeInfo().getEdgeType() == EdgeType.ASSIGNMENT) {
+      if (ui.getAccess() == Access.READ) {
+        name = "... = " + name + ";";
+      } else if (ui.getAccess() == Access.WRITE) {
+        name += " = ...;";
+      }
+    } else if (ui.getEdgeInfo().getEdgeType() == EdgeType.ASSUMPTION) {
+      name = "if ("  + name + ") {}";
+    } else if (ui.getEdgeInfo().getEdgeType() == EdgeType.FUNCTION_CALL) {
+      name = "f("  + name + ");";
+    } else if (ui.getEdgeInfo().getEdgeType() == EdgeType.DECLARATION) {
+      name = id.type.toASTString(name);
+    }
+    currentLeaf.addLast(name, ui.getLine().line);
+
+    //print this tree with aide of dfs
+    currentLeaf = TreeLeaf.getTrunkState();
+    leafStack.clear();
+    if (currentLeaf.children.size() > 0) {
+      leafStack.push(currentLeaf);
+      currentLeaf = currentLeaf.children.getFirst();
+    } else {
+      //strange, but we don't have any stacks
+      return;
+    }
+    writer.println("Line 0:     N0 -{/*_____________________*/}-> N0");
+    writer.println("Line 0:     N0 -{/*" + ui.getLockState().toString() + "*/}-> N0");
+    while (currentLeaf != null) {
+      if (currentLeaf.children.size() > 0) {
+        writer.println("Line " + currentLeaf.line + ":     N0 -{" + currentLeaf.code + "();}-> N0");
+        writer.println("Line 0:     N0 -{Function start dummy edge}-> N0");
+        leafStack.push(currentLeaf);
+        currentLeaf = currentLeaf.children.getFirst();
+      } else {
+        writer.println("Line " + currentLeaf.line + ":     N0 -{" + currentLeaf.code + "}-> N0");
+        while (true) {
+          tmpLeaf = leafStack.pop();
+          if (tmpLeaf.equals(TreeLeaf.getTrunkState())) {
+            currentLeaf = null;
+            break;
+          }
+          if (tmpLeaf.children.size() > 1  && !tmpLeaf.children.getLast().equals(currentLeaf)) {
+            leafStack.push(tmpLeaf);
+            currentLeaf = tmpLeaf.children.get(tmpLeaf.children.indexOf(currentLeaf) + 1);
+            break;
+          }
+          writer.println("Line 0:     N0 -{return;}-> N0");
+          currentLeaf = tmpLeaf;
+        }
+      }
+    }
+  }
+
+  private void createVisualization(VariableIdentifier id) {
+    Set<UsageInfo> uinfo = Stat.get(id);
 
     if (uinfo == null || uinfo.size() == 0)
       return;
@@ -280,92 +278,17 @@ private void printCases(String comment, Collection<VariableIdentifier> identifie
       writer.println("##" + id.getSimpleName() + "_" + ((LocalVariableIdentifier)id).getFunction());
     writer.println(id.type.toASTString(id.getSimpleName()));
     writer.println("Line 0:     N0 -{/*Number of usages:" + uinfo.size() + "*/}-> N0");
-    for (UsageInfo ui : uinfo) {
-      LockStatisticsState Locks = ui.getLockState();
-      currentLeaf = TreeLeaf.clearTrunkState();
-      for (LockStatisticsLock lock : Locks.getLocks()) {
-        currentLeaf = TreeLeaf.getTrunkState();
-        tmpState = lock.getCallstack();
-        tmpList.clear();
-        //revert callstacks of locks
-        while (tmpState != null) {
-          tmpList.push(tmpState);
-          tmpState = tmpState.getPreviousState();
-        }
-        //create tree of calls for locks
-        currentLeaf = currentLeaf.add(tmpList.getFirst().getCallNode().getFunctionName(), 0);
-        for (CallstackState callstack : tmpList) {
-          currentLeaf = currentLeaf.add(callstack);
-        }
-        //System.out.println("Add " + lock.getName());
-        currentLeaf.add(lock.getName() + "()", lock.getLine().line);
-      }
-
-      tmpState = ui.getCallStack();
-      tmpList.clear();
-      //revert call stack of error trace to variable
-      while (tmpState != null) {
-        tmpList.push(tmpState);
-        tmpState = tmpState.getPreviousState();
-      }
-      //add to tree of calls this path
-      currentLeaf = TreeLeaf.getTrunkState();
-      currentLeaf = currentLeaf.add(tmpList.getFirst().getCallNode().getFunctionName(), 0);
-      for (CallstackState callstack : tmpList) {
-        currentLeaf = currentLeaf.addLast(callstack);
-      }
-      String name = id.getName();
-      if (ui.getEdgeInfo().getEdgeType() == EdgeType.ASSIGNMENT) {
-        if (ui.getAccess() == Access.READ) {
-          name = "... = " + name + ";";
-        } else if (ui.getAccess() == Access.WRITE) {
-          name += " = ...;";
-        }
-      } else if (ui.getEdgeInfo().getEdgeType() == EdgeType.ASSUMPTION) {
-        name = "if ("  + name + ") {}";
-      } else if (ui.getEdgeInfo().getEdgeType() == EdgeType.FUNCTION_CALL) {
-        name = "f("  + name + ");";
-      } else if (ui.getEdgeInfo().getEdgeType() == EdgeType.DECLARATION) {
-        name = id.type.toASTString(name);
-      }
-      currentLeaf.addLast(name, ui.getLine().line);
-
-      //print this tree with aide of dfs
-      currentLeaf = TreeLeaf.getTrunkState();
-      leafStack.clear();
-      if (currentLeaf.children.size() > 0) {
-        leafStack.push(currentLeaf);
-        currentLeaf = currentLeaf.children.getFirst();
-      } else {
-        //strange, but we don't have any stacks
-        continue;
-      }
+    writer.println("Line 0:     N0 -{/*Two examples:*/}-> N0");
+    try {
+      Pair<UsageInfo, UsageInfo> tmpPair = findExamples(id);
+      createVisualization(id, tmpPair.getFirst());
+      createVisualization(id, tmpPair.getSecond());
       writer.println("Line 0:     N0 -{/*_____________________*/}-> N0");
-      writer.println("Line 0:     N0 -{/*" + ui.getLockState().toString() + "*/}-> N0");
-      while (currentLeaf != null) {
-        if (currentLeaf.children.size() > 0) {
-          writer.println("Line " + currentLeaf.line + ":     N0 -{" + currentLeaf.code + "();}-> N0");
-          writer.println("Line 0:     N0 -{Function start dummy edge}-> N0");
-          leafStack.push(currentLeaf);
-          currentLeaf = currentLeaf.children.getFirst();
-        } else {
-          writer.println("Line " + currentLeaf.line + ":     N0 -{" + currentLeaf.code + "}-> N0");
-          while (true) {
-            tmpLeaf = leafStack.pop();
-            if (tmpLeaf.equals(TreeLeaf.getTrunkState())) {
-              currentLeaf = null;
-              break;
-            }
-            if (tmpLeaf.children.size() > 1  && !tmpLeaf.children.getLast().equals(currentLeaf)) {
-              leafStack.push(tmpLeaf);
-              currentLeaf = tmpLeaf.children.get(tmpLeaf.children.indexOf(currentLeaf) + 1);
-              break;
-            }
-            writer.println("Line 0:     N0 -{return;}-> N0");
-            currentLeaf = tmpLeaf;
-          }
-        }
-      }
+      for (UsageInfo ui : uinfo)
+        createVisualization(id, ui);
+    } catch (HandleCodeException e) {
+      //strange, but we didn't find unsafe example. So, return.
+      return;
     }
   }
 

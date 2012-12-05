@@ -174,7 +174,7 @@ public class UsageInfo {
     for (LockStatisticsLock lock : locks.getLocks()) {
       sb.append("    " + lock.toString() + "\n\n");
     }
-    if (locks.getGlobalSize() > 0) {
+    if (locks.getSize() > 0) {
       sb.delete(sb.length() - 2, sb.length());
       sb.append("      }\n\n");
     } else {

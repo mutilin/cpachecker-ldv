@@ -41,40 +41,27 @@ public class LockStatisticsLock {
   }
 
   private String name;
-  private String functionName;
   private CallstackState callstack;
   private LineInfo line;
   private LockType type;
   private int recursiveCounter;
+  private String variable;
 
-  LockStatisticsLock(String n, int l, LockType t, String fName, CallstackState s, int counter) {
+  LockStatisticsLock(String n, int l, LockType t, CallstackState s, int counter, String v) {
     name = n;
     line = new LineInfo(l);
     type = t;
-    functionName = fName;
     callstack = s;
     recursiveCounter = counter;
-  }
-
-  LockStatisticsLock(String n, int l, LockType t, CallstackState s, int counter) {
-    name = n;
-    line = new LineInfo(l);
-    type = t;
-    functionName = "";
-    callstack = s;
-    recursiveCounter = counter;
+    variable = v;
   }
 
   public String getName() {
     return name;
   }
 
-  public void increase() {
-    recursiveCounter++;
-  }
-
-  public void decrease() {
-    recursiveCounter--;
+  public String getVariable() {
+    return variable;
   }
 
   public LineInfo getLine() {
@@ -89,7 +76,7 @@ public class LockStatisticsLock {
   public int hashCode() {
     final int prime = 31;
     int result = 1;
-    //result = prime * result + ((functionName == null) ? 0 : functionName.hashCode());
+    result = prime * result + ((variable == null) ? 0 : variable.hashCode());
     result = prime * result + ((name == null) ? 0 : name.hashCode());
     result = prime * result + recursiveCounter;
     result = prime * result + ((type == null) ? 0 : type.hashCode());
@@ -105,11 +92,11 @@ public class LockStatisticsLock {
     if (getClass() != obj.getClass())
       return false;
     LockStatisticsLock other = (LockStatisticsLock) obj;
-    /*if (functionName == null) {
-      if (other.functionName != null)
+    if (variable == null) {
+      if (other.variable != null)
         return false;
-    } else if (!functionName.equals(other.functionName))
-      return false;*/
+    } else if (!variable.equals(other.variable))
+      return false;
     if (name == null) {
       if (other.name != null)
         return false;
@@ -126,7 +113,7 @@ public class LockStatisticsLock {
   public String toString() {
     StringBuilder sb = new StringBuilder();
 
-    sb.append(type.toASTString() + " "+ name + "(" + recursiveCounter + ")");
+    sb.append(type.toASTString() + ( variable != "" ? ("(" + variable + ")") : "" ) + " " + name + "(" + recursiveCounter + ")");
 
     /*CallstackState e = callstack;
     sb.append("        ");
@@ -146,10 +133,6 @@ public class LockStatisticsLock {
       sb.delete(sb.length() - 3, sb.length());
     sb.append("\n");*/
     return sb.toString();
-  }
-
-  public Object getFunctionName() {
-    return functionName;
   }
 
   public CallstackState getCallstack() {

@@ -40,16 +40,13 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
   private static final long serialVersionUID = -3152134511524554357L;
 
   private final Set<LockStatisticsLock> locks;
-  //private final Set<LockStatisticsLock> LocalLocks;
 
   public LockStatisticsState() {
     locks  = new HashSet<LockStatisticsLock>();
-    //LocalLocks = new HashSet<LockStatisticsLock>();
   }
 
-  private LockStatisticsState(Set<LockStatisticsLock> gLocks/*, Set<LockStatisticsLock> lLocks*/) {
+  private LockStatisticsState(Set<LockStatisticsLock> gLocks) {
     this.locks  = gLocks;
-    //this.LocalLocks  = lLocks;
   }
 
   public boolean contains(String variableName) {
@@ -57,20 +54,12 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
       if (mutex.getName().equals(variableName))
         return true;
     }
-    /*for (LockStatisticsLock mutex : LocalLocks) {
-      if (mutex.getName().equals(variableName))
-        return true;
-    }*/
     return false;
   }
 
-  public int getGlobalSize() {
+  public int getSize() {
     return locks.size();
   }
-
-  /*public int getLocalSize() {
-    return LocalLocks.size();
-  }*/
 
   public Set<LockStatisticsLock> getLocks() {
     return locks;
@@ -79,7 +68,6 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
   @Override
   public String toString() {
     StringBuilder sb = new StringBuilder();
-    //Set<String> lockNames = new HashSet<String>();
     LockStatisticsLock tmpLock;
     Map<String, LockStatisticsLock> locksToString = new HashMap<String, LockStatisticsLock>();
 
@@ -94,26 +82,14 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
     }
 
     for (String lockName : locksToString.keySet()) {
-      //if (lock.getRecursiveCounter() == 0)
-        sb.append(locksToString.get(lockName).toString() + ", ");
-     // else
-
+      sb.append(locksToString.get(lockName).toString() + ", ");
     }
     if (locks.size() > 0)
       sb.delete(sb.length() - 2, sb.length());
     return sb.toString();
   }
 
-  /*public Set<LockStatisticsLock> getLocalLocks() {
-    return LocalLocks;
-  }*/
-
-  /*void addLocal(String lockName, int line, String pCurrentFunction, CallstackState state) {
-    LockStatisticsLock tmpMutex = new LockStatisticsLock(lockName, line, LockType.LOCAL_LOCK, pCurrentFunction, state);
-    LocalLocks.add(tmpMutex);
-  }*/
-
-  void add(String lockName, int line, CallstackState state) {
+  void add(String lockName, int line, CallstackState state, String variable) {
     LockStatisticsLock tmpMutex;
     int counter = 0;
     for (LockStatisticsLock tmpLock : locks) {
@@ -121,10 +97,12 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
         counter++;
       }
     }
-    tmpMutex = new LockStatisticsLock(lockName, line, LockType.GLOBAL_LOCK, state, counter);
+    tmpMutex = new LockStatisticsLock(lockName, line, LockType.GLOBAL_LOCK, state, counter, variable);
     locks.add(tmpMutex);
-    if (counter > 0)
-      System.out.println("Add " + lockName + " " + counter + ", line " + line);
+  }
+
+  void add(LockStatisticsLock l) {
+    locks.add(l);
   }
 
   /*LockStatisticsState removeLocal(String functionName) {
@@ -139,25 +117,18 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
     return newLock;
   }*/
 
-  void delete(String lockName) {
+  void delete(String lockName, String variable, boolean all) {
     LockStatisticsLock lockToDelete = null;
     int counter = 0;
     for (LockStatisticsLock mutex : locks) {
-      if (mutex.getName().equals(lockName) && counter <= mutex.getRecursiveCounter()) {
+      if (mutex.getName().equals(lockName) && counter <= mutex.getRecursiveCounter()
+          && (mutex.getVariable().equals(variable) || all)) {
         lockToDelete = mutex;
         counter = mutex.getRecursiveCounter();
       }
     }
     if (lockToDelete != null)
       locks.remove(lockToDelete);
-    if (counter > 0)
-      System.out.println("Delete " + lockName + " " + counter + ", line " + lockToDelete.getLine().getLine());
-    /*for (LockStatisticsLock mutex : LocalLocks) {
-      if (mutex.getName().equals(lockName)){
-        LocalLocks.remove(mutex);
-        return;
-      }
-    }*/
   }
 
   void reset(String lockName) {
@@ -172,7 +143,7 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
     }
   }
 
-  void set(String lockName, int num, int line, CallstackState state) {
+  void set(String lockName, int num, int line, CallstackState state, String variable) {
     int counter = 0;
 
     for (LockStatisticsLock lock : locks) {
@@ -182,7 +153,7 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
     }
 
     for (int i = counter; i < num; i++) {
-      locks.add(new LockStatisticsLock(lockName, line, LockType.GLOBAL_LOCK, state, i));
+      locks.add(new LockStatisticsLock(lockName, line, LockType.GLOBAL_LOCK, state, i, variable));
     }
   }
 
@@ -194,8 +165,17 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
     return counter;
   }
 
-  String print() {
-    return "Global locks: " + locks.toString()/* + "\nLocal locks: " + LocalLocks.toString()*/;
+  //this function is used only in debugging. Do not delete!
+  public String getAllLines(String lockName) {
+    StringBuilder sb = new StringBuilder();
+    for (LockStatisticsLock lock : locks) {
+      if (lock.getName().equals(lockName)) sb.append(lock.getLine().getLine() + ", ");
+    }
+
+    if (sb.length() > 2)
+      sb.delete(sb.length() - 2, sb.length());
+
+    return sb.toString();
   }
 
   /**
@@ -206,7 +186,6 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
    */
   LockStatisticsState join(LockStatisticsState other) {
     Set<LockStatisticsLock> newGlobalLocks = new HashSet<LockStatisticsLock>();
-    //Set<LockStatisticsLock> newLocalLocks = new HashSet<LockStatisticsLock>();
 
     for (LockStatisticsLock otherLock : other.locks) {
 
@@ -214,13 +193,6 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
         newGlobalLocks.add(otherLock);
       }
     }
-
-    /*for (LockStatisticsLock otherLock : other.LocalLocks) {
-
-      if (LocalLocks.contains(otherLock)) {
-        newLocalLocks.add(otherLock);
-      }
-    }*/
 
     return new LockStatisticsState(newGlobalLocks/*, newLocalLocks*/);
   }

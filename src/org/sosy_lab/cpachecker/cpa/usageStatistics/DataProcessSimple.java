@@ -36,7 +36,12 @@ import org.sosy_lab.cpachecker.cpa.usageStatistics.UsageInfo.Access;
  * in statistics
  */
 
-public class DataProcessSimple implements DataProcessing{
+public class DataProcessSimple implements DataProcessing {
+  private final Set<String> annotated;
+
+  DataProcessSimple(Set<String> aVariables) {
+    annotated = aVariables;
+  }
 
   @Override
   public Collection<VariableIdentifier> process(Map<VariableIdentifier, Set<UsageInfo>> stat) {
@@ -57,6 +62,7 @@ nextId:for (VariableIdentifier id : stat.keySet()) {
     }
     //now we should check, that all unsafe cases have at least one write access
 next:for (VariableIdentifier id : unsafe) {
+      if (annotated.contains(id.name)) continue;
       Set<UsageInfo> uset = stat.get(id);
       for (UsageInfo uinfo : uset) {
         if (uinfo.getAccess() == Access.WRITE && uinfo.getCallStack().getDepth() > 1)

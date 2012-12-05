@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
@@ -64,13 +65,16 @@ public class LockStatisticsTransferRelation implements TransferRelation
       description="contains all lock names")
   private Set<String> lockinfo;
 
-  @Option(name="annotated",
-      description="functions, which are known to works right")
+  @Option(name="annotate",
+      description=" annotated functions, which are known to works right")
   private Set<String> annotated;
 
-  @Option(name="zero",
+  private Map<String, AnnotationInfo> annotatedfunctions;
+
+  @Option(name="lockfree",
       description="functions, which are returned without locks")
-  private Set<String> zero;
+  private Set<String> freefunctions;
+  private Map<String, Set<String>> lockfree = new HashMap<String, Set<String>>();
 
   private Map<CFANode, LockStatisticsState> returnedStates = new HashMap<CFANode, LockStatisticsState>();
 
@@ -93,13 +97,14 @@ public class LockStatisticsTransferRelation implements TransferRelation
     Map<String, Integer> lockFunctions;
     Map<String, Integer> unlockFunctions;
     Map<String, Integer> resetFunctions;
-    Set<String> tmpStringSet;
+    Set<String> tmpStringSet, tmpStringSet2;
     String tmpString;
+    AnnotationInfo tmpAnnotationInfo;
     int num;
 
     for (String lockName : lockinfo) {
       tmpString = config.getProperty(lockName + ".lock");
-      tmpStringSet = new HashSet<String>(Arrays.asList(tmpString.split(",")));
+      tmpStringSet = new HashSet<String>(Arrays.asList(tmpString.split(", *")));
       lockFunctions = new HashMap<String, Integer>();
       for (String funcName : tmpStringSet) {
         try {
@@ -111,7 +116,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
       }
       unlockFunctions = new HashMap<String, Integer>();
       tmpString = config.getProperty(lockName + ".unlock");
-      tmpStringSet = new HashSet<String>(Arrays.asList(tmpString.split(",")));
+      tmpStringSet = new HashSet<String>(Arrays.asList(tmpString.split(", *")));
       for (String funcName : tmpStringSet) {
         try {
           num = Integer.parseInt(config.getProperty(lockName + "." + funcName + ".parameters"));
@@ -123,7 +128,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
       resetFunctions = new HashMap<String, Integer>();
       tmpString = config.getProperty(lockName + ".reset");
       if (tmpString != null) {
-        tmpStringSet = new HashSet<String>(Arrays.asList(tmpString.split(",")));
+        tmpStringSet = new HashSet<String>(Arrays.asList(tmpString.split(", *")));
         for (String funcName : tmpStringSet) {
           try {
             num = Integer.parseInt(config.getProperty(lockName + "." + funcName + ".parameters"));
@@ -141,6 +146,30 @@ public class LockStatisticsTransferRelation implements TransferRelation
       }
       tmpLockInfo = new LockInfo(lockName, lockFunctions, unlockFunctions, resetFunctions, tmpString, num);
       tmpInfo.add(tmpLockInfo);
+    }
+    if (freefunctions != null) {
+      for (String name : freefunctions) {
+        tmpString = config.getProperty("lockfree." + name);
+        tmpStringSet = new HashSet<String>(Arrays.asList(tmpString.split(", *")));
+        lockfree.put(name, tmpStringSet);
+      }
+    }
+
+    if (annotated != null) annotatedfunctions = new HashMap<String, AnnotationInfo>();
+
+    for (String fName : annotated) {
+      tmpString = config.getProperty("annotate." + fName + ".free");
+      if (tmpString != null)
+        tmpStringSet = new HashSet<String>(Arrays.asList(tmpString.split(", *")));
+      else
+        tmpStringSet = new HashSet<String>();
+      tmpString = config.getProperty("annotate." + fName + ".restore");
+      if (tmpString != null)
+        tmpStringSet2 = new HashSet<String>(Arrays.asList(tmpString.split(", *")));
+      else
+        tmpStringSet2 = new HashSet<String>(lockinfo);
+      tmpAnnotationInfo = new AnnotationInfo(fName, tmpStringSet, tmpStringSet2);
+      annotatedfunctions.put(fName, tmpAnnotationInfo);
     }
    /* if (HandleType.equals("LINUX")) {
       handler = new FunctionHandlerLinux(lock, unlock, exceptions);
@@ -164,20 +193,64 @@ public class LockStatisticsTransferRelation implements TransferRelation
     case FunctionCallEdge:
 
       if (annotated != null && annotated.contains(((CFunctionCallEdge)cfaEdge).getSuccessor().getFunctionName())) {
-        returnedStates.put(((CFunctionCallEdge)cfaEdge).getPredecessor(), lockStatisticsElement);
+        if (annotatedfunctions != null &&
+            annotatedfunctions.get(((CFunctionCallEdge)cfaEdge).getSuccessor().getFunctionName()).restoreLocks.size() > 0)
+          returnedStates.put(((CFunctionCallEdge)cfaEdge).getPredecessor(), lockStatisticsElement);
       }
       successor = handler.handleFunctionCall(lockStatisticsElement, (CFunctionCallEdge)cfaEdge);
       break;
 
     case FunctionReturnEdge:
       CFANode tmpNode = ((CFunctionReturnEdge)cfaEdge).getSummaryEdge().getPredecessor();
+      String fName =((CFunctionReturnEdge)cfaEdge).getSummaryEdge().getExpression().getFunctionCallExpression().getFunctionNameExpression().toASTString();
+      AnnotationInfo tmpAnnotationInfo;
+
       if (returnedStates != null && returnedStates.containsKey(tmpNode)) {
-        successor = returnedStates.get(tmpNode);
-        returnedStates.remove(tmpNode);
-      } else if (zero != null && zero.contains(((CFunctionReturnEdge)cfaEdge).getPredecessor().getFunctionName())) {
-        successor = new LockStatisticsState();
-      } else
+        assert (annotatedfunctions.containsKey(fName));
+
+        Set<Pair<String, String>> toDelete = new HashSet<Pair<String, String>>();
+        Set<String> toReset = new HashSet<String>();
+
+        tmpAnnotationInfo = annotatedfunctions.get(fName);
+        successor = returnedStates.get(tmpNode).clone();
+        //System.out.println("Function: "  + fName);
+        //System.out.println("Cached state: " + successor.toString());
+       // System.out.println("New state   : " + lockStatisticsElement.toString());
+
+        for (LockStatisticsLock lock : lockStatisticsElement.getLocks()) {
+          if (!(successor.contains(lock.getName())) && !(tmpAnnotationInfo.restoreLocks.contains(lock.getName())))
+            successor.add(lock);
+        }
+
+        for (LockStatisticsLock lock : successor.getLocks()) {
+          //we can't delete just now!
+          if (tmpAnnotationInfo.freeLocks.contains(lock.getName()))
+            toReset.add(lock.getName());
+          if (!(lockStatisticsElement.contains(lock.getName())) && !(tmpAnnotationInfo.restoreLocks.contains(lock.getName())))
+            toDelete.add(Pair.of(lock.getName(), lock.getVariable()));
+        }
+
+        for (String name : toReset)
+          successor.reset(name);
+
+        for (Pair<String, String> pair : toDelete)
+          successor.delete(pair.getFirst(), pair.getSecond(), false);
+
+        //returnedStates.remove(tmpNode);
+       // System.out.println("Result state: " + successor.toString());
+
+      } else if (lockfree.size() > 0  && lockfree.containsKey(((CFunctionReturnEdge)cfaEdge).getPredecessor().getFunctionName())) {
+        Set<String> freelocks = lockfree.get(((CFunctionReturnEdge)cfaEdge).getPredecessor().getFunctionName());
+        successor = lockStatisticsElement.clone();
+        for (String lockName : freelocks) {
+          if (successor.contains(lockName)) {
+            successor.delete(lockName, "", true);
+          }
+        }
+
+      } else {
         successor = lockStatisticsElement.clone();//removeLocal(cfaEdge.getPredecessor().getFunctionName());
+      }
       break;
 
     case StatementEdge:
