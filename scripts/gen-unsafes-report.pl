@@ -9,9 +9,13 @@ my $cilpath;
 my $path_to_etv;
 my $root_html_file = "Unsafes.html";
 
-sub usage{ print STDERR<<usage_ends;
+sub usage{ 
+        my $msg=shift;
+print STDERR $msg."\n";
 
-Script, which generate html-file with the list of unsafe reports
+print STDERR<<usage_ends;
+
+Script, which generates html-file with the list of unsafe reports
 
 Usage:
         gen-unsafes-report.pl --trace=path-to-unsafes-trace-file --cil=path-to-cil-file --ldvrepo=path-to-git-sources-of-ldv-tools
@@ -26,25 +30,32 @@ GetOptions(
         'trace|t=s'=>\$visualize_fname,
         'cil|c=s'=>\$cilpath,
         'ldvrepo|r=s'=>\$path_to_etv,
-) or usage;
+) or usage("Unrecognized options!");
 
-# = $ARGV[0] or die("Can't find CPAChecker trace");
-open(my $visualize_fh, "<", $visualize_fname) or die("Can't open file for read");
-open(my $html_result, ">", $root_html_file) or die("Can't open file for write");
+usage("Can't find CPAChecker trace!") unless $visualize_fname;
+open(my $visualize_fh, "<", $visualize_fname) or usage("Can't open file for read");
+open(my $html_result, ">", $root_html_file) or usage("Can't open file for write");
 
-# = $ARGV[1] or die("Can't find cil-file");
-# = $ARGV[2] or die("No path to etv folder (you may specify path to local ldv-tools repository)");
+usage("Can't find cil-file") unless $cilpath;
+usage("No path to etv folder (you may specify path to local ldv-tools repository)") unless $path_to_etv;
 
-open(my $tmp_trace, ">", "tmp_trace") or die("Can't open file tmp_trace for write");
+my $tmp_trace_name = "tmp_trace";
+open(my $tmp_trace, ">", $tmp_trace_name) or die("Can't open file tmp_trace for write");
 print($tmp_trace "CPAchecker error trace v1.1\n");
 print($tmp_trace "-------");
 my $String=`pwd`;
 chomp($String);
 $String=$String."/$cilpath-------\n";
 print($tmp_trace $String);
-`cat $cilpath >> tmp_trace`;
-open($tmp_trace, ">>", "tmp_trace") or die("Can't open file tmp_trace for write");
+
+#implement cat $cilpath >> tmp_trace
+open(CILFILE, $cilpath) or die("Can't open cil file");	# Open the cil file
+my @cillines = <CILFILE>;		# Read it into an array
+close(CILFILE);			# Close the file
+print($tmp_trace @cillines);	# Print the array
+
 print($tmp_trace "--------------\n");
+close($tmp_trace);
 
 my $line = <$visualize_fh>;
 print ($html_result "<b>General statistics</b><p><table><tr><td>");
@@ -122,32 +133,39 @@ while (<$visualize_fh>) {
 }
 push(@{$unsafe_list{$current_fname}}, $current_varname);
 
+my $HEADER = "<html><head><link href='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/css/etv.css' rel='stylesheet' type='text/css' /><link href='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/css/etv-analytics-center.css' rel='stylesheet' type='text/css' /><script type='text/javascript' src='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/jslib/jquery-1.4.2.min.js'></script><script type='text/javascript' src='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/jslib/etv.js'></script></head>";
+
 my $current_fname_new;
 foreach $current_fname(sort keys %unsafe_list)
 {
-	`cat tmp_trace $current_fname > $current_fname.new`;
-	`rm $current_fname`;
 	$current_fname_new = $current_fname.".new";
+	`cat $tmp_trace_name $current_fname > $current_fname_new`;
+	die ("cat failed") if( $? == -1 ) ;
+	unlink $current_fname or die;
 	`etv -c $current_fname_new --reqs-out reqs`;
+	die ("etv failed") if( $? == -1 ) ;
 	open(my $reqs, ">>", "reqs") or die("Can't open file reqs for write");
 	print($reqs "\n");
 	open($reqs, "<", "reqs") or die("Can't open file reqs for read");
-	`rm srcs`;
+	unlink "srcs" if -e "srcs";
 	open(my $srcs, ">>", "srcs") or die("Can't open file srcs for write");
 	while (<$reqs>) {
-	 my $nextline = $_;
-	 chomp($nextline);
-	 print($srcs "---LDV---$nextline---LDV---\n");
-	 `cat $nextline >> srcs`;
+	  my $nextline = $_;
+	  chomp($nextline);
+	  print($srcs "---LDV---$nextline---LDV---\n");
+	  system("cat $nextline >> srcs");
+	  die ("Can't cat srcs") if ($? == -1);
 	}
 	$current_fname_new =~ m/(.+)\.tmp.new/;
 	print ($html_result "<li><a href = \"$1.html\">$1</a></li>");
 	`etv -c $current_fname_new --src-files srcs -o $1.html.tmp`;
+	die ("etv failed") if( $? == -1 ) ;
 	open(my $html_tmp, ">", "$1.html") or die("Can't open html-file for write");
-	print($html_tmp "<html><head><link href='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/css/etv.css' rel='stylesheet' type='text/css' /><link href='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/css/etv-analytics-center.css' rel='stylesheet' type='text/css' /><script type='text/javascript' src='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/jslib/jquery-1.4.2.min.js'></script><script type='text/javascript' src='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/jslib/etv.js'></script></head><body> @{$unsafe_list{$current_fname}}");
+	print($html_tmp "$HEADER <body> <h1>@{$unsafe_list{$current_fname}}</h1>");
 	`cat $1.html.tmp >> $1.html && echo "</body></html>" >> $1.html`;
-	`rm $1.html.tmp`;
-	`rm $1.tmp.new`;
+	die ("Can't cat $1.html") if ($? == -1);
+	unlink "$1.html.tmp" or die;
+	unlink "$1.tmp.new" or die;
 	#`rm $1.tmp`;
 	print "Generate ".$1."\n";
 }
