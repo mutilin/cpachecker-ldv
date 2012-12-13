@@ -19,4 +19,5 @@ void g(void) {
 
 void ldv_main(void) {
 	f();
+	g();
 }
