@@ -145,7 +145,8 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       Precision pPrecision, CFAEdge pCfaEdge, Collection<UsageStatisticsState> results)
       throws InterruptedException, CPATransferException {
 
-    //System.out.println(pCfaEdge.getRawStatement());
+    //if (pCfaEdge.getLineNumber() > 170660 && pCfaEdge.getLineNumber() < 170760)
+    //  System.out.println(pCfaEdge.getRawStatement());
     Collection<? extends AbstractState> newWrappedStates = wrappedTransfer.getAbstractSuccessors(oldState.getWrappedState(), pPrecision, pCfaEdge);
     for (AbstractState newWrappedState : newWrappedStates) {
       UsageStatisticsState newState = oldState.clone(newWrappedState);
@@ -290,11 +291,15 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
       if (currentInfo.linkInfo != null) {
         if (currentInfo.linkInfo.getFirst() == 0) {
-          assert left != null;
-          linkVariables(pNewState, left, params.get(currentInfo.linkInfo.getSecond() - 1));
+          if (left == null)
+            System.err.println("Function " + functionCallName + "(" + fcExpression.getFileLocation().getStartingLineNumber() + ")" + "doesn't match its annotation");
+          else
+            linkVariables(pNewState, left, params.get(currentInfo.linkInfo.getSecond() - 1));
         } else if (currentInfo.linkInfo.getSecond() == 0) {
-          assert left != null;
-          linkVariables(pNewState, params.get(currentInfo.linkInfo.getFirst() - 1), left);
+          if (left == null)
+            System.err.println("Function " + functionCallName + "(" + fcExpression.getFileLocation().getStartingLineNumber() + ")" + "doesn't match its annotation");
+          else
+            linkVariables(pNewState, params.get(currentInfo.linkInfo.getFirst() - 1), left);
         } else
           linkVariables(pNewState, params.get(currentInfo.linkInfo.getFirst() - 1),
               params.get(currentInfo.linkInfo.getSecond() - 1));

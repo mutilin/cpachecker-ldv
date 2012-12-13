@@ -191,7 +191,8 @@ public class LockStatisticsTransferRelation implements TransferRelation
     switch (cfaEdge.getEdgeType()) {
 
     case FunctionCallEdge:
-
+      /*if (((CFunctionCallEdge)cfaEdge).getSuccessor().getFunctionName().equals("lockreset"))
+        System.out.println("Here!");*/
       if (annotated != null && annotated.contains(((CFunctionCallEdge)cfaEdge).getSuccessor().getFunctionName())) {
         if (annotatedfunctions != null &&
             annotatedfunctions.get(((CFunctionCallEdge)cfaEdge).getSuccessor().getFunctionName()).restoreLocks.size() > 0)

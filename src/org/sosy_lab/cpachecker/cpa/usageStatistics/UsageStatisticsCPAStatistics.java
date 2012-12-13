@@ -76,6 +76,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   private Set<String> annotatedvariables = null;
   //private String OrigName;
 
+  @Option(description = "variables, which we don't save in statistics")
+  private Set<String> skippedvariables = null;
+
   @Option(values={"SIMPLE", "SET"},toUppercase=true,
       description="which data process we should use")
   private String process = "SIMPLE";
@@ -85,6 +88,8 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
   @Option(description="Do we need to store statistics of all variables or only pointers")
   private boolean onlypointers = true;
+
+  private final String ldv_main;
 
   UsageStatisticsCPAStatistics(Configuration config, CodeCovering cover) throws InvalidConfigurationException{
     Stat = new HashMap<VariableIdentifier, Set<UsageInfo>>();
@@ -99,6 +104,8 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       System.exit(0);
     }
     covering = cover;
+
+    ldv_main = config.getProperty("analysis.entryFunction");
 
     VisualName = DirName + VisualName;
     //OrigName = config.getProperty("cpa.usagestatistics.path");
@@ -123,7 +130,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       while (id != null && id.getStatus() == Ref.REFERENCE && state.contains(id.makeVariable())) {
         id = state.get(id.makeVariable());
       }
-      if (id == null) {
+      if (id == null || (skippedvariables != null && skippedvariables.contains(id.name))) {
         skippedCases++;
         continue;
       }
@@ -147,7 +154,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       for (UsageInfo uinfo : uset){
 nextLock:for (LockStatisticsLock lock : uinfo.getLockState().getLocks()) {
           for (LockStatisticsLock usedLock : locks)
-            if ( usedLock.getName().equals(lock.getName())) continue nextLock;
+            if ( usedLock.getName().equals(lock.getName()) && usedLock.getVariable().equals(lock.getVariable())) continue nextLock;
           locks.add(lock);
         }
       }
@@ -190,7 +197,9 @@ nextLock:for (LockStatisticsLock lock : uinfo.getLockState().getLocks()) {
         tmpState = tmpState.getPreviousState();
       }
       //create tree of calls for locks
-      currentLeaf = currentLeaf.add(tmpList.getFirst().getCallNode().getFunctionName(), 0);
+      tmpState = tmpList.getFirst();
+      if (!tmpState.getCallNode().getFunctionName().equals(tmpState.getCurrentFunction()))
+        currentLeaf = currentLeaf.add(tmpList.getFirst().getCallNode().getFunctionName(), 0);
       for (CallstackState callstack : tmpList) {
         currentLeaf = currentLeaf.add(callstack);
       }
@@ -207,7 +216,9 @@ nextLock:for (LockStatisticsLock lock : uinfo.getLockState().getLocks()) {
     }
     //add to tree of calls this path
     currentLeaf = TreeLeaf.getTrunkState();
-    currentLeaf = currentLeaf.add(tmpList.getFirst().getCallNode().getFunctionName(), 0);
+    tmpState = tmpList.getFirst();
+    if (!tmpState.getCallNode().getFunctionName().equals(tmpState.getCurrentFunction()))
+      currentLeaf = currentLeaf.add(tmpList.getFirst().getCallNode().getFunctionName(), 0);
     for (CallstackState callstack : tmpList) {
       currentLeaf = currentLeaf.addLast(callstack);
     }
@@ -249,13 +260,13 @@ nextLock:for (LockStatisticsLock lock : uinfo.getLockState().getLocks()) {
         writer.println("Line " + currentLeaf.line + ":     N0 -{" + currentLeaf.code + "}-> N0");
         while (true) {
           tmpLeaf = leafStack.pop();
-          if (tmpLeaf.equals(TreeLeaf.getTrunkState())) {
-            currentLeaf = null;
-            break;
-          }
           if (tmpLeaf.children.size() > 1  && !tmpLeaf.children.getLast().equals(currentLeaf)) {
             leafStack.push(tmpLeaf);
             currentLeaf = tmpLeaf.children.get(tmpLeaf.children.indexOf(currentLeaf) + 1);
+            break;
+          }
+          if (tmpLeaf.equals(TreeLeaf.getTrunkState())) {
+            currentLeaf = null;
             break;
           }
           writer.println("Line 0:     N0 -{return;}-> N0");
@@ -284,6 +295,7 @@ nextLock:for (LockStatisticsLock lock : uinfo.getLockState().getLocks()) {
       createVisualization(id, tmpPair.getFirst());
       createVisualization(id, tmpPair.getSecond());
       writer.println("Line 0:     N0 -{/*_____________________*/}-> N0");
+      writer.println("Line 0:     N0 -{/*All usages:*/}-> N0");
       for (UsageInfo ui : uinfo)
         createVisualization(id, ui);
     } catch (HandleCodeException e) {
@@ -407,7 +419,10 @@ nextLock:for (LockStatisticsLock lock : uinfo.getLockState().getLocks()) {
       for (int j = 0; j < currentNode.getNumEnteringEdges(); j++) {
         edge = currentNode.getEnteringEdge(j);
         predecessor = edge.getPredecessor();
-        if (previousNode == null || predecessor.getFunctionName().equals(previousNode.getFunctionName())) break;
+        if (previousNode == null && predecessor.getFunctionName().equals(ldv_main))
+          break;
+        else if (previousNode != null && predecessor.getFunctionName().equals(previousNode.getFunctionName()))
+          break;
       }
       fullState = new CallstackState(fullState, currentNode.getFunctionName(), predecessor);
       previousNode = currentNode;

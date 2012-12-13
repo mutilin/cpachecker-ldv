@@ -87,7 +87,7 @@ public class UsageInfo {
 
     for (LockStatisticsLock lock : otherLocks) {
       for (LockStatisticsLock myLock : this.locks.getLocks()) {
-        if (myLock.getName().equals(lock.getName()))
+        if (myLock.getName().equals(lock.getName()) && myLock.getVariable().equals(lock.getVariable()))
           return true;
       }
     }

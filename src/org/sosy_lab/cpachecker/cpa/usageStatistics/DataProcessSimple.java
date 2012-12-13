@@ -65,7 +65,7 @@ next:for (VariableIdentifier id : unsafe) {
       if (annotated.contains(id.name)) continue;
       Set<UsageInfo> uset = stat.get(id);
       for (UsageInfo uinfo : uset) {
-        if (uinfo.getAccess() == Access.WRITE && uinfo.getCallStack().getDepth() > 1)
+        if (uinfo.getAccess() == Access.WRITE/* && uinfo.getCallStack().getDepth() > 1*/)
           continue next;
       }
       //no write access

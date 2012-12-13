@@ -92,8 +92,9 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
   void add(String lockName, int line, CallstackState state, String variable) {
     LockStatisticsLock tmpMutex;
     int counter = 0;
+
     for (LockStatisticsLock tmpLock : locks) {
-      if (tmpLock.getName().equals(lockName)) {
+      if (tmpLock.getName().equals(lockName) && tmpLock.getVariable().equals(variable)) {
         counter++;
       }
     }
@@ -104,18 +105,6 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
   void add(LockStatisticsLock l) {
     locks.add(l);
   }
-
-  /*LockStatisticsState removeLocal(String functionName) {
-    LockStatisticsState newLock = this.clone();
-
-    for (LockStatisticsLock mutex : newLock.LocalLocks) {
-      if (mutex.getFunctionName().equals(functionName)){
-        newLock.LocalLocks.remove(mutex);
-      }
-    }
-
-    return newLock;
-  }*/
 
   void delete(String lockName, String variable, boolean all) {
     LockStatisticsLock lockToDelete = null;
