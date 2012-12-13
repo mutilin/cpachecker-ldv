@@ -94,23 +94,21 @@ $line = <$visualize_fh>;
 print ($html_result "Pointers (any types):</td><td>$line</td></tr></table><br>");
 print ($html_result "<b>List of unsafes:</b><ol>");
 my $currentUnsafe;
-my $current_fname;
-my $current_varname;
 my %unsafe_list;
 
 while (<$visualize_fh>) {
 	$line = $_;
 	
 	if ($line =~ /^#(.+)/) {
-		if ($current_fname) {
-			push(@{$unsafe_list{$current_fname}}, $current_varname);
-		}
+		my $current_fname;
+		my $current_varname;
 		if ($line =~ /^###(.+)/) {
 			if ( ! -d "struct" ) {
 				mkdir("struct") || die "Can't create directory\n";
 	    		}
 			$current_fname = "struct/$1.tmp";
 			$current_varname = <$visualize_fh>;
+			push(@{$unsafe_list{$current_fname}}, $current_varname);
 			open($currentUnsafe, ">", $current_fname) or die("Can't open file for write unsafe");		
 		} elsif ($line =~ /^##(.+)/) {
 			if ( ! -d "local" ) {
@@ -118,6 +116,7 @@ while (<$visualize_fh>) {
 	    		}
 			$current_fname = "local/$1.tmp";
 			$current_varname = <$visualize_fh>;
+			push(@{$unsafe_list{$current_fname}}, $current_varname);
 			open($currentUnsafe, ">", $current_fname) or die("Can't open file for write unsafe");
 		} elsif ($line =~ /^#(.+)/) {
 			if ( ! -d "global" ) {
@@ -125,18 +124,18 @@ while (<$visualize_fh>) {
 	    		}
 			$current_fname = "global/$1.tmp";
 			$current_varname = <$visualize_fh>;
+			push(@{$unsafe_list{$current_fname}}, $current_varname);
 			open($currentUnsafe, ">", $current_fname) or die("Can't open file for write unsafe");
 		}
 	} else {
 		print($currentUnsafe $line);
 	}
 }
-push(@{$unsafe_list{$current_fname}}, $current_varname);
 
 my $HEADER = "<html><head><link href='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/css/etv.css' rel='stylesheet' type='text/css' /><link href='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/css/etv-analytics-center.css' rel='stylesheet' type='text/css' /><script type='text/javascript' src='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/jslib/jquery-1.4.2.min.js'></script><script type='text/javascript' src='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/jslib/etv.js'></script></head>";
 
 my $current_fname_new;
-foreach $current_fname(sort keys %unsafe_list)
+foreach my $current_fname(sort keys %unsafe_list)
 {
 	$current_fname_new = $current_fname.".new";
 	`cat $tmp_trace_name $current_fname > $current_fname_new`;
