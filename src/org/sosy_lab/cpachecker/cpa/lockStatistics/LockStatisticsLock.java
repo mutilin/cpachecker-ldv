@@ -132,6 +132,7 @@ public class LockStatisticsLock {
     if (callstack != null)
       sb.delete(sb.length() - 3, sb.length());
     sb.append("\n");*/
+    //sb.append(" " + line.getLine() + " line");
     return sb.toString();
   }
 

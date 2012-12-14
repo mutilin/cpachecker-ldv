@@ -80,9 +80,6 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
   @Option(description="do we need to collect statistics to generate file for Lcov")
   private boolean covering = false;
 
-  @Option(description="path to file to analize")
-  private String path = "";
-
   private UsageStatisticsCPA(ConfigurableProgramAnalysis pCpa, CFA pCfa, LogManager pLogger, Configuration pConfig) throws InvalidConfigurationException {
     super(pCpa);
     pConfig.inject(this);
@@ -91,6 +88,8 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
     this.stopOperator = initializeStopOperator();
 
     CodeCovering coverGenerator;
+    //only one file?
+    String path = pConfig.getProperty("analysis.programNames");
     if (!covering){
       coverGenerator = new CodeCoveringEmpty();
     }

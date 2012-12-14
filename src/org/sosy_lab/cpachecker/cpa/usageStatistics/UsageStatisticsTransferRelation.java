@@ -99,8 +99,6 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
   private Map<String, FunctionInfo> functionInfo;
 
   private UsageStatisticsState oldState;
-  //@Option(description = "functions, which we analyze special way: simple pointer analysis")
-  //private FunctionInfo testOption = null;
 
   public UsageStatisticsTransferRelation(TransferRelation pWrappedTransfer,
       Configuration config, UsageStatisticsCPAStatistics s, CodeCovering cover) throws InvalidConfigurationException {

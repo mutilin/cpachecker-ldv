@@ -294,10 +294,10 @@ nextLock:for (LockStatisticsLock lock : uinfo.getLockState().getLocks()) {
       Pair<UsageInfo, UsageInfo> tmpPair = findExamples(id);
       createVisualization(id, tmpPair.getFirst());
       createVisualization(id, tmpPair.getSecond());
-      writer.println("Line 0:     N0 -{/*_____________________*/}-> N0");
-      writer.println("Line 0:     N0 -{/*All usages:*/}-> N0");
+      /*writer.println("Line 0:     N0 -{_____________________}-> N0");
+      writer.println("Line 0:     N0 -{All usages:}-> N0");
       for (UsageInfo ui : uinfo)
-        createVisualization(id, ui);
+        createVisualization(id, ui);*/
     } catch (HandleCodeException e) {
       //strange, but we didn't find unsafe example. So, return.
       return;

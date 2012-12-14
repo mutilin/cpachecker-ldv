@@ -72,20 +72,23 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
     Map<String, LockStatisticsLock> locksToString = new HashMap<String, LockStatisticsLock>();
 
     for (LockStatisticsLock lock : locks) {
-      if (!locksToString.containsKey(lock.getName())) {
-        locksToString.put(lock.getName(), lock);
+      if (!locksToString.containsKey(lock.getName() + lock.getVariable())) {
+        locksToString.put(lock.getName() + lock.getVariable(), lock);
       } else {
-        tmpLock = locksToString.get(lock.getName());
+        tmpLock = locksToString.get(lock.getName() + lock.getVariable());
         if (tmpLock.getRecursiveCounter() < lock.getRecursiveCounter())
-          locksToString.put(lock.getName(), lock);
+          locksToString.put(lock.getName() + lock.getVariable(), lock);
       }
     }
 
     for (String lockName : locksToString.keySet()) {
       sb.append(locksToString.get(lockName).toString() + ", ");
     }
-    if (locks.size() > 0)
+    if (locks.size() > 0) {
       sb.delete(sb.length() - 2, sb.length());
+    } else {
+      sb.append("Without locks");
+    }
     return sb.toString();
   }
 
@@ -334,5 +337,4 @@ ok: for (LockStatisticsLock Lock : locks) {
   public String getCPAName() {
     return "LockStatisticsAnalysis";
   }
-
 }
