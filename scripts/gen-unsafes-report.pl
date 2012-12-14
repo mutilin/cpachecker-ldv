@@ -151,9 +151,11 @@ foreach my $current_fname(sort keys %unsafe_list)
 	while (<$reqs>) {
 	  my $nextline = $_;
 	  chomp($nextline);
-	  print($srcs "---LDV---$nextline---LDV---\n");
-	  system("cat $nextline >> srcs");
-	  die ("Can't cat srcs") if ($? == -1);
+	  if ($nextline) {
+	    print($srcs "---LDV---$nextline---LDV---\n");
+	    system("cat $nextline >> srcs");
+	    die ("Can't cat srcs") if ($? == -1);
+	  }
 	}
 	$current_fname_new =~ m/(.+)\.tmp.new/;
 	print ($html_result "<li><a href = \"$1.html\">$1</a></li>");
