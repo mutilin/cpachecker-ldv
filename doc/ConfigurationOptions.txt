@@ -265,7 +265,7 @@ cpa.abm.aggressiveCaching = true
 # Type of partitioning (FunctionAndLoopPartitioning or
 # DelayedFunctionAndLoopPartitioning)
 # or any class that implements a PartitioningHeuristic
-cpa.abm.blockHeuristic = FunctionAndLoopPartitioning.class
+cpa.abm.blockHeuristic = FunctionPartitioning.class
 
 # if enabled, the reached set cache is analysed for each cache miss to find
 # the cause of the miss.
@@ -343,6 +343,9 @@ cpa.bdd.vector.trackSimpleNumbersFromCFA = true
 # which vars should be tracked, default: track all. the regex is not used for
 # functionname, only for the variablename itself.
 cpa.bdd.whiteListRegex = ".*"
+
+# depth of recursion bound
+cpa.callstack.depth = 0
 
 # which composite merge operator to use (plain or agree)
 # Both delegate to the component cpas, but agree only allows merging if all
@@ -480,22 +483,17 @@ cpa.interval.threshold = 0
 cpa.invariants.merge = "JOIN"
   allowed values: [JOIN, SEP]
 
-# functions, that locks synchronization primitives
-cpa.lockStatistics.lockfunctions = no default value
+#  annotated functions, which are known to works right
+cpa.lockStatistics.annotate = no default value
 
-# functions, that unlocks synchronization primitives
-cpa.lockStatistics.unlockfunctions = no default value
+# functions, which are returned without locks
+cpa.lockStatistics.lockfree = no default value
 
-# which merge operator to use for LockStatisticsCPA
-cpa.lockstatistics.merge = "SEP"
-  allowed values: [SEP, JOIN]
+# contains all lock names
+cpa.lockStatistics.lockinfo = no default value
 
-# which stop operator to use for LockStatisticsCPA
-cpa.lockstatistics.stop = "SEP"
-  allowed values: [SEP, JOIN, NEVER]
-
-# blacklist regex for variables that won't be tracked by LockStatisticsCPA
-cpa.lockstatistics.variableBlacklist = ""
+# function to reset state
+cpa.lockStatistics.lockreset = no default value
 
 # threshold for unrolling loops of the program (0 is infinite)
 # works only if assumption storage CPA is enabled, because otherwise it would
@@ -745,22 +743,48 @@ cpa.uninitvars.printWarnings = "true"
 cpa.uninitvars.stop = "sep"
   allowed values: [sep, join]
 
+# functions, which we analize special way: simple pointer analisys
+cpa.usagestatistics.analizedfunctions = no default value
+
+# variables, which will be unsafes even only with read access (they can be
+# changed invisibly)
+cpa.usagestatistics.annotatedvariables = no default value
+
+# do we need to collect statistics to generate file for Lcov
+cpa.usagestatistics.covering = false
+
 # if we need to print all variables, not only unsafe cases
 cpa.usagestatistics.fullstatistics = true
 
-# file to write results
-cpa.usagestatistics.output = "race_results.txt"
+# which merge operator to use for LockStatisticsCPA
+cpa.usagestatistics.merge = "SEP"
+  allowed values: [SEP, JOIN]
+
+# Do we need to store statistics of all variables or only pointers
+cpa.usagestatistics.onlypointers = true
+
+# directory to write results
+cpa.usagestatistics.output = "test/"
+
+# path to file to analize
+cpa.usagestatistics.path = ""
 
 # which data process we should use
 cpa.usagestatistics.process = "SIMPLE"
   allowed values: [SIMPLE, SET]
 
+# functions, which we don't analize
+cpa.usagestatistics.skippedfunctions = no default value
+
+# variables, which we don't save in statistics
+cpa.usagestatistics.skippedvariables = no default value
+
+# which stop operator to use for LockStatisticsCPA
+cpa.usagestatistics.stop = "SEP"
+  allowed values: [SEP, JOIN, NEVER]
+
 # enable the Forced Covering optimization
 impact.useForcedCovering = true
-
-# which merge operator to use for LockStatisticsCPA
-merge = "SEP"
-  allowed values: [SEP, JOIN]
 
 # C dialect for parser
 parser.dialect = GNUC
@@ -791,8 +815,4 @@ statistics.memory = true
 
 # print statistics to console
 statistics.print = false
-
-# which stop operator to use for LockStatisticsCPA
-stop = "SEP"
-  allowed values: [SEP, JOIN, NEVER]
 

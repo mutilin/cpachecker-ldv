@@ -23,6 +23,7 @@
  */
 package org.sosy_lab.cpachecker.cpa.lockStatistics;
 
+import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Options;
@@ -42,9 +43,9 @@ public class LockStatisticsCPA extends AbstractCPA implements ConfigurableProgra
   }
 
   private final LockStatisticsReducer reducer;
-
-  private LockStatisticsCPA (Configuration config) throws InvalidConfigurationException {
-    super("sep", "sep", new LockStatisticsTransferRelation(config));
+  
+  private LockStatisticsCPA (Configuration config, LogManager logger) throws InvalidConfigurationException {
+    super("sep", "sep", new LockStatisticsTransferRelation(config, logger));
     reducer             = new LockStatisticsReducer();
   }
 

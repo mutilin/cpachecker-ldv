@@ -31,7 +31,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.logging.Level;
 
+import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
@@ -88,10 +90,12 @@ public class LockStatisticsTransferRelation implements TransferRelation
   private String HandleType = "LINUX";*/
 
   private FunctionHandlerOS handler;
-
-  public LockStatisticsTransferRelation(Configuration config) throws InvalidConfigurationException {
+  private LogManager logger;
+  
+  public LockStatisticsTransferRelation(Configuration config, LogManager logger) throws InvalidConfigurationException {
     config.inject(this);
-
+    this.logger = logger;
+    
     Set<LockInfo> tmpInfo = new HashSet<LockInfo>();
     LockInfo tmpLockInfo;
     Map<String, Integer> lockFunctions;
@@ -175,7 +179,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
       handler = new FunctionHandlerLinux(lock, unlock, exceptions);
     }
     else if (HandleType.equals("OS")) {*/
-    handler = new FunctionHandlerOS(tmpInfo);
+    handler = new FunctionHandlerOS(tmpInfo, logger);
     /*} else {
       throw new InvalidConfigurationException("Unsupported function handler");
     }*/
@@ -191,15 +195,22 @@ public class LockStatisticsTransferRelation implements TransferRelation
     switch (cfaEdge.getEdgeType()) {
 
     case FunctionCallEdge:
-      /*if (((CFunctionCallEdge)cfaEdge).getSuccessor().getFunctionName().equals("lockreset"))
-        System.out.println("Here!");*/
-      if (annotated != null && annotated.contains(((CFunctionCallEdge)cfaEdge).getSuccessor().getFunctionName())) {
-        if (annotatedfunctions != null &&
-            annotatedfunctions.get(((CFunctionCallEdge)cfaEdge).getSuccessor().getFunctionName()).restoreLocks.size() > 0)
-          returnedStates.put(((CFunctionCallEdge)cfaEdge).getPredecessor(), lockStatisticsElement);
-      }
-      successor = handler.handleFunctionCall(lockStatisticsElement, (CFunctionCallEdge)cfaEdge);
-      break;
+        /*if (((CFunctionCallEdge)cfaEdge).getSuccessor().getFunctionName().equals("lockreset"))
+          System.out.println("Here!");*/
+        String fCallName = ((CFunctionCallEdge)cfaEdge).getSuccessor().getFunctionName();
+    	if (annotated != null && annotated.contains(fCallName)) {
+    		CFANode pred = ((CFunctionCallEdge)cfaEdge).getPredecessor();
+    		logger.log(Level.FINER,"annotated name=" + fCallName + ", call" 
+                   + ", node=" + pred
+                   + ", line=" + pred.getLineNumber()
+                       + ", successor=" + lockStatisticsElement 
+                   );
+    		if (annotatedfunctions != null && annotatedfunctions.get(fCallName).restoreLocks.size() > 0) {   		
+    			returnedStates.put(pred, lockStatisticsElement);
+    		}
+    	}    	
+        successor = handler.handleFunctionCall(lockStatisticsElement, (CFunctionCallEdge)cfaEdge);
+        break;
 
     case FunctionReturnEdge:
       CFANode tmpNode = ((CFunctionReturnEdge)cfaEdge).getSummaryEdge().getPredecessor();
@@ -218,9 +229,16 @@ public class LockStatisticsTransferRelation implements TransferRelation
         //System.out.println("Cached state: " + successor.toString());
        // System.out.println("New state   : " + lockStatisticsElement.toString());
 
+		logger.log(Level.FINER, "annotated name=" + fName + ", return" 
+                + ", node=" + tmpNode
+                + ", line=" + tmpNode.getLineNumber()
+                + ",\n\t successor=" + successor 
+                + ",\n\t element=" + element 
+                );
+		
         for (LockStatisticsLock lock : lockStatisticsElement.getLocks()) {
           if (!(successor.contains(lock.getName())) && !(tmpAnnotationInfo.restoreLocks.contains(lock.getName())))
-            successor.add(lock);
+            successor.add(lock, logger);
         }
 
         for (LockStatisticsLock lock : successor.getLocks()) {
@@ -232,10 +250,10 @@ public class LockStatisticsTransferRelation implements TransferRelation
         }
 
         for (String name : toReset)
-          successor.reset(name);
+          successor.reset(name, logger);
 
         for (Pair<String, String> pair : toDelete)
-          successor.delete(pair.getFirst(), pair.getSecond(), false);
+          successor.delete(pair.getFirst(), pair.getSecond(), false, logger);
 
         //returnedStates.remove(tmpNode);
        // System.out.println("Result state: " + successor.toString());
@@ -245,7 +263,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
         successor = lockStatisticsElement.clone();
         for (String lockName : freelocks) {
           if (successor.contains(lockName)) {
-            successor.delete(lockName, "", true);
+            successor.delete(lockName, "", true, logger);
           }
         }
 

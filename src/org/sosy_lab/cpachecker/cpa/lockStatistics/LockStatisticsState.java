@@ -28,7 +28,9 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.logging.Level;
 
+import org.sosy_lab.common.LogManager;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractQueryableState;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.lockStatistics.LockStatisticsLock.LockType;
@@ -92,7 +94,8 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
     return sb.toString();
   }
 
-  void add(String lockName, int line, CallstackState state, String variable) {
+  void add(String lockName, int line, CallstackState state, String variable, LogManager logger) {
+	String locksBefore = locks.toString();
     LockStatisticsLock tmpMutex;
     int counter = 0;
 
@@ -102,14 +105,24 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
       }
     }
     tmpMutex = new LockStatisticsLock(lockName, line, LockType.GLOBAL_LOCK, state, counter, variable);
-    locks.add(tmpMutex);
+    boolean b = locks.add(tmpMutex);
+    if(b || counter > 0) {
+        logger.log(Level.FINER, "Locks before: " + locksBefore);
+        logger.log(Level.FINER, "Locks after: " + locks);
+    }    
   }
 
-  void add(LockStatisticsLock l) {
-    locks.add(l);
+  void add(LockStatisticsLock l, LogManager logger) {
+	  String locksBefore = locks.toString();
+	  boolean b = locks.add(l);
+	  if(b) {
+		  logger.log(Level.FINER, "Locks before: " + locksBefore);
+		  logger.log(Level.FINER, "Locks after: " + locks);
+	  }    
   }
 
-  void delete(String lockName, String variable, boolean all) {
+  void delete(String lockName, String variable, boolean all, LogManager logger) {
+	String locksBefore = locks.toString();
     LockStatisticsLock lockToDelete = null;
     int counter = 0;
     for (LockStatisticsLock mutex : locks) {
@@ -119,11 +132,17 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
         counter = mutex.getRecursiveCounter();
       }
     }
+    boolean b = false;
     if (lockToDelete != null)
-      locks.remove(lockToDelete);
+      b = locks.remove(lockToDelete);
+    
+    if(b || counter > 0) {
+    	logger.log(Level.FINER, "Locks before: " + locksBefore);
+    	logger.log(Level.FINER, "Locks after: " + locks);
+    }    
   }
 
-  void reset(String lockName) {
+  void reset(String lockName, LogManager logger) {
     Set<LockStatisticsLock> toDelete = new HashSet<LockStatisticsLock>();
     for (LockStatisticsLock mutex : locks) {
       if (mutex.getName().equals(lockName)) {
@@ -325,8 +344,8 @@ ok: for (LockStatisticsLock Lock : locks) {
           throw new InvalidQueryException(statement + " should end with \")\"");
         }
 
-        String assignment = statement.substring("setlock(".length(), statement.length() - 1);
-        String varName = assignment.trim();
+        //String assignment = statement.substring("setlock(".length(), statement.length() - 1);
+        //String varName = assignment.trim();
         //TODO what line? mutex?
         //this.addGlobal(varName, 0);
       }

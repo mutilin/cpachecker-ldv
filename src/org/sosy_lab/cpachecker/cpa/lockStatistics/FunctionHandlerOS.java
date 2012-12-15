@@ -25,7 +25,9 @@ package org.sosy_lab.cpachecker.cpa.lockStatistics;
 
 import java.util.List;
 import java.util.Set;
+import java.util.logging.Level;
 
+import org.sosy_lab.common.LogManager;
 import org.sosy_lab.cpachecker.cfa.ast.c.CAssignment;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallExpression;
@@ -43,10 +45,11 @@ import org.sosy_lab.cpachecker.util.AbstractStates;
 public class FunctionHandlerOS {
   private UsageStatisticsCPA stateGetter;
   private final Set<LockInfo> locks;
+  private LogManager logger;
 
-
-  public FunctionHandlerOS(Set<LockInfo> l) {
+  public FunctionHandlerOS(Set<LockInfo> l, LogManager logger) {
     locks = l;
+    this.logger = logger;
   }
 
   public LockStatisticsState handleStatement(LockStatisticsState element, CStatement expression, String currentFunction) throws HandleCodeException {
@@ -136,14 +139,15 @@ public class FunctionHandlerOS {
 
     for (LockInfo lock : locks) {
       if (lock.LockFunctions.containsKey(functionName)) {
-        int p = lock.LockFunctions.get(functionName);
+    	  logger.log(Level.FINER, "Lock at line " + lineNumber + ", Callstack: " + callstack);
+    	  int p = lock.LockFunctions.get(functionName);
         int d = newElement.getCounter(lock.lockName);
         //CExpression param = params.get(0);
         //if (isGlobal(param))
         if (p == 0 && d < lock.maxLock)
-          newElement.add(lock.lockName, lineNumber, callstack, "");
+          newElement.add(lock.lockName, lineNumber, callstack, "", logger);
         else if (d < lock.maxLock)
-          newElement.add(lock.lockName, lineNumber, callstack, params.get(p - 1).toASTString());
+          newElement.add(lock.lockName, lineNumber, callstack, params.get(p - 1).toASTString(), logger);
         else {
           System.err.println("Try to lock " + lock.lockName + " more, than " + lock.maxLock/* + " in " + lineNumber + " line"*/);
           //System.err.println("Lines: " + newElement.getAllLines(lock.lockName));
@@ -151,19 +155,21 @@ public class FunctionHandlerOS {
         return newElement;
 
       } else if (lock.UnlockFunctions.containsKey(functionName)) {
+    	  logger.log(Level.FINER, "Unlock at line " + lineNumber + ", Callstack: " + callstack);
         int p = lock.UnlockFunctions.get(functionName);
         if (p == 0)
-          newElement.delete(lock.lockName, "", false);
+          newElement.delete(lock.lockName, "", false, logger);
         else
-          newElement.delete(lock.lockName, params.get(p - 1).toASTString(), false);
+          newElement.delete(lock.lockName, params.get(p - 1).toASTString(), false, logger);
         return newElement;
 
       } else if (lock.ResetFunctions != null && lock.ResetFunctions.containsKey(functionName)) {
+    	  logger.log(Level.FINER, "Reset at line " + lineNumber + ", Callstack: " + callstack);
         int p = lock.ResetFunctions.get(functionName);
         if (p == 0)
-          newElement.reset(lock.lockName);
+          newElement.reset(lock.lockName, logger);
         else
-          newElement.reset(params.get(p - 1).toASTString());
+          newElement.reset(params.get(p - 1).toASTString(), logger);
         return newElement;
 
       } else if (lock.setLevel != null && lock.setLevel.equals(functionName)) {
