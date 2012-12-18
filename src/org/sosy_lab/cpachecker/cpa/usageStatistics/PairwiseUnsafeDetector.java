@@ -28,7 +28,13 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+import org.sosy_lab.common.Pair;
+import org.sosy_lab.common.configuration.Configuration;
+import org.sosy_lab.common.configuration.InvalidConfigurationException;
+import org.sosy_lab.common.configuration.Option;
+import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cpa.usageStatistics.UsageInfo.Access;
+import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 
 /**
  * This class implements simple analysis, when all lines are compared
@@ -36,15 +42,17 @@ import org.sosy_lab.cpachecker.cpa.usageStatistics.UsageInfo.Access;
  * in statistics
  */
 
-public class DataProcessSimple implements DataProcessing {
-  private final Set<String> annotated;
+@Options(prefix="cpa.usagestatistics.unsafedetector")
+public class PairwiseUnsafeDetector implements UnsafeDetector {
+  @Option(description = "variables, which will be unsafes even only with read access (they can be changed invisibly)")
+  private Set<String> detectByReadAccess;
 
-  DataProcessSimple(Set<String> aVariables) {
-    annotated = aVariables;
+  public PairwiseUnsafeDetector(Configuration config) throws InvalidConfigurationException {
+	    config.inject(this);
   }
 
   @Override
-  public Collection<VariableIdentifier> process(Map<VariableIdentifier, Set<UsageInfo>> stat) {
+  public Collection<VariableIdentifier> getUnsafes(Map<VariableIdentifier, Set<UsageInfo>> stat) {
 
     Collection<VariableIdentifier> unsafe = new HashSet<VariableIdentifier>();
     Collection<VariableIdentifier> toDelete = new HashSet<VariableIdentifier>();
@@ -62,7 +70,7 @@ nextId:for (VariableIdentifier id : stat.keySet()) {
     }
     //now we should check, that all unsafe cases have at least one write access
 next:for (VariableIdentifier id : unsafe) {
-      if (annotated.contains(id.name)) continue;
+      if (detectByReadAccess.contains(id.name)) continue;
       Set<UsageInfo> uset = stat.get(id);
       for (UsageInfo uinfo : uset) {
         if (uinfo.getAccess() == Access.WRITE/* && uinfo.getCallStack().getDepth() > 1*/)
@@ -80,6 +88,18 @@ next:for (VariableIdentifier id : unsafe) {
     return unsafe;
   }
 
+  @Override
+  public Pair<UsageInfo, UsageInfo> getSomeUnsafePair(Set<UsageInfo> uinfo) throws HandleCodeException {
+	    for (UsageInfo info1 : uinfo) {
+	      for (UsageInfo info2 : uinfo) {
+	        if ((info1.getAccess() == Access.WRITE || info2.getAccess() == Access.WRITE) && !info1.intersect(info2)) {
+	          return Pair.of(info1, info2);
+	        }
+	      }
+	    }
+	    throw new HandleCodeException("Can't find example of unsafe cases");
+  }
+  
   @Override
   public String getDescription() {
     return "All lines with different mutexes were printed";

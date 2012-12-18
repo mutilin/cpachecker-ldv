@@ -27,19 +27,22 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
 
+import org.sosy_lab.common.Pair;
+import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
+
 /**
  * Interface for data processing, that was collected in
  * UsageStatistics CPA.
  */
 
-public interface DataProcessing {
+public interface UnsafeDetector {
 
   /**
    * main function to process the data
-   * @param variables - all collected variables
+   * @param varStatistics - all collected variables
    * @return collection of unsafe variables
    */
-  public Collection<VariableIdentifier> process(Map<VariableIdentifier, Set<UsageInfo>> variables);
+  public Collection<VariableIdentifier> getUnsafes(Map<VariableIdentifier, Set<UsageInfo>> varStatistics);
 
   /**
    * function to get simple description, its useful to write it in
@@ -48,4 +51,7 @@ public interface DataProcessing {
    */
 
   public String getDescription();
+
+  public Pair<UsageInfo, UsageInfo> getSomeUnsafePair(Set<UsageInfo> uinfo)
+		throws HandleCodeException;
 }

@@ -37,50 +37,50 @@ class UsageStatisticsState extends AbstractSingleWrapperState  {
 
   private static final long serialVersionUID = -898577877284268426L;
 
-  private Map<VariableIdentifier, VariableIdentifier> PointerRelation;
+  private Map<VariableIdentifier, VariableIdentifier> variableBindingRelation;
 
   public UsageStatisticsState(AbstractState pWrappedElement) {
     super(pWrappedElement);
-    PointerRelation = new HashMap<VariableIdentifier, VariableIdentifier>();
+    variableBindingRelation = new HashMap<VariableIdentifier, VariableIdentifier>();
   }
 
   public UsageStatisticsState(AbstractState pWrappedElement, Map<VariableIdentifier, VariableIdentifier> map) {
     super(pWrappedElement);
-    PointerRelation = new HashMap<VariableIdentifier, VariableIdentifier>(map);
+    variableBindingRelation = new HashMap<VariableIdentifier, VariableIdentifier>(map);
   }
 
   public boolean contains(VariableIdentifier id) {
-    return PointerRelation.containsKey(id);
+    return variableBindingRelation.containsKey(id);
   }
 
   public void put(VariableIdentifier id1, VariableIdentifier id2) {
    // System.out.println("Link " + (id1 == null ? "null" : id1.getName()) + " and " + (id2 == null ? "null" : id2.getName()));
     if (!id1.equals(id2))
-      PointerRelation.put(id1, id2);
+      variableBindingRelation.put(id1, id2);
   }
 
   public VariableIdentifier get(VariableIdentifier id) {
-    return PointerRelation.get(id);
+    return variableBindingRelation.get(id);
   }
 
   public Map<VariableIdentifier, VariableIdentifier> getMap() {
-    return PointerRelation;
+    return variableBindingRelation;
   }
 
   @Override
   public UsageStatisticsState clone() {
-    return new UsageStatisticsState(this.getWrappedState(), this.PointerRelation);
+    return new UsageStatisticsState(this.getWrappedState(), this.variableBindingRelation);
   }
 
   public UsageStatisticsState clone(AbstractState pWrappedState) {
-    return new UsageStatisticsState(pWrappedState, this.PointerRelation);
+    return new UsageStatisticsState(pWrappedState, this.variableBindingRelation);
   }
 
   @Override
   public int hashCode() {
     final int prime = 31;
     int result = 1;
-    result = prime * result + ((PointerRelation == null) ? 0 : PointerRelation.hashCode());
+    result = prime * result + ((variableBindingRelation == null) ? 0 : variableBindingRelation.hashCode());
     return result;
   }
 
@@ -93,10 +93,10 @@ class UsageStatisticsState extends AbstractSingleWrapperState  {
     if (getClass() != obj.getClass())
       return false;
     UsageStatisticsState other = (UsageStatisticsState) obj;
-    if (PointerRelation == null) {
-      if (other.PointerRelation != null)
+    if (variableBindingRelation == null) {
+      if (other.variableBindingRelation != null)
         return false;
-    } else if (!PointerRelation.equals(other.PointerRelation))
+    } else if (!variableBindingRelation.equals(other.variableBindingRelation))
       return false;
     return true;
   }
@@ -105,20 +105,20 @@ class UsageStatisticsState extends AbstractSingleWrapperState  {
   public String toString() {
     StringBuilder str = new StringBuilder();
     str.append(getWrappedState());
-    return PointerRelation.size() + " : " + str.toString();
+    return variableBindingRelation.size() + " : " + str.toString();
   }
 
   boolean isLessOrEqual(UsageStatisticsState other) {
 
     // this element is not less or equal than the other element, if it contains less elements
-    if (PointerRelation.size() < other.PointerRelation.size()) {
+    if (variableBindingRelation.size() < other.variableBindingRelation.size()) {
       return false;
     }
 
     // also, this element is not less or equal than the other element,
     // if any one constant's value of the other element differs from the constant's value in this element
-    for (VariableIdentifier id : PointerRelation.keySet()) {
-      if (!other.PointerRelation.containsKey(id)) {
+    for (VariableIdentifier id : variableBindingRelation.keySet()) {
+      if (!other.variableBindingRelation.containsKey(id)) {
         return false;
       }
     }

@@ -35,7 +35,7 @@ import com.google.common.base.Preconditions;
 /**
  * Information about special functions like sdlFirst() and sdlNext();
  */
-public class FunctionInfo {
+public class BinderFunctionInfo {
 
   public static enum ParameterInfo {
     READ,
@@ -60,7 +60,7 @@ public class FunctionInfo {
    */
   Pair<Integer, Integer> linkInfo;
 
-  FunctionInfo(String nm, Configuration pConfig) throws InvalidConfigurationException {
+  BinderFunctionInfo(String nm, Configuration pConfig) throws InvalidConfigurationException {
     name = nm;
     try {
       parameters = Integer.parseInt(pConfig.getProperty(name + ".parameters"));

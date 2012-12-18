@@ -59,55 +59,52 @@ import org.sosy_lab.cpachecker.util.AbstractStates;
 public class UsageStatisticsCPAStatistics implements Statistics {
 
   private Map<VariableIdentifier, Set<UsageInfo>> Stat;
-  private int FullCounter = 0;
-  private int skippedCases = 0;
+  
+  private int totalVarUsageCounter = 0;
+  //skipped by transfer relation
+  private int skippedUsageCounter = 0;
+  //TODO: replace field with interface to ABM state
+  //we need them to restore original callstacks
   private LinkedList<Block> BlockStack;
 
-  PrintWriter writer = null;
-  FileOutputStream file = null;
-  DataProcessing dataProcess = null;
+  UnsafeDetector unsafeDetector = null;
+  //lcov data for code coverage generation 
   CodeCovering covering;
 
-  @Option(name="output", description="directory to write results")
-  private String DirName = "test/";
-  private String VisualName = "visualize";
+  @Option(name="output", description="path to write results")
+  private String outputStatFileName = "test/rawstat";
 
-  @Option(description = "variables, which will be unsafes even only with read access (they can be changed invisibly)")
-  private Set<String> annotatedvariables = null;
-  //private String OrigName;
-
-  @Option(description = "variables, which we don't save in statistics")
+  @Option(description = "variables, which will not be saved in statistics")
   private Set<String> skippedvariables = null;
 
-  @Option(values={"SIMPLE", "SET"},toUppercase=true,
+  @Option(values={"PAIR", "SETDIFF"},toUppercase=true,
       description="which data process we should use")
-  private String process = "SIMPLE";
+  private String unsafeDetectorType = "PAIR";
 
-  @Option(description="if we need to print all variables, not only unsafe cases")
-  private boolean fullstatistics = true;
+  //@Option(description="if we need to print all variables, not only unsafe cases")
+  //private boolean fullstatistics = true;
 
-  @Option(description="Do we need to store statistics of all variables or only pointers")
-  private boolean onlypointers = true;
+  //@Option(description="Do we need to store statistics of all variables or only pointers")
+  //private boolean onlypointers = true;
 
-  private final String ldv_main;
+  private final String entryFunction;
 
-  UsageStatisticsCPAStatistics(Configuration config, CodeCovering cover) throws InvalidConfigurationException{
+  public UsageStatisticsCPAStatistics(Configuration config, CodeCovering cover) throws InvalidConfigurationException{
     Stat = new HashMap<VariableIdentifier, Set<UsageInfo>>();
     config.inject(this);
 
-    if (process.equals("SIMPLE"))
-      dataProcess = new DataProcessSimple(annotatedvariables);
-    else if (process.equals("SET"))
-      dataProcess = new DataProcessSetAnalysis();
+    if (unsafeDetectorType.equals("PAIR"))
+      unsafeDetector = new PairwiseUnsafeDetector(config);
+    else if (unsafeDetectorType.equals("SETDIFF"))
+      unsafeDetector = new SetDifferenceUnsafeDetector(config);
     else {
-      System.out.println("Unknown data procession " + process);
+      System.out.println("Unknown data procession " + unsafeDetectorType);
       System.exit(0);
     }
     covering = cover;
 
-    ldv_main = config.getProperty("analysis.entryFunction");
+    entryFunction = config.getProperty("analysis.entryFunction");
 
-    VisualName = DirName + VisualName;
     //OrigName = config.getProperty("cpa.usagestatistics.path");
     //reducer = pReducer;
   }
@@ -125,13 +122,13 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     EdgeInfo info = new EdgeInfo(type);
 
     for (Pair<VariableIdentifier, Access> tmpPair : result) {
-      FullCounter++;
+      totalVarUsageCounter++;
       id = tmpPair.getFirst();
       while (id != null && id.getStatus() == Ref.REFERENCE && state.contains(id.makeVariable())) {
         id = state.get(id.makeVariable());
       }
       if (id == null || (skippedvariables != null && skippedvariables.contains(id.name))) {
-        skippedCases++;
+        skippedUsageCounter++;
         continue;
       }
       UsageInfo usage = new UsageInfo(tmpPair.getSecond(), lineInfo, info, lockState, callstackState);
@@ -146,16 +143,17 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
   }
 
-  private Set<LockStatisticsLock> FindMutexes() {
+  private Set<LockStatisticsLock> findAllLocks() {
     Set<LockStatisticsLock> locks = new HashSet<LockStatisticsLock>();
 
     for (Identifier id : Stat.keySet()) {
       Set<UsageInfo> uset = Stat.get(id);
+      
       for (UsageInfo uinfo : uset){
-nextLock:for (LockStatisticsLock lock : uinfo.getLockState().getLocks()) {
-          for (LockStatisticsLock usedLock : locks)
-            if ( usedLock.getName().equals(lock.getName()) && usedLock.getVariable().equals(lock.getVariable())) continue nextLock;
-          locks.add(lock);
+    	  for (LockStatisticsLock lock : uinfo.getLockState().getLocks()) {	
+		  if( !lock.existsIn(locks)) { 
+	          locks.add(lock);
+		  }
         }
       }
     }
@@ -163,23 +161,10 @@ nextLock:for (LockStatisticsLock lock : uinfo.getLockState().getLocks()) {
     return locks;
   }
 
-  /*
+/*
    * looks through all unsafe cases of current identifier and find the example of two lines with different locks, one of them must be 'write'
    */
-  private Pair<UsageInfo, UsageInfo> findExamples(Identifier unsafeCase) throws HandleCodeException {
-    Set<UsageInfo> uinfo = Stat.get(unsafeCase);
-
-    for (UsageInfo info1 : uinfo) {
-      for (UsageInfo info2 : uinfo) {
-        if ((info1.getAccess() == Access.WRITE || info2.getAccess() == Access.WRITE) && !info1.intersect(info2)) {
-          return Pair.of(info1, info2);
-        }
-      }
-    }
-    throw new HandleCodeException("Can't find example of unsafe cases");
-  }
-
-  private void createVisualization(VariableIdentifier id, UsageInfo ui) {
+  private void createVisualization(VariableIdentifier id, UsageInfo ui, PrintWriter writer) {
     LinkedList<CallstackState> tmpList = new LinkedList<CallstackState>();
     LinkedList<TreeLeaf> leafStack = new LinkedList<TreeLeaf>();
     TreeLeaf tmpLeaf, currentLeaf;
@@ -276,7 +261,7 @@ nextLock:for (LockStatisticsLock lock : uinfo.getLockState().getLocks()) {
     }
   }
 
-  private void createVisualization(VariableIdentifier id) {
+  private void createVisualization(VariableIdentifier id, PrintWriter writer) {
     Set<UsageInfo> uinfo = Stat.get(id);
 
     if (uinfo == null || uinfo.size() == 0)
@@ -291,9 +276,9 @@ nextLock:for (LockStatisticsLock lock : uinfo.getLockState().getLocks()) {
     writer.println("Line 0:     N0 -{/*Number of usages:" + uinfo.size() + "*/}-> N0");
     writer.println("Line 0:     N0 -{/*Two examples:*/}-> N0");
     try {
-      Pair<UsageInfo, UsageInfo> tmpPair = findExamples(id);
-      createVisualization(id, tmpPair.getFirst());
-      createVisualization(id, tmpPair.getSecond());
+      Pair<UsageInfo, UsageInfo> tmpPair = unsafeDetector.getSomeUnsafePair(uinfo);
+      createVisualization(id, tmpPair.getFirst(), writer);
+      createVisualization(id, tmpPair.getSecond(), writer);
       /*writer.println("Line 0:     N0 -{_____________________}-> N0");
       writer.println("Line 0:     N0 -{All usages:}-> N0");
       for (UsageInfo ui : uinfo)
@@ -306,6 +291,9 @@ nextLock:for (LockStatisticsLock lock : uinfo.getLockState().getLocks()) {
 
   @Override
   public void printStatistics(PrintStream out, Result result, ReachedSet reached) {
+		PrintWriter writer = null;
+		FileOutputStream file = null;
+		  
 
     /*Collection<GlobalVariableIdentifier> global = new HashSet<GlobalVariableIdentifier>();
     Collection<LocalVariableIdentifier> local = new HashSet<LocalVariableIdentifier>();
@@ -313,12 +301,12 @@ nextLock:for (LockStatisticsLock lock : uinfo.getLockState().getLocks()) {
     int global = 0, local = 0, fields = 0, pointers = 0;
 
     try {
-      file = new FileOutputStream (VisualName);
+      file = new FileOutputStream (outputStatFileName);
       writer = new PrintWriter(file);
     }
     catch(FileNotFoundException e)
     {
-      System.out.println("Cannot open file " + VisualName);
+      System.out.println("Cannot open file " + outputStatFileName);
       return;
     }
 
@@ -349,11 +337,11 @@ nextLock:for (LockStatisticsLock lock : uinfo.getLockState().getLocks()) {
     writer.println(fields);
     writer.println(pointers);
 
-    writer.println(FullCounter);
+    writer.println(totalVarUsageCounter);
     writer.println(counter);
-    writer.println(skippedCases);
+    writer.println(skippedUsageCounter);
 
-    Set<LockStatisticsLock> mutexes = FindMutexes();
+    Set<LockStatisticsLock> mutexes = findAllLocks();
 
     writer.println(mutexes.size());
 
@@ -361,7 +349,7 @@ nextLock:for (LockStatisticsLock lock : uinfo.getLockState().getLocks()) {
       writer.println(lock.toString());
     }
 
-    Collection<VariableIdentifier> unsafeCases = dataProcess.process(Stat);
+    Collection<VariableIdentifier> unsafeCases = unsafeDetector.getUnsafes(Stat);
     counter = global = local = fields = pointers = 0;
 
     for (VariableIdentifier id : unsafeCases) {
@@ -393,7 +381,7 @@ nextLock:for (LockStatisticsLock lock : uinfo.getLockState().getLocks()) {
     //printCases(dataProcess.getDescription(), unsafeCases);
 
     for (VariableIdentifier id : unsafeCases) {
-      createVisualization(id);
+      createVisualization(id, writer);
     }
 
     if(file != null)
@@ -419,7 +407,7 @@ nextLock:for (LockStatisticsLock lock : uinfo.getLockState().getLocks()) {
       for (int j = 0; j < currentNode.getNumEnteringEdges(); j++) {
         edge = currentNode.getEnteringEdge(j);
         predecessor = edge.getPredecessor();
-        if (previousNode == null && predecessor.getFunctionName().equals(ldv_main))
+        if (previousNode == null && predecessor.getFunctionName().equals(entryFunction))
           break;
         else if (previousNode != null && predecessor.getFunctionName().equals(previousNode.getFunctionName()))
           break;

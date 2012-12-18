@@ -24,20 +24,25 @@
 package org.sosy_lab.cpachecker.cpa.usageStatistics;
 
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-import org.sosy_lab.cpachecker.cpa.lockStatistics.LockStatisticsLock;
+import org.sosy_lab.common.Pair;
+import org.sosy_lab.common.configuration.Configuration;
+import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 
 
-public class DataProcessSetAnalysis implements DataProcessing{
+public class SetDifferenceUnsafeDetector implements UnsafeDetector {
 
-  @Override
-  public Collection<VariableIdentifier> process(Map<VariableIdentifier, Set<UsageInfo>> variables) {
+  public SetDifferenceUnsafeDetector(Configuration config) {
+		// TODO Auto-generated constructor stub
+	}
+
+@Override
+  public Collection<VariableIdentifier> getUnsafes(Map<VariableIdentifier, Set<UsageInfo>> variables) {
     Collection<VariableIdentifier> unsafe = new HashSet<VariableIdentifier>();
-    Map<Integer, Set<Set<LockStatisticsLock>>> Cases = new HashMap<Integer, Set<Set<LockStatisticsLock>>>();
+    //Map<Integer, Set<Set<LockStatisticsLock>>> Cases = new HashMap<Integer, Set<Set<LockStatisticsLock>>>();
 /*
     for (String name : variables.keySet()) {
       Set<VariableInfo> vars = variables.get(name);
@@ -99,6 +104,13 @@ public class DataProcessSetAnalysis implements DataProcessing{
   @Override
   public String getDescription() {
     return "All lines with different sets of mutexes were printed";
+  }
+
+  @Override
+  public Pair<UsageInfo, UsageInfo> getSomeUnsafePair(Set<UsageInfo> uinfo)
+		throws HandleCodeException {
+	// TODO Auto-generated method stub
+	return null;
   }
 
 }

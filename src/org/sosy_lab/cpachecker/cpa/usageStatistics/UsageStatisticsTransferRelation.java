@@ -74,7 +74,7 @@ import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.usageStatistics.EdgeInfo.EdgeType;
-import org.sosy_lab.cpachecker.cpa.usageStatistics.FunctionInfo.ParameterInfo;
+import org.sosy_lab.cpachecker.cpa.usageStatistics.BinderFunctionInfo.ParameterInfo;
 import org.sosy_lab.cpachecker.cpa.usageStatistics.UsageInfo.Access;
 import org.sosy_lab.cpachecker.cpa.usageStatistics.VariableIdentifier.Ref;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
@@ -93,11 +93,13 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
   @Option(description = "functions, which we don't analize")
   private Set<String> skippedfunctions = null;
 
-  @Option(description = "functions, which we analize special way: simple pointer analisys")
-  private Set<String> analizedfunctions = null;
+  @Option(description = "functions, which are used to bind variables (like list elements are binded to list variable)")
+  private Set<String> binderFunctions = null;
 
-  private Map<String, FunctionInfo> functionInfo;
+  private Map<String, BinderFunctionInfo> binderFunctionInfo;
 
+  //TODO: strengthen (CallStackCPA, LockStatisticsCPA)
+  //pass the state to LockStatisticsCPA to bind Callstack to lock
   private UsageStatisticsState oldState;
 
   public UsageStatisticsTransferRelation(TransferRelation pWrappedTransfer,
@@ -107,11 +109,11 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     statistics = s;
     covering = cover;
 
-    functionInfo = new HashMap<String, FunctionInfo>();
-    FunctionInfo tmpInfo;
-    for (String name : analizedfunctions) {
-      tmpInfo = new FunctionInfo(name, config);
-      functionInfo.put(name, tmpInfo);
+    binderFunctionInfo = new HashMap<String, BinderFunctionInfo>();
+    BinderFunctionInfo tmpInfo;
+    for (String name : binderFunctions) {
+      tmpInfo = new BinderFunctionInfo(name, config);
+      binderFunctionInfo.put(name, tmpInfo);
     }
   }
 
@@ -280,9 +282,9 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     String functionName = AbstractStates.extractStateByType(pNewState, CallstackState.class).getCurrentFunction();
 
     String functionCallName = fcExpression.getFunctionNameExpression().toASTString();
-    if (analizedfunctions != null && analizedfunctions.contains(functionCallName))
+    if (binderFunctions != null && binderFunctions.contains(functionCallName))
     {
-      FunctionInfo currentInfo = functionInfo.get(functionCallName);
+      BinderFunctionInfo currentInfo = binderFunctionInfo.get(functionCallName);
       List<CExpression> params = fcExpression.getParameterExpressions();
 
       assert params.size() == currentInfo.parameters;

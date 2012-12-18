@@ -23,6 +23,8 @@
  */
 package org.sosy_lab.cpachecker.cpa.lockStatistics;
 
+import java.util.Set;
+
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.usageStatistics.LineInfo;
 
@@ -138,5 +140,15 @@ public class LockStatisticsLock {
 
   public CallstackState getCallstack() {
     return callstack;
+  }
+
+  public boolean existsIn(Set<LockStatisticsLock> locks) {
+    for (LockStatisticsLock usedLock : locks) {
+        if ( usedLock.getName().equals(this.getName()) 
+        		&& usedLock.getVariable().equals(this.getVariable())) { 
+        	return true;
+        }
+    }
+	return false;
   }
 }
