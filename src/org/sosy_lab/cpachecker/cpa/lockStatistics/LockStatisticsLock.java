@@ -24,9 +24,11 @@
 package org.sosy_lab.cpachecker.cpa.lockStatistics;
 
 import java.util.Set;
+import java.util.Stack;
 
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.usageStatistics.LineInfo;
+import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 
 
 public class LockStatisticsLock {
@@ -43,18 +45,28 @@ public class LockStatisticsLock {
   }
 
   private String name;
-  private CallstackState callstack;
-  private LineInfo line;
+  private Stack<AccessPoint> accessPoints;
   private LockType type;
   private int recursiveCounter;
   private String variable;
 
-  LockStatisticsLock(String n, int l, LockType t, CallstackState s, int counter, String v) {
+  LockStatisticsLock(String n, int l, LockType t, CallstackState s, String v) {
     name = n;
-    line = new LineInfo(l);
+    accessPoints = new Stack<AccessPoint>();
+    accessPoints.add(new AccessPoint( new LineInfo(l), s));
     type = t;
-    callstack = s;
-    recursiveCounter = counter;
+    recursiveCounter = 0;
+    variable = v;
+  }
+
+  private LockStatisticsLock(String n, LockType t, Stack<AccessPoint> points, String v, int r) {
+    name = n;
+    accessPoints = new Stack<AccessPoint>();
+    for (AccessPoint point : points) {
+      accessPoints.add(point);
+    }
+    type = t;
+    recursiveCounter = r;
     variable = v;
   }
 
@@ -66,12 +78,74 @@ public class LockStatisticsLock {
     return variable;
   }
 
-  public LineInfo getLine() {
-    return line;
+  public Stack<AccessPoint> getAccessPoints() {
+    return accessPoints;
   }
 
   public int getRecursiveCounter() {
     return recursiveCounter;
+  }
+
+  @Override
+  public LockStatisticsLock clone() {
+    return new LockStatisticsLock(this.name, this.type, this.accessPoints, this.variable, this.recursiveCounter);
+  }
+
+  public LockStatisticsLock addAccessPointer(AccessPoint accessPoint) {
+    LockStatisticsLock cloned = this.clone();
+    cloned.recursiveCounter++;
+    cloned.accessPoints.push(accessPoint);
+    return cloned;
+  }
+
+  public LockStatisticsLock removeLastAccessPointer() {
+    LockStatisticsLock cloned = this.clone();
+    if(recursiveCounter > 1) {
+      cloned.recursiveCounter--;
+      cloned.accessPoints.pop();
+      return cloned;
+    } else {
+      return null;
+    }
+  }
+
+  public boolean hasEqualNameAndVariable(LockStatisticsLock lock) {
+    return hasEqualNameAndVariable(lock.getName(), lock.getVariable());
+  }
+
+  public boolean hasEqualName(String lockName) {
+    if ( this.name.equals(lockName)) {
+      return true;
+    }
+    return false;
+  }
+
+  public boolean hasEqualNameAndVariable(String lockName, String variableName) {
+    if ( this.name.equals(lockName)
+        && this.variable.equals(variableName)) {
+      return true;
+    }
+    return false;
+  }
+
+  public void initReplaceLabel() {
+    for (AccessPoint accessPoint : accessPoints) {
+      accessPoint.resetLabel();
+    }
+  }
+
+  public void replace(LockStatisticsLock rootLock) throws HandleCodeException {
+    AccessPoint tmpPoint;
+    for (int i = 0; i < this.accessPoints.size(); i++) {
+      tmpPoint = accessPoints.get(i);
+      if (!tmpPoint.getLabel()) return;
+      else {
+        if (rootLock.accessPoints.size() > i)
+          tmpPoint.replace(rootLock.accessPoints.get(i));
+        else
+          throw new HandleCodeException("Can't find labeled lock in root state");
+      }
+    }
   }
 
   @Override
@@ -138,17 +212,24 @@ public class LockStatisticsLock {
     return sb.toString();
   }
 
-  public CallstackState getCallstack() {
+  /*public CallstackState getCallstack() {
     return callstack;
-  }
+  }*/
 
   public boolean existsIn(Set<LockStatisticsLock> locks) {
     for (LockStatisticsLock usedLock : locks) {
-        if ( usedLock.getName().equals(this.getName()) 
-        		&& usedLock.getVariable().equals(this.getVariable())) { 
+        if (usedLock.hasEqualNameAndVariable(this)) {
         	return true;
         }
     }
 	return false;
+  }
+
+  public LockStatisticsLock addRecursiveAccessPointer(int pNum, AccessPoint pAccessPoint) {
+    LockStatisticsLock tmpLock = this.clone();
+    for (int i = 0; i < pNum; i++) {
+      tmpLock = tmpLock.addAccessPointer(pAccessPoint);
+    }
+    return tmpLock;
   }
 }

@@ -47,6 +47,7 @@ import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
+import org.sosy_lab.cpachecker.cpa.lockStatistics.AccessPoint;
 import org.sosy_lab.cpachecker.cpa.lockStatistics.LockStatisticsLock;
 import org.sosy_lab.cpachecker.cpa.lockStatistics.LockStatisticsState;
 import org.sosy_lab.cpachecker.cpa.usageStatistics.EdgeInfo.EdgeType;
@@ -59,7 +60,7 @@ import org.sosy_lab.cpachecker.util.AbstractStates;
 public class UsageStatisticsCPAStatistics implements Statistics {
 
   private Map<VariableIdentifier, Set<UsageInfo>> Stat;
-  
+
   private int totalVarUsageCounter = 0;
   //skipped by transfer relation
   private int skippedUsageCounter = 0;
@@ -68,7 +69,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   private LinkedList<Block> BlockStack;
 
   UnsafeDetector unsafeDetector = null;
-  //lcov data for code coverage generation 
+  //lcov data for code coverage generation
   CodeCovering covering;
 
   @Option(name="output", description="path to write results")
@@ -148,10 +149,10 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
     for (Identifier id : Stat.keySet()) {
       Set<UsageInfo> uset = Stat.get(id);
-      
+
       for (UsageInfo uinfo : uset){
-    	  for (LockStatisticsLock lock : uinfo.getLockState().getLocks()) {	
-		  if( !lock.existsIn(locks)) { 
+    	  for (LockStatisticsLock lock : uinfo.getLockState().getLocks()) {
+		  if( !lock.existsIn(locks)) {
 	          locks.add(lock);
 		  }
         }
@@ -173,23 +174,25 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     LockStatisticsState Locks = ui.getLockState();
     currentLeaf = TreeLeaf.clearTrunkState();
     for (LockStatisticsLock lock : Locks.getLocks()) {
-      currentLeaf = TreeLeaf.getTrunkState();
-      tmpState = lock.getCallstack();
-      tmpList.clear();
-      //revert callstacks of locks
-      while (tmpState != null) {
-        tmpList.push(tmpState);
-        tmpState = tmpState.getPreviousState();
+      for (AccessPoint accessPoint : lock.getAccessPoints()) {
+        currentLeaf = TreeLeaf.getTrunkState();
+        tmpState = accessPoint.getCallstack();
+        tmpList.clear();
+        //revert callstacks of locks
+        while (tmpState != null) {
+          tmpList.push(tmpState);
+          tmpState = tmpState.getPreviousState();
+        }
+        //create tree of calls for locks
+        tmpState = tmpList.getFirst();
+        if (!tmpState.getCallNode().getFunctionName().equals(tmpState.getCurrentFunction()))
+          currentLeaf = currentLeaf.add(tmpList.getFirst().getCallNode().getFunctionName(), 0);
+        for (CallstackState callstack : tmpList) {
+          currentLeaf = currentLeaf.add(callstack);
+        }
+        //System.out.println("Add " + lock.getName());
+        currentLeaf.add(lock.getName() + "()", accessPoint.line.line);
       }
-      //create tree of calls for locks
-      tmpState = tmpList.getFirst();
-      if (!tmpState.getCallNode().getFunctionName().equals(tmpState.getCurrentFunction()))
-        currentLeaf = currentLeaf.add(tmpList.getFirst().getCallNode().getFunctionName(), 0);
-      for (CallstackState callstack : tmpList) {
-        currentLeaf = currentLeaf.add(callstack);
-      }
-      //System.out.println("Add " + lock.getName());
-      currentLeaf.add(lock.getName() + "()", lock.getLine().line);
     }
 
     tmpState = ui.getCallStack();
@@ -293,7 +296,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   public void printStatistics(PrintStream out, Result result, ReachedSet reached) {
 		PrintWriter writer = null;
 		FileOutputStream file = null;
-		  
+
 
     /*Collection<GlobalVariableIdentifier> global = new HashSet<GlobalVariableIdentifier>();
     Collection<LocalVariableIdentifier> local = new HashSet<LocalVariableIdentifier>();
@@ -384,8 +387,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       createVisualization(id, writer);
     }
 
-    if(file != null)
-      writer.close();
+    writer.close();
 
     covering.generate();
   }

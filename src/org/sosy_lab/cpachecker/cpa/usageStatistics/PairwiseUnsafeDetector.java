@@ -70,7 +70,7 @@ nextId:for (VariableIdentifier id : stat.keySet()) {
     }
     //now we should check, that all unsafe cases have at least one write access
 next:for (VariableIdentifier id : unsafe) {
-      if (detectByReadAccess.contains(id.name)) continue;
+      if (detectByReadAccess != null && detectByReadAccess.contains(id.name)) continue;
       Set<UsageInfo> uset = stat.get(id);
       for (UsageInfo uinfo : uset) {
         if (uinfo.getAccess() == Access.WRITE/* && uinfo.getCallStack().getDepth() > 1*/)
@@ -99,7 +99,7 @@ next:for (VariableIdentifier id : unsafe) {
 	    }
 	    throw new HandleCodeException("Can't find example of unsafe cases");
   }
-  
+
   @Override
   public String getDescription() {
     return "All lines with different mutexes were printed";

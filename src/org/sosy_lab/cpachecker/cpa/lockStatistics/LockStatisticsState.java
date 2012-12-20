@@ -34,6 +34,7 @@ import org.sosy_lab.common.LogManager;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractQueryableState;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.lockStatistics.LockStatisticsLock.LockType;
+import org.sosy_lab.cpachecker.cpa.usageStatistics.LineInfo;
 import org.sosy_lab.cpachecker.exceptions.InvalidQueryException;
 
 import com.google.common.base.Preconditions;
@@ -51,12 +52,24 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
     this.locks  = gLocks;
   }
 
-  public boolean contains(String variableName) {
-    for (LockStatisticsLock mutex : locks) {
-      if (mutex.getName().equals(variableName))
+  public boolean contains(String lockName, String variableName) {
+    for (LockStatisticsLock lock : locks) {
+      if (lock.hasEqualNameAndVariable(lockName, variableName))
         return true;
     }
     return false;
+  }
+
+  public boolean contains(String lockName) {
+    for (LockStatisticsLock lock : locks) {
+      if (lock.hasEqualName(lockName))
+        return true;
+    }
+    return false;
+  }
+
+  public boolean contains(LockStatisticsLock lock) {
+    return locks.contains(lock);
   }
 
   public int getSize() {
@@ -97,19 +110,40 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
   void add(String lockName, int line, CallstackState state, String variable, LogManager logger) {
 	String locksBefore = locks.toString();
     LockStatisticsLock tmpMutex;
-    int counter = 0;
 
-    for (LockStatisticsLock tmpLock : locks) {
-      if (tmpLock.getName().equals(lockName) && tmpLock.getVariable().equals(variable)) {
-        counter++;
-      }
-    }
-    tmpMutex = new LockStatisticsLock(lockName, line, LockType.GLOBAL_LOCK, state, counter, variable);
-    boolean b = locks.add(tmpMutex);
-    if(b || counter > 0) {
+    LockStatisticsLock oldLock = findLock(lockName, variable, false);
+    if(oldLock!=null) {
+      LockStatisticsLock newLock = oldLock.addAccessPointer(new AccessPoint(new LineInfo(line), state));
+      boolean b = locks.remove(oldLock);
+      assert b;
+      b = locks.add(newLock);
+      assert b;
+      logger.log(Level.FINER, "Locks before: " + locksBefore);
+      logger.log(Level.FINER, "Locks after: " + locks);
+    } else {
+      tmpMutex = new LockStatisticsLock(lockName, line, LockType.GLOBAL_LOCK, state, variable);
+      boolean b = locks.add(tmpMutex);
+      if(b) {
         logger.log(Level.FINER, "Locks before: " + locksBefore);
         logger.log(Level.FINER, "Locks after: " + locks);
-    }    
+      }
+    }
+
+
+    for (LockStatisticsLock tmpLock : locks) {
+      if (tmpLock.hasEqualNameAndVariable(lockName, variable)) {
+        return;
+      }
+    }
+  }
+
+  private LockStatisticsLock findLock(String lockName, String variable, boolean all) {
+    for (LockStatisticsLock lock : locks) {
+      if (lock.hasEqualNameAndVariable(lockName, variable) || (all && lock.hasEqualName(lockName))) {
+        return lock;
+      }
+    }
+    return null;
   }
 
   void add(LockStatisticsLock l, LogManager logger) {
@@ -118,34 +152,31 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
 	  if(b) {
 		  logger.log(Level.FINER, "Locks before: " + locksBefore);
 		  logger.log(Level.FINER, "Locks after: " + locks);
-	  }    
+	  }
   }
 
   void delete(String lockName, String variable, boolean all, LogManager logger) {
-	String locksBefore = locks.toString();
-    LockStatisticsLock lockToDelete = null;
-    int counter = 0;
-    for (LockStatisticsLock mutex : locks) {
-      if (mutex.getName().equals(lockName) && counter <= mutex.getRecursiveCounter()
-          && (mutex.getVariable().equals(variable) || all)) {
-        lockToDelete = mutex;
-        counter = mutex.getRecursiveCounter();
-      }
+    //even if all==true, we delete only one lock - it's NORMAL
+
+	  String locksBefore = locks.toString();
+	  LockStatisticsLock oldLock = findLock(lockName, variable, all);
+	  if (oldLock == null)
+	    //TODO why?
+	    return;
+    boolean b = locks.remove(oldLock);
+    assert b;
+    LockStatisticsLock newLock = oldLock.removeLastAccessPointer();
+    if (newLock != null) {
+      locks.add(newLock);
+      logger.log(Level.FINER, "Locks before: " + locksBefore);
+      logger.log(Level.FINER, "Locks after: " + locks);
     }
-    boolean b = false;
-    if (lockToDelete != null)
-      b = locks.remove(lockToDelete);
-    
-    if(b || counter > 0) {
-    	logger.log(Level.FINER, "Locks before: " + locksBefore);
-    	logger.log(Level.FINER, "Locks after: " + locks);
-    }    
   }
 
   void reset(String lockName, LogManager logger) {
     Set<LockStatisticsLock> toDelete = new HashSet<LockStatisticsLock>();
     for (LockStatisticsLock mutex : locks) {
-      if (mutex.getName().equals(lockName)) {
+      if (mutex.hasEqualName(lockName)) {
         toDelete.add(mutex);
       }
     }
@@ -155,23 +186,19 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
   }
 
   void set(String lockName, int num, int line, CallstackState state, String variable) {
-    int counter = 0;
-
-    for (LockStatisticsLock lock : locks) {
-      if (lock.getName().equals(lockName)) {
-        counter++;
-      }
-    }
-
-    for (int i = counter; i < num; i++) {
-      locks.add(new LockStatisticsLock(lockName, line, LockType.GLOBAL_LOCK, state, i, variable));
+    LockStatisticsLock oldLock = findLock(lockName, variable, false);
+    if (oldLock != null) {
+      LockStatisticsLock newLock = oldLock.addRecursiveAccessPointer(num - oldLock.getRecursiveCounter(),
+          new AccessPoint(new LineInfo(line), state));
+      locks.remove(oldLock);
+      locks.add(newLock);
     }
   }
 
   public int getCounter(String lockName) {
     int counter = 0;
     for (LockStatisticsLock lock : locks) {
-      if (lock.getName().equals(lockName)) counter++;
+      if (lock.hasEqualName(lockName)) return lock.getRecursiveCounter();
     }
     return counter;
   }
@@ -180,7 +207,10 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
   public String getAllLines(String lockName) {
     StringBuilder sb = new StringBuilder();
     for (LockStatisticsLock lock : locks) {
-      if (lock.getName().equals(lockName)) sb.append(lock.getLine().getLine() + ", ");
+      if (lock.hasEqualName(lockName)) {
+        for (AccessPoint point : lock.getAccessPoints())
+        sb.append(point.line.getLine() + ", ");
+      }
     }
 
     if (sb.length() > 2)
@@ -244,7 +274,7 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
     // if any one constant's value of the other element differs from the constant's value in this element
 ok: for (LockStatisticsLock Lock : locks) {
       for (LockStatisticsLock lock : other.locks) {
-        if (Lock.getName().equals(lock.getName())) continue ok;
+        if (Lock.hasEqualNameAndVariable(lock)) continue ok;
       }
       return false;
     }
@@ -261,6 +291,12 @@ ok: for (LockStatisticsLock Lock : locks) {
   @Override
   public LockStatisticsState clone() {
     return new LockStatisticsState(new HashSet<LockStatisticsLock>(locks)/*, new HashSet<LockStatisticsLock>(LocalLocks)*/);
+  }
+
+  public void initReplaceLabels() {
+    for (LockStatisticsLock lock : locks) {
+      lock.initReplaceLabel();
+    }
   }
 
   @Override
@@ -296,22 +332,25 @@ ok: for (LockStatisticsLock Lock : locks) {
 
   @Override
   public Object evaluateProperty(String pProperty) throws InvalidQueryException {
-    pProperty = pProperty.trim();
+    /*pProperty = pProperty.trim();
 
     if (pProperty.startsWith("contains(")) {
       String varName = pProperty.substring("contains(".length(), pProperty.length() - 1);
       return this.contains(varName);
     } else {
       return checkProperty(pProperty);
-    }
+    }*/
+    //Qu'est que c'est?
+    return true;
   }
 
   @Override
   public boolean checkProperty(String pProperty) throws InvalidQueryException {
-    if (this.contains(pProperty))
+    /*if (this.contains(pProperty))
       return true;
     else
-      return false;
+      return false;*/
+    return true;
   }
 
   @Override

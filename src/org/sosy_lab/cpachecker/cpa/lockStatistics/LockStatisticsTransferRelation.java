@@ -91,11 +91,11 @@ public class LockStatisticsTransferRelation implements TransferRelation
 
   private FunctionHandlerOS handler;
   private LogManager logger;
-  
+
   public LockStatisticsTransferRelation(Configuration config, LogManager logger) throws InvalidConfigurationException {
     config.inject(this);
     this.logger = logger;
-    
+
     Set<LockInfo> tmpInfo = new HashSet<LockInfo>();
     LockInfo tmpLockInfo;
     Map<String, Integer> lockFunctions;
@@ -195,20 +195,18 @@ public class LockStatisticsTransferRelation implements TransferRelation
     switch (cfaEdge.getEdgeType()) {
 
     case FunctionCallEdge:
-        /*if (((CFunctionCallEdge)cfaEdge).getSuccessor().getFunctionName().equals("lockreset"))
-          System.out.println("Here!");*/
-        String fCallName = ((CFunctionCallEdge)cfaEdge).getSuccessor().getFunctionName();
+      String fCallName = ((CFunctionCallEdge)cfaEdge).getSuccessor().getFunctionName();
     	if (annotated != null && annotated.contains(fCallName)) {
     		CFANode pred = ((CFunctionCallEdge)cfaEdge).getPredecessor();
-    		logger.log(Level.FINER,"annotated name=" + fCallName + ", call" 
+    		logger.log(Level.FINER,"annotated name=" + fCallName + ", call"
                    + ", node=" + pred
                    + ", line=" + pred.getLineNumber()
-                       + ", successor=" + lockStatisticsElement 
+                       + ", successor=" + lockStatisticsElement
                    );
-    		if (annotatedfunctions != null && annotatedfunctions.get(fCallName).restoreLocks.size() > 0) {   		
+    		if (annotatedfunctions != null && annotatedfunctions.get(fCallName).restoreLocks.size() > 0) {
     			returnedStates.put(pred, lockStatisticsElement);
     		}
-    	}    	
+    	}
         successor = handler.handleFunctionCall(lockStatisticsElement, (CFunctionCallEdge)cfaEdge);
         break;
 
@@ -229,15 +227,16 @@ public class LockStatisticsTransferRelation implements TransferRelation
         //System.out.println("Cached state: " + successor.toString());
        // System.out.println("New state   : " + lockStatisticsElement.toString());
 
-		logger.log(Level.FINER, "annotated name=" + fName + ", return" 
+		logger.log(Level.FINER, "annotated name=" + fName + ", return"
                 + ", node=" + tmpNode
                 + ", line=" + tmpNode.getLineNumber()
-                + ",\n\t successor=" + successor 
-                + ",\n\t element=" + element 
+                + ",\n\t successor=" + successor
+                + ",\n\t element=" + element
                 );
-		
+
         for (LockStatisticsLock lock : lockStatisticsElement.getLocks()) {
-          if (!(successor.contains(lock.getName())) && !(tmpAnnotationInfo.restoreLocks.contains(lock.getName())))
+          if (!(successor.contains(lock.getName(), lock.getVariable()))
+              && !(tmpAnnotationInfo.restoreLocks.contains(lock.getName())))
             successor.add(lock, logger);
         }
 
@@ -245,7 +244,8 @@ public class LockStatisticsTransferRelation implements TransferRelation
           //we can't delete just now!
           if (tmpAnnotationInfo.freeLocks.contains(lock.getName()))
             toReset.add(lock.getName());
-          if (!(lockStatisticsElement.contains(lock.getName())) && !(tmpAnnotationInfo.restoreLocks.contains(lock.getName())))
+          if (!(lockStatisticsElement.contains(lock.getName(), lock.getVariable()))
+              && !(tmpAnnotationInfo.restoreLocks.contains(lock.getName())))
             toDelete.add(Pair.of(lock.getName(), lock.getVariable()));
         }
 

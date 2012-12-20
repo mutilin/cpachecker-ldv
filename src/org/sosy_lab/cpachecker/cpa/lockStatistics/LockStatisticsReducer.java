@@ -28,6 +28,7 @@ import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
+import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 
 
 public class LockStatisticsReducer implements Reducer {
@@ -36,7 +37,10 @@ public class LockStatisticsReducer implements Reducer {
   @Override
   public AbstractState getVariableReducedState(AbstractState pExpandedElement, Block pContext, CFANode pCallNode) {
     //return new LockStatisticsState();
-    return pExpandedElement;
+    LockStatisticsState lockState = (LockStatisticsState) pExpandedElement;
+    LockStatisticsState reducedState = lockState.clone();
+    reducedState.initReplaceLabels();
+    return reducedState;
   }
 
   @Override
@@ -44,7 +48,21 @@ public class LockStatisticsReducer implements Reducer {
       AbstractState pReducedElement) {
 
     //return ((LockStatisticsState)pRootElement).combine(((LockStatisticsState)pReducedElement));
-    return pReducedElement;
+    LockStatisticsState expandedState = ((LockStatisticsState)pReducedElement).clone();
+    LockStatisticsState rootState = (LockStatisticsState) pRootElement;
+    for (LockStatisticsLock lock : expandedState.getLocks()) {
+      for (LockStatisticsLock rootLock : rootState.getLocks()) {
+        if (lock.hasEqualNameAndVariable(rootLock)) {
+          try {
+            lock.replace(rootLock);
+          } catch (HandleCodeException e) {
+            System.err.println(e.getMessage());
+          }
+          break;
+        }
+      }
+    }
+    return expandedState;
   }
 
   @Override
