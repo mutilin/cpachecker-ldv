@@ -20,7 +20,7 @@ Script, which generates html-file with the list of unsafe reports
 Usage:
         gen-unsafes-report.pl --trace=path-to-unsafes-trace-file --cil=path-to-cil-file --ldvrepo=path-to-git-sources-of-ldv-tools
 
-Example: gen-unsafes-report.pl --trace=../test/results/visualize --cil=../cil.out.i --ldvrepo=/home/alpha/git/ldv-tools/
+Example: gen-unsafes-report.pl --trace=../test/results/unsafe_rawdata --cil=../cil.out.i --ldvrepo=/home/osuser/LDV/ldv-tools/
 
 usage_ends
         die;
