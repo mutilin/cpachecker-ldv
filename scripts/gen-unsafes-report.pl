@@ -102,29 +102,51 @@ while (<$visualize_fh>) {
 	if ($line =~ /^#(.+)/) {
 		my $current_fname;
 		my $current_varname;
+		my $current_varname_title;
 		if ($line =~ /^###(.+)/) {
 			if ( ! -d "struct" ) {
 				mkdir("struct") || die "Can't create directory\n";
 	    		}
-			$current_fname = "struct/$1.tmp";
 			$current_varname = <$visualize_fh>;
-			push(@{$unsafe_list{$current_fname}}, $current_varname);
+			chomp($current_varname);
+			$current_varname_title = $current_varname;
+			$current_varname =~ s/ /\./g;
+			$current_varname =~ s/\*//g;
+			$current_varname =~ s/\(//g;
+			$current_varname =~ s/\)//g;
+			$current_varname =~ s/\.\.//g;
+			$current_fname = "struct/$current_varname.tmp";
+			push(@{$unsafe_list{$current_fname}}, $current_varname_title);
 			open($currentUnsafe, ">", $current_fname) or die("Can't open file for write unsafe");		
 		} elsif ($line =~ /^##(.+)/) {
 			if ( ! -d "local" ) {
 				mkdir("local") || die "Can't create directory\n";
 	    		}
-			$current_fname = "local/$1.tmp";
 			$current_varname = <$visualize_fh>;
-			push(@{$unsafe_list{$current_fname}}, $current_varname);
+			chomp($current_varname);
+			$current_varname_title = $current_varname;
+			$current_varname =~ s/ /\./g;
+			$current_varname =~ s/\*//g;
+			$current_varname =~ s/\(//g;
+			$current_varname =~ s/\)//g;
+			$current_varname =~ s/\.\.//g;
+			$current_fname = "local/$current_varname.tmp";
+			push(@{$unsafe_list{$current_fname}}, $current_varname_title);
 			open($currentUnsafe, ">", $current_fname) or die("Can't open file for write unsafe");
 		} elsif ($line =~ /^#(.+)/) {
 			if ( ! -d "global" ) {
 				mkdir("global") || die "Can't create directory\n";
 	    		}
-			$current_fname = "global/$1.tmp";
 			$current_varname = <$visualize_fh>;
-			push(@{$unsafe_list{$current_fname}}, $current_varname);
+			chomp($current_varname);
+			$current_varname_title = $current_varname;
+			$current_varname =~ s/ /\./g;
+			$current_varname =~ s/\*//g;
+			$current_varname =~ s/\(//g;
+			$current_varname =~ s/\)//g;
+			$current_varname =~ s/\.\.//g;
+			$current_fname = "global/$current_varname.tmp";
+			push(@{$unsafe_list{$current_fname}}, $current_varname_title);
 			open($currentUnsafe, ">", $current_fname) or die("Can't open file for write unsafe");
 		}
 	} else {
@@ -157,7 +179,7 @@ foreach my $current_fname(sort keys %unsafe_list)
 	    die ("Can't cat srcs") if ($? == -1);
 	  }
 	}
-	$current_fname_new =~ m/(.+)\.tmp.new/;
+	$current_fname_new =~ m/(.+)\.tmp\.new/;
 	print ($html_result "<li><a href = \"$1.html\">$1</a></li>");
 	`etv -c $current_fname_new --src-files srcs -o $1.html.tmp`;
 	die ("etv failed") if( $? == -1 ) ;

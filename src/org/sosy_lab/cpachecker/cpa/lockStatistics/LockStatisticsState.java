@@ -154,7 +154,7 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
 	  String locksBefore = locks.toString();
 	  LockStatisticsLock oldLock = findLock(lockName, variable, all);
 	  if (oldLock == null)
-	    //TODO why?
+	    //TODO what should we do, if we've lost a lock?
 	    return;
     boolean b = locks.remove(oldLock);
     assert b;
@@ -173,9 +173,17 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
 
   void set(String lockName, int num, int line, CallstackState state, String variable) {
     LockStatisticsLock oldLock = findLock(lockName, variable, false);
+    LockStatisticsLock newLock;
     if (oldLock != null) {
-      LockStatisticsLock newLock = oldLock.addRecursiveAccessPointer(num - oldLock.getRecursiveCounter(),
-          new AccessPoint(new LineInfo(line), state));
+      newLock = oldLock;
+      if (num > oldLock.getRecursiveCounter()) {
+        newLock = oldLock.addRecursiveAccessPointer(num - oldLock.getRecursiveCounter(),
+            new AccessPoint(new LineInfo(line), state));
+      } else if (num < oldLock.getRecursiveCounter()) {
+        for (int i = 0; i < num - oldLock.getRecursiveCounter(); i++) {
+          newLock = newLock.removeLastAccessPointer();
+        }
+      }
       locks.remove(oldLock);
       locks.add(newLock);
     }
@@ -221,7 +229,7 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
       }
     }
 
-    return new LockStatisticsState(newGlobalLocks/*, newLocalLocks*/);
+    return new LockStatisticsState(newGlobalLocks);
   }
 
   /*LockStatisticsState combine(LockStatisticsState other) {
@@ -258,11 +266,8 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
 
     // also, this element is not less or equal than the other element,
     // if any one constant's value of the other element differs from the constant's value in this element
-ok: for (LockStatisticsLock Lock : locks) {
-      for (LockStatisticsLock lock : other.locks) {
-        if (Lock.hasEqualNameAndVariable(lock)) continue ok;
-      }
-      return false;
+    for (LockStatisticsLock Lock : locks) {
+      if (!Lock.existsIn(other.locks)) return false;
     }
 
     /*for (LockStatisticsLock Lock : LocalLocks) {

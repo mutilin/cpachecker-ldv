@@ -70,6 +70,10 @@ public class LockStatisticsLock {
     variable = v;
   }
 
+  public String getName() {
+    return name;
+  }
+
   public String getVariable() {
     return variable;
   }
@@ -216,9 +220,5 @@ public class LockStatisticsLock {
       tmpLock = tmpLock.addAccessPointer(pAccessPoint);
     }
     return tmpLock;
-  }
-
-  public String getName() {
-    return name;
   }
 }
