@@ -70,10 +70,6 @@ public class LockStatisticsLock {
     variable = v;
   }
 
-  public String getName() {
-    return name;
-  }
-
   public String getVariable() {
     return variable;
   }
@@ -110,22 +106,15 @@ public class LockStatisticsLock {
   }
 
   public boolean hasEqualNameAndVariable(LockStatisticsLock lock) {
-    return hasEqualNameAndVariable(lock.getName(), lock.getVariable());
+    return hasEqualNameAndVariable(lock.name, lock.variable);
   }
 
   public boolean hasEqualName(String lockName) {
-    if ( this.name.equals(lockName)) {
-      return true;
-    }
-    return false;
+    return this.name.equals(lockName);
   }
 
   public boolean hasEqualNameAndVariable(String lockName, String variableName) {
-    if ( this.name.equals(lockName)
-        && this.variable.equals(variableName)) {
-      return true;
-    }
-    return false;
+    return (this.name.equals(lockName) && this.variable.equals(variableName));
   }
 
   public void initReplaceLabel() {
@@ -212,17 +201,13 @@ public class LockStatisticsLock {
     return sb.toString();
   }
 
-  /*public CallstackState getCallstack() {
-    return callstack;
-  }*/
-
   public boolean existsIn(Set<LockStatisticsLock> locks) {
     for (LockStatisticsLock usedLock : locks) {
         if (usedLock.hasEqualNameAndVariable(this)) {
         	return true;
         }
     }
-	return false;
+	  return false;
   }
 
   public LockStatisticsLock addRecursiveAccessPointer(int pNum, AccessPoint pAccessPoint) {
@@ -231,5 +216,9 @@ public class LockStatisticsLock {
       tmpLock = tmpLock.addAccessPointer(pAccessPoint);
     }
     return tmpLock;
+  }
+
+  public String getName() {
+    return name;
   }
 }

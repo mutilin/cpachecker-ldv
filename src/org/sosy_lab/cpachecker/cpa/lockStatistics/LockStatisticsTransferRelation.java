@@ -219,15 +219,12 @@ public class LockStatisticsTransferRelation implements TransferRelation
         assert (annotatedfunctions.containsKey(fName));
 
         Set<Pair<String, String>> toDelete = new HashSet<Pair<String, String>>();
-        Set<String> toReset = new HashSet<String>();
+        Set<Pair<String, String>> toReset = new HashSet<Pair<String, String>>();
 
         tmpAnnotationInfo = annotatedfunctions.get(fName);
         successor = returnedStates.get(tmpNode).clone();
-        //System.out.println("Function: "  + fName);
-        //System.out.println("Cached state: " + successor.toString());
-       // System.out.println("New state   : " + lockStatisticsElement.toString());
 
-		logger.log(Level.FINER, "annotated name=" + fName + ", return"
+		    logger.log(Level.FINER, "annotated name=" + fName + ", return"
                 + ", node=" + tmpNode
                 + ", line=" + tmpNode.getLineNumber()
                 + ",\n\t successor=" + successor
@@ -243,20 +240,17 @@ public class LockStatisticsTransferRelation implements TransferRelation
         for (LockStatisticsLock lock : successor.getLocks()) {
           //we can't delete just now!
           if (tmpAnnotationInfo.freeLocks.contains(lock.getName()))
-            toReset.add(lock.getName());
+            toReset.add(Pair.of(lock.getName(), lock.getVariable()));
           if (!(lockStatisticsElement.contains(lock.getName(), lock.getVariable()))
               && !(tmpAnnotationInfo.restoreLocks.contains(lock.getName())))
             toDelete.add(Pair.of(lock.getName(), lock.getVariable()));
         }
 
-        for (String name : toReset)
-          successor.reset(name, logger);
+        for (Pair<String, String> pair : toReset)
+          successor.reset(pair.getFirst(), pair.getSecond(), logger);
 
         for (Pair<String, String> pair : toDelete)
           successor.delete(pair.getFirst(), pair.getSecond(), false, logger);
-
-        //returnedStates.remove(tmpNode);
-       // System.out.println("Result state: " + successor.toString());
 
       } else if (lockfree.size() > 0  && lockfree.containsKey(((CFunctionReturnEdge)cfaEdge).getPredecessor().getFunctionName())) {
         Set<String> freelocks = lockfree.get(((CFunctionReturnEdge)cfaEdge).getPredecessor().getFunctionName());

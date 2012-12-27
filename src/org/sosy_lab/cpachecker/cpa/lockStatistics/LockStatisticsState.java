@@ -108,11 +108,11 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
   }
 
   void add(String lockName, int line, CallstackState state, String variable, LogManager logger) {
-	String locksBefore = locks.toString();
+	  String locksBefore = locks.toString();
     LockStatisticsLock tmpMutex;
 
     LockStatisticsLock oldLock = findLock(lockName, variable, false);
-    if(oldLock!=null) {
+    if(oldLock != null) {
       LockStatisticsLock newLock = oldLock.addAccessPointer(new AccessPoint(new LineInfo(line), state));
       boolean b = locks.remove(oldLock);
       assert b;
@@ -126,13 +126,6 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
       if(b) {
         logger.log(Level.FINER, "Locks before: " + locksBefore);
         logger.log(Level.FINER, "Locks after: " + locks);
-      }
-    }
-
-
-    for (LockStatisticsLock tmpLock : locks) {
-      if (tmpLock.hasEqualNameAndVariable(lockName, variable)) {
-        return;
       }
     }
   }
@@ -173,16 +166,9 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
     }
   }
 
-  void reset(String lockName, LogManager logger) {
-    Set<LockStatisticsLock> toDelete = new HashSet<LockStatisticsLock>();
-    for (LockStatisticsLock mutex : locks) {
-      if (mutex.hasEqualName(lockName)) {
-        toDelete.add(mutex);
-      }
-    }
-    for (LockStatisticsLock lock : toDelete) {
-      locks.remove(lock);
-    }
+  void reset(String lockName, String var, LogManager logger) {
+    LockStatisticsLock lock = findLock(lockName, var, false);
+    locks.remove(lock);
   }
 
   void set(String lockName, int num, int line, CallstackState state, String variable) {

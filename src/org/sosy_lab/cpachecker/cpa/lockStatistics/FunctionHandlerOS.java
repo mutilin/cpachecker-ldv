@@ -142,8 +142,6 @@ public class FunctionHandlerOS {
     	  logger.log(Level.FINER, "Lock at line " + lineNumber + ", Callstack: " + callstack);
     	  int p = lock.LockFunctions.get(functionName);
         int d = newElement.getCounter(lock.lockName);
-        //CExpression param = params.get(0);
-        //if (isGlobal(param))
         if (p == 0 && d < lock.maxLock)
           newElement.add(lock.lockName, lineNumber, callstack, "", logger);
         else if (d < lock.maxLock)
@@ -167,9 +165,9 @@ public class FunctionHandlerOS {
     	  logger.log(Level.FINER, "Reset at line " + lineNumber + ", Callstack: " + callstack);
         int p = lock.ResetFunctions.get(functionName);
         if (p == 0)
-          newElement.reset(lock.lockName, logger);
+          newElement.reset(lock.lockName, "", logger);
         else
-          newElement.reset(params.get(p - 1).toASTString(), logger);
+          newElement.reset(lock.lockName, params.get(p - 1).toASTString(), logger);
         return newElement;
 
       } else if (lock.setLevel != null && lock.setLevel.equals(functionName)) {
