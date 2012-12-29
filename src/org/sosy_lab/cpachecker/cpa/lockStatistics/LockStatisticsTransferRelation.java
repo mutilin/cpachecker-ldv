@@ -73,11 +73,6 @@ public class LockStatisticsTransferRelation implements TransferRelation
 
   private Map<String, AnnotationInfo> annotatedfunctions;
 
-  @Option(name="lockfree",
-      description="functions, which are returned without locks")
-  private Set<String> freefunctions;
-  private Map<String, Set<String>> lockfree = new HashMap<String, Set<String>>();
-
   private Map<CFANode, LockStatisticsState> returnedStates = new HashMap<CFANode, LockStatisticsState>();
 
   /*@Option(name="exceptions",
@@ -101,6 +96,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
     Map<String, Integer> lockFunctions;
     Map<String, Integer> unlockFunctions;
     Map<String, Integer> resetFunctions;
+    Map<String, String> freeLocks;
     Set<String> tmpStringSet, tmpStringSet2;
     String tmpString;
     AnnotationInfo tmpAnnotationInfo;
@@ -151,28 +147,35 @@ public class LockStatisticsTransferRelation implements TransferRelation
       tmpLockInfo = new LockInfo(lockName, lockFunctions, unlockFunctions, resetFunctions, tmpString, num);
       tmpInfo.add(tmpLockInfo);
     }
-    if (freefunctions != null) {
-      for (String name : freefunctions) {
-        tmpString = config.getProperty("lockfree." + name);
-        tmpStringSet = new HashSet<String>(Arrays.asList(tmpString.split(", *")));
-        lockfree.put(name, tmpStringSet);
-      }
-    }
 
     if (annotated != null) annotatedfunctions = new HashMap<String, AnnotationInfo>();
 
     for (String fName : annotated) {
       tmpString = config.getProperty("annotate." + fName + ".free");
-      if (tmpString != null)
+      if (tmpString != null) {
         tmpStringSet = new HashSet<String>(Arrays.asList(tmpString.split(", *")));
+        freeLocks = new HashMap<String, String>();
+        for (String fullName : tmpStringSet) {
+          if (fullName.matches(".*\\(.*")) {
+            String[] stringArray = fullName.split("\\(");
+            assert stringArray.length == 2;
+            freeLocks.put(stringArray[0], stringArray[1]);
+          } else {
+            freeLocks.put(fullName, "");
+          }
+        }
+      }
       else
-        tmpStringSet = new HashSet<String>();
+        freeLocks = new HashMap<String, String>();
       tmpString = config.getProperty("annotate." + fName + ".restore");
       if (tmpString != null)
         tmpStringSet2 = new HashSet<String>(Arrays.asList(tmpString.split(", *")));
       else
+        tmpStringSet2 = new HashSet<String>();
+      if (freeLocks.size() == 0 && tmpStringSet2.size() == 0)
+        //restare all locks
         tmpStringSet2 = new HashSet<String>(lockinfo);
-      tmpAnnotationInfo = new AnnotationInfo(fName, tmpStringSet, tmpStringSet2);
+      tmpAnnotationInfo = new AnnotationInfo(fName, freeLocks, tmpStringSet2);
       annotatedfunctions.put(fName, tmpAnnotationInfo);
     }
    /* if (HandleType.equals("LINUX")) {
@@ -213,6 +216,8 @@ public class LockStatisticsTransferRelation implements TransferRelation
     case FunctionReturnEdge:
       CFANode tmpNode = ((CFunctionReturnEdge)cfaEdge).getSummaryEdge().getPredecessor();
       String fName =((CFunctionReturnEdge)cfaEdge).getSummaryEdge().getExpression().getFunctionCallExpression().getFunctionNameExpression().toASTString();
+      if (fName.equals("memFree"))
+        System.out.println("memFree() called");
       AnnotationInfo tmpAnnotationInfo;
 
       if (returnedStates != null && returnedStates.containsKey(tmpNode)) {
@@ -224,7 +229,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
         tmpAnnotationInfo = annotatedfunctions.get(fName);
         successor = returnedStates.get(tmpNode).clone();
 
-		    logger.log(Level.FINER, "annotated name=" + fName + ", return"
+		  logger.log(Level.FINER, "annotated name=" + fName + ", return"
                 + ", node=" + tmpNode
                 + ", line=" + tmpNode.getLineNumber()
                 + ",\n\t successor=" + successor
@@ -239,8 +244,10 @@ public class LockStatisticsTransferRelation implements TransferRelation
 
         for (LockStatisticsLock lock : successor.getLocks()) {
           //we can't delete just now!
-          if (tmpAnnotationInfo.freeLocks.contains(lock.getName()))
-            toReset.add(Pair.of(lock.getName(), lock.getVariable()));
+          if (tmpAnnotationInfo.freeLocks.containsKey(lock.getName())) {
+            if (tmpAnnotationInfo.freeLocks.get(lock.getName()).equals(lock.getVariable()))
+              toReset.add(Pair.of(lock.getName(), lock.getVariable()));
+          }
           if (!(lockStatisticsElement.contains(lock.getName(), lock.getVariable()))
               && !(tmpAnnotationInfo.restoreLocks.contains(lock.getName())))
             toDelete.add(Pair.of(lock.getName(), lock.getVariable()));
@@ -252,12 +259,14 @@ public class LockStatisticsTransferRelation implements TransferRelation
         for (Pair<String, String> pair : toDelete)
           successor.delete(pair.getFirst(), pair.getSecond(), false, logger);
 
-      } else if (lockfree.size() > 0  && lockfree.containsKey(((CFunctionReturnEdge)cfaEdge).getPredecessor().getFunctionName())) {
-        Set<String> freelocks = lockfree.get(((CFunctionReturnEdge)cfaEdge).getPredecessor().getFunctionName());
+      } else if (annotatedfunctions != null && annotatedfunctions.containsKey(fName)) {
+        //free some locks
+        tmpAnnotationInfo = annotatedfunctions.get(fName);
+        assert tmpAnnotationInfo.freeLocks.size() > 0;
         successor = lockStatisticsElement.clone();
-        for (String lockName : freelocks) {
+        for (String lockName : tmpAnnotationInfo.freeLocks.keySet()) {
           if (successor.contains(lockName)) {
-            successor.delete(lockName, "", true, logger);
+            successor.delete(lockName, tmpAnnotationInfo.freeLocks.get(lockName), false, logger);
           }
         }
 
