@@ -118,7 +118,11 @@ public class LockStatisticsLock {
   }
 
   public boolean hasEqualNameAndVariable(String lockName, String variableName) {
-    return (this.name.equals(lockName) && this.variable.equals(variableName));
+    String myVariableName = this.variable.replaceAll("\\(", "");
+    myVariableName = myVariableName.replaceAll("\\)", "");
+    String otherVariable = variableName.replaceAll("\\(", "");
+    otherVariable = otherVariable.replaceAll("\\)", "");
+    return (this.name.equals(lockName) && myVariableName.equals(otherVariable));
   }
 
   public void initReplaceLabel() {
@@ -182,7 +186,7 @@ public class LockStatisticsLock {
   public String toString() {
     StringBuilder sb = new StringBuilder();
 
-    sb.append(type.toASTString() + ( variable != "" ? ("(" + variable + ")") : "" ) + " " + name + "(" + recursiveCounter + ")");
+    sb.append(type.toASTString() + " " + name + ( variable != "" ? ("(" + variable + ")") : "" )  + "(" + recursiveCounter + ")");
 
     /*CallstackState e = callstack;
     sb.append("        ");

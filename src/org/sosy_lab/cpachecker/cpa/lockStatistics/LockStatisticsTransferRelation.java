@@ -218,8 +218,10 @@ public class LockStatisticsTransferRelation implements TransferRelation
       CFANode tmpNode = ((CFunctionReturnEdge)cfaEdge).getSummaryEdge().getPredecessor();
       String fName =((CFunctionReturnEdge)cfaEdge).getSummaryEdge().getExpression().getFunctionCallExpression().getFunctionNameExpression().toASTString();
       AnnotationInfo tmpAnnotationInfo;
-
-      if (lockStatisticsElement.getRestoreState() != null && annotatedfunctions.containsKey(fName)) {
+      if (fName.equals("hshRemoveId"))
+        System.out.println("In hshRemoveId()");
+      if (lockStatisticsElement.getRestoreState() != null && annotatedfunctions.containsKey(fName)
+          && annotatedfunctions.get(fName).restoreLocks.size() > 0) {
 
         Set<Pair<String, String>> toDelete = new HashSet<Pair<String, String>>();
         Set<Pair<String, String>> toReset = new HashSet<Pair<String, String>>();
@@ -259,6 +261,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
 
       } else if (annotatedfunctions != null && annotatedfunctions.containsKey(fName)) {
         //free some locks
+
         tmpAnnotationInfo = annotatedfunctions.get(fName);
         assert tmpAnnotationInfo.freeLocks.size() > 0;
         successor = lockStatisticsElement.clone();

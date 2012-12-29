@@ -274,10 +274,10 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
       return false;
     }*/
 
-    if (toRestore != null && !toRestore.equals(other.toRestore))
+    /*if (toRestore != null && !toRestore.equals(other.toRestore))
       return false;
     else if (toRestore == null && other.toRestore != null)
-      return false;
+      return false;*/
 
     if (locks.size() == 0 && other.locks.size() > 0)
       return false;
