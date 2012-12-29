@@ -118,10 +118,11 @@ while (<$visualize_fh>) {
 			$current_fname = "struct/$current_varname.tmp";
 			push(@{$unsafe_list{$current_fname}}, $current_varname_title);
 			open($currentUnsafe, ">", $current_fname) or die("Can't open file for write unsafe");		
-		} elsif ($line =~ /^##(.+)/) {
+		} elsif ($line =~ /^##.+\.(.+)/) {
 			if ( ! -d "local" ) {
 				mkdir("local") || die "Can't create directory\n";
 	    		}
+			my $funcName = $1; 
 			$current_varname = <$visualize_fh>;
 			chomp($current_varname);
 			$current_varname_title = $current_varname;
@@ -130,7 +131,7 @@ while (<$visualize_fh>) {
 			$current_varname =~ s/\(//g;
 			$current_varname =~ s/\)//g;
 			$current_varname =~ s/\.\.//g;
-			$current_fname = "local/$current_varname.tmp";
+			$current_fname = "local/$current_varname"."_".$funcName.".tmp";
 			push(@{$unsafe_list{$current_fname}}, $current_varname_title);
 			open($currentUnsafe, ">", $current_fname) or die("Can't open file for write unsafe");
 		} elsif ($line =~ /^#(.+)/) {

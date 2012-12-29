@@ -254,31 +254,40 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
   }
 
-  private void createVisualization(VariableIdentifier id, PrintWriter writer) {
+  private void createVisualization(VariableIdentifier id, PrintWriter writer, boolean allStats) {
     Set<UsageInfo> uinfo = Stat.get(id);
 
     if (uinfo == null || uinfo.size() == 0)
       return;
-    if (id instanceof StructureFieldIdentifier)
-      writer.println("###" + id.getSimpleName());
-    else if (id instanceof GlobalVariableIdentifier)
-      writer.println("#" + id.getSimpleName());
-    else if (id instanceof LocalVariableIdentifier)
-      writer.println("##" + id.getSimpleName() + "_" + ((LocalVariableIdentifier)id).getFunction());
-    writer.println(id.type.toASTString(id.getSimpleName()));
-    writer.println("Line 0:     N0 -{/*Number of usages:" + uinfo.size() + "*/}-> N0");
-    writer.println("Line 0:     N0 -{/*Two examples:*/}-> N0");
-    try {
-      Pair<UsageInfo, UsageInfo> tmpPair = unsafeDetector.getSomeUnsafePair(uinfo);
-      createVisualization(id, tmpPair.getFirst(), writer);
-      createVisualization(id, tmpPair.getSecond(), writer);
-      /*writer.println("Line 0:     N0 -{_____________________}-> N0");
-      writer.println("Line 0:     N0 -{All usages:}-> N0");
-      for (UsageInfo ui : uinfo)
-        createVisualization(id, ui);*/
-    } catch (HandleCodeException e) {
-      //strange, but we didn't find unsafe example. So, return.
-      return;
+    if (allStats) {
+      if (id instanceof StructureFieldIdentifier)
+        writer.println("###" + id.getSimpleName());
+      else if (id instanceof GlobalVariableIdentifier)
+        writer.println("#" + id.getSimpleName());
+      else if (id instanceof LocalVariableIdentifier)
+        writer.println("##" + id.getSimpleName() + "." + ((LocalVariableIdentifier)id).getFunction());
+      writer.println(id.type.toASTString(id.getSimpleName()));
+      writer.println("Line 0:     N0 -{/*Number of usages:" + uinfo.size() + "*/}-> N0");
+      writer.println("Line 0:     N0 -{/*Two examples:*/}-> N0");
+      try {
+        Pair<UsageInfo, UsageInfo> tmpPair = unsafeDetector.getSomeUnsafePair(uinfo);
+        createVisualization(id, tmpPair.getFirst(), writer);
+        createVisualization(id, tmpPair.getSecond(), writer);
+        /*writer.println("Line 0:     N0 -{_____________________}-> N0");
+        writer.println("Line 0:     N0 -{All usages:}-> N0");
+        for (UsageInfo ui : uinfo)
+          createVisualization(id, ui, writer);
+        if (id.status != Ref.ADRESS && Stat.containsKey(id.makeAdress()))
+          createVisualization(id.makeAdress(), writer, false);
+        else if (id.status != Ref.REFERENCE && Stat.containsKey(id.makeReference()))
+          createVisualization(id.makeReference(), writer, false);*/
+      } catch (HandleCodeException e) {
+        //strange, but we didn't find unsafe example. So, return.
+        return;
+      }
+    } else {
+    for (UsageInfo ui : uinfo)
+      createVisualization(id, ui, writer);
     }
   }
 
@@ -308,7 +317,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     for (VariableIdentifier id : Stat.keySet()) {
       counter += Stat.get(id).size();
 
-      if (id.getStatus() == Ref.VARIABLE || !Stat.keySet().contains(id.makeVariable())) {
+      if (id.getStatus() == Ref.VARIABLE) {
         if (id instanceof GlobalVariableIdentifier)
         //global.add((GlobalVariableIdentifier)id);
           global++;
@@ -318,8 +327,8 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         else if (id instanceof StructureFieldIdentifier)
         //fields.add((StructureFieldIdentifier)id);
           fields++;
-        }
-      else {
+      }
+      else if (!Stat.keySet().contains(id.makeVariable())) {
         pointers++;
       }
     }
@@ -348,7 +357,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     for (VariableIdentifier id : unsafeCases) {
       counter += Stat.get(id).size();
 
-      if (id.getStatus() == Ref.VARIABLE || !Stat.keySet().contains(id.makeVariable())) {
+      if (id.getStatus() == Ref.VARIABLE) {
         if (id instanceof GlobalVariableIdentifier)
         //global.add((GlobalVariableIdentifier)id);
           global++;
@@ -358,8 +367,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         else if (id instanceof StructureFieldIdentifier)
         //fields.add((StructureFieldIdentifier)id);
           fields++;
-        }
-      else {
+      } else if (!Stat.keySet().contains(id.makeVariable())) {
         pointers++;
       }
     }
@@ -374,7 +382,8 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     //printCases(dataProcess.getDescription(), unsafeCases);
 
     for (VariableIdentifier id : unsafeCases) {
-      createVisualization(id, writer);
+      if (id.status == Ref.VARIABLE || !unsafeCases.contains(id.makeVariable()))
+        createVisualization(id, writer, true);
     }
 
     writer.close();
