@@ -73,7 +73,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
 
   private Map<String, AnnotationInfo> annotatedfunctions;
 
-  private Map<CFANode, LockStatisticsState> returnedStates = new HashMap<CFANode, LockStatisticsState>();
+  //private Map<CFANode, LockStatisticsState> returnedStates = new HashMap<CFANode, LockStatisticsState>();
 
   /*@Option(name="exceptions",
       description="functions wuth parameters, which we don't need to use")
@@ -206,30 +206,28 @@ public class LockStatisticsTransferRelation implements TransferRelation
                    + ", line=" + pred.getLineNumber()
                        + ", successor=" + lockStatisticsElement
                    );
-    		if (annotatedfunctions != null && annotatedfunctions.get(fCallName).restoreLocks.size() > 0) {
-    			returnedStates.put(pred, lockStatisticsElement);
-    		}
     	}
-        successor = handler.handleFunctionCall(lockStatisticsElement, (CFunctionCallEdge)cfaEdge);
-        break;
+      successor = handler.handleFunctionCall(lockStatisticsElement, (CFunctionCallEdge)cfaEdge);
+      if (annotatedfunctions != null && annotatedfunctions.containsKey(fCallName) &&
+          annotatedfunctions.get(fCallName).restoreLocks.size() > 0) {
+        successor.setRestoreState(successor);
+      }
+      break;
 
     case FunctionReturnEdge:
       CFANode tmpNode = ((CFunctionReturnEdge)cfaEdge).getSummaryEdge().getPredecessor();
       String fName =((CFunctionReturnEdge)cfaEdge).getSummaryEdge().getExpression().getFunctionCallExpression().getFunctionNameExpression().toASTString();
-      if (fName.equals("memFree"))
-        System.out.println("memFree() called");
       AnnotationInfo tmpAnnotationInfo;
 
-      if (returnedStates != null && returnedStates.containsKey(tmpNode)) {
-        assert (annotatedfunctions.containsKey(fName));
+      if (lockStatisticsElement.getRestoreState() != null && annotatedfunctions.containsKey(fName)) {
 
         Set<Pair<String, String>> toDelete = new HashSet<Pair<String, String>>();
         Set<Pair<String, String>> toReset = new HashSet<Pair<String, String>>();
 
         tmpAnnotationInfo = annotatedfunctions.get(fName);
-        successor = returnedStates.get(tmpNode).clone();
+        successor = lockStatisticsElement.getRestoreState().clone();
 
-		  logger.log(Level.FINER, "annotated name=" + fName + ", return"
+		    logger.log(Level.FINER, "annotated name=" + fName + ", return"
                 + ", node=" + tmpNode
                 + ", line=" + tmpNode.getLineNumber()
                 + ",\n\t successor=" + successor

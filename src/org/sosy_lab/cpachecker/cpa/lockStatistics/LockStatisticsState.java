@@ -43,13 +43,17 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
   private static final long serialVersionUID = -3152134511524554357L;
 
   private final Set<LockStatisticsLock> locks;
+  //if we need restore state, we save it here
+  private LockStatisticsState toRestore;
 
   public LockStatisticsState() {
     locks  = new HashSet<LockStatisticsLock>();
+    toRestore = null;
   }
 
-  private LockStatisticsState(Set<LockStatisticsLock> gLocks) {
+  private LockStatisticsState(Set<LockStatisticsLock> gLocks, LockStatisticsState state) {
     this.locks  = gLocks;
+    toRestore = state;
   }
 
   public boolean contains(String lockName, String variableName) {
@@ -78,6 +82,14 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
 
   public Set<LockStatisticsLock> getLocks() {
     return locks;
+  }
+
+  public LockStatisticsState getRestoreState() {
+    return toRestore;
+  }
+
+  public void setRestoreState(LockStatisticsState state) {
+    toRestore = state;
   }
 
   @Override
@@ -229,7 +241,7 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
       }
     }
 
-    return new LockStatisticsState(newGlobalLocks);
+    return new LockStatisticsState(newGlobalLocks, this.toRestore);
   }
 
   /*LockStatisticsState combine(LockStatisticsState other) {
@@ -261,6 +273,12 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
     /*if (LocalLocks.size() < other.LocalLocks.size()) {
       return false;
     }*/
+
+    if (toRestore != null && !toRestore.equals(other.toRestore))
+      return false;
+    else if (toRestore == null && other.toRestore != null)
+      return false;
+
     if (locks.size() == 0 && other.locks.size() > 0)
       return false;
 
@@ -281,7 +299,7 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
 
   @Override
   public LockStatisticsState clone() {
-    return new LockStatisticsState(new HashSet<LockStatisticsLock>(locks)/*, new HashSet<LockStatisticsLock>(LocalLocks)*/);
+    return new LockStatisticsState(new HashSet<LockStatisticsLock>(locks), this.toRestore);
   }
 
   public void initReplaceLabels() {
