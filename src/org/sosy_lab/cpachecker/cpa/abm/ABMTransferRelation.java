@@ -67,6 +67,7 @@ import org.sosy_lab.cpachecker.cpa.boundedrecursion.BoundedRecursionCPA;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
+import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.exceptions.StopAnalysisException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Precisions;
@@ -74,7 +75,7 @@ import org.sosy_lab.cpachecker.util.Precisions;
 import com.google.common.collect.Iterables;
 
 @Options(prefix="cpa.abm")
-public class ABMTransferRelation implements TransferRelation {
+public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
 
   private class AbstractStateHash {
 
@@ -262,7 +263,6 @@ public class ABMTransferRelation implements TransferRelation {
 
   private Block currentBlock;
   private LinkedList<Block> BlockStack = new LinkedList<Block>();
-  //private LinkedList<String> FuncStack = new LinkedList<String>();
 
   private BlockPartitioning partitioning;
   private int depth = 0;
@@ -273,6 +273,8 @@ public class ABMTransferRelation implements TransferRelation {
   private final ReachedSetFactory reachedSetFactory;
   private final Reducer wrappedReducer;
   private final ABMPrecisionAdjustment prec;
+
+  private final String entryFunction;
 
   private Map<AbstractState, Precision> forwardPrecisionToExpandedPrecision;
 
@@ -309,6 +311,8 @@ public class ABMTransferRelation implements TransferRelation {
     wrappedReducer = abmCpa.getReducer();
     prec = abmCpa.getPrecisionAdjustment();
     assert wrappedReducer != null;
+
+    entryFunction = pConfig.getProperty("analysis.entryFunction");
   }
 
   void setForwardPrecisionToExpandedPrecision(
@@ -941,5 +945,46 @@ public class ABMTransferRelation implements TransferRelation {
 
   public LinkedList<Block> getBlockStack() {
     return BlockStack;
+  }
+
+  @Override
+  public CallstackState restoreCallstack(CallstackState state) throws HandleCodeException {
+    CallstackState fullState = null, tmpState;
+    CFANode currentNode, previousNode, predecessor;
+    CFAEdge edge;
+
+    previousNode = null;
+    for (int i = 0; i < BlockStack.size(); i++) {
+      currentNode = BlockStack.get(i).getCallNode();
+      predecessor = currentNode;
+      for (int j = 0; j < currentNode.getNumEnteringEdges(); j++) {
+        edge = currentNode.getEnteringEdge(j);
+        predecessor = edge.getPredecessor();
+        if (previousNode == null && predecessor.getFunctionName().equals(entryFunction))
+          break;
+        else if (previousNode != null && predecessor.getFunctionName().equals(previousNode.getFunctionName()))
+          break;
+      }
+      fullState = new CallstackState(fullState, currentNode.getFunctionName(), predecessor);
+      previousNode = currentNode;
+    }
+    CallstackState newState = state.clone();
+    tmpState = newState;
+    if (fullState != null) {
+      if (tmpState.getCurrentFunction().equals(fullState.getCurrentFunction()) && tmpState.getPreviousState() == null)
+        return fullState;
+      else if (!tmpState.getCurrentFunction().equals(fullState.getCurrentFunction()) && tmpState.getPreviousState() != null) {
+        while (!tmpState.getPreviousState().getCurrentFunction().equals(fullState.getCurrentFunction()))
+          tmpState = tmpState.getPreviousState();
+        tmpState.setPreviousState(fullState);
+        return newState;
+      } else if (tmpState.getCurrentFunction().equals(fullState.getCurrentFunction()) && tmpState.getPreviousState() != null) {
+        return fullState;
+      } else /*if (!tmpState.getCurrentFunction().equals(fullState.getCurrentFunction()) && tmpState.getPreviousState() == null)*/ {
+        throw new HandleCodeException("Strange situation in creating call stack");
+      }
+    } else {
+      return newState;
+    }
   }
 }

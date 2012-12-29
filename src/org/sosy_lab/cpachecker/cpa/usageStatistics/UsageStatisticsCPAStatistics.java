@@ -40,12 +40,10 @@ import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
-import org.sosy_lab.cpachecker.cfa.blocks.Block;
-import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
-import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
+import org.sosy_lab.cpachecker.cpa.abm.ABMRestoreStack;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.lockStatistics.AccessPoint;
 import org.sosy_lab.cpachecker.cpa.lockStatistics.LockStatisticsLock;
@@ -64,9 +62,8 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   private int totalVarUsageCounter = 0;
   //skipped by transfer relation
   private int skippedUsageCounter = 0;
-  //TODO: replace field with interface to ABM state
-  //we need them to restore original callstacks
-  private LinkedList<Block> BlockStack;
+  //ABM interface to restore original callstacks
+  private ABMRestoreStack stackRestoration;
 
   UnsafeDetector unsafeDetector = null;
   //lcov data for code coverage generation
@@ -88,8 +85,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   //@Option(description="Do we need to store statistics of all variables or only pointers")
   //private boolean onlypointers = true;
 
-  private final String entryFunction;
-
   public UsageStatisticsCPAStatistics(Configuration config, CodeCovering cover) throws InvalidConfigurationException{
     Stat = new HashMap<VariableIdentifier, Set<UsageInfo>>();
     config.inject(this);
@@ -103,11 +98,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       System.exit(0);
     }
     covering = cover;
-
-    entryFunction = config.getProperty("analysis.entryFunction");
-
-    //OrigName = config.getProperty("cpa.usagestatistics.path");
-    //reducer = pReducer;
   }
 
   public void add(List<Pair<VariableIdentifier, Access>> result, UsageStatisticsState state, int line, EdgeType type) throws HandleCodeException {
@@ -398,46 +388,11 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   }
 
   public CallstackState createStack(CallstackState state) throws HandleCodeException {
-    CallstackState fullState = null, tmpState;
-    CFANode currentNode, previousNode, predecessor;
-    CFAEdge edge;
-
-    previousNode = null;
-    for (int i = 0; i < BlockStack.size(); i++) {
-      currentNode = BlockStack.get(i).getCallNode();
-      predecessor = currentNode;
-      for (int j = 0; j < currentNode.getNumEnteringEdges(); j++) {
-        edge = currentNode.getEnteringEdge(j);
-        predecessor = edge.getPredecessor();
-        if (previousNode == null && predecessor.getFunctionName().equals(entryFunction))
-          break;
-        else if (previousNode != null && predecessor.getFunctionName().equals(previousNode.getFunctionName()))
-          break;
-      }
-      fullState = new CallstackState(fullState, currentNode.getFunctionName(), predecessor);
-      previousNode = currentNode;
-    }
-    CallstackState newState = state.clone();
-    tmpState = newState;
-    if (fullState != null) {
-      if (tmpState.getCurrentFunction().equals(fullState.getCurrentFunction()) && tmpState.getPreviousState() == null)
-        return fullState;
-      else if (!tmpState.getCurrentFunction().equals(fullState.getCurrentFunction()) && tmpState.getPreviousState() != null) {
-        while (!tmpState.getPreviousState().getCurrentFunction().equals(fullState.getCurrentFunction()))
-          tmpState = tmpState.getPreviousState();
-        tmpState.setPreviousState(fullState);
-        return newState;
-      } else if (tmpState.getCurrentFunction().equals(fullState.getCurrentFunction()) && tmpState.getPreviousState() != null) {
-        return fullState;
-      } else /*if (!tmpState.getCurrentFunction().equals(fullState.getCurrentFunction()) && tmpState.getPreviousState() == null)*/ {
-        throw new HandleCodeException("Strange situation in creating call stack");
-      }
-    } else {
-      return newState;
-    }
+    //need to LockStatistics usage
+    return stackRestoration.restoreCallstack(state);
   }
 
-  public void setBlockStack(LinkedList<Block> stack) {
-    BlockStack = stack;
+  public void setStackRestoration(ABMRestoreStack rStack) {
+    stackRestoration = rStack;
   }
 }

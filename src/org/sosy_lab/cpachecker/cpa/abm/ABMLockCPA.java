@@ -68,7 +68,7 @@ public class ABMLockCPA extends ABMCPA {
 
       UsageStatisticsCPA usCpa = ((WrapperCPA) getWrappedCpa()).retrieveWrappedCpa(UsageStatisticsCPA.class);
       if (usCpa != null) {
-        usCpa.getStats().setBlockStack(transfer.getBlockStack());
+        usCpa.getStats().setStackRestoration(transfer);
       }
 
       Map<AbstractState, Precision> forwardPrecisionToExpandedPrecision = new HashMap<AbstractState, Precision>();
