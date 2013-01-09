@@ -156,9 +156,9 @@ public class FunctionHandlerOS {
     	  logger.log(Level.FINER, "Unlock at line " + lineNumber + ", Callstack: " + callstack);
         int p = lock.UnlockFunctions.get(functionName);
         if (p == 0)
-          newElement.delete(lock.lockName, "", false, logger);
+          newElement.delete(lock.lockName, "", logger);
         else
-          newElement.delete(lock.lockName, params.get(p - 1).toASTString(), false, logger);
+          newElement.delete(lock.lockName, params.get(p - 1).toASTString(), logger);
         return newElement;
 
       } else if (lock.ResetFunctions != null && lock.ResetFunctions.containsKey(functionName)) {

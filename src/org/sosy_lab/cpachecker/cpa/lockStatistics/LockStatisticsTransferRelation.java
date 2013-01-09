@@ -34,7 +34,6 @@ import java.util.Set;
 import java.util.logging.Level;
 
 import org.sosy_lab.common.LogManager;
-import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
@@ -197,96 +196,61 @@ public class LockStatisticsTransferRelation implements TransferRelation
     LockStatisticsState successor;
     switch (cfaEdge.getEdgeType()) {
 
-    case FunctionCallEdge:
-      String fCallName = ((CFunctionCallEdge)cfaEdge).getSuccessor().getFunctionName();
-    	if (annotated != null && annotated.contains(fCallName)) {
-    		CFANode pred = ((CFunctionCallEdge)cfaEdge).getPredecessor();
-    		logger.log(Level.FINER,"annotated name=" + fCallName + ", call"
-                   + ", node=" + pred
-                   + ", line=" + pred.getLineNumber()
-                       + ", successor=" + lockStatisticsElement
-                   );
-    	}
-      successor = handler.handleFunctionCall(lockStatisticsElement, (CFunctionCallEdge)cfaEdge);
-      if (annotatedfunctions != null && annotatedfunctions.containsKey(fCallName) &&
-          annotatedfunctions.get(fCallName).restoreLocks.size() > 0) {
-        successor.setRestoreState(successor);
-      }
-      break;
-
-    case FunctionReturnEdge:
-      CFANode tmpNode = ((CFunctionReturnEdge)cfaEdge).getSummaryEdge().getPredecessor();
-      String fName =((CFunctionReturnEdge)cfaEdge).getSummaryEdge().getExpression().getFunctionCallExpression().getFunctionNameExpression().toASTString();
-      AnnotationInfo tmpAnnotationInfo;
-      if (fName.equals("hshRemoveId"))
-        System.out.println("In hshRemoveId()");
-      if (lockStatisticsElement.getRestoreState() != null && annotatedfunctions.containsKey(fName)
-          && annotatedfunctions.get(fName).restoreLocks.size() > 0) {
-
-        Set<Pair<String, String>> toDelete = new HashSet<Pair<String, String>>();
-        Set<Pair<String, String>> toReset = new HashSet<Pair<String, String>>();
-
-        tmpAnnotationInfo = annotatedfunctions.get(fName);
-        successor = lockStatisticsElement.getRestoreState().clone();
-
-		    logger.log(Level.FINER, "annotated name=" + fName + ", return"
-                + ", node=" + tmpNode
-                + ", line=" + tmpNode.getLineNumber()
-                + ",\n\t successor=" + successor
-                + ",\n\t element=" + element
-                );
-
-        for (LockStatisticsLock lock : lockStatisticsElement.getLocks()) {
-          if (!(successor.contains(lock.getName(), lock.getVariable()))
-              && !(tmpAnnotationInfo.restoreLocks.contains(lock.getName())))
-            successor.add(lock, logger);
+      case FunctionCallEdge:
+        String fCallName = ((CFunctionCallEdge)cfaEdge).getSuccessor().getFunctionName();
+      	if (annotated != null && annotated.contains(fCallName)) {
+      		CFANode pred = ((CFunctionCallEdge)cfaEdge).getPredecessor();
+      		logger.log(Level.FINER,"annotated name=" + fCallName + ", call"
+                     + ", node=" + pred
+                     + ", line=" + pred.getLineNumber()
+                         + ", successor=" + lockStatisticsElement
+                     );
+      	}
+        successor = handler.handleFunctionCall(lockStatisticsElement, (CFunctionCallEdge)cfaEdge);
+        if (annotatedfunctions != null && annotatedfunctions.containsKey(fCallName) &&
+            annotatedfunctions.get(fCallName).restoreLocks.size() > 0) {
+          successor.setRestoreState(lockStatisticsElement);
         }
-
-        for (LockStatisticsLock lock : successor.getLocks()) {
-          //we can't delete just now!
-          if (tmpAnnotationInfo.freeLocks.containsKey(lock.getName())) {
-            if (tmpAnnotationInfo.freeLocks.get(lock.getName()).equals(lock.getVariable()))
-              toReset.add(Pair.of(lock.getName(), lock.getVariable()));
-          }
-          if (!(lockStatisticsElement.contains(lock.getName(), lock.getVariable()))
-              && !(tmpAnnotationInfo.restoreLocks.contains(lock.getName())))
-            toDelete.add(Pair.of(lock.getName(), lock.getVariable()));
-        }
-
-        for (Pair<String, String> pair : toReset)
-          successor.reset(pair.getFirst(), pair.getSecond(), logger);
-
-        for (Pair<String, String> pair : toDelete)
-          successor.delete(pair.getFirst(), pair.getSecond(), false, logger);
-
-      } else if (annotatedfunctions != null && annotatedfunctions.containsKey(fName)) {
-        //free some locks
-
-        tmpAnnotationInfo = annotatedfunctions.get(fName);
-        assert tmpAnnotationInfo.freeLocks.size() > 0;
-        successor = lockStatisticsElement.clone();
-        for (String lockName : tmpAnnotationInfo.freeLocks.keySet()) {
-          if (successor.contains(lockName)) {
-            successor.delete(lockName, tmpAnnotationInfo.freeLocks.get(lockName), false, logger);
-          }
-        }
-
-      } else {
-        successor = lockStatisticsElement.clone();//removeLocal(cfaEdge.getPredecessor().getFunctionName());
-      }
-      break;
-
-    case StatementEdge:
-      CStatement statement = ((CStatementEdge)cfaEdge).getStatement();
-      if (statement instanceof CFunctionCallStatement && lockreset != null &&
-        ((CFunctionCallStatement)statement).getFunctionCallExpression().getFunctionNameExpression().toASTString().equals(lockreset)) {
-        successor = new LockStatisticsState();
         break;
-      }
 
-      //$FALL-THROUGH$
-    default:
-      successor = handleSimpleEdge(lockStatisticsElement, cfaEdge);
+      case FunctionReturnEdge:
+        CFANode tmpNode = ((CFunctionReturnEdge)cfaEdge).getSummaryEdge().getPredecessor();
+        String fName =((CFunctionReturnEdge)cfaEdge).getSummaryEdge().getExpression().getFunctionCallExpression().getFunctionNameExpression().toASTString();
+
+        successor = lockStatisticsElement.clone();
+        if (lockStatisticsElement.getRestoreState() != null && annotatedfunctions.containsKey(fName)
+            && annotatedfunctions.get(fName).restoreLocks.size() > 0) {
+
+          successor.setRestoreState(lockStatisticsElement.getRestoreState().getRestoreState());
+
+  		    logger.log(Level.FINER, "annotated name=" + fName + ", return"
+                  + ", node=" + tmpNode
+                  + ", line=" + tmpNode.getLineNumber()
+                  + ",\n\t successor=" + successor
+                  + ",\n\t element=" + element
+                  );
+
+  		    successor.restore(lockStatisticsElement.getRestoreState(), annotatedfunctions.get(fName).restoreLocks, logger);
+
+        }
+        if (annotatedfunctions != null && annotatedfunctions.containsKey(fName)
+            && annotatedfunctions.get(fName).freeLocks.size() > 0) {
+          //free some locks
+          successor.free(annotatedfunctions.get(fName).freeLocks, logger);
+        }
+        break;
+
+      case StatementEdge:
+        CStatement statement = ((CStatementEdge)cfaEdge).getStatement();
+        if (statement instanceof CFunctionCallStatement && lockreset != null &&
+          ((CFunctionCallStatement)statement).getFunctionCallExpression().getFunctionNameExpression().toASTString().equals(lockreset)) {
+          successor = new LockStatisticsState();
+          break;
+        }
+
+        //$FALL-THROUGH$
+      default:
+        successor = handleSimpleEdge(lockStatisticsElement, cfaEdge);
     }
 
     if (successor == null) {

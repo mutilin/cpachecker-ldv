@@ -113,16 +113,17 @@ public class LockStatisticsLock {
     return hasEqualNameAndVariable(lock.name, lock.variable);
   }
 
-  public boolean hasEqualName(String lockName) {
-    return this.name.equals(lockName);
-  }
-
   public boolean hasEqualNameAndVariable(String lockName, String variableName) {
-    String myVariableName = this.variable.replaceAll("\\(", "");
-    myVariableName = myVariableName.replaceAll("\\)", "");
-    String otherVariable = variableName.replaceAll("\\(", "");
-    otherVariable = otherVariable.replaceAll("\\)", "");
-    return (this.name.equals(lockName) && myVariableName.equals(otherVariable));
+    if (variableName != null) {
+      //variable is important
+      String myVariableName = this.variable.replaceAll("\\(", "");
+      myVariableName = myVariableName.replaceAll("\\)", "");
+      String otherVariable = variableName.replaceAll("\\(", "");
+      otherVariable = otherVariable.replaceAll("\\)", "");
+      return (this.name.equals(lockName) && myVariableName.equals(otherVariable));
+    } else {
+      return this.name.equals(lockName);
+    }
   }
 
   public void initReplaceLabel() {
