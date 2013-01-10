@@ -52,6 +52,7 @@ import org.sosy_lab.cpachecker.cfa.blocks.BlockPartitioning;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
 import org.sosy_lab.cpachecker.core.algorithm.CPAAlgorithm;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
@@ -376,22 +377,10 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
         maxRecursiveDepth = Math.max(depth, maxRecursiveDepth);
 
         Block outerSubtree = currentBlock;
-        /*String name = currentBlock.getCallNode().getFunctionName();
-
-        if (name.equals("printExc")){
-          logger.log(Level.INFO, "currentBlock.Func=" + name);
-          logger.log(Level.INFO, "currentState: " + pElement);
-        }*/
-        //System.out.println("currentBlock.Func=" + currentBlock.getCallNode().getFunctionName());
         currentBlock = partitioning.getBlockForCallNode(node);
-        //FuncStack.add(currentBlock.getCallNode().getFunctionName());
         BlockStack.add(currentBlock);
-        //System.out.println(FuncStack);
-        //System.out.println("Cash hits: " + fullCacheHits);
         Collection<Pair<AbstractState, Precision>> reducedResult = performCompositeAnalysis(pElement, pPrecision, node);
         BlockStack.removeLast();
-        //FuncStack.removeLast();
-        //System.out.println("remove block");
 
         logger.log(Level.FINER, "Current stack size = " + BlockStack.size());
         logger.log(Level.FINER, "Recursive analysis of depth", depth--, "finished");
@@ -424,6 +413,15 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
 
         for (int i = 0; i < node.getNumLeavingEdges(); i++) {
           CFAEdge e = node.getLeavingEdge(i);
+          if (e instanceof CFunctionCallEdge) {
+            //need to check recursion here
+            for (Block block : BlockStack) {
+              if (block.getCallNode().equals(e.getSuccessor())) {
+                //go throw block, where we've already been
+                throw new StopAnalysisException("ABM detects recursion", e.getPredecessor(), e);
+              }
+            }
+          }
           result.addAll(getAbstractSuccessors0(pElement, pPrecision, e));
         }
         return result;
@@ -443,7 +441,8 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
       // we are not analyzing the block corresponding to currentNode (currentNodeBlock) but the currentNodeBlock is inside of this block
       // avoid a reanalysis
       //System.out.println("We've lost1");
-      return Collections.emptySet();
+      return wrappedTransfer.getAbstractSuccessors(pElement, pPrecision, edge);
+      //return Collections.emptySet();
     }
 
     if (currentBlock.isReturnNode(currentNode) && !currentBlock.getNodes().contains(edge.getSuccessor())) {
