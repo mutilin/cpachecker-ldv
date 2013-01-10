@@ -14,7 +14,7 @@ int f(void) {
 
 void mqSend(void) {
 	intLock();
-	ldv_main();
+	g();
 }
 
 void g(void) {
