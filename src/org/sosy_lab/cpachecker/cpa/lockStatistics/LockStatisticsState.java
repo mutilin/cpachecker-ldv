@@ -131,8 +131,7 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
       b = locks.remove(oldLock);
       assert b;
       b = locks.add(newLock);
-      if (!b)
-        System.out.println("adding fails");
+      assert b;
     } else {
       LockStatisticsLock tmpMutex = new LockStatisticsLock(lockName, line, LockType.GLOBAL_LOCK, state, variable);
       b = locks.add(tmpMutex);

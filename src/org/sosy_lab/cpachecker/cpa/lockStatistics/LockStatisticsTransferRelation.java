@@ -56,8 +56,6 @@ import org.sosy_lab.cpachecker.exceptions.UnrecognizedCFAEdgeException;
 @Options(prefix="cpa.lockStatistics")
 public class LockStatisticsTransferRelation implements TransferRelation
 {
-  //private final Set<String> globalMutex = new HashSet<String>();
-
   @Option(name="lockreset",
       description="function to reset state")
   private String lockreset;
@@ -71,8 +69,6 @@ public class LockStatisticsTransferRelation implements TransferRelation
   private Set<String> annotated;
 
   private Map<String, AnnotationInfo> annotatedfunctions;
-
-  //private Map<CFANode, LockStatisticsState> returnedStates = new HashMap<CFANode, LockStatisticsState>();
 
   /*@Option(name="exceptions",
       description="functions wuth parameters, which we don't need to use")
