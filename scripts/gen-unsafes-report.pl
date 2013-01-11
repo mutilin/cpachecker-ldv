@@ -96,60 +96,40 @@ print ($html_result "<b>List of unsafes:</b><ol>");
 my $currentUnsafe;
 my %unsafe_list;
 
+if ( ! -d "struct" ) {
+	mkdir("struct") || die "Can't create directory\n";
+}
+if ( ! -d "local" ) {
+	mkdir("local") || die "Can't create directory\n";
+}
+if ( ! -d "global" ) {
+	mkdir("global") || die "Can't create directory\n";
+}
 while (<$visualize_fh>) {
 	$line = $_;
 	
+	my $current_fname;
+	my $current_varname;
+	my $current_varname_title;
 	if ($line =~ /^#(.+)/) {
-		my $current_fname;
-		my $current_varname;
-		my $current_varname_title;
+		$current_varname = <$visualize_fh>;
+		chomp($current_varname);
+		$current_varname_title = $current_varname;
+		$current_varname =~ s/ /\./g;
+		$current_varname =~ s/\*//g;
+		$current_varname =~ s/\(//g;
+		$current_varname =~ s/\)//g;
+		$current_varname =~ s/\.\.//g;
 		if ($line =~ /^###(.+)/) {
-			if ( ! -d "struct" ) {
-				mkdir("struct") || die "Can't create directory\n";
-	    		}
-			$current_varname = <$visualize_fh>;
-			chomp($current_varname);
-			$current_varname_title = $current_varname;
-			$current_varname =~ s/ /\./g;
-			$current_varname =~ s/\*//g;
-			$current_varname =~ s/\(//g;
-			$current_varname =~ s/\)//g;
-			$current_varname =~ s/\.\.//g;
 			$current_fname = "struct/$current_varname.tmp";
-			push(@{$unsafe_list{$current_fname}}, $current_varname_title);
-			open($currentUnsafe, ">", $current_fname) or die("Can't open file for write unsafe");		
 		} elsif ($line =~ /^##.+\.(.+)/) {
-			if ( ! -d "local" ) {
-				mkdir("local") || die "Can't create directory\n";
-	    		}
-			my $funcName = $1; 
-			$current_varname = <$visualize_fh>;
-			chomp($current_varname);
-			$current_varname_title = $current_varname;
-			$current_varname =~ s/ /\./g;
-			$current_varname =~ s/\*//g;
-			$current_varname =~ s/\(//g;
-			$current_varname =~ s/\)//g;
-			$current_varname =~ s/\.\.//g;
+			my $funcName = $1;
 			$current_fname = "local/$current_varname"."_".$funcName.".tmp";
-			push(@{$unsafe_list{$current_fname}}, $current_varname_title);
-			open($currentUnsafe, ">", $current_fname) or die("Can't open file for write unsafe");
 		} elsif ($line =~ /^#(.+)/) {
-			if ( ! -d "global" ) {
-				mkdir("global") || die "Can't create directory\n";
-	    		}
-			$current_varname = <$visualize_fh>;
-			chomp($current_varname);
-			$current_varname_title = $current_varname;
-			$current_varname =~ s/ /\./g;
-			$current_varname =~ s/\*//g;
-			$current_varname =~ s/\(//g;
-			$current_varname =~ s/\)//g;
-			$current_varname =~ s/\.\.//g;
 			$current_fname = "global/$current_varname.tmp";
-			push(@{$unsafe_list{$current_fname}}, $current_varname_title);
-			open($currentUnsafe, ">", $current_fname) or die("Can't open file for write unsafe");
 		}
+		push(@{$unsafe_list{$current_fname}}, $current_varname_title);
+		open($currentUnsafe, ">", $current_fname) or die("Can't open file for write unsafe");		
 	} else {
 		print($currentUnsafe $line);
 	}
@@ -158,6 +138,17 @@ while (<$visualize_fh>) {
 my $HEADER = "<html><head><link href='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/css/etv.css' rel='stylesheet' type='text/css' /><link href='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/css/etv-analytics-center.css' rel='stylesheet' type='text/css' /><script type='text/javascript' src='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/jslib/jquery-1.4.2.min.js'></script><script type='text/javascript' src='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/jslib/etv.js'></script></head>";
 
 my $current_fname_new;
+# Create only list of unsafes
+foreach my $current_fname(sort keys %unsafe_list)
+{
+	$current_fname =~ m/(.+)\.tmp/;
+	print ($html_result "<li><a href = \"$1.html\">$1</a></li>");
+}
+
+print "General statistics is generated\n";
+
+# Now create all html-pages with unsafes
+
 foreach my $current_fname(sort keys %unsafe_list)
 {
 	$current_fname_new = $current_fname.".new";
@@ -181,7 +172,6 @@ foreach my $current_fname(sort keys %unsafe_list)
 	  }
 	}
 	$current_fname_new =~ m/(.+)\.tmp\.new/;
-	print ($html_result "<li><a href = \"$1.html\">$1</a></li>");
 	`etv -c $current_fname_new --src-files srcs -o $1.html.tmp`;
 	die ("etv failed") if( $? == -1 ) ;
 	open(my $html_tmp, ">", "$1.html") or die("Can't open html-file for write");
@@ -190,7 +180,6 @@ foreach my $current_fname(sort keys %unsafe_list)
 	die ("Can't cat $1.html") if ($? == -1);
 	unlink "$1.html.tmp" or die;
 	unlink "$1.tmp.new" or die;
-	#`rm $1.tmp`;
 	print "Generate ".$1."\n";
 }
 
