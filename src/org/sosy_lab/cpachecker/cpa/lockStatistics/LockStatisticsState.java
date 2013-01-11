@@ -46,6 +46,7 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
 
   private final Set<LockStatisticsLock> locks;
   //if we need restore state, we save it here
+  //Used for function annotations like annotate.function_name.restore
   private LockStatisticsState toRestore;
 
   public LockStatisticsState() {
@@ -391,11 +392,11 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
         return false;
     } else if (!locks.equals(other.locks))
       return false;
-    /*if (LocalLocks == null) {
-      if (other.LocalLocks != null)
+    if (toRestore == null) {
+      if (other.toRestore != null)
         return false;
-    } else if (!LocalLocks.equals(other.LocalLocks))
-      return false;*/
+    } else if (!toRestore.equals(other.toRestore))
+      return false;
     return true;
   }
 
