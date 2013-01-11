@@ -167,10 +167,6 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
 
   void add(LockStatisticsLock l, LogManager logger) {
 	  String locksBefore = locks.toString();
-	  for (LockStatisticsLock lock : locks) {
-	    if (lock.hasEqualNameAndVariable(l))
-	      System.out.println("Strange situation in adding lock");
-	  }
 	  boolean b = locks.add(l);
 	  if(b && logger != null) {
 		  logger.log(Level.FINER, "Locks before: " + locksBefore);

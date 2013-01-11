@@ -104,9 +104,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     Set<UsageInfo> uset;
     VariableIdentifier id;
 
-    if (line == 241256)
-      System.out.println("breakpoint in UsageStatisticsCPAStatistics:add()");
-
     LockStatisticsState lockState = AbstractStates.extractStateByType(state, LockStatisticsState.class);
     CallstackState callstackState = AbstractStates.extractStateByType(state, CallstackState.class);
 

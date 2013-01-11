@@ -23,6 +23,7 @@
  */
 package org.sosy_lab.cpachecker.cpa.lockStatistics;
 
+import org.sosy_lab.common.Pair;
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
@@ -40,6 +41,7 @@ public class LockStatisticsReducer implements Reducer {
     LockStatisticsState lockState = (LockStatisticsState) pExpandedElement;
     LockStatisticsState reducedState = lockState.clone();
     reducedState.initReplaceLabels();
+    //reducedState.setRestoreState(null);
     return reducedState;
   }
 
@@ -62,6 +64,7 @@ public class LockStatisticsReducer implements Reducer {
         }
       }
     }
+    //expandedState.setRestoreState(rootState.getRestoreState());
     return expandedState;
   }
 
@@ -80,8 +83,7 @@ public class LockStatisticsReducer implements Reducer {
   public Object getHashCodeForState(AbstractState pElementKey, Precision pPrecisionKey) {
     LockStatisticsState elementKey = (LockStatisticsState)pElementKey;
 
-    //return Pair.of(elementKey.getGlobalLocks(), elementKey.getLocalLocks());
-    return elementKey.getLocks();
+    return Pair.of(elementKey.getLocks(), elementKey.getRestoreState());
   }
 
   @Override

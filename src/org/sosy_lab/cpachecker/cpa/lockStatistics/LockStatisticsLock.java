@@ -136,7 +136,8 @@ public class LockStatisticsLock {
     AccessPoint tmpPoint;
     for (int i = 0; i < this.accessPoints.size(); i++) {
       tmpPoint = accessPoints.get(i);
-      if (!tmpPoint.getLabel()) return;
+      if (!tmpPoint.getLabel())
+        return;
       else {
         if (rootLock.accessPoints.size() > i)
           tmpPoint.replace(rootLock.accessPoints.get(i));

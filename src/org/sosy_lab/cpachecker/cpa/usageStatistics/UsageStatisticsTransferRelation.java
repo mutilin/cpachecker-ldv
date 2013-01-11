@@ -145,8 +145,6 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       Precision pPrecision, CFAEdge pCfaEdge, Collection<UsageStatisticsState> results)
       throws InterruptedException, CPATransferException {
 
-    //if (pCfaEdge.getLineNumber() > 170660 && pCfaEdge.getLineNumber() < 170760)
-    //  System.out.println(pCfaEdge.getRawStatement());
     Collection<? extends AbstractState> newWrappedStates = wrappedTransfer.getAbstractSuccessors(oldState.getWrappedState(), pPrecision, pCfaEdge);
     for (AbstractState newWrappedState : newWrappedStates) {
       UsageStatisticsState newState = oldState.clone(newWrappedState);
@@ -176,7 +174,6 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
         break;
       }
 
-      // maybe two function pointers are compared.
       case AssumeEdge: {
         CAssumeEdge assumeEdge = (CAssumeEdge) pCfaEdge;
         handleAssumption(newState, assumeEdge.getExpression(), pCfaEdge);
