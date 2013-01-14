@@ -92,7 +92,8 @@ public class LockStatisticsTransferRelation implements TransferRelation
     Map<String, Integer> unlockFunctions;
     Map<String, Integer> resetFunctions;
     Map<String, String> freeLocks;
-    Set<String> tmpStringSet, tmpStringSet2;
+    Map<String, String> restoreLocks;
+    Set<String> tmpStringSet;
     String tmpString;
     AnnotationInfo tmpAnnotationInfo;
     int num;
@@ -147,6 +148,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
 
     for (String fName : annotated) {
       tmpString = config.getProperty("annotate." + fName + ".free");
+      freeLocks = null;
       if (tmpString != null) {
         tmpStringSet = new HashSet<String>(Arrays.asList(tmpString.split(", *")));
         freeLocks = new HashMap<String, String>();
@@ -160,17 +162,26 @@ public class LockStatisticsTransferRelation implements TransferRelation
           }
         }
       }
-      else
-        freeLocks = new HashMap<String, String>();
       tmpString = config.getProperty("annotate." + fName + ".restore");
-      if (tmpString != null)
-        tmpStringSet2 = new HashSet<String>(Arrays.asList(tmpString.split(", *")));
+      restoreLocks = null;
+      if (tmpString != null) {
+        tmpStringSet = new HashSet<String>(Arrays.asList(tmpString.split(", *")));
+        restoreLocks = new HashMap<String, String>();
+        for (String fullName : tmpStringSet) {
+          if (fullName.matches(".*\\(.*")) {
+            String[] stringArray = fullName.split("\\(");
+            assert stringArray.length == 2;
+            restoreLocks.put(stringArray[0], stringArray[1]);
+          } else {
+            restoreLocks.put(fullName, "");
+          }
+        }
+      }
+      if (restoreLocks == null && freeLocks == null)
+        //we don't specify the annotation. Restore all locks.
+        tmpAnnotationInfo = new AnnotationInfo(fName, null, new HashMap<String, String>());
       else
-        tmpStringSet2 = new HashSet<String>();
-      if (freeLocks.size() == 0 && tmpStringSet2.size() == 0)
-        //restare all locks
-        tmpStringSet2 = new HashSet<String>(lockinfo);
-      tmpAnnotationInfo = new AnnotationInfo(fName, freeLocks, tmpStringSet2);
+        tmpAnnotationInfo = new AnnotationInfo(fName, freeLocks, restoreLocks);
       annotatedfunctions.put(fName, tmpAnnotationInfo);
     }
    /* if (HandleType.equals("LINUX")) {
@@ -204,7 +215,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
       	}
         successor = handler.handleFunctionCall(lockStatisticsElement, (CFunctionCallEdge)cfaEdge);
         if (annotatedfunctions != null && annotatedfunctions.containsKey(fCallName) &&
-            annotatedfunctions.get(fCallName).restoreLocks.size() > 0) {
+            annotatedfunctions.get(fCallName).restoreLocks != null) {
           successor.setRestoreState(lockStatisticsElement);
         }
         break;
@@ -213,27 +224,31 @@ public class LockStatisticsTransferRelation implements TransferRelation
         CFANode tmpNode = ((CFunctionReturnEdge)cfaEdge).getSummaryEdge().getPredecessor();
         String fName =((CFunctionReturnEdge)cfaEdge).getSummaryEdge().getExpression().getFunctionCallExpression().getFunctionNameExpression().toASTString();
 
-        successor = lockStatisticsElement.clone();
         if (lockStatisticsElement.getRestoreState() != null && annotatedfunctions.containsKey(fName)
-            && annotatedfunctions.get(fName).restoreLocks.size() > 0) {
+            && annotatedfunctions.get(fName).restoreLocks != null) {
 
-          successor.setRestoreState(lockStatisticsElement.getRestoreState().getRestoreState());
+  		    successor = lockStatisticsElement.restore(lockStatisticsElement.getRestoreState(), annotatedfunctions.get(fName).restoreLocks, logger);
+  		    successor.setRestoreState(lockStatisticsElement.getRestoreState().getRestoreState());
+
+  		    if (annotatedfunctions.get(fName).freeLocks != null)
+  		      successor = successor.free(annotatedfunctions.get(fName).freeLocks, logger);
 
   		    logger.log(Level.FINER, "annotated name=" + fName + ", return"
-                  + ", node=" + tmpNode
-                  + ", line=" + tmpNode.getLineNumber()
-                  + ",\n\t successor=" + successor
-                  + ",\n\t element=" + element
-                  );
+              + ", node=" + tmpNode
+              + ", line=" + tmpNode.getLineNumber()
+              + ",\n\t successor=" + successor
+              + ",\n\t element=" + element
+              );
 
-  		    successor.restore(lockStatisticsElement.getRestoreState(), annotatedfunctions.get(fName).restoreLocks, logger);
+  		    break;
 
-        }
-        if (annotatedfunctions != null && annotatedfunctions.containsKey(fName)
-            && annotatedfunctions.get(fName).freeLocks.size() > 0) {
+        } else if (annotatedfunctions != null && annotatedfunctions.containsKey(fName)
+            && annotatedfunctions.get(fName).freeLocks != null) {
           //free some locks
-          successor.free(annotatedfunctions.get(fName).freeLocks, logger);
+          successor = lockStatisticsElement.free(annotatedfunctions.get(fName).freeLocks, logger);
+          break;
         }
+        successor = lockStatisticsElement.clone();
         break;
 
       case StatementEdge:

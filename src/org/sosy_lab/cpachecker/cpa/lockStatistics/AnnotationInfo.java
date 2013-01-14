@@ -24,15 +24,14 @@
 package org.sosy_lab.cpachecker.cpa.lockStatistics;
 
 import java.util.Map;
-import java.util.Set;
 
 
 public class AnnotationInfo {
   public final String funcName;
   public final Map<String, String> freeLocks;
-  public final Set<String> restoreLocks;
+  public final Map<String, String> restoreLocks;
 
-  public AnnotationInfo(String name, Map<String, String> free, Set<String> restore) {
+  public AnnotationInfo(String name, Map<String, String> free, Map<String, String> restore) {
     funcName = name;
     freeLocks = free;
     restoreLocks = restore;

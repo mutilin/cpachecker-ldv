@@ -26,8 +26,6 @@ package org.sosy_lab.cpachecker.cpa.lockStatistics;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
@@ -143,20 +141,6 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
     }
   }
 
-  public List<LockStatisticsLock> findLocks(String lockName) {
-    List<LockStatisticsLock> result = new LinkedList<LockStatisticsLock>();
-
-    for (LockStatisticsLock lock : locks) {
-      if (lock.hasEqualNameAndVariable(lockName, null)) {
-        result.add(lock);
-      }
-    }
-    if (result.size() > 0)
-      return result;
-    else
-      return null;
-  }
-
   public LockStatisticsLock findLock(String lockName, String variable) {
     for (LockStatisticsLock lock : locks) {
       if (lock.hasEqualNameAndVariable(lockName, variable)) {
@@ -230,36 +214,39 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
     }
   }
 
-  void restore(LockStatisticsState restoredState, Set<String> lockNames, LogManager logger) {
-    for (String lockName : lockNames) {
-      List<LockStatisticsLock> oldLocks = this.findLocks(lockName);
-      List<LockStatisticsLock> newLocks = restoredState.findLocks(lockName);
-      if (oldLocks != null) {
-        for (LockStatisticsLock oldLock : oldLocks) {
-          this.reset(oldLock, logger);
-          if (newLocks != null) {
-            for (LockStatisticsLock newLock : newLocks) {
-              if (oldLock.hasEqualNameAndVariable(newLock)){
-                this.add(newLock, logger);
-                break;
-              }
-            }
-          }
+  LockStatisticsState restore(LockStatisticsState restoredState, Map<String, String> lockNames, LogManager logger) {
+    if (lockNames.size() == 0) {
+      //we didn't specify, which locks we would like to restore, so, restore all;
+      return restoredState;
+    }
+    if (this.locks.equals(restoredState.locks))
+      //only for optimization. We don't compare restoreState, because in this it can be only more complex.
+      return this;
+
+    LockStatisticsState newState = this.clone();
+    for (String lockName : lockNames.keySet()) {
+      LockStatisticsLock oldLock = this.findLock(lockName, lockNames.get(lockName));
+      LockStatisticsLock newLock = restoredState.findLock(lockName, lockNames.get(lockName));
+      if (oldLock != null) {
+        newState.reset(oldLock, logger);
+        if (newLock != null) {
+          newState.add(newLock, logger);
         }
-      } else if (newLocks != null){
-        for (LockStatisticsLock newLock : newLocks) {
-          this.add(newLock, logger);
-        }
+      } else if (newLock != null){
+        newState.add(newLock, logger);
       }
     }
+    return newState;
   }
 
-  void free(Map<String, String> freeLocks, LogManager logger) {
+  LockStatisticsState free(Map<String, String> freeLocks, LogManager logger) {
+    LockStatisticsState newState = this.clone();
     for (String lockName : freeLocks.keySet()) {
       if (this.contains(lockName)) {
-        this.delete(lockName, freeLocks.get(lockName), logger);
+        newState.delete(lockName, freeLocks.get(lockName), logger);
       }
     }
+    return newState;
   }
 
   public int getCounter(String lockName) {
