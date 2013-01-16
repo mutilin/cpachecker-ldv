@@ -172,7 +172,7 @@ public class FunctionHandlerOS {
 
       } else if (lock.setLevel != null && lock.setLevel.equals(functionName)) {
         int p = Integer.parseInt(params.get(0).toASTString()); //new level
-        newElement.set(lock.lockName, p, lineNumber, callstack, "");
+        newElement.set(lock.lockName, p - 1, lineNumber, callstack, ""); //they count from 1
         return newElement;
       }
     }

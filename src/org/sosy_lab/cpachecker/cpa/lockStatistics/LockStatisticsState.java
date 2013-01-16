@@ -195,7 +195,16 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
     }
   }
 
+  LockStatisticsState reset(Map<String, String> pResetLocks, LogManager pLogger) {
+    LockStatisticsState newState = this.clone();
+    for (String lockName : pResetLocks.keySet()) {
+      newState.reset(lockName, pResetLocks.get(lockName), pLogger);
+    }
+    return newState;
+  }
+
   void set(String lockName, int num, int line, CallstackState state, String variable) {
+    //num can be equal -1, this means, that in origin file it is 0 and we should delete locks
     LockStatisticsLock oldLock = findLock(lockName, variable);
     LockStatisticsLock newLock;
 
@@ -205,12 +214,18 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
         newLock = oldLock.addRecursiveAccessPointer(num - oldLock.getRecursiveCounter(),
             new AccessPoint(new LineInfo(line), state));
       } else if (num < oldLock.getRecursiveCounter()) {
-        for (int i = 0; i < num - oldLock.getRecursiveCounter(); i++) {
+        for (int i = 0; i < oldLock.getRecursiveCounter() - num; i++) {
           newLock = newLock.removeLastAccessPointer();
         }
       }
       locks.remove(oldLock);
-      locks.add(newLock);
+      if (newLock != null)
+        locks.add(newLock);
+    } else if (num > -1) {
+      newLock = new LockStatisticsLock(lockName, line, LockType.GLOBAL_LOCK, state, variable);
+      newLock = newLock.addRecursiveAccessPointer(num, new AccessPoint(new LineInfo(line), state));
+      if (newLock != null)
+        locks.add(newLock);
     }
   }
 

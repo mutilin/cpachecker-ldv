@@ -93,6 +93,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
     Map<String, Integer> resetFunctions;
     Map<String, String> freeLocks;
     Map<String, String> restoreLocks;
+    Map<String, String> resetLocks;
     Set<String> tmpStringSet;
     String tmpString;
     AnnotationInfo tmpAnnotationInfo;
@@ -177,11 +178,26 @@ public class LockStatisticsTransferRelation implements TransferRelation
           }
         }
       }
-      if (restoreLocks == null && freeLocks == null)
+      tmpString = config.getProperty("annotate." + fName + ".reset");
+      resetLocks = null;
+      if (tmpString != null) {
+        tmpStringSet = new HashSet<String>(Arrays.asList(tmpString.split(", *")));
+        resetLocks = new HashMap<String, String>();
+        for (String fullName : tmpStringSet) {
+          if (fullName.matches(".*\\(.*")) {
+            String[] stringArray = fullName.split("\\(");
+            assert stringArray.length == 2;
+            resetLocks.put(stringArray[0], stringArray[1]);
+          } else {
+            resetLocks.put(fullName, "");
+          }
+        }
+      }
+      if (restoreLocks == null && freeLocks == null && resetLocks == null)
         //we don't specify the annotation. Restore all locks.
-        tmpAnnotationInfo = new AnnotationInfo(fName, null, new HashMap<String, String>());
+        tmpAnnotationInfo = new AnnotationInfo(fName, null, new HashMap<String, String>(), null);
       else
-        tmpAnnotationInfo = new AnnotationInfo(fName, freeLocks, restoreLocks);
+        tmpAnnotationInfo = new AnnotationInfo(fName, freeLocks, restoreLocks, resetLocks);
       annotatedfunctions.put(fName, tmpAnnotationInfo);
     }
    /* if (HandleType.equals("LINUX")) {
@@ -224,28 +240,28 @@ public class LockStatisticsTransferRelation implements TransferRelation
         CFANode tmpNode = ((CFunctionReturnEdge)cfaEdge).getSummaryEdge().getPredecessor();
         String fName =((CFunctionReturnEdge)cfaEdge).getSummaryEdge().getExpression().getFunctionCallExpression().getFunctionNameExpression().toASTString();
 
-        if (lockStatisticsElement.getRestoreState() != null && annotatedfunctions.containsKey(fName)
-            && annotatedfunctions.get(fName).restoreLocks != null) {
+        if (annotatedfunctions != null && annotatedfunctions.containsKey(fName)) {
+          successor = lockStatisticsElement.clone();
+          if (lockStatisticsElement.getRestoreState() != null && annotatedfunctions.get(fName).restoreLocks != null) {
 
-  		    successor = lockStatisticsElement.restore(lockStatisticsElement.getRestoreState(), annotatedfunctions.get(fName).restoreLocks, logger);
-  		    successor.setRestoreState(lockStatisticsElement.getRestoreState().getRestoreState());
+            successor = successor.restore(lockStatisticsElement.getRestoreState(), annotatedfunctions.get(fName).restoreLocks, logger);
+    		    successor.setRestoreState(lockStatisticsElement.getRestoreState().getRestoreState());
 
-  		    if (annotatedfunctions.get(fName).freeLocks != null)
-  		      successor = successor.free(annotatedfunctions.get(fName).freeLocks, logger);
+    		    logger.log(Level.FINER, "annotated name=" + fName + ", return"
+                + ", node=" + tmpNode
+                + ", line=" + tmpNode.getLineNumber()
+                + ",\n\t successor=" + successor
+                + ",\n\t element=" + element
+                );
 
-  		    logger.log(Level.FINER, "annotated name=" + fName + ", return"
-              + ", node=" + tmpNode
-              + ", line=" + tmpNode.getLineNumber()
-              + ",\n\t successor=" + successor
-              + ",\n\t element=" + element
-              );
-
-  		    break;
-
-        } else if (annotatedfunctions != null && annotatedfunctions.containsKey(fName)
-            && annotatedfunctions.get(fName).freeLocks != null) {
-          //free some locks
-          successor = lockStatisticsElement.free(annotatedfunctions.get(fName).freeLocks, logger);
+          }
+          if (annotatedfunctions.get(fName).freeLocks != null) {
+            //free some locks
+            successor = successor.free(annotatedfunctions.get(fName).freeLocks, logger);
+          }
+          if (annotatedfunctions.get(fName).resetLocks != null) {
+            successor = successor.reset(annotatedfunctions.get(fName).resetLocks, logger);
+          }
           break;
         }
         successor = lockStatisticsElement.clone();

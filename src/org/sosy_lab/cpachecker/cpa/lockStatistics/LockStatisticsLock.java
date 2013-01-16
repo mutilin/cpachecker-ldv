@@ -100,7 +100,7 @@ public class LockStatisticsLock {
 
   public LockStatisticsLock removeLastAccessPointer() {
     LockStatisticsLock cloned = this.clone();
-    if(recursiveCounter > 1) {
+    if(recursiveCounter > 0) {
       cloned.recursiveCounter--;
       cloned.accessPoints.pop();
       return cloned;
