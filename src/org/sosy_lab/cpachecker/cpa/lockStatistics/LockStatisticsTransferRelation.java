@@ -239,7 +239,6 @@ public class LockStatisticsTransferRelation implements TransferRelation
       case FunctionReturnEdge:
         CFANode tmpNode = ((CFunctionReturnEdge)cfaEdge).getSummaryEdge().getPredecessor();
         String fName =((CFunctionReturnEdge)cfaEdge).getSummaryEdge().getExpression().getFunctionCallExpression().getFunctionNameExpression().toASTString();
-
         if (annotatedfunctions != null && annotatedfunctions.containsKey(fName)) {
           successor = lockStatisticsElement.clone();
           if (lockStatisticsElement.getRestoreState() != null && annotatedfunctions.get(fName).restoreLocks != null) {
@@ -257,6 +256,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
           }
           if (annotatedfunctions.get(fName).freeLocks != null) {
             //free some locks
+
             successor = successor.free(annotatedfunctions.get(fName).freeLocks, logger);
           }
           if (annotatedfunctions.get(fName).resetLocks != null) {

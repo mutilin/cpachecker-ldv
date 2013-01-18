@@ -140,14 +140,19 @@ public class FunctionHandlerOS {
     for (LockInfo lock : locks) {
       if (lock.LockFunctions.containsKey(functionName)) {
     	  logger.log(Level.FINER, "Lock at line " + lineNumber + ", Callstack: " + callstack);
+
     	  int p = lock.LockFunctions.get(functionName);
-        int d = newElement.getCounter(lock.lockName);
+        int d;
+        if (p == 0 )
+          d = newElement.getCounter(lock.lockName, "");
+        else
+          d = newElement.getCounter(lock.lockName, params.get(p - 1).toASTString());
         if (p == 0 && d < lock.maxLock)
           newElement.add(lock.lockName, lineNumber, callstack, "", logger);
         else if (d < lock.maxLock)
           newElement.add(lock.lockName, lineNumber, callstack, params.get(p - 1).toASTString(), logger);
         else {
-          System.err.println("Try to lock " + lock.lockName + " more, than " + lock.maxLock/* + " in " + lineNumber + " line"*/);
+          System.err.println("Try to lock " + lock.lockName + " more, than " + lock.maxLock + " in " + lineNumber + " line");
           //System.err.println("Lines: " + newElement.getAllLines(lock.lockName));
         }
         return newElement;

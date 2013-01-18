@@ -264,10 +264,11 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
     return newState;
   }
 
-  public int getCounter(String lockName) {
+  public int getCounter(String lockName, String varName) {
     int counter = 0;
     for (LockStatisticsLock lock : locks) {
-      if (lock.hasEqualNameAndVariable(lockName, null)) return lock.getRecursiveCounter();
+      if (lock.hasEqualNameAndVariable(lockName, varName))
+        return lock.getRecursiveCounter();
     }
     return counter;
   }

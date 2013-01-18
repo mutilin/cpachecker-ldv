@@ -75,7 +75,7 @@ class BoundedRecursionTransferRelation implements TransferRelation {
         CFANode node = e.getNode();
         CFAEdge edge = e.getEdge();
 
-        logger.log(Level.INFO, "Stop analisys: " + e.getMessage());
+        logger.log(Level.FINER, "Stop analisys: " + e.getMessage());
 
         if (edge == null) {
           for (int edgeIdx = 0; edgeIdx < node.getNumLeavingEdges(); edgeIdx++) {
