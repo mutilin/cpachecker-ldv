@@ -23,8 +23,11 @@
  */
 package org.sosy_lab.cpachecker.cpa.usageStatistics;
 
+import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.FileReader;
+import java.io.IOException;
 import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.util.Collection;
@@ -40,6 +43,8 @@ import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.types.c.CPointerType;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
@@ -58,7 +63,6 @@ import org.sosy_lab.cpachecker.util.AbstractStates;
 public class UsageStatisticsCPAStatistics implements Statistics {
 
   private Map<VariableIdentifier, Set<UsageInfo>> Stat;
-
   private int totalVarUsageCounter = 0;
   //skipped by transfer relation
   private int skippedUsageCounter = 0;
@@ -69,8 +73,13 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   //lcov data for code coverage generation
   CodeCovering covering;
 
+  @Option(name="localanalysis", description="should we use local analysis?")
+  private boolean localAnalysis = false;
+
   @Option(name="output", description="path to write results")
   private String outputStatFileName = "test/rawstat";
+
+  private String outputFileName = "output/localsave";
 
   @Option(description = "variables, which will not be saved in statistics")
   private Set<String> skippedvariables = null;
@@ -78,6 +87,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   @Option(values={"PAIR", "SETDIFF"},toUppercase=true,
       description="which data process we should use")
   private String unsafeDetectorType = "PAIR";
+  private Map<String, Map<String, String>> localStatistics;
 
   //@Option(description="if we need to print all variables, not only unsafe cases")
   //private boolean fullstatistics = true;
@@ -98,6 +108,42 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       System.exit(0);
     }
     covering = cover;
+
+    if (localAnalysis) {
+      //Restore all information
+      localStatistics = new HashMap<String, Map<String, String>>();
+      try {
+        BufferedReader reader = new BufferedReader(new FileReader(outputFileName));
+        String line, node = null, local;
+        String[] localSet;
+        Map<String, String> info = null;
+        while ((line = reader.readLine()) != null) {
+          if (line.startsWith("N")) {
+            //N1 - it's node identifier
+            if (node != null && info != null) {
+              localStatistics.put(node, info);
+            }
+            node = line;
+            info = new HashMap<String, String>();
+          } else if (line.length() > 0) {
+            // it's information about local statistics
+            local = line;
+            localSet = local.split(" - ");
+            info.put(localSet[0], localSet[1]);
+
+          }
+        }
+        if (node != null && info != null) {
+          localStatistics.put(node, info);
+        }
+        reader.close();
+      } catch(FileNotFoundException e) {
+        System.err.println("Cannot open file " + outputFileName);
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+
+    }
   }
 
   public void add(List<Pair<VariableIdentifier, Access>> result, UsageStatisticsState state, int line, EdgeType type) throws HandleCodeException {
@@ -118,9 +164,31 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       while (id != null && id.getStatus() == Ref.REFERENCE && state.contains(id.makeVariable())) {
         id = state.get(id.makeVariable());
       }
-      if (id == null || (skippedvariables != null && skippedvariables.contains(id.name))) {
+      if (id == null) {
         skippedUsageCounter++;
         continue;
+      }
+      if (skippedvariables != null && skippedvariables.contains(id.name)) {
+        skippedUsageCounter++;
+        continue;
+      }
+      if (id instanceof LocalVariableIdentifier && id.type.getClass() != CPointerType.class && id.status != Ref.REFERENCE) {
+        //we don't save in statistics ordinary local variables
+        skippedUsageCounter++;
+        continue;
+      }
+      //last check: if this variable is local, because of local analysis
+      if (localAnalysis) {
+        CFANode node = AbstractStates.extractLocation(state);
+        Map<String, String> localInfo = localStatistics.get(node.toString());
+        if (localInfo != null && localInfo.containsKey(id.name)) {
+          String dataType = localInfo.get(id.name);
+          if (dataType.equalsIgnoreCase("local")) {
+            System.out.println("Skip " + id.name + " as local");
+            skippedUsageCounter++;
+            continue;
+          }
+        }
       }
       UsageInfo usage = new UsageInfo(tmpPair.getSecond(), lineInfo, info, lockState, callstackState);
 
@@ -142,9 +210,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
       for (UsageInfo uinfo : uset){
     	  for (LockStatisticsLock lock : uinfo.getLockState().getLocks()) {
-		  if( !lock.existsIn(locks)) {
-	          locks.add(lock);
-		  }
+    		  if( !lock.existsIn(locks)) {
+    	      locks.add(lock);
+    		  }
         }
       }
     }
