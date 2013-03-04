@@ -54,7 +54,6 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CInitializer;
 import org.sosy_lab.cpachecker.cfa.ast.c.CInitializerExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CLiteralExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CParameterDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.c.CSimpleDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
@@ -68,7 +67,6 @@ import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
 import org.sosy_lab.cpachecker.cfa.types.c.CPointerType;
-import org.sosy_lab.cpachecker.cfa.types.c.CType;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
@@ -267,7 +265,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
       statistics.add(result, pNewState, initExpression.getFileLocation().getStartingLineNumber(), EdgeType.DECLARATION);
 
-      VariableIdentifier id = createIdentifier(decl, declEdge.getPredecessor().getFunctionName(), 0);
+      VariableIdentifier id = VariableIdentifier.createIdentifier(decl, declEdge.getPredecessor().getFunctionName(), 0);
       result.clear();
       result.add(Pair.of(id, Access.WRITE));
       statistics.add(result, pNewState, initExpression.getFileLocation().getStartingLineNumber(), EdgeType.DECLARATION);
@@ -388,49 +386,6 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     statistics.add(result, element, pExpression.getFileLocation().getStartingLineNumber(), EdgeType.ASSUMPTION);
   }
 
-  private VariableIdentifier createIdentifier(CIdExpression expression, String function, int dereference) throws HandleCodeException {
-
-    CSimpleDeclaration decl = expression.getDeclaration();
-
-    if (decl == null) {
-        /*
-         * It means, that we have function, but parser couldn't understand this:
-         * int f();
-         * int (*a)() = &f;
-         * Skip it
-         */
-      return null;
-    }
-
-    return createIdentifier(decl, function, dereference);
-  }
-
-  private VariableIdentifier createIdentifier(CSimpleDeclaration decl, String function, int dereference) throws HandleCodeException
-  {
-    String name = decl.getName();
-    CType type = decl.getType();
-
-    if (decl instanceof CDeclaration){
-      if(((CDeclaration)decl).isGlobal())
-        return new GlobalVariableIdentifier(name, type, dereference);
-      else {
-        if (dereference > 0 || decl.getType().getClass() == CPointerType.class)
-          return new LocalVariableIdentifier(name, type, function, dereference);
-        else
-          return null;
-      }
-
-    } else if (decl instanceof CParameterDeclaration) {
-      if (dereference > 0 || decl.getType().getClass() == CPointerType.class)
-        return new LocalVariableIdentifier(name, type, function, dereference);
-      else
-        return null;
-
-    } else {
-      throw new HandleCodeException("Unrecognized declaration: " + decl.toASTString());
-    }
-  }
-
   private List<Pair<VariableIdentifier, Access>> handleRead(CExpression expression, String function, int derefenceCounter, boolean stopAtFirst) throws HandleCodeException {
     List<Pair<VariableIdentifier, Access>> result = new LinkedList<Pair<VariableIdentifier, Access>>();
 
@@ -454,10 +409,12 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
     } else if (expression instanceof CFieldReference) {
       VariableIdentifier id;
-      id = new StructureFieldIdentifier(((CFieldReference)expression).getFieldName(),
-        ((CFieldReference)expression).getFieldOwner().getExpressionType(),
-        ((CFieldReference)expression).getExpressionType().toASTString(""), derefenceCounter);
-      result.add(Pair.of(id, Access.READ));
+      if (!isLocalExpression(((CFieldReference)expression).getFieldOwner())) {
+        id = new StructureFieldIdentifier(((CFieldReference)expression).getFieldName(),
+          ((CFieldReference)expression).getFieldOwner().getExpressionType(),
+          ((CFieldReference)expression).getExpressionType().toASTString(""), derefenceCounter);
+        result.add(Pair.of(id, Access.READ));
+      }
       if(!stopAtFirst) {
         if (((CFieldReference)expression).isPointerDereference())
           result.addAll(handleRead(((CFieldReference)expression).getFieldOwner(), function, 1, false));
@@ -465,7 +422,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
           result.addAll(handleRead(((CFieldReference)expression).getFieldOwner(), function, 0, false));
       }
     } else if (expression instanceof CIdExpression) {
-      VariableIdentifier id = createIdentifier((CIdExpression)expression, function, derefenceCounter);
+      VariableIdentifier id = VariableIdentifier.createIdentifier((CIdExpression)expression, function, derefenceCounter);
       result.add(Pair.of(id, Access.READ));
 
     } else if (expression instanceof CUnaryExpression) {
@@ -497,6 +454,55 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     return result;
   }
 
+  private boolean isLocalExpression(CExpression expression) throws HandleCodeException {
+    if (expression.getExpressionType() instanceof CPointerType)
+      return false;
+
+    if (expression instanceof CArraySubscriptExpression) {
+      return isLocalExpression(((CArraySubscriptExpression)expression).getArrayExpression());
+
+    } else if (expression instanceof CBinaryExpression) {
+      boolean result = isLocalExpression(((CBinaryExpression)expression).getOperand1());
+      if (!result)
+        return false;
+      result = isLocalExpression(((CBinaryExpression)expression).getOperand2());
+      return result;
+
+    } else if (expression instanceof CFieldReference) {
+      if (((CFieldReference)expression).isPointerDereference()) {
+        return false;
+      } else {
+        return isLocalExpression(((CFieldReference)expression).getFieldOwner());
+      }
+    } else if (expression instanceof CIdExpression) {
+      CSimpleDeclaration decl = ((CIdExpression)expression).getDeclaration();
+
+      if (decl instanceof CDeclaration) {
+        return (!(((CDeclaration)decl).isGlobal()));
+      } else {
+        return true;
+      }
+
+    } else if (expression instanceof CUnaryExpression) {
+      if (((CUnaryExpression)expression).getOperator() == CUnaryExpression.UnaryOperator.STAR) {
+        return false;
+      } else {
+        return isLocalExpression(((CUnaryExpression)expression).getOperand());
+      }
+
+    } else if (expression instanceof CLiteralExpression) {
+      return true;
+
+    } else if (expression instanceof CCastExpression) {
+      return isLocalExpression(((CCastExpression)expression).getOperand());
+    } else if (expression instanceof CTypeIdExpression){
+      return true;
+
+    } else {
+      throw new HandleCodeException("Undefined type of expression: " + expression.toASTString());
+    }
+  }
+
   private List<Pair<VariableIdentifier, Access>> handleWrite(CExpression expression, String function, int derefenceCounter) throws HandleCodeException {
     List<Pair<VariableIdentifier, Access>> result = new LinkedList<Pair<VariableIdentifier, Access>>();
 
@@ -511,17 +517,19 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     } else if (expression instanceof CFieldReference) {
       /*if (((CFieldReference)expression).getFieldName().equals("m_count"))
         System.out.println("here");*/
-      VariableIdentifier id = new StructureFieldIdentifier(((CFieldReference)expression).getFieldName(),
+      if (!isLocalExpression(((CFieldReference)expression).getFieldOwner())) {
+        VariableIdentifier id = new StructureFieldIdentifier(((CFieldReference)expression).getFieldName(),
           ((CFieldReference)expression).getFieldOwner().getExpressionType(),
           ((CFieldReference)expression).getExpressionType().toASTString(""), derefenceCounter);
-      result.add(Pair.of(id, Access.WRITE));
+        result.add(Pair.of(id, Access.WRITE));
+      }
       if (((CFieldReference)expression).isPointerDereference()) {
         result.addAll(handleRead(((CFieldReference)expression).getFieldOwner(), function, 1, false));
       } else {
         result.addAll(handleRead(((CFieldReference)expression).getFieldOwner(), function, 0, false));
       }
     } else if (expression instanceof CIdExpression) {
-      VariableIdentifier id = createIdentifier((CIdExpression)expression, function, derefenceCounter);
+      VariableIdentifier id = VariableIdentifier.createIdentifier((CIdExpression)expression, function, derefenceCounter);
       result.add(Pair.of(id, Access.WRITE));
 
     } else if (expression instanceof CUnaryExpression) {
