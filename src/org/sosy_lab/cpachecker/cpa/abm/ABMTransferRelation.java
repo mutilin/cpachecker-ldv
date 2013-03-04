@@ -54,6 +54,7 @@ import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
 import org.sosy_lab.cpachecker.core.algorithm.CPAAlgorithm;
+import org.sosy_lab.cpachecker.core.algorithm.CPALocalSaveAlgorithm;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
@@ -299,14 +300,19 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
 
 
   public void changeAlgorithm(BoundedRecursionCPA brCpa, Configuration pConfig) throws InvalidConfigurationException {
-    algorithm = new CPAAlgorithm(brCpa, logger, pConfig);
+    //evil hack
+    algorithm = new CPALocalSaveAlgorithm(brCpa, logger, pConfig, true);
   }
 
   public ABMTransferRelation(Configuration pConfig, LogManager pLogger, ABMCPA abmCpa, ReachedSetFactory pReachedSetFactory) throws InvalidConfigurationException {
     pConfig.inject(this);
     logger = pLogger;
     //TODO make it better
-    algorithm = new CPAAlgorithm(abmCpa, logger, pConfig);
+    String saveLocal = pConfig.getProperty("analysis.saveLocalResults");
+    if (saveLocal != null && saveLocal.equals("true"))
+      algorithm = new CPALocalSaveAlgorithm(abmCpa, logger, pConfig, true);
+    else
+      algorithm = new CPAAlgorithm(abmCpa, logger, pConfig);
     reachedSetFactory = pReachedSetFactory;
     wrappedTransfer = abmCpa.getWrappedCpa().getTransferRelation();
     wrappedReducer = abmCpa.getReducer();
@@ -337,6 +343,7 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
       throws CPATransferException, InterruptedException {
 
     Block nextBlock;
+    //System.out.println(pElement.toString());
     forwardPrecisionToExpandedPrecision.clear();
 
     if (edge == null) {

@@ -36,6 +36,7 @@ import org.sosy_lab.cpachecker.core.algorithm.AssumptionCollectorAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.BMCAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.CEGARAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.CPAAlgorithm;
+import org.sosy_lab.cpachecker.core.algorithm.CPALocalSaveAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.CounterexampleCheckAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.FeatureVarsRestrictionAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.ProofCheckAlgorithm;
@@ -81,6 +82,9 @@ class CoreComponentsFactory {
   @Option(description="Use McMillan's Impact algorithm for lazy interpolation")
   private boolean useImpactAlgorithm = false;
 
+  @Option(description="Save results of local analysis")
+  private boolean saveLocalResults = false;
+
   @Option(name="restartAfterUnknown",
       description="restart the algorithm using a different CPA after unknown result")
   private boolean useRestartingAlgorithm = false;
@@ -120,6 +124,9 @@ class CoreComponentsFactory {
 
     } else if (useImpactAlgorithm) {
       algorithm = new ImpactAlgorithm(config, logger, cpa);
+
+    } else if (saveLocalResults) {
+      algorithm = new CPALocalSaveAlgorithm(cpa, logger, config, false);
 
     } else {
       algorithm = new CPAAlgorithm(cpa, logger, config);

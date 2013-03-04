@@ -61,16 +61,16 @@ import com.google.common.collect.Iterables;
 @Options(prefix="cpa")
 public class CPAAlgorithm implements Algorithm, StatisticsProvider {
 
-  private static class CPAStatistics implements Statistics {
+  protected static class CPAStatistics implements Statistics {
 
-    private Timer totalTimer         = new Timer();
-    private Timer chooseTimer        = new Timer();
-    private Timer precisionTimer     = new Timer();
-    private Timer transferTimer      = new Timer();
-    private Timer mergeTimer         = new Timer();
-    private Timer stopTimer          = new Timer();
-    private Timer addTimer           = new Timer();
-    private Timer forcedCoveringTimer = new Timer();
+    protected Timer totalTimer         = new Timer();
+    protected Timer chooseTimer        = new Timer();
+    protected Timer precisionTimer     = new Timer();
+    protected Timer transferTimer      = new Timer();
+    protected Timer mergeTimer         = new Timer();
+    protected Timer stopTimer          = new Timer();
+    protected Timer addTimer           = new Timer();
+    protected Timer forcedCoveringTimer = new Timer();
 
     private int   countIterations   = 0;
     private int   maxWaitlistSize   = 0;
@@ -120,7 +120,7 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
   private Class<? extends ForcedCovering> forcedCoveringClass = null;
   private final ForcedCovering forcedCovering;
 
-  private final CPAStatistics               stats = new CPAStatistics();
+  protected final CPAStatistics               stats = new CPAStatistics();
 
   private final ConfigurableProgramAnalysis cpa;
 
@@ -157,7 +157,7 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
     }
   }
 
-  private boolean run0(final ReachedSet reachedSet) throws CPAException, InterruptedException {
+  protected boolean run0(final ReachedSet reachedSet) throws CPAException, InterruptedException {
     final TransferRelation transferRelation = cpa.getTransferRelation();
     final MergeOperator mergeOperator = cpa.getMergeOperator();
     final StopOperator stopOperator = cpa.getStopOperator();

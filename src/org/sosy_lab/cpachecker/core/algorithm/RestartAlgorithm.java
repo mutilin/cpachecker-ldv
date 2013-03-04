@@ -134,6 +134,10 @@ public class RestartAlgorithm implements Algorithm, StatisticsProvider {
   @FileOption(FileOption.Type.REQUIRED_INPUT_FILE)
   private List<File> configFiles;
 
+  @Option(name="alwaysrun",
+      description="if it's true, we always run other algorithm, even previous is sound and finished correctly")
+  private boolean alwaysRunOtherAlgorithm = false;
+
   private final LogManager logger;
   private final RestartAlgorithmStatistics stats;
   private final String filename;
@@ -213,6 +217,9 @@ public class RestartAlgorithm implements Algorithm, StatisticsProvider {
             // continue with the next algorithm
             logger.log(Level.INFO, "Analysis not completed: There are still states to be processed.");
 
+          } else if (alwaysRunOtherAlgorithm && configFilesIterator.hasNext()) {
+            logger.log(Level.INFO, "Analysis is finished");
+
           } else {
             // sound analysis and completely finished, terminate
             return true;
@@ -265,6 +272,10 @@ public class RestartAlgorithm implements Algorithm, StatisticsProvider {
     @Option(name="analysis.externalCBMC",
         description="use CBMC as an external tool from CPAchecker")
         boolean runCBMCasExternalTool = false;
+
+    @Option(name="analysis.saveLocalResults",
+        description="Save results of local analysis")
+        private boolean saveLocalResults = false;
 
   }
 
@@ -332,7 +343,12 @@ public class RestartAlgorithm implements Algorithm, StatisticsProvider {
   throws InvalidConfigurationException, CPAException {
     logger.log(Level.FINE, "Creating algorithms");
 
-    Algorithm algorithm = new CPAAlgorithm(cpa, logger, pConfig);
+    Algorithm algorithm;
+    if (pOptions.saveLocalResults) {
+      algorithm = new CPALocalSaveAlgorithm(cpa, logger, pConfig, false);
+    } else {
+      algorithm = new CPAAlgorithm(cpa, logger, pConfig);
+    }
 
     if (pOptions.useRefinement) {
       algorithm = new CEGARAlgorithm(algorithm, cpa, pConfig, logger);
