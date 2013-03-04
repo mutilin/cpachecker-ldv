@@ -241,17 +241,21 @@ public class LockStatisticsTransferRelation implements TransferRelation
         String fName =((CFunctionReturnEdge)cfaEdge).getSummaryEdge().getExpression().getFunctionCallExpression().getFunctionNameExpression().toASTString();
         if (annotatedfunctions != null && annotatedfunctions.containsKey(fName)) {
           successor = lockStatisticsElement.clone();
-          if (lockStatisticsElement.getRestoreState() != null && annotatedfunctions.get(fName).restoreLocks != null) {
+          if (annotatedfunctions.get(fName).restoreLocks != null) {
 
-            successor = successor.restore(lockStatisticsElement.getRestoreState(), annotatedfunctions.get(fName).restoreLocks, logger);
-    		    successor.setRestoreState(lockStatisticsElement.getRestoreState().getRestoreState());
+            if (lockStatisticsElement.getRestoreState() == null) {
+              System.err.println("Can't restore state in function " + fName + ", because of null restore state");
+            } else {
+              successor = successor.restore(lockStatisticsElement.getRestoreState(), annotatedfunctions.get(fName).restoreLocks, logger);
+      		    successor.setRestoreState(lockStatisticsElement.getRestoreState().getRestoreState());
 
-    		    logger.log(Level.FINER, "annotated name=" + fName + ", return"
-                + ", node=" + tmpNode
-                + ", line=" + tmpNode.getLineNumber()
-                + ",\n\t successor=" + successor
-                + ",\n\t element=" + element
-                );
+      		    logger.log(Level.FINER, "annotated name=" + fName + ", return"
+                  + ", node=" + tmpNode
+                  + ", line=" + tmpNode.getLineNumber()
+                  + ",\n\t successor=" + successor
+                  + ",\n\t element=" + element
+                  );
+            }
 
           }
           if (annotatedfunctions.get(fName).freeLocks != null) {
