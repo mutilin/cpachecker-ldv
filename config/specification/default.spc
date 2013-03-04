@@ -4,4 +4,4 @@
 //#include ErrorLabel.spc
 
 // Recognize functions such as exit() and abort() which do not return.
-#include TerminatingFunctions.spc
+//#include TerminatingFunctions.spc
