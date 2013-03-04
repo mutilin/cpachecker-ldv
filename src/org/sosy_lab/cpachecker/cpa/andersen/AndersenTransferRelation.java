@@ -39,6 +39,7 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CInitializer;
 import org.sosy_lab.cpachecker.cfa.ast.c.CInitializerExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
@@ -92,6 +93,8 @@ public class AndersenTransferRelation implements TransferRelation {
       break;
 
     case BlankEdge:
+    case FunctionCallEdge:
+    case FunctionReturnEdge:
       successor = andersenState.clone();
       break;
 
@@ -233,6 +236,10 @@ public class AndersenTransferRelation implements TransferRelation {
       succ.addConstraint(new BaseConstraint("malloc-" + cfaEdge.getLineNumber(), op1));
       return succ;
 
+    } else if (op2 instanceof CLiteralExpression) {
+
+      AndersenState succ = element.clone();
+      return succ;
     }
 
     // not implemented, or not interessing
