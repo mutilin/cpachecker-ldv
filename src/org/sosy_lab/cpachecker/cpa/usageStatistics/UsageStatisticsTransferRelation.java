@@ -38,27 +38,17 @@ import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
-import org.sosy_lab.cpachecker.cfa.ast.c.CArraySubscriptExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CAssignment;
-import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CCastExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpressionStatement;
-import org.sosy_lab.cpachecker.cfa.ast.c.CFieldReference;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallAssignmentStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionDeclaration;
-import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CInitializer;
 import org.sosy_lab.cpachecker.cfa.ast.c.CInitializerExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
-import org.sosy_lab.cpachecker.cfa.ast.c.CSimpleDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
-import org.sosy_lab.cpachecker.cfa.ast.c.CTypeIdExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CVariableDeclaration;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
@@ -87,6 +77,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
   private final TransferRelation wrappedTransfer;
   private final UsageStatisticsCPAStatistics statistics;
   private final CodeCovering covering;
+  private final ExpressionHandler handler;
 
   @Option(description = "functions, which we don't analize")
   private Set<String> skippedfunctions = null;
@@ -95,7 +86,6 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
   private Set<String> binderFunctions = null;
 
   private Map<String, BinderFunctionInfo> binderFunctionInfo;
-
   //TODO: strengthen (CallStackCPA, LockStatisticsCPA)
   //pass the state to LockStatisticsCPA to bind Callstack to lock
   private UsageStatisticsState oldState;
@@ -113,6 +103,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       tmpInfo = new BinderFunctionInfo(name, config);
       binderFunctionInfo.put(name, tmpInfo);
     }
+    handler = new ExpressionHandler();
   }
 
   @Override
@@ -158,7 +149,6 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
     switch(pCfaEdge.getEdgeType()) {
 
-      // declaration of a function pointer.
       case DeclarationEdge: {
         CDeclarationEdge declEdge = (CDeclarationEdge) pCfaEdge;
         handleDeclaration(newState, declEdge);
@@ -194,7 +184,6 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
         throw new UnrecognizedCFAEdgeException(pCfaEdge);
     }
 
-
     return newState;
   }
 
@@ -209,8 +198,9 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       CExpression variable = ((CFunctionCallAssignmentStatement)statement).getLeftHandSide();
       String functionName = AbstractStates.extractStateByType(pNewState, CallstackState.class).getCurrentFunction();
 
-      List<Pair<VariableIdentifier, Access>> result = handleWrite(variable, functionName, 0);
-      statistics.add(result, pNewState, variable.getFileLocation().getStartingLineNumber(), EdgeType.ASSIGNMENT);
+      handler.setMode(functionName, Access.WRITE);
+      variable.accept(handler);
+      statistics.add(handler.result, pNewState, variable.getFileLocation().getStartingLineNumber(), EdgeType.ASSIGNMENT);
       // expression - only name of function
       if (right instanceof CFunctionCallExpression) {
         handleFunctionCallExpression(pNewState, variable, (CFunctionCallExpression)right);
@@ -245,7 +235,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       //CPA replace "int t;" into "int t = 0;", so here there isn't assignment
 
       if (!decl.toASTString().contains("CPAchecker_TMP"))
-        //sometimes cpachecker insert some declarations
+        //sometimes CPAChecker insert some declarations
         covering.addException(declEdge.getLineNumber());
       return;
     }
@@ -260,23 +250,25 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
     if (init instanceof CInitializerExpression) {
       CExpression initExpression = ((CInitializerExpression)init).getExpression();
-      List<Pair<VariableIdentifier, Access>> result = handleRead(initExpression,
-          AbstractStates.extractStateByType(pNewState, CallstackState.class).getCurrentFunction(), 0, false);
+      int line = initExpression.getFileLocation().getStartingLineNumber();
+      String funcName = AbstractStates.extractStateByType(pNewState, CallstackState.class).getCurrentFunction();
+      handler.setMode(funcName, Access.READ);
+      initExpression.accept(handler);
 
-      statistics.add(result, pNewState, initExpression.getFileLocation().getStartingLineNumber(), EdgeType.DECLARATION);
+      statistics.add(handler.result, pNewState, line, EdgeType.DECLARATION);
 
-      VariableIdentifier id = VariableIdentifier.createIdentifier(decl, declEdge.getPredecessor().getFunctionName(), 0);
-      result.clear();
+      VariableIdentifier id = VariableIdentifier.createIdentifier(decl, funcName, 0);
+      List<Pair<VariableIdentifier, Access>> result = new LinkedList<Pair<VariableIdentifier,Access>>();
       result.add(Pair.of(id, Access.WRITE));
-      statistics.add(result, pNewState, initExpression.getFileLocation().getStartingLineNumber(), EdgeType.DECLARATION);
+      statistics.add(result, pNewState, line, EdgeType.DECLARATION);
     }
   }
 
   private void handleFunctionCallExpression(UsageStatisticsState pNewState, CExpression left, CFunctionCallExpression fcExpression) throws HandleCodeException {
-    List<Pair<VariableIdentifier, Access>> result;
     String functionName = AbstractStates.extractStateByType(pNewState, CallstackState.class).getCurrentFunction();
 
     String functionCallName = fcExpression.getFunctionNameExpression().toASTString();
+    int line = fcExpression.getFileLocation().getStartingLineNumber();
     if (binderFunctions != null && binderFunctions.contains(functionCallName))
     {
       BinderFunctionInfo currentInfo = binderFunctionInfo.get(functionCallName);
@@ -285,29 +277,25 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       assert params.size() == currentInfo.parameters;
 
       if (currentInfo.linkInfo != null) {
-        if (currentInfo.linkInfo.getFirst() == 0) {
-          if (left == null)
-            System.err.println("Function " + functionCallName + "(" + fcExpression.getFileLocation().getStartingLineNumber() + ")" + "doesn't match its annotation");
-          else
-            linkVariables(pNewState, left, params.get(currentInfo.linkInfo.getSecond() - 1));
-        } else if (currentInfo.linkInfo.getSecond() == 0) {
-          if (left == null)
-            System.err.println("Function " + functionCallName + "(" + fcExpression.getFileLocation().getStartingLineNumber() + ")" + "doesn't match its annotation");
-          else
-            linkVariables(pNewState, params.get(currentInfo.linkInfo.getFirst() - 1), left);
-        } else
+        //Sometimes these functions are used not only for linkings.
+        //For example, sdlGetFirst also deletes element.
+        //So, if we can't link (no left side), we skip it
+        if (currentInfo.linkInfo.getFirst() == 0 && left != null) {
+          linkVariables(pNewState, left, params.get(currentInfo.linkInfo.getSecond() - 1));
+        } else if (currentInfo.linkInfo.getSecond() == 0 && left != null) {
+          linkVariables(pNewState, params.get(currentInfo.linkInfo.getFirst() - 1), left);
+        } else if (left != null)
           linkVariables(pNewState, params.get(currentInfo.linkInfo.getFirst() - 1),
               params.get(currentInfo.linkInfo.getSecond() - 1));
       }
       for (int i = 0; i < params.size(); i++) {
         if (currentInfo.pInfo.get(i) == ParameterInfo.READ) {
-          result = handleRead(params.get(i), functionName, 0, false);
-          statistics.add(result, pNewState, fcExpression.getFileLocation().getStartingLineNumber(), EdgeType.FUNCTION_CALL);
-
+          handler.setMode(functionName, Access.READ);
         } else if (currentInfo.pInfo.get(i) == ParameterInfo.WRITE) {
-          result = handleWrite(params.get(i), functionName, 0);
-          statistics.add(result, pNewState, fcExpression.getFileLocation().getStartingLineNumber(), EdgeType.FUNCTION_CALL);
+          handler.setMode(functionName, Access.WRITE);
         }
+        params.get(i).accept(handler);
+        statistics.add(handler.result, pNewState, line, EdgeType.FUNCTION_CALL);
       }
     }
 
@@ -328,38 +316,41 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       //TODO now it works only with ABM
       return;*/
     for (CExpression p : params) {
-      result = handleRead(p, functionName, 0, false);
+      handler.setMode(functionName, Access.READ);
+      p.accept(handler);
 
-      statistics.add(result, pNewState, p.getFileLocation().getStartingLineNumber(), EdgeType.FUNCTION_CALL);
+      statistics.add(handler.result, pNewState, p.getFileLocation().getStartingLineNumber(), EdgeType.FUNCTION_CALL);
     }
   }
 
   private void handleStatement(UsageStatisticsState pNewState, CStatement pStatement,
         CFAEdge pCfaEdge) throws HandleCodeException {
 
+    String functionName = AbstractStates.extractStateByType(pNewState, CallstackState.class).getCurrentFunction();
+    int line = pStatement.getFileLocation().getStartingLineNumber();
+
     if (pStatement instanceof CAssignment) {
       // assignment like "a = b" or "a = foo()"
-      List<Pair<VariableIdentifier, Access>> result;
       CAssignment assignment = (CAssignment)pStatement;
-
       CExpression left = assignment.getLeftHandSide();
       CRightHandSide right = assignment.getRightHandSide();
 
-      result = handleWrite(left, AbstractStates.extractStateByType(pNewState, CallstackState.class).getCurrentFunction(), 0);
+      handler.setMode(functionName, Access.WRITE);
+      left.accept(handler);
 
-      statistics.add(result, pNewState, pStatement.getFileLocation().getStartingLineNumber(), EdgeType.ASSIGNMENT);
+      statistics.add(handler.result, pNewState, line, EdgeType.ASSIGNMENT);
 
       if (right instanceof CExpression) {
-        result = handleRead((CExpression)assignment.getRightHandSide(),
-                  AbstractStates.extractStateByType(pNewState, CallstackState.class).getCurrentFunction(), 0, false);
+        handler.setMode(functionName, Access.READ);
+        ((CExpression)right).accept(handler);
 
-        statistics.add(result, pNewState, pStatement.getFileLocation().getStartingLineNumber(), EdgeType.ASSIGNMENT);
+        statistics.add(handler.result, pNewState, line, EdgeType.ASSIGNMENT);
 
         //linkVariables(pNewState, left, (CExpression)right);
 
       } else if (right instanceof CFunctionCallExpression) {
 
-        handleFunctionCallExpression(pNewState, left, (CFunctionCallExpression)assignment.getRightHandSide());
+        handleFunctionCallExpression(pNewState, left, (CFunctionCallExpression)right);
       }
       else {
         throw new HandleCodeException("Unrecognised type of right side of assignment: " + assignment.asStatement().toASTString());
@@ -369,10 +360,10 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       handleFunctionCallExpression(pNewState, null, ((CFunctionCallStatement)pStatement).getFunctionCallExpression());
 
     } else if (pStatement instanceof CExpressionStatement) {
-      List<Pair<VariableIdentifier, Access>> result = handleWrite(((CExpressionStatement)pStatement).getExpression(),
-          AbstractStates.extractStateByType(pNewState, CallstackState.class).getCurrentFunction(), 0);
+      handler.setMode(functionName, Access.WRITE);
+      ((CExpressionStatement)pStatement).getExpression().accept(handler);
 
-      statistics.add(result, pNewState, pStatement.getFileLocation().getStartingLineNumber(), EdgeType.STATEMENT);
+      statistics.add(handler.result, pNewState, line, EdgeType.STATEMENT);
 
     } else {
       throw new HandleCodeException("Unrecognized statement: " + pStatement.toASTString());
@@ -380,180 +371,13 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
   }
 
   private void handleAssumption(UsageStatisticsState element, CExpression pExpression, CFAEdge cfaEdge) throws HandleCodeException {
-    List<Pair<VariableIdentifier, Access>> result = handleRead(pExpression,
-                  AbstractStates.extractStateByType(element, CallstackState.class).getCurrentFunction(), 0, false);
 
-    statistics.add(result, element, pExpression.getFileLocation().getStartingLineNumber(), EdgeType.ASSUMPTION);
-  }
+    String functionName = AbstractStates.extractStateByType(element, CallstackState.class).getCurrentFunction();
 
-  private List<Pair<VariableIdentifier, Access>> handleRead(CExpression expression, String function, int derefenceCounter, boolean stopAtFirst) throws HandleCodeException {
-    List<Pair<VariableIdentifier, Access>> result = new LinkedList<Pair<VariableIdentifier, Access>>();
+    handler.setMode(functionName, Access.READ);
+    pExpression.accept(handler);
 
-
-    if (expression instanceof CArraySubscriptExpression) {
-      result.addAll(handleRead(((CArraySubscriptExpression)expression).getArrayExpression(), function, derefenceCounter, stopAtFirst));
-
-    } else if (expression instanceof CBinaryExpression) {
-      if(stopAtFirst) {
-        List<Pair<VariableIdentifier, Access>> left =
-            handleRead(((CBinaryExpression)expression).getOperand1(), function, derefenceCounter, true);
-        if(!left.isEmpty()) {
-          result.addAll(left);
-        } else {
-          result.addAll(handleRead(((CBinaryExpression)expression).getOperand1(), function, derefenceCounter, true));
-        }
-      } else {
-        result.addAll(handleRead(((CBinaryExpression)expression).getOperand1(), function, derefenceCounter, false));
-        result.addAll(handleRead(((CBinaryExpression)expression).getOperand2(), function, derefenceCounter, false));
-      }
-
-    } else if (expression instanceof CFieldReference) {
-      VariableIdentifier id;
-      if (!isLocalExpression(((CFieldReference)expression).getFieldOwner())) {
-        id = new StructureFieldIdentifier(((CFieldReference)expression).getFieldName(),
-          ((CFieldReference)expression).getFieldOwner().getExpressionType(),
-          ((CFieldReference)expression).getExpressionType().toASTString(""), derefenceCounter);
-        result.add(Pair.of(id, Access.READ));
-      }
-      if(!stopAtFirst) {
-        if (((CFieldReference)expression).isPointerDereference())
-          result.addAll(handleRead(((CFieldReference)expression).getFieldOwner(), function, 1, false));
-        else
-          result.addAll(handleRead(((CFieldReference)expression).getFieldOwner(), function, 0, false));
-      }
-    } else if (expression instanceof CIdExpression) {
-      VariableIdentifier id = VariableIdentifier.createIdentifier((CIdExpression)expression, function, derefenceCounter);
-      result.add(Pair.of(id, Access.READ));
-
-    } else if (expression instanceof CUnaryExpression) {
-      if (((CUnaryExpression)expression).getOperator() == CUnaryExpression.UnaryOperator.STAR) {
-        result.addAll(handleRead(((CUnaryExpression)expression).getOperand(), function, ++derefenceCounter, stopAtFirst));
-        if (!stopAtFirst)
-          result.addAll(handleRead(((CUnaryExpression)expression).getOperand(), function, 0, false));
-      } else if (((CUnaryExpression)expression).getOperator() == CUnaryExpression.UnaryOperator.AMPER) {
-        result.addAll(handleRead(((CUnaryExpression)expression).getOperand(), function, --derefenceCounter, stopAtFirst));
-        if (!stopAtFirst)
-          result.addAll(handleRead(((CUnaryExpression)expression).getOperand(), function, 0, false));
-      } else {
-        result.addAll(handleRead(((CUnaryExpression)expression).getOperand(), function, derefenceCounter, stopAtFirst));
-      }
-
-    } else if (expression instanceof CLiteralExpression) {
-      //nothing to do
-
-    } else if (expression instanceof CCastExpression){
-      //can't do anything with cast
-      return handleRead(((CCastExpression)expression).getOperand(), function, derefenceCounter, stopAtFirst);
-
-    } else if (expression instanceof CTypeIdExpression){
-      //like a = sizeof(int), so nothing to do
-
-    } else {
-      throw new HandleCodeException("Undefined type of expression: " + expression.toASTString());
-    }
-    return result;
-  }
-
-  private boolean isLocalExpression(CExpression expression) throws HandleCodeException {
-    if (expression.getExpressionType() instanceof CPointerType)
-      return false;
-
-    if (expression instanceof CArraySubscriptExpression) {
-      return isLocalExpression(((CArraySubscriptExpression)expression).getArrayExpression());
-
-    } else if (expression instanceof CBinaryExpression) {
-      boolean result = isLocalExpression(((CBinaryExpression)expression).getOperand1());
-      if (!result)
-        return false;
-      result = isLocalExpression(((CBinaryExpression)expression).getOperand2());
-      return result;
-
-    } else if (expression instanceof CFieldReference) {
-      if (((CFieldReference)expression).isPointerDereference()) {
-        return false;
-      } else {
-        return isLocalExpression(((CFieldReference)expression).getFieldOwner());
-      }
-    } else if (expression instanceof CIdExpression) {
-      CSimpleDeclaration decl = ((CIdExpression)expression).getDeclaration();
-
-      if (decl instanceof CDeclaration) {
-        return (!(((CDeclaration)decl).isGlobal()));
-      } else {
-        return true;
-      }
-
-    } else if (expression instanceof CUnaryExpression) {
-      if (((CUnaryExpression)expression).getOperator() == CUnaryExpression.UnaryOperator.STAR) {
-        return false;
-      } else {
-        return isLocalExpression(((CUnaryExpression)expression).getOperand());
-      }
-
-    } else if (expression instanceof CLiteralExpression) {
-      return true;
-
-    } else if (expression instanceof CCastExpression) {
-      return isLocalExpression(((CCastExpression)expression).getOperand());
-    } else if (expression instanceof CTypeIdExpression){
-      return true;
-
-    } else {
-      throw new HandleCodeException("Undefined type of expression: " + expression.toASTString());
-    }
-  }
-
-  private List<Pair<VariableIdentifier, Access>> handleWrite(CExpression expression, String function, int derefenceCounter) throws HandleCodeException {
-    List<Pair<VariableIdentifier, Access>> result = new LinkedList<Pair<VariableIdentifier, Access>>();
-
-    if (expression instanceof CArraySubscriptExpression) {
-      result.addAll(handleWrite(((CArraySubscriptExpression)expression).getArrayExpression(), function, derefenceCounter));
-
-    } else if (expression instanceof CBinaryExpression) {
-      //TODO handle it
-      // *(a + b) = ... -> here
-      //throw new HandleCodeException(expression.toASTString() + " can't be in left side of statement");
-
-    } else if (expression instanceof CFieldReference) {
-      /*if (((CFieldReference)expression).getFieldName().equals("m_count"))
-        System.out.println("here");*/
-      if (!isLocalExpression(((CFieldReference)expression).getFieldOwner())) {
-        VariableIdentifier id = new StructureFieldIdentifier(((CFieldReference)expression).getFieldName(),
-          ((CFieldReference)expression).getFieldOwner().getExpressionType(),
-          ((CFieldReference)expression).getExpressionType().toASTString(""), derefenceCounter);
-        result.add(Pair.of(id, Access.WRITE));
-      }
-      if (((CFieldReference)expression).isPointerDereference()) {
-        result.addAll(handleRead(((CFieldReference)expression).getFieldOwner(), function, 1, false));
-      } else {
-        result.addAll(handleRead(((CFieldReference)expression).getFieldOwner(), function, 0, false));
-      }
-    } else if (expression instanceof CIdExpression) {
-      VariableIdentifier id = VariableIdentifier.createIdentifier((CIdExpression)expression, function, derefenceCounter);
-      result.add(Pair.of(id, Access.WRITE));
-
-    } else if (expression instanceof CUnaryExpression) {
-      if (((CUnaryExpression)expression).getOperator() == CUnaryExpression.UnaryOperator.STAR) {
-        //write: *s =
-        result.addAll(handleWrite(((CUnaryExpression)expression).getOperand(), function, ++derefenceCounter));
-        //read: s
-        result.addAll(handleRead(((CUnaryExpression)expression).getOperand(), function, 0, false));
-      } else if (((CUnaryExpression)expression).getOperator() == CUnaryExpression.UnaryOperator.AMPER) {
-        result.addAll(handleWrite(((CUnaryExpression)expression).getOperand(), function, --derefenceCounter));
-        result.addAll(handleRead(((CUnaryExpression)expression).getOperand(), function, 0, false));
-      } else {
-        result.addAll(handleRead(((CUnaryExpression)expression).getOperand(), function, derefenceCounter, false));
-      }
-
-    } else if (expression instanceof CLiteralExpression) {
-      //nothing to do
-
-    } else if (expression instanceof CCastExpression) {
-      return handleWrite(((CCastExpression)expression).getOperand(), function, derefenceCounter);
-    } else {
-      throw new HandleCodeException("Undefined type of expression: " + expression.toASTString());
-    }
-    return result;
+    statistics.add(handler.result, element, cfaEdge.getLineNumber(), EdgeType.ASSUMPTION);
   }
 
   private void linkVariables(UsageStatisticsState state, CExpression in, CExpression from) throws HandleCodeException {
@@ -563,13 +387,18 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
     /*if (in.getClass() != CIdExpression.class || (from.getClass() != CCastExpression.class && from.getClass() != CIdExpression.class))
       return;*/
-    list = handleRead(in, functionName, 0, true);
+    FirstVariableFinder finder = new FirstVariableFinder();
+    finder.setMode(functionName, Access.READ);
+    in.accept(finder);
+    list = finder.result;
     if (list.size() != 1)
       return;
     idIn = list.get(0).getFirst();
     if (idIn == null)
       return;
-    list = handleRead(from, functionName, 0, true);
+    finder.setMode(functionName, Access.READ);
+    from.accept(finder);
+    list = finder.result;
     if (list.size() != 1)
       return;
     idFrom = list.get(0).getFirst();
