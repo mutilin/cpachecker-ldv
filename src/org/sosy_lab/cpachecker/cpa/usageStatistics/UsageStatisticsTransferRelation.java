@@ -64,12 +64,12 @@ import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.usageStatistics.BinderFunctionInfo.ParameterInfo;
 import org.sosy_lab.cpachecker.cpa.usageStatistics.EdgeInfo.EdgeType;
 import org.sosy_lab.cpachecker.cpa.usageStatistics.UsageInfo.Access;
-import org.sosy_lab.cpachecker.cpa.usageStatistics.VariableIdentifier.Ref;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.exceptions.StopAnalysisException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCFAEdgeException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
+import org.sosy_lab.cpachecker.util.identifiers.Identifier;
 
 @Options(prefix="cpa.usagestatistics")
 public class UsageStatisticsTransferRelation implements TransferRelation {
@@ -257,8 +257,8 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
       statistics.add(handler.result, pNewState, line, EdgeType.DECLARATION);
 
-      VariableIdentifier id = VariableIdentifier.createIdentifier(decl, funcName, 0);
-      List<Pair<VariableIdentifier, Access>> result = new LinkedList<Pair<VariableIdentifier,Access>>();
+      Identifier id = Identifier.createIdentifier(decl, funcName, 0);
+      List<Pair<Identifier, Access>> result = new LinkedList<Pair<Identifier,Access>>();
       result.add(Pair.of(id, Access.WRITE));
       statistics.add(result, pNewState, line, EdgeType.DECLARATION);
     }
@@ -382,8 +382,8 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
   private void linkVariables(UsageStatisticsState state, CExpression in, CExpression from) throws HandleCodeException {
     String functionName = AbstractStates.extractStateByType(state, CallstackState.class).getCurrentFunction();
-    List<Pair<VariableIdentifier, Access>> list;
-    VariableIdentifier idIn, idFrom;
+    List<Pair<Identifier, Access>> list;
+    Identifier idIn, idFrom;
 
     /*if (in.getClass() != CIdExpression.class || (from.getClass() != CCastExpression.class && from.getClass() != CIdExpression.class))
       return;*/
@@ -405,21 +405,21 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     if (idFrom == null)
       return;
 
-    if (idIn.getStatus() == Ref.VARIABLE && idIn.getType().getClass() == CPointerType.class) {
+    if (idIn.getDereference() == 0 && idIn.getType().getClass() == CPointerType.class) {
 
-    } else if (idIn.getStatus() == Ref.REFERENCE && state.contains(idIn)) {
+    } else if (idIn.getDereference() > 0 && state.contains(idIn)) {
       idIn = state.get(idIn);
     } else {
       System.out.println(idIn.getName() + " and " + idFrom.getName() + " isn't linked");
       return;
     }
 
-    if (idFrom.getStatus() == Ref.ADRESS ||
-        (idFrom.getStatus() == Ref.VARIABLE && idIn.getStatus() == Ref.VARIABLE && (idIn.getType().getClass() == CPointerType.class))) {
+    if (idFrom.getDereference() < 0 ||
+        (idFrom.getDereference() == 0 && idIn.getDereference() == 0 && (idIn.getType().getClass() == CPointerType.class))) {
        if (state.contains(idFrom)) {
          idFrom = state.get(idFrom);
        }
-       state.put(idIn, idFrom.makeVariable());
+       state.put(idIn, idFrom.clearDereference());
      }
   }
 

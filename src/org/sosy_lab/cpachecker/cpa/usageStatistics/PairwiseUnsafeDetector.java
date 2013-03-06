@@ -35,6 +35,7 @@ import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cpa.usageStatistics.UsageInfo.Access;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
+import org.sosy_lab.cpachecker.util.identifiers.Identifier;
 
 /**
  * This class implements simple analysis, when all lines are compared
@@ -52,12 +53,12 @@ public class PairwiseUnsafeDetector implements UnsafeDetector {
   }
 
   @Override
-  public Collection<VariableIdentifier> getUnsafes(Map<VariableIdentifier, Set<UsageInfo>> stat) {
+  public Collection<Identifier> getUnsafes(Map<Identifier, Set<UsageInfo>> stat) {
 
-    Collection<VariableIdentifier> unsafe = new HashSet<VariableIdentifier>();
-    Collection<VariableIdentifier> toDelete = new HashSet<VariableIdentifier>();
+    Collection<Identifier> unsafe = new HashSet<Identifier>();
+    Collection<Identifier> toDelete = new HashSet<Identifier>();
 
-nextId:for (VariableIdentifier id : stat.keySet()) {
+nextId:for (Identifier id : stat.keySet()) {
       Set<UsageInfo> uset = stat.get(id);
       for (UsageInfo uinfo : uset) {
         for (UsageInfo uinfo2 : uset) {
@@ -69,8 +70,8 @@ nextId:for (VariableIdentifier id : stat.keySet()) {
       }
     }
     //now we should check, that all unsafe cases have at least one write access
-next:for (VariableIdentifier id : unsafe) {
-      if (detectByReadAccess != null && detectByReadAccess.contains(id.name)) continue;
+next:for (Identifier id : unsafe) {
+      if (detectByReadAccess != null && detectByReadAccess.contains(id.getName())) continue;
       Set<UsageInfo> uset = stat.get(id);
       for (UsageInfo uinfo : uset) {
         if (uinfo.getAccess() == Access.WRITE/* && uinfo.getCallStack().getDepth() > 1*/)
@@ -82,7 +83,7 @@ next:for (VariableIdentifier id : unsafe) {
     }
 
     //deleting
-    for (VariableIdentifier id : toDelete) {
+    for (Identifier id : toDelete) {
       unsafe.remove(id);
     }
     return unsafe;

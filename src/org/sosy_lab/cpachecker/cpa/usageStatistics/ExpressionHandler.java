@@ -44,6 +44,8 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
 import org.sosy_lab.cpachecker.cfa.types.c.CPointerType;
 import org.sosy_lab.cpachecker.cpa.usageStatistics.UsageInfo.Access;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
+import org.sosy_lab.cpachecker.util.identifiers.Identifier;
+import org.sosy_lab.cpachecker.util.identifiers.StructureFieldIdentifier;
 
 
 public class ExpressionHandler implements CExpressionVisitor<Void, HandleCodeException> {
@@ -127,13 +129,13 @@ public class ExpressionHandler implements CExpressionVisitor<Void, HandleCodeExc
   }
 
 
-  public List<Pair<VariableIdentifier, Access>> result;
+  public List<Pair<Identifier, Access>> result;
   protected Access accessMode;
   protected String function;
   protected int dereferenceCounter;
 
   public void setMode(String funcName, Access mode) {
-    result = new LinkedList<Pair<VariableIdentifier, Access>>();
+    result = new LinkedList<Pair<Identifier, Access>>();
     function = funcName;
     dereferenceCounter = 0;
     accessMode = mode;
@@ -169,9 +171,8 @@ public class ExpressionHandler implements CExpressionVisitor<Void, HandleCodeExc
     isLocalExpression localChecker = new isLocalExpression();
     //Checks, if this variable is local. If it is so, we don't need to save it in statistics
     if (!(expression.getFieldOwner().accept(localChecker))) {
-      VariableIdentifier id = new StructureFieldIdentifier(expression.getFieldName(),
-        expression.getFieldOwner().getExpressionType(),
-        expression.getExpressionType().toASTString(""), dereferenceCounter);
+      Identifier id = new StructureFieldIdentifier(expression.getFieldName(),
+        expression.getExpressionType(), expression.getFieldOwner().getExpressionType(), dereferenceCounter);
       result.add(Pair.of(id, accessMode));
     }
     accessMode = Access.READ;
@@ -182,7 +183,7 @@ public class ExpressionHandler implements CExpressionVisitor<Void, HandleCodeExc
 
   @Override
   public Void visit(CIdExpression expression) throws HandleCodeException {
-    VariableIdentifier id = VariableIdentifier.createIdentifier(expression, function, dereferenceCounter);
+    Identifier id = Identifier.createIdentifier(expression, function, dereferenceCounter);
     result.add(Pair.of(id, accessMode));
     return null;
   }

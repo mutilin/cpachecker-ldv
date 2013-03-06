@@ -28,6 +28,7 @@ import java.util.Map;
 
 import org.sosy_lab.cpachecker.core.defaults.AbstractSingleWrapperState;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
+import org.sosy_lab.cpachecker.util.identifiers.Identifier;
 
 /**
  * Represents one abstract state of the UsageStatistics CPA.
@@ -37,33 +38,33 @@ class UsageStatisticsState extends AbstractSingleWrapperState  {
 
   private static final long serialVersionUID = -898577877284268426L;
 
-  private Map<VariableIdentifier, VariableIdentifier> variableBindingRelation;
+  private Map<Identifier, Identifier> variableBindingRelation;
 
   public UsageStatisticsState(AbstractState pWrappedElement) {
     super(pWrappedElement);
-    variableBindingRelation = new HashMap<VariableIdentifier, VariableIdentifier>();
+    variableBindingRelation = new HashMap<Identifier, Identifier>();
   }
 
-  public UsageStatisticsState(AbstractState pWrappedElement, Map<VariableIdentifier, VariableIdentifier> map) {
+  public UsageStatisticsState(AbstractState pWrappedElement, Map<Identifier, Identifier> map) {
     super(pWrappedElement);
-    variableBindingRelation = new HashMap<VariableIdentifier, VariableIdentifier>(map);
+    variableBindingRelation = new HashMap<Identifier, Identifier>(map);
   }
 
-  public boolean contains(VariableIdentifier id) {
+  public boolean contains(Identifier id) {
     return variableBindingRelation.containsKey(id);
   }
 
-  public void put(VariableIdentifier id1, VariableIdentifier id2) {
+  public void put(Identifier id1, Identifier id2) {
    // System.out.println("Link " + (id1 == null ? "null" : id1.getName()) + " and " + (id2 == null ? "null" : id2.getName()));
     if (!id1.equals(id2))
       variableBindingRelation.put(id1, id2);
   }
 
-  public VariableIdentifier get(VariableIdentifier id) {
+  public Identifier get(Identifier id) {
     return variableBindingRelation.get(id);
   }
 
-  public Map<VariableIdentifier, VariableIdentifier> getMap() {
+  public Map<Identifier, Identifier> getMap() {
     return variableBindingRelation;
   }
 
@@ -117,7 +118,7 @@ class UsageStatisticsState extends AbstractSingleWrapperState  {
 
     // also, this element is not less or equal than the other element,
     // if any one constant's value of the other element differs from the constant's value in this element
-    for (VariableIdentifier id : variableBindingRelation.keySet()) {
+    for (Identifier id : variableBindingRelation.keySet()) {
       if (!other.variableBindingRelation.containsKey(id)) {
         return false;
       }

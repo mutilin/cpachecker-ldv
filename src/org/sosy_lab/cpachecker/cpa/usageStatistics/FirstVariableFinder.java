@@ -28,6 +28,8 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFieldReference;
 import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
+import org.sosy_lab.cpachecker.util.identifiers.Identifier;
+import org.sosy_lab.cpachecker.util.identifiers.StructureFieldIdentifier;
 
 
 public class FirstVariableFinder extends ExpressionHandler {
@@ -42,9 +44,8 @@ public class FirstVariableFinder extends ExpressionHandler {
 
   @Override
   public Void visit(CFieldReference expression) throws HandleCodeException {
-    VariableIdentifier id = new StructureFieldIdentifier(expression.getFieldName(),
-        expression.getFieldOwner().getExpressionType(),
-        expression.getExpressionType().toASTString(""), dereferenceCounter);
+    Identifier id = new StructureFieldIdentifier(expression.getFieldName(),
+        expression.getExpressionType(), expression.getFieldOwner().getExpressionType(), dereferenceCounter);
       result.add(Pair.of(id, accessMode));
     return null;
   }
