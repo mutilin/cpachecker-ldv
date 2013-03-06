@@ -45,7 +45,8 @@ public class FirstVariableFinder extends ExpressionHandler {
   @Override
   public Void visit(CFieldReference expression) throws HandleCodeException {
     Identifier id = new StructureFieldIdentifier(expression.getFieldName(),
-        expression.getExpressionType(), expression.getFieldOwner().getExpressionType(), dereferenceCounter);
+        expression.getExpressionType().toASTString(""), expression.getFieldOwner().getExpressionType(),
+        dereferenceCounter);
       result.add(Pair.of(id, accessMode));
     return null;
   }

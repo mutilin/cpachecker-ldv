@@ -172,7 +172,7 @@ public class ExpressionHandler implements CExpressionVisitor<Void, HandleCodeExc
     //Checks, if this variable is local. If it is so, we don't need to save it in statistics
     if (!(expression.getFieldOwner().accept(localChecker))) {
       Identifier id = new StructureFieldIdentifier(expression.getFieldName(),
-        expression.getExpressionType(), expression.getFieldOwner().getExpressionType(), dereferenceCounter);
+        expression.getExpressionType().toASTString(""), expression.getFieldOwner().getExpressionType(), dereferenceCounter);
       result.add(Pair.of(id, accessMode));
     }
     accessMode = Access.READ;

@@ -333,11 +333,15 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       return;
     if (allStats) {
       if (id instanceof StructureFieldIdentifier)
-        writer.println("###" + id.getName());
-      else if (id instanceof GlobalVariableIdentifier)
-        writer.println("#" + id.getName());
+        writer.println("###");
+      else if (id instanceof GlobalVariableIdentifier) {
+        writer.println("#");
+      }
       else if (id instanceof LocalVariableIdentifier)
-        writer.println("##" + id.getName() + "." + ((LocalVariableIdentifier)id).getFunction());
+        writer.println("##" + ((LocalVariableIdentifier)id).getFunction());
+      else
+        System.err.println("What is it?" + id.toString());
+      writer.println(id.getDereference());
       writer.println(id.getType().toASTString(id.getName()));
       writer.println("Line 0:     N0 -{/*Number of usages:" + uinfo.size() + "*/}-> N0");
       writer.println("Line 0:     N0 -{/*Two examples:*/}-> N0");
@@ -424,11 +428,10 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
     Collection<Identifier> unsafeCases = unsafeDetector.getUnsafes(Stat);
     counter = global = local = fields = pointers = 0;
-
     for (Identifier id : unsafeCases) {
       counter += Stat.get(id).size();
 
-      if (id.getDereference() == 0) {
+      if (id.getDereference() <= 0) {
         if (id instanceof GlobalVariableIdentifier)
         //global.add((GlobalIdentifier)id);
           global++;

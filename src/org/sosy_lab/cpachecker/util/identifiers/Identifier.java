@@ -60,13 +60,21 @@ public abstract class Identifier implements AbstractIdentifier{
     return name;
   }
 
+  public String getPointers() {
+    StringBuilder sb = new StringBuilder();
+    for (int i = 0; i < dereference; i++) {
+      sb.append("*");
+    }
+    return sb.toString();
+  }
+
   @Override
   public int hashCode() {
     final int prime = 31;
     int result = 1;
     result = prime * result + dereference;
     result = prime * result + ((name == null) ? 0 : name.hashCode());
-    result = prime * result + ((type == null) ? 0 : type.hashCode());
+    result = prime * result + ((type == null) ? 0 : type.toASTString("").hashCode());
     return result;
   }
 
@@ -112,9 +120,8 @@ public abstract class Identifier implements AbstractIdentifier{
 
     } else if (expression instanceof CFieldReference) {
         return new StructureFieldIdentifier(((CFieldReference)expression).getFieldName(),
-          ((CFieldReference)expression).getExpressionType(),
-          ((CFieldReference)expression).getFieldOwner().getExpressionType(),
-          (((CFieldReference)expression).isPointerDereference() ? ++dereference : dereference));
+          ((CFieldReference)expression).getExpressionType().toASTString(""),
+          ((CFieldReference)expression).getFieldOwner().getExpressionType(), dereference);
 
     } else if (expression instanceof CIdExpression) {
       return Identifier.createIdentifier((CIdExpression)expression, function, dereference);

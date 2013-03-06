@@ -105,13 +105,19 @@ if ( ! -d "local" ) {
 if ( ! -d "global" ) {
 	mkdir("global") || die "Can't create directory\n";
 }
+if ( ! -d "pointer" ) {
+	mkdir("pointer") || die "Can't create directory\n";
+}
 while (<$visualize_fh>) {
 	$line = $_;
 	
 	my $current_fname;
 	my $current_varname;
 	my $current_varname_title;
-	if ($line =~ /^#(.+)/) {
+	my $pointer;
+	if ($line =~ /^#/) {
+		$pointer = <$visualize_fh>;
+		chomp($pointer);
 		$current_varname = <$visualize_fh>;
 		chomp($current_varname);
 		$current_varname_title = $current_varname;
@@ -120,13 +126,25 @@ while (<$visualize_fh>) {
 		$current_varname =~ s/\(//g;
 		$current_varname =~ s/\)//g;
 		$current_varname =~ s/\.\.//g;
-		if ($line =~ /^###(.+)/) {
-			$current_fname = "struct/$current_varname.tmp";
-		} elsif ($line =~ /^##.+\.(.+)/) {
+		if ($line =~ /^###/) {
+			if ( $pointer > 0) {
+				$current_fname = "pointer/$current_varname".$pointer.".tmp";
+			} else {
+				$current_fname = "struct/$current_varname.tmp";
+			}
+		} elsif ($line =~ /^##(.+)/) {
 			my $funcName = $1;
-			$current_fname = "local/$current_varname"."_".$funcName.".tmp";
-		} elsif ($line =~ /^#(.+)/) {
-			$current_fname = "global/$current_varname.tmp";
+			if ( $pointer > 0) {
+				$current_fname = "pointer/$current_varname".$pointer."_".$funcName.".tmp";
+			} else {
+				$current_fname = "local/$current_varname"."_".$funcName.".tmp";
+			}
+		} elsif ($line =~ /^#/) {
+			if ( $pointer > 0) {
+				$current_fname = "pointer/$current_varname".$pointer.".tmp";
+			} else {
+				$current_fname = "global/$current_varname.tmp";
+			}
 		}
 		push(@{$unsafe_list{$current_fname}}, $current_varname_title);
 		open($currentUnsafe, ">", $current_fname) or die("Can't open file for write unsafe");		

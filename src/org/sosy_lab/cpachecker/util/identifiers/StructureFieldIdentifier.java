@@ -28,9 +28,9 @@ import org.sosy_lab.cpachecker.cfa.types.c.CType;
 
 
 public class StructureFieldIdentifier extends Identifier {
-  protected CType fieldType;
+  protected String fieldType;
 
-  public StructureFieldIdentifier(String pNm, CType pTp, CType fTp, int dereference) {
+  public StructureFieldIdentifier(String pNm, String pTp, CType fTp, int dereference) {
     super(pNm, fTp, dereference);
     fieldType = pTp;
   }
