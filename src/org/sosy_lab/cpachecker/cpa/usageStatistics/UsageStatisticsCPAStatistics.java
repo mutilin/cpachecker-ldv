@@ -58,14 +58,14 @@ import org.sosy_lab.cpachecker.cpa.usageStatistics.UsageInfo.Access;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.identifiers.GlobalVariableIdentifier;
-import org.sosy_lab.cpachecker.util.identifiers.Identifier;
 import org.sosy_lab.cpachecker.util.identifiers.LocalVariableIdentifier;
+import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.StructureFieldIdentifier;
 
 @Options(prefix="cpa.usagestatistics")
 public class UsageStatisticsCPAStatistics implements Statistics {
 
-  private Map<Identifier, Set<UsageInfo>> Stat;
+  private Map<SingleIdentifier, Set<UsageInfo>> Stat;
   private int totalVarUsageCounter = 0;
   //skipped by transfer relation
   private int skippedUsageCounter = 0;
@@ -99,7 +99,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   //private boolean onlypointers = true;
 
   public UsageStatisticsCPAStatistics(Configuration config, CodeCovering cover) throws InvalidConfigurationException{
-    Stat = new HashMap<Identifier, Set<UsageInfo>>();
+    Stat = new HashMap<SingleIdentifier, Set<UsageInfo>>();
     config.inject(this);
 
     if (unsafeDetectorType.equals("PAIR"))
@@ -149,9 +149,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
   }
 
-  public void add(List<Pair<Identifier, Access>> result, UsageStatisticsState state, int line, EdgeType type) throws HandleCodeException {
+  public void add(List<Pair<SingleIdentifier, Access>> result, UsageStatisticsState state, int line, EdgeType type) throws HandleCodeException {
     Set<UsageInfo> uset;
-    Identifier id;
+    SingleIdentifier id;
 
     LockStatisticsState lockState = AbstractStates.extractStateByType(state, LockStatisticsState.class);
     CallstackState callstackState = AbstractStates.extractStateByType(state, CallstackState.class);
@@ -161,12 +161,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     LineInfo lineInfo = new LineInfo(line);
     EdgeInfo info = new EdgeInfo(type);
 
-    for (Pair<Identifier, Access> tmpPair : result) {
+    for (Pair<SingleIdentifier, Access> tmpPair : result) {
       totalVarUsageCounter++;
       id = tmpPair.getFirst();
-      /*while (id != null && id.getDereference() > 0 && state.contains(id.clearDereference())) {
-        id = state.get(id.clearDereference());
-      }*/
       if (id == null) {
         skippedUsageCounter++;
         continue;
@@ -209,7 +206,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   private Set<LockStatisticsLock> findAllLocks() {
     Set<LockStatisticsLock> locks = new HashSet<LockStatisticsLock>();
 
-    for (Identifier id : Stat.keySet()) {
+    for (SingleIdentifier id : Stat.keySet()) {
       Set<UsageInfo> uset = Stat.get(id);
 
       for (UsageInfo uinfo : uset){
@@ -227,7 +224,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 /*
    * looks through all unsafe cases of current identifier and find the example of two lines with different locks, one of them must be 'write'
    */
-  private void createVisualization(Identifier id, UsageInfo ui, PrintWriter writer) {
+  private void createVisualization(SingleIdentifier id, UsageInfo ui, PrintWriter writer) {
     LinkedList<CallstackState> tmpList = new LinkedList<CallstackState>();
     LinkedList<TreeLeaf> leafStack = new LinkedList<TreeLeaf>();
     TreeLeaf tmpLeaf, currentLeaf;
@@ -326,7 +323,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
   }
 
-  private void createVisualization(Identifier id, PrintWriter writer, boolean allStats) {
+  private void createVisualization(SingleIdentifier id, PrintWriter writer, boolean allStats) {
     Set<UsageInfo> uinfo = Stat.get(id);
 
     if (uinfo == null || uinfo.size() == 0)
@@ -341,6 +338,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         writer.println("##" + ((LocalVariableIdentifier)id).getFunction());
       else
         System.err.println("What is it?" + id.toString());
+      if (id.getDereference() < 0) {
+        System.out.println("Adress unsafe: " + id.getName());
+      }
       writer.println(id.getDereference());
       writer.println(id.getType().toASTString(id.getName()));
       writer.println("Line 0:     N0 -{/*Number of usages:" + uinfo.size() + "*/}-> N0");
@@ -353,10 +353,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         writer.println("Line 0:     N0 -{All usages:}-> N0");
         for (UsageInfo ui : uinfo)
           createVisualization(id, ui, writer);
-        if (id.status != Ref.ADRESS && Stat.containsKey(id.makeAdress()))
-          createVisualization(id.makeAdress(), writer, false);
-        else if (id.status != Ref.REFERENCE && Stat.containsKey(id.makeReference()))
-          createVisualization(id.makeReference(), writer, false);*/
+        */
       } catch (HandleCodeException e) {
         //strange, but we didn't find unsafe example. So, return.
         return;
@@ -390,7 +387,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
     int counter = 0;
 
-    for (Identifier id : Stat.keySet()) {
+    for (SingleIdentifier id : Stat.keySet()) {
       counter += Stat.get(id).size();
 
       if (id.getDereference() == 0) {
@@ -426,9 +423,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       writer.println(lock.toString());
     }
 
-    Collection<Identifier> unsafeCases = unsafeDetector.getUnsafes(Stat);
+    Collection<SingleIdentifier> unsafeCases = unsafeDetector.getUnsafes(Stat);
     counter = global = local = fields = pointers = 0;
-    for (Identifier id : unsafeCases) {
+    for (SingleIdentifier id : unsafeCases) {
       counter += Stat.get(id).size();
 
       if (id.getDereference() <= 0) {
@@ -455,9 +452,8 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
     //printCases(dataProcess.getDescription(), unsafeCases);
 
-    for (Identifier id : unsafeCases) {
-    //  if (id.getDereference() == 0 || !unsafeCases.contains(id.clearDereference()))
-        createVisualization(id, writer, true);
+    for (SingleIdentifier id : unsafeCases) {
+      createVisualization(id, writer, true);
     }
 
     writer.close();

@@ -27,7 +27,16 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
+import org.sosy_lab.cpachecker.cfa.types.c.CPointerType;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
+import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
+import org.sosy_lab.cpachecker.util.identifiers.BinaryIdentifier;
+import org.sosy_lab.cpachecker.util.identifiers.ConstantIdentifier;
+import org.sosy_lab.cpachecker.util.identifiers.GlobalVariableIdentifier;
+import org.sosy_lab.cpachecker.util.identifiers.LocalVariableIdentifier;
+import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
+import org.sosy_lab.cpachecker.util.identifiers.StructureIdentifier;
+import org.sosy_lab.cpachecker.util.identifiers.VariableIdentifier;
 
 
 public class LocalState implements AbstractState {
@@ -53,21 +62,21 @@ public class LocalState implements AbstractState {
   //map from variable id to its type
   private LocalState previousState;
   private CExpression returnExpression;
-  private final Map<Id, DataType> DataInfo;
+  private final Map<AbstractIdentifier, DataType> DataInfo;
 
   public LocalState(LocalState state) {
-    DataInfo = new HashMap<Id, DataType>();
+    DataInfo = new HashMap<AbstractIdentifier, DataType>();
     previousState = state;
     returnExpression = null;
   }
 
-  private LocalState(Map<Id, DataType> oldMap, LocalState state, CExpression ret) {
-    DataInfo = new HashMap<Id, DataType>(oldMap);
+  private LocalState(Map<AbstractIdentifier, DataType> oldMap, LocalState state, CExpression ret) {
+    DataInfo = new HashMap<AbstractIdentifier, DataType>(oldMap);
     previousState = state;
     returnExpression = ret;
   }
 
-  public void save(Id name, DataType type) {
+  public void save(SingleIdentifier name, DataType type) {
     if (DataInfo.containsKey(name))
       DataInfo.put(name, DataType.max(type, DataInfo.get(name)));
     else if (type != null)
@@ -86,20 +95,20 @@ public class LocalState implements AbstractState {
     return returnExpression;
   }
 
-  public void set(Id name, DataType type) {
+  public void set(AbstractIdentifier name, DataType type) {
     if (type == null) {
       if (DataInfo.containsKey(name)) {
         DataInfo.remove(name);
       }
       return;
     }
-    if (name instanceof VarId)
+    if (name instanceof VariableIdentifier)
       DataInfo.put(name, type);
-    else {
+    else if (name instanceof StructureIdentifier){
       //check if parent struct is global
-      Id owner = name;
-      while (owner instanceof StructId) {
-        owner = ((StructId)owner).getOwner();
+      AbstractIdentifier owner = name;
+      while (owner instanceof StructureIdentifier) {
+        owner = ((StructureIdentifier)owner).getOwner();
         if (DataInfo.containsKey(owner)) {
           DataInfo.put(name, DataType.max(type, DataInfo.get(owner)));
           return;
@@ -107,22 +116,48 @@ public class LocalState implements AbstractState {
       }
       //we've found nothing
       DataInfo.put(name, type);
+    } else if (name instanceof ConstantIdentifier) {
+      //ConstantIdentifier - do nothing
+    } else if (name instanceof BinaryIdentifier) {
+      if (((BinaryIdentifier)name).getDereference() > 0) {
+        DataInfo.put(name, type);
+      } else {
+        set(((BinaryIdentifier)name).getIdentifier1(), type);
+        set(((BinaryIdentifier)name).getIdentifier2(), type);
+      }
     }
   }
-  public DataType getType(Id name) {
+  public DataType getType(AbstractIdentifier name) {
     if (DataInfo.containsKey(name))
       return DataInfo.get(name);
     else {
-      if (name instanceof VarId || name == null)
+      if (name instanceof GlobalVariableIdentifier)
+        return DataType.GLOBAL;
+      else if (name instanceof LocalVariableIdentifier) {
+        LocalVariableIdentifier localId = (LocalVariableIdentifier) name;
+        if (localId.getDereference() < 0 && !(localId.getType() instanceof CPointerType)) {
+          //TODO may be precised...
+          return DataType.LOCAL;
+        }
         return null;
-      else {
-        StructId id = (StructId) name;
+      }
+      else if (name instanceof BinaryIdentifier) {
+        //in good case, this if we won't use... But let it be.
+        DataType type1 = getType(((BinaryIdentifier)name).getIdentifier1());
+        DataType type2 = getType(((BinaryIdentifier)name).getIdentifier2());
+        return DataType.max(type1, type2);
+      } else if (name instanceof ConstantIdentifier) {
+        return DataType.LOCAL;
+      } else if (name instanceof StructureIdentifier){
+        StructureIdentifier id = (StructureIdentifier) name;
         return this.getType(id.getOwner());
+      } else {
+        return null;
       }
     }
   }
 
-  public boolean contains(Id name) {
+  public boolean contains(AbstractIdentifier name) {
     return DataInfo.containsKey(name);
   }
 
@@ -143,11 +178,11 @@ public class LocalState implements AbstractState {
   public LocalState join(LocalState pState2) {
 
     LocalState joinState = this.clone();
-    for (Id name : joinState.DataInfo.keySet()) {
+    for (AbstractIdentifier name : joinState.DataInfo.keySet()) {
       if (!pState2.DataInfo.containsKey(name) && joinState.DataInfo.get(name) != DataType.GLOBAL)
         joinState.DataInfo.remove(name);
     }
-    for (Id name : pState2.DataInfo.keySet()) {
+    for (AbstractIdentifier name : pState2.DataInfo.keySet()) {
       if (!joinState.DataInfo.containsKey(name) && pState2.DataInfo.get(name) == DataType.GLOBAL)
         joinState.DataInfo.put(name, DataType.GLOBAL);
       else if (joinState.DataInfo.containsKey(name))
@@ -158,7 +193,7 @@ public class LocalState implements AbstractState {
 
   public boolean isLessOrEqual(LocalState pState2) {
 
-    for (Id name : this.DataInfo.keySet()) {
+    for (AbstractIdentifier name : this.DataInfo.keySet()) {
       if (!pState2.DataInfo.containsKey(name))
         return false;
     }
@@ -195,7 +230,7 @@ public class LocalState implements AbstractState {
     StringBuilder sb = new StringBuilder();
 
     //sb.append("{");
-    for (Id id : DataInfo.keySet()) {
+    for (AbstractIdentifier id : DataInfo.keySet()) {
       //sb.append("(");
       sb.append(id.toString() + " - " + DataInfo.get(id) + "\n");
     }

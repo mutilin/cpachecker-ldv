@@ -21,22 +21,31 @@
  *  CPAchecker web page:
  *    http://cpachecker.sosy-lab.org
  */
-package org.sosy_lab.cpachecker.cpa.local;
-
-import org.sosy_lab.cpachecker.cfa.ast.c.CSimpleDeclaration;
+package org.sosy_lab.cpachecker.util.identifiers;
 
 
-public class VarId extends Id {
 
-  protected final CSimpleDeclaration decl;
+public class ConstantIdentifier implements AbstractIdentifier {
 
-  public VarId(String name, int deref, CSimpleDeclaration d) {
-    super(name, deref);
-    decl = d;
+  protected String name;
+
+  public ConstantIdentifier(String nm) {
+    name = nm;
   }
 
   @Override
-  public VarId clone() {
-    return new VarId(this.name, this.dereference, this.decl);
+  public ConstantIdentifier clone() {
+    return new ConstantIdentifier(name);
   }
+
+  @Override
+  public String toString() {
+    return name;
+  }
+
+  @Override
+  public boolean isGlobal() {
+    return false;
+  }
+
 }

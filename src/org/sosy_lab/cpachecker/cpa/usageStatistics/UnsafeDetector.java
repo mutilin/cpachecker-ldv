@@ -29,7 +29,7 @@ import java.util.Set;
 
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
-import org.sosy_lab.cpachecker.util.identifiers.Identifier;
+import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 /**
  * Interface for data processing, that was collected in
@@ -43,7 +43,7 @@ public interface UnsafeDetector {
    * @param varStatistics - all collected variables
    * @return collection of unsafe variables
    */
-  public Collection<Identifier> getUnsafes(Map<Identifier, Set<UsageInfo>> varStatistics);
+  public Collection<SingleIdentifier> getUnsafes(Map<SingleIdentifier, Set<UsageInfo>> varStatistics);
 
   /**
    * function to get simple description, its useful to write it in

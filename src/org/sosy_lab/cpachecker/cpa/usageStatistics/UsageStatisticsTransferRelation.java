@@ -69,7 +69,7 @@ import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.exceptions.StopAnalysisException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCFAEdgeException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
-import org.sosy_lab.cpachecker.util.identifiers.Identifier;
+import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 @Options(prefix="cpa.usagestatistics")
 public class UsageStatisticsTransferRelation implements TransferRelation {
@@ -257,8 +257,8 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
       statistics.add(handler.result, pNewState, line, EdgeType.DECLARATION);
 
-      Identifier id = Identifier.createIdentifier(decl, funcName, 0);
-      List<Pair<Identifier, Access>> result = new LinkedList<Pair<Identifier,Access>>();
+      SingleIdentifier id = SingleIdentifier.createIdentifier(decl, funcName, 0);
+      List<Pair<SingleIdentifier, Access>> result = new LinkedList<Pair<SingleIdentifier,Access>>();
       result.add(Pair.of(id, Access.WRITE));
       statistics.add(result, pNewState, line, EdgeType.DECLARATION);
     }
@@ -382,8 +382,8 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
   private void linkVariables(UsageStatisticsState state, CExpression in, CExpression from) throws HandleCodeException {
     String functionName = AbstractStates.extractStateByType(state, CallstackState.class).getCurrentFunction();
-    List<Pair<Identifier, Access>> list;
-    Identifier idIn, idFrom;
+    List<Pair<SingleIdentifier, Access>> list;
+    SingleIdentifier idIn, idFrom;
 
     /*if (in.getClass() != CIdExpression.class || (from.getClass() != CCastExpression.class && from.getClass() != CIdExpression.class))
       return;*/

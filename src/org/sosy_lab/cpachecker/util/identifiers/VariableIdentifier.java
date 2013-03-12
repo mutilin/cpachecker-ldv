@@ -26,16 +26,14 @@ package org.sosy_lab.cpachecker.util.identifiers;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
 
 
-public class VariableIdentifier extends Identifier {
+public abstract class VariableIdentifier extends SingleIdentifier {
 
   public VariableIdentifier(String nm, CType tp, int dereference) {
     super(nm, tp, dereference);
   }
 
   @Override
-  public Identifier clone() {
-    return new VariableIdentifier(name, type, dereference);
-  }
+  public abstract SingleIdentifier clone();
 
   @Override
   public String toString() {
@@ -48,8 +46,6 @@ public class VariableIdentifier extends Identifier {
   }
 
   @Override
-  public Identifier clearDereference() {
-    return new VariableIdentifier(name, type, 0);
-  }
+  public abstract SingleIdentifier clearDereference();
 
 }

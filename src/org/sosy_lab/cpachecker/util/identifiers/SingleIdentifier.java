@@ -36,13 +36,13 @@ import org.sosy_lab.cpachecker.cfa.types.c.CType;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 
 
-public abstract class Identifier implements AbstractIdentifier{
+public abstract class SingleIdentifier implements AbstractIdentifier{
 
   protected String name;
   protected CType type;
   protected int dereference;
 
-  public Identifier(String nm, CType tp, int deref) {
+  public SingleIdentifier(String nm, CType tp, int deref) {
     name = nm;
     type = tp;
     dereference = deref;
@@ -86,7 +86,7 @@ public abstract class Identifier implements AbstractIdentifier{
       return false;
     if (getClass() != obj.getClass())
       return false;
-    Identifier other = (Identifier) obj;
+    SingleIdentifier other = (SingleIdentifier) obj;
     if (dereference != other.dereference)
       return false;
     if (name == null) {
@@ -103,14 +103,14 @@ public abstract class Identifier implements AbstractIdentifier{
   }
 
   @Override
-  public abstract Identifier clone();
+  public abstract SingleIdentifier clone();
 
   @Override
   public abstract String toString();
 
-  public abstract Identifier clearDereference();
+  public abstract SingleIdentifier clearDereference();
 
-  public static Identifier createIdentifier(CExpression expression, String function, int dereference) throws HandleCodeException {
+  public static SingleIdentifier createIdentifier(CExpression expression, String function, int dereference) throws HandleCodeException {
     if (expression instanceof CArraySubscriptExpression) {
       return createIdentifier(((CArraySubscriptExpression)expression).getArrayExpression(), function, dereference);
 
@@ -124,7 +124,7 @@ public abstract class Identifier implements AbstractIdentifier{
           ((CFieldReference)expression).getFieldOwner().getExpressionType(), dereference);
 
     } else if (expression instanceof CIdExpression) {
-      return Identifier.createIdentifier((CIdExpression)expression, function, dereference);
+      return SingleIdentifier.createIdentifier((CIdExpression)expression, function, dereference);
 
     } else if (expression instanceof CUnaryExpression) {
       if (((CUnaryExpression)expression).getOperator() == CUnaryExpression.UnaryOperator.STAR) {
@@ -141,7 +141,7 @@ public abstract class Identifier implements AbstractIdentifier{
     }
   }
 
-  public static Identifier createIdentifier(CIdExpression expression, String function, int dereference) throws HandleCodeException {
+  public static SingleIdentifier createIdentifier(CIdExpression expression, String function, int dereference) throws HandleCodeException {
 
     CSimpleDeclaration decl = expression.getDeclaration();
 
@@ -155,10 +155,10 @@ public abstract class Identifier implements AbstractIdentifier{
       return null;
     }
 
-    return Identifier.createIdentifier(decl, function, dereference);
+    return SingleIdentifier.createIdentifier(decl, function, dereference);
   }
 
-  public static Identifier createIdentifier(CSimpleDeclaration decl, String function, int dereference) throws HandleCodeException
+  public static SingleIdentifier createIdentifier(CSimpleDeclaration decl, String function, int dereference) throws HandleCodeException
   {
     String name = decl.getName();
     CType type = decl.getType();

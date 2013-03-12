@@ -32,26 +32,16 @@ import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
-import org.sosy_lab.cpachecker.cfa.ast.c.CArraySubscriptExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CAssignment;
-import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CCastExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpressionStatement;
-import org.sosy_lab.cpachecker.cfa.ast.c.CFieldReference;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCall;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallAssignmentStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallStatement;
-import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CLiteralExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CParameterDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
-import org.sosy_lab.cpachecker.cfa.ast.c.CSimpleDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
-import org.sosy_lab.cpachecker.cfa.ast.c.CTypeIdExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CVariableDeclaration;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
@@ -61,6 +51,7 @@ import org.sosy_lab.cpachecker.cfa.model.c.CFunctionReturnEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionSummaryEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CReturnStatementEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
+import org.sosy_lab.cpachecker.cfa.types.c.CComplexType;
 import org.sosy_lab.cpachecker.cfa.types.c.CPointerType;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
@@ -70,12 +61,19 @@ import org.sosy_lab.cpachecker.cpa.local.LocalState.DataType;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCFAEdgeException;
+import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
+import org.sosy_lab.cpachecker.util.identifiers.BinaryIdentifier;
+import org.sosy_lab.cpachecker.util.identifiers.ConstantIdentifier;
+import org.sosy_lab.cpachecker.util.identifiers.LocalVariableIdentifier;
+import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 @Options(prefix="cpa.local")
 public class LocalTransferRelation implements TransferRelation {
 
   @Option(name="allocatefunctions", description = "functions, which allocate new free memory")
   private Set<String> allocate;
+
+  private IdentifierCreator idCreator = new IdentifierCreator();
 
   public LocalTransferRelation(Configuration config) throws InvalidConfigurationException {
     config.inject(this);
@@ -154,8 +152,13 @@ public class LocalTransferRelation implements TransferRelation {
 
         CFunctionCallAssignmentStatement assignExp = ((CFunctionCallAssignmentStatement)exprOnSummary);
         CExpression op1 = assignExp.getLeftHandSide();
+        CType type = op1.getExpressionType();
         //find type in old state...
-        int dereference = findDereference(op1.getExpressionType());
+        if (type instanceof CComplexType) {
+          //sometimes, it's easy to look at returned expression
+          type = returnExpression.getExpressionType();
+        }
+        int dereference = findDereference(type);
         DataType returnType = findType(pSuccessor, returnExpression, dereference);
         //... and save it in new
         set(newElement, op1, returnType, dereference);
@@ -218,8 +221,9 @@ public class LocalTransferRelation implements TransferRelation {
         currentArgument = arguments.get(i);
         dereference = findDereference(currentArgument.getExpressionType());
         if (dereference > 0) {
-          VarId id = new VarId(paramNames.get(i), dereference, null);
-          newState.save(id, findType(pSuccessor, currentArgument, findDereference(currentArgument.getExpressionType())));
+          LocalVariableIdentifier id = new LocalVariableIdentifier(paramNames.get(i), null,
+              functionEntryNode.getFunctionName(), dereference);
+          newState.save(id, findType(pSuccessor, currentArgument, 0));
           //if (pointsToStruct(currentArgument.getExpressionType()))
             //System.out.println("Argument " + currentArgument.toASTString() + " is pointer of struct type("
          // + callEdge.getLineNumber() + ")");
@@ -229,6 +233,7 @@ public class LocalTransferRelation implements TransferRelation {
       }
     }
     // else, something like 'f(..)'. Now we can't do anything
+    //TODO Do something!
     return newState;
   }
 
@@ -263,7 +268,7 @@ public class LocalTransferRelation implements TransferRelation {
       //handleFunctionCallExpression(pSuccessor, null, ((CFunctionCallStatement)pStatement).getFunctionCallExpression());
 
     } else if (pStatement instanceof CExpressionStatement) {
-      System.out.println("Do you know, how CExpressionStatement look like? This: " + pStatement);
+      System.err.println("Do you know, how CExpressionStatement look like? This: " + pStatement);
 
     } else {
       throw new HandleCodeException("Unrecognized statement: " + pStatement.toASTString());
@@ -279,10 +284,11 @@ public class LocalTransferRelation implements TransferRelation {
     }
   }
 
-  private DataType checkId(Id id) throws HandleCodeException {
+  private DataType checkId(AbstractIdentifier id) throws HandleCodeException {
     //returns LOCAL or GLOBAL fo _variable_, not for memory location
-    if (id instanceof VarId) {
-      CSimpleDeclaration decl = ((VarId)id).decl;
+    /*if (id instanceof GlobalVariableIdentifier) {
+      return DataType.GLOBAL;
+      /*CSimpleDeclaration decl = ((VarId)id).decl;
       if (decl == null) {
         //'null' value is parsed, as CIdExpression without declaration...
         if (id.name.equals("null"))
@@ -303,19 +309,25 @@ public class LocalTransferRelation implements TransferRelation {
       } else {
         throw new HandleCodeException("Unknown type of declaration: " + decl.toASTString());
       }
-    } else if (id instanceof StructId) {
-       return checkId(((StructId)id).getOwner());
+    } else if (id instanceof LocalVariableIdentifier) {
+      return DataType.LOCAL;
+    } else if (id instanceof StructureIdentifier) {
+       return checkId(((StructureIdentifier)id).getOwner());
     } else {
         //null
       //System.out.println("Null pointer in checkId()");
       return null;
-    }
+    }*/
+    if (id.isGlobal())
+      return DataType.GLOBAL;
+    else
+      return DataType.LOCAL;
   }
 
   private DataType findType(LocalState pSuccessor, CExpression expression, int dereference) throws HandleCodeException {
     //p = expression
     //Where points 'expression'
-    if (expression instanceof CArraySubscriptExpression) {
+    /*if (expression instanceof CArraySubscriptExpression) {
       // p = q[i] -> p = q
       return findType(pSuccessor, ((CArraySubscriptExpression)expression).getArrayExpression(), dereference);
 
@@ -325,7 +337,7 @@ public class LocalTransferRelation implements TransferRelation {
       return DataType.max(firstType, secondType);
 
     } else if (expression instanceof CFieldReference) {
-      Id struct = createId(expression, dereference);
+      AbstractIdentifier struct = createId(expression, dereference);
       if (struct != null) {
         DataType type = checkId(struct);
         if (type == DataType.GLOBAL) {
@@ -353,12 +365,12 @@ public class LocalTransferRelation implements TransferRelation {
         if (((CDeclaration)decl).isGlobal())
           return DataType.GLOBAL;
         else if (dereference > 0)
-          return pSuccessor.getType(new VarId(decl.getName(), dereference, decl));
+          return pSuccessor.getType(new VariableIdentifier(decl.getName(), expression.getExpressionType(), dereference));
         else
         //we have '&a' somewhere (a can be only local in this branch)
           return DataType.LOCAL;
       } else if (decl instanceof CParameterDeclaration) {
-        return pSuccessor.getType(new VarId(decl.getName(), dereference, decl));
+        return pSuccessor.getType(new VariableIdentifier(decl.getName(), expression.getExpressionType(), dereference));
       } else {
         throw new HandleCodeException("Can't understand the type of declaration: " + decl.getName());
       }
@@ -380,11 +392,13 @@ public class LocalTransferRelation implements TransferRelation {
       return DataType.LOCAL;
     } else {
       throw new HandleCodeException("Unknown type of expression: " + expression.toASTString());
-    }
+    }*/
+    AbstractIdentifier id = createId(expression, dereference);
+    return pSuccessor.getType(id);
   }
 
   private void set(LocalState pSuccessor, CExpression expression, DataType type, int dereference) throws HandleCodeException {
-    if (expression instanceof CArraySubscriptExpression) {
+    /*if (expression instanceof CArraySubscriptExpression) {
       // p = q[i] -> p = q
       set(pSuccessor, ((CArraySubscriptExpression)expression).getArrayExpression(), type, dereference);
 
@@ -394,7 +408,7 @@ public class LocalTransferRelation implements TransferRelation {
 
     } else if (expression instanceof CFieldReference) {
       //CExpression owner = ((CFieldReference)expression).getFieldOwner();
-      Id struct = createId(expression, dereference);
+      Identifier struct = createId(expression, dereference);
       if (struct != null)
         pSuccessor.set(struct, type);
 
@@ -402,14 +416,16 @@ public class LocalTransferRelation implements TransferRelation {
       CSimpleDeclaration decl = ((CIdExpression)expression).getDeclaration();
       if (dereference >= 0) {
         //TODO closure: **p, ***p, ****p ...
-        pSuccessor.set(new VarId(((CIdExpression)expression).getName(), dereference, decl), type);
+        pSuccessor.set(new VariableIdentifier(((CIdExpression)expression).getName()
+            , expression.getExpressionType(), dereference), type);
       }
       else {
         //we have '&a' somewhere
         //TODO closure: ***p, ****p, ...
         if (pSuccessor.contains(new VarId(decl.getName(), 1, decl)))
           //we have 'p = &q', but q also points somewhere, so we set *q as 'type'
-          pSuccessor.set(new VarId(((CIdExpression)expression).getName(), 1, decl), type);
+          pSuccessor.set(new VariableIdentifier(((CIdExpression)expression).getName()
+              , expression.getExpressionType(), 1), type);
       }
 
     } else if (expression instanceof CUnaryExpression) {
@@ -427,13 +443,15 @@ public class LocalTransferRelation implements TransferRelation {
       //do nothing, because we can't set 'type' to literal or typeId
     } else {
       throw new HandleCodeException("Unknown type of expression: " + expression.toASTString());
-    }
+    }*/
+    AbstractIdentifier id = createId(expression, dereference);
+    pSuccessor.set(id, type);
   }
 
   public void assume(LocalState pSuccessor, CExpression left, int leftDereference, CExpression right) throws HandleCodeException {
     //expr = expr
-    if (left instanceof CIdExpression) {
-       VarId id = new VarId(((CIdExpression)left).getName(), leftDereference,
+    /*if (left instanceof CIdExpression) {
+       VariableIdentifier id = new VariableIdentifier(((CIdExpression)left).getName(), leftDereference,
           ((CIdExpression)left).getDeclaration());
       assume(pSuccessor, id, right);
     } else if (left instanceof CUnaryExpression) {
@@ -445,7 +463,7 @@ public class LocalTransferRelation implements TransferRelation {
     } else if (left instanceof CArraySubscriptExpression) {
       assume(pSuccessor, ((CArraySubscriptExpression)left).getArrayExpression(), leftDereference, right);
     } else if (left instanceof CFieldReference) {
-      Id struct = createId(left, leftDereference);
+      Identifier struct = createId(left, leftDereference);
       if (struct != null)
         assume(pSuccessor, struct, right);
     } else if (left instanceof CBinaryExpression) {
@@ -466,77 +484,36 @@ public class LocalTransferRelation implements TransferRelation {
     } else {
       throw new HandleCodeException("Now we can't process such difficult left side: " + left.toASTString()
           + "(" + left.getFileLocation().getStartingLineNumber() + ")");
-    }
+    }*/
+    AbstractIdentifier leftId = createId(left, leftDereference);
+    assume(pSuccessor, leftId, right);
   }
 
-  private Id createId(CExpression expression, int dereference) throws HandleCodeException {
+  private AbstractIdentifier createId(CExpression expression, int dereference) throws HandleCodeException {
     //return null, if we can't create id. Now it's because of (*(5 + sizeof(int)).x
-    if (expression instanceof CArraySubscriptExpression) {
-      // p = q[i] -> p = q
-      return createId(((CArraySubscriptExpression)expression).getArrayExpression(), dereference);
-
-    } else if (expression instanceof CBinaryExpression) {
-      Id resultId1, resultId2;
-      resultId1 = createId(((CBinaryExpression)expression).getOperand1(), dereference);
-      resultId2 = createId(((CBinaryExpression)expression).getOperand2(), dereference);
-      if (resultId1 == null && resultId2 == null)
-        return null;
-      else if (resultId1 == null)
-        return resultId2;
-      else if (resultId2 == null)
-        return resultId1;
-      else {
-        //f.e. (a + b)->x;
-        return null;
-      }
-
-    } else if (expression instanceof CFieldReference) {
-      CExpression owner = ((CFieldReference)expression).getFieldOwner();
-      Id ownerId = createId(owner, (((CFieldReference)expression).isPointerDereference() ? 1 : 0));
-      StructId fullId = new StructId(ownerId, ((CFieldReference)expression).getFieldName(), dereference);
-      return fullId;
-
-    } else if (expression instanceof CIdExpression) {
-      //we should check and now it can be only local
-      if (dereference >= 0)
-        return new VarId(((CIdExpression)expression).getName(), dereference,
-            ((CIdExpression)expression).getDeclaration());
-      else
-        //we have '&a' somewhere (a can be only local in this branch)
-        throw new HandleCodeException("Adress in field owner of structure " + expression.toASTString());
-
-    } else if (expression instanceof CUnaryExpression) {
-      if (((CUnaryExpression)expression).getOperator() == CUnaryExpression.UnaryOperator.STAR) {
-        return createId(((CUnaryExpression)expression).getOperand(), ++dereference);
-      } else if (((CUnaryExpression)expression).getOperator() == CUnaryExpression.UnaryOperator.AMPER) {
-        return createId(((CUnaryExpression)expression).getOperand(),  --dereference);
-      } else {
-        return createId(((CUnaryExpression)expression).getOperand(), dereference);
-      }
-
-    } else if (expression instanceof CLiteralExpression) {
-      // f.e. ( ((threadTCB *)0)->m_intermNode). we shouldn't return null, because it is correct.
-      // So, we create new id
-      return new VarId(expression.toASTString(), dereference, null);
-    } else if (expression instanceof CCastExpression) {
-      return createId(((CCastExpression)expression).getOperand(), dereference);
-    } else if (expression instanceof CTypeIdExpression) {
-      return null;
-    } else {
-      throw new HandleCodeException("Unknown type of field owner: " + expression.toASTString());
-    }
+    idCreator.setDereference(dereference);
+    return expression.accept(idCreator);
   }
 
-  private void assume(LocalState pSuccessor, Id leftId, CExpression right) throws HandleCodeException {
+  private void assume(LocalState pSuccessor, AbstractIdentifier leftId, CExpression right) throws HandleCodeException {
     DataType type = checkId(leftId);
+    if (leftId instanceof ConstantIdentifier)
+      //Can't assume to constant, but this situation can occur, if we have *(a + b)...
+      return;
+    else if (leftId instanceof BinaryIdentifier) {
+      //TODO may be, it should be changed...
+      assume(pSuccessor, ((BinaryIdentifier)leftId).getIdentifier1(), right);
+      assume(pSuccessor, ((BinaryIdentifier)leftId).getIdentifier2(), right);
+    }
+    SingleIdentifier left = (SingleIdentifier) leftId;
     if (type == DataType.GLOBAL) {
       //Variable is global, not memory location!
       //So, we should set the type of 'right' to global
-      set(pSuccessor, right, DataType.GLOBAL, leftId.dereference);
+      set(pSuccessor, right, DataType.GLOBAL, left.getDereference());
     } else {
-      type = findType(pSuccessor, right, leftId.dereference);
+      type = findType(pSuccessor, right, left.getDereference());
       if (type != null)
-        pSuccessor.save(leftId, type);
+        pSuccessor.save(left, type);
     }
   }
 
@@ -546,12 +523,11 @@ public class LocalTransferRelation implements TransferRelation {
       return;
 
     CDeclaration decl = declEdge.getDeclaration();
-    /*if (decl.getFileLocation().getStartingLineNumber() == 333453)
-      System.out.println("Declaration of FILE f");*/
     if (decl.getType() instanceof CPointerType) {
       //we don't save global variables
       if (!decl.isGlobal())
-        pSuccessor.save(new VarId(decl.getName(), findDereference(decl.getType()), decl), DataType.LOCAL);
+        pSuccessor.save(new LocalVariableIdentifier(decl.getName(), null, declEdge.getSuccessor().getFunctionName()
+            , findDereference(decl.getType())), DataType.LOCAL);
     }
   }
 

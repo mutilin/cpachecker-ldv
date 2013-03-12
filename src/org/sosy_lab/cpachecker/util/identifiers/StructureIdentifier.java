@@ -27,10 +27,10 @@ import org.sosy_lab.cpachecker.cfa.types.c.CType;
 
 
 
-public class StructureIdentifier extends Identifier{
-  protected Identifier owner;
+public class StructureIdentifier extends SingleIdentifier{
+  protected AbstractIdentifier owner;
 
-  public StructureIdentifier(String pNm, CType pTp, int dereference, Identifier own) {
+  public StructureIdentifier(String pNm, CType pTp, int dereference, AbstractIdentifier own) {
     super(pNm, pTp, dereference);
     this.owner = own;
   }
@@ -49,6 +49,10 @@ public class StructureIdentifier extends Identifier{
   @Override
   public StructureIdentifier clone() {
     return new StructureIdentifier(name, type, dereference, owner.clone());
+  }
+
+  public AbstractIdentifier getOwner() {
+    return owner;
   }
 
   @Override
@@ -77,7 +81,12 @@ public class StructureIdentifier extends Identifier{
   }
 
   @Override
-  public Identifier clearDereference() {
+  public SingleIdentifier clearDereference() {
     return new StructureIdentifier(name, type, 0, owner);
+  }
+
+  @Override
+  public boolean isGlobal() {
+    return owner.isGlobal();
   }
 }

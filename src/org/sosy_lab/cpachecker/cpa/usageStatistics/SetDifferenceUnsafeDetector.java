@@ -31,7 +31,7 @@ import java.util.Set;
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
-import org.sosy_lab.cpachecker.util.identifiers.Identifier;
+import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 
 public class SetDifferenceUnsafeDetector implements UnsafeDetector {
@@ -41,8 +41,8 @@ public class SetDifferenceUnsafeDetector implements UnsafeDetector {
 	}
 
 @Override
-  public Collection<Identifier> getUnsafes(Map<Identifier, Set<UsageInfo>> variables) {
-    Collection<Identifier> unsafe = new HashSet<Identifier>();
+  public Collection<SingleIdentifier> getUnsafes(Map<SingleIdentifier, Set<UsageInfo>> variables) {
+    Collection<SingleIdentifier> unsafe = new HashSet<SingleIdentifier>();
     //Map<Integer, Set<Set<LockStatisticsLock>>> Cases = new HashMap<Integer, Set<Set<LockStatisticsLock>>>();
 /*
     for (String name : variables.keySet()) {

@@ -44,7 +44,7 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
 import org.sosy_lab.cpachecker.cfa.types.c.CPointerType;
 import org.sosy_lab.cpachecker.cpa.usageStatistics.UsageInfo.Access;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
-import org.sosy_lab.cpachecker.util.identifiers.Identifier;
+import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.StructureFieldIdentifier;
 
 
@@ -129,13 +129,13 @@ public class ExpressionHandler implements CExpressionVisitor<Void, HandleCodeExc
   }
 
 
-  public List<Pair<Identifier, Access>> result;
+  public List<Pair<SingleIdentifier, Access>> result;
   protected Access accessMode;
   protected String function;
   protected int dereferenceCounter;
 
   public void setMode(String funcName, Access mode) {
-    result = new LinkedList<Pair<Identifier, Access>>();
+    result = new LinkedList<Pair<SingleIdentifier, Access>>();
     function = funcName;
     dereferenceCounter = 0;
     accessMode = mode;
@@ -171,7 +171,7 @@ public class ExpressionHandler implements CExpressionVisitor<Void, HandleCodeExc
     isLocalExpression localChecker = new isLocalExpression();
     //Checks, if this variable is local. If it is so, we don't need to save it in statistics
     if (!(expression.getFieldOwner().accept(localChecker))) {
-      Identifier id = new StructureFieldIdentifier(expression.getFieldName(),
+      SingleIdentifier id = new StructureFieldIdentifier(expression.getFieldName(),
         expression.getExpressionType().toASTString(""), expression.getFieldOwner().getExpressionType(), dereferenceCounter);
       result.add(Pair.of(id, accessMode));
     }
@@ -183,7 +183,7 @@ public class ExpressionHandler implements CExpressionVisitor<Void, HandleCodeExc
 
   @Override
   public Void visit(CIdExpression expression) throws HandleCodeException {
-    Identifier id = Identifier.createIdentifier(expression, function, dereferenceCounter);
+    SingleIdentifier id = SingleIdentifier.createIdentifier(expression, function, dereferenceCounter);
     result.add(Pair.of(id, accessMode));
     return null;
   }

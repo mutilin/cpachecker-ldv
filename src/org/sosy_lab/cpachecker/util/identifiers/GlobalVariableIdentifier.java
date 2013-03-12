@@ -39,7 +39,12 @@ public class GlobalVariableIdentifier extends VariableIdentifier {
   }
 
   @Override
-  public Identifier clearDereference() {
+  public SingleIdentifier clearDereference() {
     return new GlobalVariableIdentifier(name, type, 0);
+  }
+
+  @Override
+  public boolean isGlobal() {
+    return true;
   }
 }

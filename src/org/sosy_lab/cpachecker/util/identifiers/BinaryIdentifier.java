@@ -21,35 +21,29 @@
  *  CPAchecker web page:
  *    http://cpachecker.sosy-lab.org
  */
-package org.sosy_lab.cpachecker.cpa.local;
+package org.sosy_lab.cpachecker.util.identifiers;
 
 
+public class BinaryIdentifier implements AbstractIdentifier {
+  protected AbstractIdentifier id1;
+  protected AbstractIdentifier id2;
+  protected int dereference;
 
-public abstract class Id {
-  protected final String name;
-  protected final int dereference;
-
-  public Id(String n, int deref) {
-    name = n;
+  public BinaryIdentifier(AbstractIdentifier i1, AbstractIdentifier i2, int deref) {
+    id1 = i1;
+    id2 = i2;
     dereference = deref;
   }
-
-  public int getDereference() {
-    return dereference;
-  }
-
-  @Override
-  public abstract Id clone();
 
   @Override
   public int hashCode() {
     final int prime = 31;
     int result = 1;
     result = prime * result + dereference;
-    result = prime * result + ((name == null) ? 0 : name.hashCode());
+    result = prime * result + ((id1 == null) ? 0 : id1.hashCode());
+    result = prime * result + ((id2 == null) ? 0 : id2.hashCode());
     return result;
   }
-
   @Override
   public boolean equals(Object obj) {
     if (this == obj)
@@ -58,25 +52,49 @@ public abstract class Id {
       return false;
     if (getClass() != obj.getClass())
       return false;
-    Id other = (Id) obj;
+    BinaryIdentifier other = (BinaryIdentifier) obj;
     if (dereference != other.dereference)
       return false;
-    if (name == null) {
-      if (other.name != null)
+    if (id1 == null) {
+      if (other.id1 != null)
         return false;
-    } else if (!name.equals(other.name))
+    } else if (!id1.equals(other.id1))
+      return false;
+    if (id2 == null) {
+      if (other.id2 != null)
+        return false;
+    } else if (!id2.equals(other.id2))
       return false;
     return true;
   }
 
+
+
   @Override
   public String toString() {
-    /*StringBuilder sb = new StringBuilder();
-    for (int i = 0; i < dereference; i++) {
-      sb.append("*");
-    }
-    sb.append(name);
-    return sb.toString();*/
-    return name;
+    return id1.toString() + " -- " + id2.toString();
   }
+
+  @Override
+  public boolean isGlobal() {
+    return (id1.isGlobal() || id2.isGlobal());
+  }
+
+  @Override
+  public BinaryIdentifier clone() {
+    return new BinaryIdentifier(id1.clone(), id2.clone(), dereference);
+  }
+
+  public AbstractIdentifier getIdentifier1() {
+    return id1;
+  }
+
+  public AbstractIdentifier getIdentifier2() {
+    return id2;
+  }
+
+  public int getDereference() {
+    return dereference;
+  }
+
 }

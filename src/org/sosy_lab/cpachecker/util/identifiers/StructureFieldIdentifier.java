@@ -27,7 +27,7 @@ import org.sosy_lab.cpachecker.cfa.types.c.CType;
 
 
 
-public class StructureFieldIdentifier extends Identifier {
+public class StructureFieldIdentifier extends SingleIdentifier {
   protected String fieldType;
 
   public StructureFieldIdentifier(String pNm, String pTp, CType fTp, int dereference) {
@@ -78,7 +78,13 @@ public class StructureFieldIdentifier extends Identifier {
   }
 
   @Override
-  public Identifier clearDereference() {
+  public SingleIdentifier clearDereference() {
     return new StructureFieldIdentifier(name, fieldType, type, 0);
+  }
+
+  @Override
+  public boolean isGlobal() {
+    //It isn't correct, but this method shouldn't be used in this class
+    return false;
   }
 }

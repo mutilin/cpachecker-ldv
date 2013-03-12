@@ -71,7 +71,12 @@ public class LocalVariableIdentifier extends VariableIdentifier {
   }
 
   @Override
-  public Identifier clearDereference() {
+  public SingleIdentifier clearDereference() {
     return new LocalVariableIdentifier(name, type, function, 0);
+  }
+
+  @Override
+  public boolean isGlobal() {
+    return false;
   }
 }

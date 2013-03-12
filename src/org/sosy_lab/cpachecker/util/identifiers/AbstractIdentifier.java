@@ -26,11 +26,15 @@ package org.sosy_lab.cpachecker.util.identifiers;
 
 public interface AbstractIdentifier {
   @Override
-  public abstract boolean equals(Object other);
+  public boolean equals(Object other);
 
   @Override
-  public abstract int hashCode();
+  public int hashCode();
 
   @Override
   public String toString();
+
+  public boolean isGlobal();
+
+  public AbstractIdentifier clone();
 }
