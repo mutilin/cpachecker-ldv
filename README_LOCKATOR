@@ -1,0 +1,15 @@
+Информация о параметрах запуска
+
+Параметры запуска для DSCV (внимательно исправить пути)
+RCV_VERIFIER=cpachecker CPACHECKER=/home/alpha/git/cpachecker/scripts/cpa.sh CPACHECKER_CONFIG=/home/alpha/git/cpachecker/test/config/lockStatistics-abm.properties LDV_DEBUG=100 RCV_MEMLIMIT=8000000 WORK_DIR=/home/alpha/ldv-tools/tests/races/tmp dscv --cmdfile=/home/osuser/ispras/staticanalysis/cmdstream.xml --rule-model=BZ_1
+
+Параметры запуска отдельно CPAchecker'a в консоли
+./scripts/cpa.sh -config ./test/config/lockStatistics-abm.properties ./test/cil.out.i
+
+Параметры запуска скрипта, генерирующего отчет об ошибках
+./scripts/gen-unsafes-report.pl --trace=unsafe_rawdata --cil=../cil.out.i --ldvrepo=/home/alpha/git/ldv-tools/
+
+Параметры запуска скрипта, генерирующего отчет о покрытии
+./scripts/gen-coverage-report.pl --i=cil.out.i.info --o=./results
+
+Подробную информацию о параметрах двух последних скриптов можно посмотреть в них самих.
