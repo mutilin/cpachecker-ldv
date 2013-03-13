@@ -76,12 +76,12 @@ public class LocalState implements AbstractState {
     returnExpression = ret;
   }
 
-  public void save(SingleIdentifier name, DataType type) {
+  /*public void save(SingleIdentifier name, DataType type) {
     if (DataInfo.containsKey(name))
       DataInfo.put(name, DataType.max(type, DataInfo.get(name)));
     else if (type != null)
       DataInfo.put(name, type);
-  }
+  }*/
 
   public LocalState getPreviousState() {
     return previousState;
@@ -223,6 +223,20 @@ public class LocalState implements AbstractState {
     } else if (!DataInfo.equals(other.DataInfo))
       return false;
     return true;
+  }
+
+  public String toLog() {
+    StringBuilder sb = new StringBuilder();
+    for (AbstractIdentifier id : DataInfo.keySet()) {
+      if (id instanceof SingleIdentifier)
+        sb.append(((SingleIdentifier)id).toLog() + ";" + DataInfo.get(id) + "\n");
+      else
+        System.err.println("Can't write to log " + id.toString());
+    }
+
+    if (sb.length() > 2)
+      sb.delete(sb.length() - 1, sb.length());
+    return sb.toString();
   }
 
   @Override

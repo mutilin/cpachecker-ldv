@@ -89,4 +89,14 @@ public class StructureIdentifier extends SingleIdentifier{
   public boolean isGlobal() {
     return owner.isGlobal();
   }
+
+  @Override
+  public String toLog() {
+    return "s;" + name + ";" + dereference;
+  }
+
+  @Override
+  public GeneralIdentifier getGeneralId() {
+    return new GeneralStructureFieldIdentifier(name, dereference);
+  }
 }

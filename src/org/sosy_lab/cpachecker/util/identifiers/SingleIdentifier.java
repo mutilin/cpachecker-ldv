@@ -110,6 +110,10 @@ public abstract class SingleIdentifier implements AbstractIdentifier{
 
   public abstract SingleIdentifier clearDereference();
 
+  public abstract String toLog();
+
+  public abstract GeneralIdentifier getGeneralId();
+
   public static SingleIdentifier createIdentifier(CExpression expression, String function, int dereference) throws HandleCodeException {
     if (expression instanceof CArraySubscriptExpression) {
       return createIdentifier(((CArraySubscriptExpression)expression).getArrayExpression(), function, dereference);

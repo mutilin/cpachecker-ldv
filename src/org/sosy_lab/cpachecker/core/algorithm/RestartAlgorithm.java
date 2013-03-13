@@ -288,6 +288,7 @@ public class RestartAlgorithm implements Algorithm, StatisticsProvider {
     singleConfigBuilder.copyFrom(globalConfig);
     singleConfigBuilder.clearOption("restartAlgorithm.configFiles");
     singleConfigBuilder.clearOption("analysis.restartAfterUnknown");
+    singleConfigBuilder.clearOption("analysis.saveLocalResult");
 
     RestartAlgorithmOptions singleOptions = new RestartAlgorithmOptions();
     singleConfigBuilder.loadFromFile(singleConfigFileName);

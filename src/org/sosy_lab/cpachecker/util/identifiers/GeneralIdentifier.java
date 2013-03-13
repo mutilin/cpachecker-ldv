@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2012  Dirk Beyer
+ *  Copyright (C) 2007-2013  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,38 +23,12 @@
  */
 package org.sosy_lab.cpachecker.util.identifiers;
 
-import org.sosy_lab.cpachecker.cfa.types.c.CType;
+/**
+ * Empty interface. It only shows, that id is general,
+ * i. e. it is compared to others only by name and dereference
+ */
+public interface GeneralIdentifier {
 
+  public void setDereference(int newD);
 
-
-public class GlobalVariableIdentifier extends VariableIdentifier {
-
-  public GlobalVariableIdentifier(String nm, CType t, int dereference) {
-    super(nm, t, dereference);
-  }
-
-  @Override
-  public GlobalVariableIdentifier clone() {
-    return new GlobalVariableIdentifier(name, type, dereference);
-  }
-
-  @Override
-  public SingleIdentifier clearDereference() {
-    return new GlobalVariableIdentifier(name, type, 0);
-  }
-
-  @Override
-  public boolean isGlobal() {
-    return true;
-  }
-
-  @Override
-  public String toLog() {
-    return "g;" + name + ";" + dereference;
-  }
-
-  @Override
-  public GeneralIdentifier getGeneralId() {
-    return new GeneralGlobalVariableIdentifier(name, dereference);
-  }
 }

@@ -223,7 +223,7 @@ public class LocalTransferRelation implements TransferRelation {
         if (dereference > 0) {
           LocalVariableIdentifier id = new LocalVariableIdentifier(paramNames.get(i), null,
               functionEntryNode.getFunctionName(), dereference);
-          newState.save(id, findType(pSuccessor, currentArgument, 0));
+          newState.set(id, findType(pSuccessor, currentArgument, 0));
           //if (pointsToStruct(currentArgument.getExpressionType()))
             //System.out.println("Argument " + currentArgument.toASTString() + " is pointer of struct type("
          // + callEdge.getLineNumber() + ")");
@@ -236,18 +236,6 @@ public class LocalTransferRelation implements TransferRelation {
     //TODO Do something!
     return newState;
   }
-
-  /*private boolean pointsToStruct(CType pExpressionType) {
-    if (pExpressionType instanceof CPointerType) {
-      return pointsToStruct(((CPointerType)pExpressionType).getType());
-    } else if (pExpressionType instanceof CCompositeType) {
-      //TODO add struct check
-      return true;
-    } else if (pExpressionType instanceof CComplexType) {
-      return true;
-    }
-    return false;
-  }*/
 
   private void handleStatement(LocalState pSuccessor, CStatement pStatement, CFAEdge pCfaEdge) throws HandleCodeException {
     if (pStatement instanceof CAssignment) {
@@ -496,7 +484,6 @@ public class LocalTransferRelation implements TransferRelation {
   }
 
   private void assume(LocalState pSuccessor, AbstractIdentifier leftId, CExpression right) throws HandleCodeException {
-    DataType type = checkId(leftId);
     if (leftId instanceof ConstantIdentifier)
       //Can't assume to constant, but this situation can occur, if we have *(a + b)...
       return;
@@ -504,17 +491,27 @@ public class LocalTransferRelation implements TransferRelation {
       //TODO may be, it should be changed...
       assume(pSuccessor, ((BinaryIdentifier)leftId).getIdentifier1(), right);
       assume(pSuccessor, ((BinaryIdentifier)leftId).getIdentifier2(), right);
+      //System.out.println("Binary assumption: " + leftId.toString() + ":" + right.getFileLocation().getStartingLineNumber());
+      return;
     }
     SingleIdentifier left = (SingleIdentifier) leftId;
+    DataType type = checkId(leftId);
     if (type == DataType.GLOBAL) {
       //Variable is global, not memory location!
       //So, we should set the type of 'right' to global
       set(pSuccessor, right, DataType.GLOBAL, left.getDereference());
     } else {
       type = findType(pSuccessor, right, left.getDereference());
-      if (type != null)
-        pSuccessor.save(left, type);
+      pSuccessor.set(left, type);
     }
+  }
+
+  private CType getPointedType(CPointerType type) {
+    CType pointedType = type.getType();
+    if (pointedType instanceof CPointerType)
+      return getPointedType((CPointerType)pointedType);
+    else
+      return pointedType;
   }
 
   private void handleDeclaration(LocalState pSuccessor, CDeclarationEdge declEdge) throws HandleCodeException {
@@ -523,11 +520,16 @@ public class LocalTransferRelation implements TransferRelation {
       return;
 
     CDeclaration decl = declEdge.getDeclaration();
-    if (decl.getType() instanceof CPointerType) {
+    if (decl.getType() instanceof CPointerType && !decl.isGlobal()) {
       //we don't save global variables
-      if (!decl.isGlobal())
-        pSuccessor.save(new LocalVariableIdentifier(decl.getName(), null, declEdge.getSuccessor().getFunctionName()
-            , findDereference(decl.getType())), DataType.LOCAL);
+      pSuccessor.set(new LocalVariableIdentifier(decl.getName(), null, declEdge.getSuccessor().getFunctionName()
+          , findDereference(decl.getType())), DataType.LOCAL);
+      /*CType type = getPointedType((CPointerType)decl.getType());
+      if (type instanceof CCompositeType) {
+         ((CComposite))
+      }*/
+      //else
+
     }
   }
 

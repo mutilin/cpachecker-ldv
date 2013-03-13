@@ -65,9 +65,12 @@ public class IdentifierCreator implements CExpressionVisitor<AbstractIdentifier,
   public AbstractIdentifier visit(CBinaryExpression expression) throws HandleCodeException {
     AbstractIdentifier resultId1, resultId2, result;
     int oldDereference = dereference;
+    dereference = 0;
     resultId1 = expression.getOperand1().accept(this);
+    dereference = 0;
     resultId2 = expression.getOperand2().accept(this);
     result = new BinaryIdentifier(resultId1, resultId2, oldDereference);
+    dereference = oldDereference;
     return result;
   }
 

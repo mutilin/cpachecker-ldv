@@ -79,4 +79,14 @@ public class LocalVariableIdentifier extends VariableIdentifier {
   public boolean isGlobal() {
     return false;
   }
+
+  @Override
+  public String toLog() {
+    return "l;" + name + ";" + dereference;
+  }
+
+  @Override
+  public GeneralIdentifier getGeneralId() {
+    return new GeneralLocalVariableIdentifier(name, dereference);
+  }
 }

@@ -24,15 +24,11 @@
 package org.sosy_lab.cpachecker.util.identifiers;
 
 
-public class BinaryIdentifier implements AbstractIdentifier {
-  protected AbstractIdentifier id1;
-  protected AbstractIdentifier id2;
-  protected int dereference;
 
-  public BinaryIdentifier(AbstractIdentifier i1, AbstractIdentifier i2, int deref) {
-    id1 = i1;
-    id2 = i2;
-    dereference = deref;
+public class GeneralLocalVariableIdentifier extends LocalVariableIdentifier implements GeneralIdentifier {
+
+  public GeneralLocalVariableIdentifier(String pNm, int pDereference) {
+    super(pNm, null, "", pDereference);
   }
 
   @Override
@@ -40,10 +36,10 @@ public class BinaryIdentifier implements AbstractIdentifier {
     final int prime = 31;
     int result = 1;
     result = prime * result + dereference;
-    result = prime * result + ((id1 == null) ? 0 : id1.hashCode());
-    result = prime * result + ((id2 == null) ? 0 : id2.hashCode());
+    result = prime * result + ((name == null) ? 0 : name.hashCode());
     return result;
   }
+
   @Override
   public boolean equals(Object obj) {
     if (this == obj)
@@ -52,49 +48,24 @@ public class BinaryIdentifier implements AbstractIdentifier {
       return false;
     if (getClass() != obj.getClass())
       return false;
-    BinaryIdentifier other = (BinaryIdentifier) obj;
+    SingleIdentifier other = (SingleIdentifier) obj;
     if (dereference != other.dereference)
       return false;
-    if (id1 == null) {
-      if (other.id1 != null)
+    if (name == null) {
+      if (other.name != null)
         return false;
-    } else if (!id1.equals(other.id1))
-      return false;
-    if (id2 == null) {
-      if (other.id2 != null)
-        return false;
-    } else if (!id2.equals(other.id2))
+    } else if (!name.equals(other.name))
       return false;
     return true;
   }
 
-
-
   @Override
-  public String toString() {
-    return dereference + "(" + id1.toString() + " -- " + id2.toString() + ")";
+  public GeneralLocalVariableIdentifier clone() {
+    return new GeneralLocalVariableIdentifier(name, dereference);
   }
 
   @Override
-  public boolean isGlobal() {
-    return (id1.isGlobal() || id2.isGlobal());
+  public void setDereference(int pNewD) {
+    dereference = pNewD;
   }
-
-  @Override
-  public BinaryIdentifier clone() {
-    return new BinaryIdentifier(id1.clone(), id2.clone(), dereference);
-  }
-
-  public AbstractIdentifier getIdentifier1() {
-    return id1;
-  }
-
-  public AbstractIdentifier getIdentifier2() {
-    return id2;
-  }
-
-  public int getDereference() {
-    return dereference;
-  }
-
 }

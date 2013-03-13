@@ -47,31 +47,6 @@ public class StructureFieldIdentifier extends SingleIdentifier {
     return info;
   }
 
-  /*@Override
-  public int hashCode() {
-    final int prime = 31;
-    int result = super.hashCode();
-    result = prime * result + ((fieldType == null) ? 0 : fieldType.hashCode());
-    return result;
-  }
-
-  @Override
-  public boolean equals(Object obj) {
-    if (this == obj)
-      return true;
-    if (!super.equals(obj))
-      return false;
-    if (getClass() != obj.getClass())
-      return false;
-    StructureFieldIdentifier other = (StructureFieldIdentifier) obj;
-    if (fieldType == null) {
-      if (other.fieldType != null)
-        return false;
-    } else if (!fieldType.toASTString("").equals(other.fieldType.toASTString("")))
-      return false;
-    return true;
-  }*/
-
   @Override
   public StructureFieldIdentifier clone() {
     return new StructureFieldIdentifier(name, fieldType, type, dereference);
@@ -86,5 +61,15 @@ public class StructureFieldIdentifier extends SingleIdentifier {
   public boolean isGlobal() {
     //It isn't correct, but this method shouldn't be used in this class
     return false;
+  }
+
+  @Override
+  public String toLog() {
+    return "f;" + name + ";" + dereference;
+  }
+
+  @Override
+  public GeneralIdentifier getGeneralId() {
+    return new GeneralStructureFieldIdentifier(name, dereference);
   }
 }

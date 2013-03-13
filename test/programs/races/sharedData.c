@@ -16,7 +16,7 @@ int *f(int *m) {
   //m = &t;
   point *C;
   *m = 10;
-  C->x = a;
+  C->x = m;
   C->y = 1;
   return C->x;
 }
@@ -32,16 +32,19 @@ point* getStart(struct line *l) {
   }
 }
 
-int main() {
+int ldv_main() {
   int *a;//, *c;
  // int b;
-  struct point B;
+  struct point* B;
   //struct line *L2;
   
   /*a = &b;
   c = a;
   a = malloc();*/
-  A = getStart(&B);
+  B = getStart(&B);
+  intLock();
+  a = B->x;
+  intUnlock();
   //L2->start = B;
   /*p = &c;
   *p = a;

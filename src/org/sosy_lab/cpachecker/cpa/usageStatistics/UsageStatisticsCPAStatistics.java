@@ -50,6 +50,7 @@ import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.abm.ABMRestoreStack;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
+import org.sosy_lab.cpachecker.cpa.local.LocalState.DataType;
 import org.sosy_lab.cpachecker.cpa.lockStatistics.AccessPoint;
 import org.sosy_lab.cpachecker.cpa.lockStatistics.LockStatisticsLock;
 import org.sosy_lab.cpachecker.cpa.lockStatistics.LockStatisticsState;
@@ -57,6 +58,10 @@ import org.sosy_lab.cpachecker.cpa.usageStatistics.EdgeInfo.EdgeType;
 import org.sosy_lab.cpachecker.cpa.usageStatistics.UsageInfo.Access;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
+import org.sosy_lab.cpachecker.util.identifiers.GeneralGlobalVariableIdentifier;
+import org.sosy_lab.cpachecker.util.identifiers.GeneralIdentifier;
+import org.sosy_lab.cpachecker.util.identifiers.GeneralLocalVariableIdentifier;
+import org.sosy_lab.cpachecker.util.identifiers.GeneralStructureFieldIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.GlobalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.LocalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
@@ -90,7 +95,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   @Option(values={"PAIR", "SETDIFF"},toUppercase=true,
       description="which data process we should use")
   private String unsafeDetectorType = "PAIR";
-  private Map<String, Map<String, String>> localStatistics;
+  private Map<String, Map<GeneralIdentifier, DataType>> localStatistics;
 
   //@Option(description="if we need to print all variables, not only unsafe cases")
   //private boolean fullstatistics = true;
@@ -114,12 +119,14 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
     if (localAnalysis) {
       //Restore all information
-      localStatistics = new HashMap<String, Map<String, String>>();
+      localStatistics = new HashMap<String, Map<GeneralIdentifier, DataType>>();
       try {
         BufferedReader reader = new BufferedReader(new FileReader(outputFileName));
         String line, node = null, local;
         String[] localSet;
-        Map<String, String> info = null;
+        DataType type;
+        Map<GeneralIdentifier, DataType> info = null;
+        GeneralIdentifier id;
         while ((line = reader.readLine()) != null) {
           if (line.startsWith("N")) {
             //N1 - it's node identifier
@@ -127,13 +134,33 @@ public class UsageStatisticsCPAStatistics implements Statistics {
               localStatistics.put(node, info);
             }
             node = line;
-            info = new HashMap<String, String>();
+            info = new HashMap<GeneralIdentifier, DataType>();
           } else if (line.length() > 0) {
             // it's information about local statistics
             local = line;
-            localSet = local.split(" - ");
-            info.put(localSet[0], localSet[1]);
-
+            localSet = local.split(";");
+            if (localSet[0].equalsIgnoreCase("g")) {
+              //Global variable
+              id = new GeneralGlobalVariableIdentifier(localSet[1], Integer.parseInt(localSet[2]));
+            } else if (localSet[0].equalsIgnoreCase("l")) {
+              //Local identifier
+              id = new GeneralLocalVariableIdentifier(localSet[1], Integer.parseInt(localSet[2]));
+            } else if (localSet[0].equalsIgnoreCase("s") || localSet[0].equalsIgnoreCase("f")) {
+              //Structure (field) identifier
+              id = new GeneralStructureFieldIdentifier(localSet[1], Integer.parseInt(localSet[2]));
+            } else {
+              System.err.println("Can't resolve such line: " + line);
+              continue;
+            }
+            if (localSet[3].equalsIgnoreCase("global")) {
+              type = DataType.GLOBAL;
+            } else if (localSet[3].equalsIgnoreCase("local")){
+              type = DataType.LOCAL;
+            } else {
+              System.err.println("Can't resolve such data type: " + localSet[3]);
+              continue;
+            }
+            info.put(id, type);
           }
         }
         if (node != null && info != null) {
@@ -181,11 +208,16 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       //last check: if this variable is local, because of local analysis
       if (localAnalysis) {
         CFANode node = AbstractStates.extractLocation(state);
-        Map<String, String> localInfo = localStatistics.get(node.toString());
-        if (localInfo != null && localInfo.containsKey(id.getName())) {
-          String dataType = localInfo.get(id.getName());
-          if (dataType.equalsIgnoreCase("local")) {
-            System.out.println("Skip " + id.getName() + " as local");
+        Map<GeneralIdentifier, DataType> localInfo = localStatistics.get(node.toString());
+        GeneralIdentifier generalId = id.getGeneralId();
+        //TODO make it better. This is also evil hack!
+        if (id.getDereference() == 0)
+          generalId.setDereference(1);
+
+        if (localInfo != null && localInfo.containsKey(generalId)) {
+          DataType dataType = localInfo.get(generalId);
+          if (dataType == DataType.LOCAL) {
+            //System.out.println("Skip " + id.getName() + " as local");
             skippedUsageCounter++;
             continue;
           }

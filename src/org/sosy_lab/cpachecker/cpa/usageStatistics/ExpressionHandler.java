@@ -170,7 +170,8 @@ public class ExpressionHandler implements CExpressionVisitor<Void, HandleCodeExc
   public Void visit(CFieldReference expression) throws HandleCodeException {
     isLocalExpression localChecker = new isLocalExpression();
     //Checks, if this variable is local. If it is so, we don't need to save it in statistics
-    if (!(expression.getFieldOwner().accept(localChecker))) {
+    if (!(expression.getFieldOwner().accept(localChecker)) &&
+        (expression.getExpressionType() instanceof CPointerType)) {
       SingleIdentifier id = new StructureFieldIdentifier(expression.getFieldName(),
         expression.getExpressionType().toASTString(""), expression.getFieldOwner().getExpressionType(), dereferenceCounter);
       result.add(Pair.of(id, accessMode));

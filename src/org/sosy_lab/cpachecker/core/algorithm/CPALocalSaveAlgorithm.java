@@ -85,7 +85,7 @@ public class CPALocalSaveAlgorithm extends CPAAlgorithm {
       writer = new PrintWriter(file);
       for (CFANode node : reachedStatistics.keySet()) {
         writer.println(node.toString());
-        writer.println(reachedStatistics.get(node));
+        writer.println(reachedStatistics.get(node).toLog());
       }
       writer.close();
     } catch(FileNotFoundException e) {
