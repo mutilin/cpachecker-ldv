@@ -301,7 +301,11 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
 
   public void changeAlgorithm(BoundedRecursionCPA brCpa, Configuration pConfig) throws InvalidConfigurationException {
     //evil hack
-    algorithm = new CPALocalSaveAlgorithm(brCpa, logger, pConfig, true);
+    String saveLocal = pConfig.getProperty("analysis.saveLocalResults");
+    if (saveLocal != null && saveLocal.equals("true"))
+      algorithm = new CPALocalSaveAlgorithm(brCpa, logger, pConfig, true);
+    else
+      algorithm = new CPAAlgorithm(brCpa, logger, pConfig);
   }
 
   public ABMTransferRelation(Configuration pConfig, LogManager pLogger, ABMCPA abmCpa, ReachedSetFactory pReachedSetFactory) throws InvalidConfigurationException {

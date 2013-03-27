@@ -44,7 +44,6 @@ import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
-import org.sosy_lab.cpachecker.cfa.types.c.CPointerType;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
@@ -199,7 +198,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         skippedUsageCounter++;
         continue;
       }
-      if (id instanceof LocalVariableIdentifier && !(id.getType() instanceof CPointerType)
+      if (id instanceof LocalVariableIdentifier /*&& !(id.getType() instanceof CPointerType)*/
           && id.getDereference() <= 0) {
         //we don't save in statistics ordinary local variables
         skippedUsageCounter++;
@@ -210,9 +209,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         CFANode node = AbstractStates.extractLocation(state);
         Map<GeneralIdentifier, DataType> localInfo = localStatistics.get(node.toString());
         GeneralIdentifier generalId = id.getGeneralId();
-        //TODO make it better. This is also evil hack!
-        if (id.getDereference() == 0)
-          generalId.setDereference(1);
 
         if (localInfo != null && localInfo.containsKey(generalId)) {
           DataType dataType = localInfo.get(generalId);
@@ -253,7 +249,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     return locks;
   }
 
-/*
+  /*
    * looks through all unsafe cases of current identifier and find the example of two lines with different locks, one of them must be 'write'
    */
   private void createVisualization(SingleIdentifier id, UsageInfo ui, PrintWriter writer) {
@@ -301,7 +297,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     for (CallstackState callstack : tmpList) {
       currentLeaf = currentLeaf.addLast(callstack);
     }
-    String name = id.getName();
+    String name = id.toString();
     if (ui.getEdgeInfo().getEdgeType() == EdgeType.ASSIGNMENT) {
       if (ui.getAccess() == Access.READ) {
         name = "... = " + name + ";";

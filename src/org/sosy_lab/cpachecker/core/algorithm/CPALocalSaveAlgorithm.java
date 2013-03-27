@@ -67,7 +67,12 @@ public class CPALocalSaveAlgorithm extends CPAAlgorithm {
         //we should have LocationCPA and our LocalCPA
         CFANode node = AbstractStates.extractLocation(state);
         LocalState lState = AbstractStates.extractStateByType(state, LocalState.class);
-        reachedStatistics.put(node, lState);
+        if (!reachedStatistics.containsKey(node)) {
+          reachedStatistics.put(node, lState);
+        } else {
+          LocalState previousState = reachedStatistics.get(node);
+          reachedStatistics.put(node, previousState.join(lState));
+        }
       }
     } else if (reachedSet instanceof ForwardingReachedSet) {
       addReachedSet(((ForwardingReachedSet)reachedSet).getDelegate());
