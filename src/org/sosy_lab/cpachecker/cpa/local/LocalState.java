@@ -24,11 +24,13 @@
 package org.sosy_lab.cpachecker.cpa.local;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
-import org.sosy_lab.cpachecker.cfa.types.c.CPointerType;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
+import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.BinaryIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.ConstantIdentifier;
@@ -63,6 +65,7 @@ public class LocalState implements AbstractState {
   private LocalState previousState;
   private CExpression returnExpression;
   private final Map<AbstractIdentifier, DataType> DataInfo;
+  //private static int counter = 0;
 
   public LocalState(LocalState state) {
     DataInfo = new HashMap<AbstractIdentifier, DataType>();
@@ -135,7 +138,7 @@ public class LocalState implements AbstractState {
         return DataType.GLOBAL;
       else if (name instanceof LocalVariableIdentifier) {
         LocalVariableIdentifier localId = (LocalVariableIdentifier) name;
-        if (localId.getDereference() < 0 && !(localId.getType() instanceof CPointerType)) {
+        if (localId.getDereference() <= 0/* && !(localId.getType() instanceof CPointerType)*/) {
           //TODO may be precised...
           return DataType.LOCAL;
         }
@@ -176,17 +179,55 @@ public class LocalState implements AbstractState {
   }
 
   public LocalState join(LocalState pState2) {
-
+    //by definition of Merge operator we should return state2, not this!
+    if (this.equals(pState2))
+      return pState2;
     LocalState joinState = this.clone();
+    Set<AbstractIdentifier> toDelete = new HashSet<AbstractIdentifier>();
+
     for (AbstractIdentifier name : joinState.DataInfo.keySet()) {
       if (!pState2.DataInfo.containsKey(name) && joinState.DataInfo.get(name) != DataType.GLOBAL)
-        joinState.DataInfo.remove(name);
+        toDelete.add(name);
     }
+
+    for (AbstractIdentifier del : toDelete) {
+      joinState.DataInfo.remove(del);
+    }
+
     for (AbstractIdentifier name : pState2.DataInfo.keySet()) {
       if (!joinState.DataInfo.containsKey(name) && pState2.DataInfo.get(name) == DataType.GLOBAL)
         joinState.DataInfo.put(name, DataType.GLOBAL);
       else if (joinState.DataInfo.containsKey(name))
         joinState.DataInfo.put(name, DataType.max(this.DataInfo.get(name), pState2.DataInfo.get(name)));
+    }
+    //counter++;
+    //System.out.println("Merge: " + counter);
+    if ((this.previousState != null && pState2.previousState == null)
+        && (this.previousState == null && pState2.previousState != null) ) {
+      System.err.println("Panic! Merging states, but one of them has previous and another hasn't");
+    } else if (this.previousState != null && pState2.previousState != null
+        && !this.previousState.equals(pState2.previousState)) {
+      //it can be, when we join states, called from different functions
+      joinState.previousState = this.previousState.join(pState2.previousState);
+    }
+
+    if ((this.returnExpression != null && pState2.returnExpression == null)
+        && (this.returnExpression == null && pState2.returnExpression != null) ) {
+      System.err.println("Panic! Merging states, but one of them has returnExpression and another hasn't");
+
+    } else if (this.returnExpression != null && pState2.returnExpression != null) {
+      IdentifierCreator creator = new IdentifierCreator();
+      try {
+        AbstractIdentifier thisId = this.returnExpression.accept(creator);
+        AbstractIdentifier otherId = pState2.returnExpression.accept(creator);
+        DataType thisType = this.getType(thisId);
+        DataType otherType = pState2.getType(otherId);
+        if (DataType.max(thisType, otherType) != thisType) {
+          joinState.returnExpression = pState2.returnExpression;
+        }
+      } catch (HandleCodeException e) {
+        System.err.println("Can't create id for " + this.returnExpression.toASTString());
+      }
     }
     return joinState;
   }
@@ -194,8 +235,21 @@ public class LocalState implements AbstractState {
   public boolean isLessOrEqual(LocalState pState2) {
 
     for (AbstractIdentifier name : this.DataInfo.keySet()) {
-      if (!pState2.DataInfo.containsKey(name))
+      if (!pState2.DataInfo.containsKey(name)) {
+        //LOCAL < NULL < GLOBAL
+        if (this.DataInfo.get(name) == DataType.LOCAL)
+          continue;
+        else
+          return false;
+      } else {
+        if (this.DataInfo.get(name) != pState2.DataInfo.get(name))
+          return false;
+      }
+    }
+    for (AbstractIdentifier name : pState2.DataInfo.keySet()) {
+      if (!this.DataInfo.containsKey(name) && pState2.DataInfo.get(name) == DataType.LOCAL) {
         return false;
+      }
     }
     return true;
   }

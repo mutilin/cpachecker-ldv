@@ -76,9 +76,7 @@ public class LocalCPA implements ConfigurableProgramAnalysisWithABM  {
       this.abstractDomain = new LocalDomain();
       this.mergeOperator = initializeMergeOperator();
       this.stopOperator = initializeStopOperator();
-      //this.precisionAdjustment = new UsageStatisticsPrecisionAdjustment(pCpa.getPrecisionAdjustment());
       reducer = new LocalReducer();
-      //this.statistics = new UsageStatisticsCPAStatistics(pConfig, coverGenerator);
       this.transferRelation = new LocalTransferRelation(pConfig);
 
     }

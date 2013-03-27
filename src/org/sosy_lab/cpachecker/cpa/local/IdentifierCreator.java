@@ -44,8 +44,8 @@ import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.BinaryIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.ConstantIdentifier;
-import org.sosy_lab.cpachecker.util.identifiers.GlobalVariableIdentifier;
-import org.sosy_lab.cpachecker.util.identifiers.LocalVariableIdentifier;
+import org.sosy_lab.cpachecker.util.identifiers.GeneralGlobalVariableIdentifier;
+import org.sosy_lab.cpachecker.util.identifiers.GeneralLocalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.StructureIdentifier;
 
 
@@ -97,13 +97,17 @@ public class IdentifierCreator implements CExpressionVisitor<AbstractIdentifier,
 
     if (decl instanceof CDeclaration) {
       if (((CDeclaration)decl).isGlobal())
-        return new GlobalVariableIdentifier(expression.getName(), expression.getExpressionType(), dereference);
+        return new GeneralGlobalVariableIdentifier(expression.getName(), dereference);
       else
-        return new LocalVariableIdentifier(expression.getName(), expression.getExpressionType(), "", dereference);
+        return new GeneralLocalVariableIdentifier(expression.getName(), dereference);
     } else if (decl instanceof CParameterDeclaration) {
-      return new LocalVariableIdentifier(expression.getName(), expression.getExpressionType(), "", dereference);
+      return new GeneralLocalVariableIdentifier(expression.getName(), dereference);
     } else if (decl instanceof CEnumerator) {
       return new ConstantIdentifier(decl.getName());
+    } else if (decl == null) {
+      //In our cil-file it means, that we have function pointer
+      //This data can't be shared (we wouldn't write)
+      return new GeneralLocalVariableIdentifier(expression.getName(), dereference);
     } else {
       //Composite type
       return null;

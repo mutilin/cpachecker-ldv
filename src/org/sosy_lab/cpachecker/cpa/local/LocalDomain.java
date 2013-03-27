@@ -29,7 +29,6 @@ import org.sosy_lab.cpachecker.exceptions.CPAException;
 
 
 public class LocalDomain implements AbstractDomain {
-
   @Override
   public AbstractState join(AbstractState pState1, AbstractState pState2) throws CPAException {
     return ((LocalState)pState1).join((LocalState)pState2);

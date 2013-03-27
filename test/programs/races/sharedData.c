@@ -1,4 +1,4 @@
-struct point {
+/*struct point {
   int *x;
   int y;
 } *A;
@@ -19,9 +19,9 @@ int *f(int *m) {
   C->x = m;
   C->y = 1;
   return C->x;
-}
+}*/
 
-point* getStart(struct line *l) {
+/*point* getStart(struct line *l) {
   if ( l != null) {
     //f(G);
     l->start = &t;
@@ -30,24 +30,33 @@ point* getStart(struct line *l) {
     //f(*p);
     return null;
   }
-}
+}*/
 
 int ldv_main() {
   int *a;//, *c;
- // int b;
-  struct point* B;
+  int b;
+  //struct point* B;
   //struct line *L2;
   
   /*a = &b;
   c = a;
   a = malloc();*/
-  B = getStart(&B);
+  while (b > 1) {
+      a = f(2);
+  }
+ /* while (*a > 1) {
+    B = getStart(&B);
+    if (*a < 1)
+      a++;
+    else
+      a--;
+  }
   intLock();
   a = B->x;
-  intUnlock();
+  intUnlock();*/
   //L2->start = B;
   /*p = &c;
   *p = a;
   c = &b;*/
-  B->x = f(a);
+ // B->x = f(a);
 }
