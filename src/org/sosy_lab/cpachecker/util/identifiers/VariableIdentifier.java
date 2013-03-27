@@ -38,8 +38,15 @@ public abstract class VariableIdentifier extends SingleIdentifier {
   @Override
   public String toString() {
     StringBuilder sb = new StringBuilder();
-    for (int i = 0; i < dereference; i++) {
-      sb.append("*");
+    if (dereference > 0) {
+      for (int i = 0; i < dereference; i++) {
+        sb.append("*");
+      }
+    } else if (dereference == -1) {
+      sb.append("&");
+    } else if (dereference < -1){
+      sb.append("Error in string representation, dereference < -1");
+      return sb.toString();
     }
     sb.append(name);
     return sb.toString();

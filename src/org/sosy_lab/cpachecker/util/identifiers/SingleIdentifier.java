@@ -48,6 +48,7 @@ public abstract class SingleIdentifier implements AbstractIdentifier{
     dereference = deref;
   }
 
+  @Override
   public int getDereference() {
     return dereference;
   }

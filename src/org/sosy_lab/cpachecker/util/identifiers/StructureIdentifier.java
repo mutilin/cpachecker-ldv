@@ -38,10 +38,17 @@ public class StructureIdentifier extends SingleIdentifier{
   @Override
   public String toString() {
     String info = "";
-    for (int i = 0; i < dereference; i++) {
-      info += "*";
+    if (dereference > 0) {
+      for (int i = 0; i < dereference; i++) {
+        info += "*";
+      }
+    } else if (dereference == -1) {
+      info += "&";
+    } else if (dereference < -1){
+      info = "Error in string representation, dereference < -1";
+      return info;
     }
-    info = "(" + owner.toString() + ").";
+    info += "(" + owner.toString() + ").";
     info += name;
     return info;
   }
@@ -93,6 +100,11 @@ public class StructureIdentifier extends SingleIdentifier{
   @Override
   public String toLog() {
     return "s;" + name + ";" + dereference;
+    /*if (owner instanceof SingleIdentifier){
+      return log + "\n" + ((SingleIdentifier)owner).toLog();
+    } else {
+      return log;
+    }*/
   }
 
   @Override

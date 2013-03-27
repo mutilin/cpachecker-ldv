@@ -37,4 +37,6 @@ public interface AbstractIdentifier {
   public boolean isGlobal();
 
   public AbstractIdentifier clone();
+
+  public int getDereference();
 }

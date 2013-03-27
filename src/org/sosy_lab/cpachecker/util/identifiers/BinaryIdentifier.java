@@ -72,7 +72,19 @@ public class BinaryIdentifier implements AbstractIdentifier {
 
   @Override
   public String toString() {
-    return dereference + "(" + id1.toString() + " -- " + id2.toString() + ")";
+    String info = "";
+    if (dereference > 0) {
+      for (int i = 0; i < dereference; i++) {
+        info += "*";
+      }
+    } else if (dereference == -1) {
+      info += "&";
+    } else if (dereference < -1){
+      info = "Error in string representation, dereference < -1";
+      return info;
+    }
+    info += "(" + id1.toString() + " # " + id2.toString() + ")";
+    return info;
   }
 
   @Override
@@ -93,6 +105,7 @@ public class BinaryIdentifier implements AbstractIdentifier {
     return id2;
   }
 
+  @Override
   public int getDereference() {
     return dereference;
   }

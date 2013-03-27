@@ -48,4 +48,10 @@ public class ConstantIdentifier implements AbstractIdentifier {
     return false;
   }
 
+  @Override
+  public int getDereference() {
+    return 0;
+  }
+
+
 }

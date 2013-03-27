@@ -38,8 +38,15 @@ public class StructureFieldIdentifier extends SingleIdentifier {
   @Override
   public String toString() {
     String info = "";
-    for (int i = 0; i < dereference; i++) {
-      info += "*";
+    if (dereference > 0) {
+      for (int i = 0; i < dereference; i++) {
+        info += "*";
+      }
+    } else if (dereference == -1) {
+      info += "&";
+    } else if (dereference < -1){
+      info = "Error in string representation, dereference < -1";
+      return info;
     }
     info += "(?.";
     info += name;
