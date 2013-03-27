@@ -31,7 +31,6 @@ import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.defaults.AbstractSingleWrapperCPA;
 import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
-import org.sosy_lab.cpachecker.core.defaults.MergeSepOperator;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractDomain;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.CPAFactory;
@@ -46,11 +45,11 @@ import org.sosy_lab.cpachecker.cpa.abm.ABMLockCPA;
 @Options(prefix="cpa.boundedrecursion")
 public class BoundedRecursionCPA extends AbstractSingleWrapperCPA {
 
-  private BoundedRecursionDomain abstractDomain;
-  private MergeOperator mergeOperator;
-  private StopOperator stopOperator;
+  //private BoundedRecursionDomain abstractDomain;
+  //private MergeOperator mergeOperator;
+  //private StopOperator stopOperator;
   private TransferRelation transferRelation;
-  private PrecisionAdjustment precisionAdjustment;
+  //private PrecisionAdjustment precisionAdjustment;
 
   public static CPAFactory factory() {
     return AutomaticCPAFactory.forType(BoundedRecursionCPA.class);
@@ -60,20 +59,20 @@ public class BoundedRecursionCPA extends AbstractSingleWrapperCPA {
     super(pCpa);
     if (pCpa instanceof ABMLockCPA)
       ((ABMLockCPA)pCpa).getTransferRelation().changeAlgorithm(this, pConfig);
-    this.abstractDomain = new BoundedRecursionDomain(pCpa.getAbstractDomain());
-    this.mergeOperator = initializeMergeOperator();
-    this.stopOperator = getWrappedCpa().getStopOperator();
+    //this.abstractDomain = new BoundedRecursionDomain(pCpa.getAbstractDomain());
+    //this.mergeOperator = initializeMergeOperator();
+    //this.stopOperator = getWrappedCpa().getStopOperator();
     this.transferRelation = new BoundedRecursionTransferRelation(pCpa.getTransferRelation(), pConfig, pLogger);
-    this.precisionAdjustment = new BoundedRecursionPrecisionAdjustment(pCpa.getPrecisionAdjustment());
+    //this.precisionAdjustment = new BoundedRecursionPrecisionAdjustment(pCpa.getPrecisionAdjustment());
   }
 
-  private MergeOperator initializeMergeOperator() {
+  /*private MergeOperator initializeMergeOperator() {
     return MergeSepOperator.getInstance();
-  }
+  }*/
 
   @Override
   public AbstractDomain getAbstractDomain() {
-    return abstractDomain;
+    return getWrappedCpa().getAbstractDomain();
   }
 
   @Override
@@ -83,17 +82,17 @@ public class BoundedRecursionCPA extends AbstractSingleWrapperCPA {
 
   @Override
   public MergeOperator getMergeOperator() {
-    return mergeOperator;
+    return getWrappedCpa().getMergeOperator();
   }
 
   @Override
   public StopOperator getStopOperator() {
-    return stopOperator;
+    return getWrappedCpa().getStopOperator();
   }
 
   @Override
   public PrecisionAdjustment getPrecisionAdjustment() {
-    return precisionAdjustment;
+    return getWrappedCpa().getPrecisionAdjustment();
   }
 
   @Override
