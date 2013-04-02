@@ -401,7 +401,8 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     /*Collection<GlobalIdentifier> global = new HashSet<GlobalIdentifier>();
     Collection<LocalIdentifier> local = new HashSet<LocalIdentifier>();
     Collection<StructureFieldIdentifier> fields = new HashSet<StructureFieldIdentifier>();*/
-    int global = 0, local = 0, fields = 0, pointers = 0;
+    int global = 0, local = 0, fields = 0;
+    int globalPointer = 0, localPointer = 0, fieldPointer = 0;
 
     try {
       file = new FileOutputStream (outputStatFileName);
@@ -413,35 +414,76 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       return;
     }
 
-    int counter = 0;
+    //int counter = 0;
 
     for (SingleIdentifier id : Stat.keySet()) {
-      counter += Stat.get(id).size();
+      //counter += Stat.get(id).size();
 
-      if (id.getDereference() == 0) {
-        if (id instanceof GlobalVariableIdentifier)
-        //global.add((GlobalIdentifier)id);
+      if (id instanceof GlobalVariableIdentifier) {
+        if (id.getDereference() == 0)
           global++;
-        else if (id instanceof LocalVariableIdentifier)
-        //local.add((LocalIdentifier)id);
+        else
+          globalPointer++;
+      }
+      else if (id instanceof LocalVariableIdentifier) {
+        if (id.getDereference() == 0)
           local++;
-        else if (id instanceof StructureFieldIdentifier)
-        //fields.add((StructureFieldIdentifier)id);
+        else
+          localPointer++;
+      }
+      else if (id instanceof StructureFieldIdentifier) {
+        if (id.getDereference() == 0)
           fields++;
-      } else {
-        pointers++;
+        else
+          fieldPointer++;
       }
     }
 
     writer.println(global);
+    writer.println(globalPointer);
     writer.println(local);
+    writer.println(localPointer);
     //writer.println("--Structures:           " + structures);
     writer.println(fields);
-    writer.println(pointers);
+    writer.println(fieldPointer);
 
-    writer.println(totalVarUsageCounter);
-    writer.println(counter);
-    writer.println(skippedUsageCounter);
+    writer.println(global + globalPointer + local + localPointer + fields + fieldPointer);
+    //writer.println(totalVarUsageCounter);
+    //writer.println(skippedUsageCounter);
+
+    Collection<SingleIdentifier> unsafeCases = unsafeDetector.getUnsafes(Stat);
+    global = globalPointer = local = localPointer = fields = fieldPointer= 0;
+    for (SingleIdentifier id : unsafeCases) {
+      //counter += Stat.get(id).size();
+
+      if (id instanceof GlobalVariableIdentifier) {
+        if (id.getDereference() == 0)
+          global++;
+        else
+          globalPointer++;
+      }
+      else if (id instanceof LocalVariableIdentifier) {
+        if (id.getDereference() == 0)
+          local++;
+        else
+          localPointer++;
+      }
+      else if (id instanceof StructureFieldIdentifier) {
+        if (id.getDereference() == 0)
+          fields++;
+        else
+          fieldPointer++;
+      }
+    }
+    //writer.println(counter);
+    writer.println(global);
+    writer.println(globalPointer);
+    writer.println(local);
+    writer.println(localPointer);
+    //writer.println("--Structures:           " + structures);
+    writer.println(fields);
+    writer.println(fieldPointer);
+    writer.println(global + globalPointer + local + localPointer + fields + fieldPointer);
 
     Set<LockStatisticsLock> mutexes = findAllLocks();
 
@@ -450,34 +492,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     for (LockStatisticsLock lock : mutexes) {
       writer.println(lock.toString());
     }
-
-    Collection<SingleIdentifier> unsafeCases = unsafeDetector.getUnsafes(Stat);
-    counter = global = local = fields = pointers = 0;
-    for (SingleIdentifier id : unsafeCases) {
-      counter += Stat.get(id).size();
-
-      if (id.getDereference() <= 0) {
-        if (id instanceof GlobalVariableIdentifier)
-        //global.add((GlobalIdentifier)id);
-          global++;
-        else if (id instanceof LocalVariableIdentifier)
-        //local.add((LocalIdentifier)id);
-          local++;
-        else if (id instanceof StructureFieldIdentifier)
-        //fields.add((StructureFieldIdentifier)id);
-          fields++;
-      } else {
-        pointers++;
-      }
-    }
-    writer.println(global + local + fields + pointers);
-    writer.println(counter);
-    writer.println(global);
-    writer.println(local);
-    //writer.println("--Structures:           " + structures);
-    writer.println(fields);
-    writer.println(pointers);
-
     //printCases(dataProcess.getDescription(), unsafeCases);
 
     for (SingleIdentifier id : unsafeCases) {
