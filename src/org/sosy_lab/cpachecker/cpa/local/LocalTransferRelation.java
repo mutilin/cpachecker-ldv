@@ -213,9 +213,6 @@ public class LocalTransferRelation implements TransferRelation {
     LocalState newState = new LocalState(pSuccessor);
 
     CFunctionEntryNode functionEntryNode = callEdge.getSuccessor();
-    String fname = functionEntryNode.getFunctionName();
-    if (fname.equals("hshNodeCreate"))
-      System.out.println("Creating scope for hshNodeCreate()");
     List<String> paramNames = functionEntryNode.getFunctionParameterNames();
     List<CExpression> arguments = callEdge.getArguments();
 
@@ -227,7 +224,6 @@ public class LocalTransferRelation implements TransferRelation {
         dereference = findDereference(currentArgument.getExpressionType());
         AbstractIdentifier previousId;
         int previousDeref = 0;
-        //boolean isConst = currentArgument.getExpressionType().isConst();
         while (dereference > 0) {
           LocalVariableIdentifier id = new GeneralLocalVariableIdentifier(paramNames.get(i), dereference);
           previousId = createId(currentArgument, previousDeref);
@@ -284,7 +280,7 @@ public class LocalTransferRelation implements TransferRelation {
     }
   }
 
-  private int findDereference(CType type) {
+  public static int findDereference(CType type) {
     if (type instanceof CPointerType) {
       CPointerType pointerType = (CPointerType) type;
       return (findDereference(pointerType.getType()) + 1);
@@ -341,14 +337,6 @@ public class LocalTransferRelation implements TransferRelation {
     }
   }
 
-  private CType getPointedType(CPointerType type) {
-    CType pointedType = type.getType();
-    if (pointedType instanceof CPointerType)
-      return getPointedType((CPointerType)pointedType);
-    else
-      return pointedType;
-  }
-
   private void handleDeclaration(LocalState pSuccessor, CDeclarationEdge declEdge) throws HandleCodeException {
 
     if (declEdge.getDeclaration().getClass() != CVariableDeclaration.class)
@@ -358,11 +346,6 @@ public class LocalTransferRelation implements TransferRelation {
     if (decl.getType() instanceof CPointerType && !decl.isGlobal()) {
       //we don't save global variables
       pSuccessor.set(new GeneralLocalVariableIdentifier(decl.getName(), findDereference(decl.getType())), DataType.LOCAL);
-      /*CType type = getPointedType((CPointerType)decl.getType());
-      if (type instanceof CCompositeType) {
-         ((CComposite))
-      }*/
-      //else
 
     }
   }

@@ -28,19 +28,33 @@ package org.sosy_lab.cpachecker.util.identifiers;
 public class ConstantIdentifier implements AbstractIdentifier {
 
   protected String name;
+  protected int dereference;
 
-  public ConstantIdentifier(String nm) {
+  public ConstantIdentifier(String nm, int deref) {
     name = nm;
+    dereference = deref;
   }
 
   @Override
   public ConstantIdentifier clone() {
-    return new ConstantIdentifier(name);
+    return new ConstantIdentifier(name, dereference);
   }
 
   @Override
   public String toString() {
-    return name;
+    String info = "";
+    if (dereference > 0) {
+      for (int i = 0; i < dereference; i++) {
+        info += "*";
+      }
+    } else if (dereference == -1) {
+      info += "&";
+    } else if (dereference < -1){
+      info = "Error in string representation, dereference < -1";
+      return info;
+    }
+    info += name;
+    return info;
   }
 
   @Override
@@ -50,7 +64,7 @@ public class ConstantIdentifier implements AbstractIdentifier {
 
   @Override
   public int getDereference() {
-    return 0;
+    return dereference;
   }
 
 

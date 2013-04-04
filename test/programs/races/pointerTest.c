@@ -16,11 +16,12 @@ int* memAlloc() {
 }
  
 int ldv_main() {
-  int *a;
+  int *a, *b;
   /*struct point *A;
   A->x = 1;
   A->y = 2;*/
-  a = f();
+  b = f();
   a = memAlloc();
-  *a = 1;
+  b = (int *) a;
+  *b = 1;
 }

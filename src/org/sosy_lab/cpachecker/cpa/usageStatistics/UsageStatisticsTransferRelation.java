@@ -220,28 +220,19 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
     if (declEdge.getDeclaration().getClass() != CVariableDeclaration.class) {
       // not a variable declaration
-      /*if (declEdge.getDeclaration().getClass() == CFunctionDeclaration.class &&
-          declEdge.getRawStatement().contains(";")) {
-        covering.addException(declEdge.getLineNumber());
-      }*/
       return;
     }
     CVariableDeclaration decl = (CVariableDeclaration)declEdge.getDeclaration();
 
     if (!decl.toASTString().equals(declEdge.getRawStatement())) {
       //CPA replace "int t;" into "int t = 0;", so here there isn't assignment
-
-      /*if (!decl.toASTString().contains("CPAchecker_TMP"))
-        //sometimes CPAChecker insert some declarations
-        covering.addException(declEdge.getLineNumber());*/
       return;
     }
 
     CInitializer init = decl.getInitializer();
 
     if (init == null) {
-      //covering.addException(declEdge.getLineNumber());
-      //no assumption
+      //no assignment
       return;
     }
 
@@ -296,22 +287,12 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       }
     }
 
-    //covering.addFunctionUsage(functionCallName);
     if (skippedfunctions != null && skippedfunctions.contains(functionName)) {
       CallstackState callstack = AbstractStates.extractStateByType(pNewState, CallstackState.class);
       throw new StopAnalysisException("Function " + functionCallName + " is skipped", callstack.getCallNode());
     }
 
     List<CExpression> params = fcExpression.getParameterExpressions();
-    //It's strange, but callstack thinks, that we are already in called function
-    /*CallstackState callstack = AbstractStates.extractStateByType(pNewState, CallstackState.class);
-    if (callstack.getPreviousState() != null)
-      //it means, that we call function
-      functionName = callstack.getPreviousState().getCurrentFunction();
-    else
-      //we already in function and look on it signature
-      //TODO now it works only with ABM
-      return;*/
     for (CExpression p : params) {
       handler.setMode(functionName, Access.READ);
       p.accept(handler);
@@ -342,8 +323,6 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
         ((CExpression)right).accept(handler);
 
         statistics.add(handler.result, pNewState, line, EdgeType.ASSIGNMENT);
-
-        //linkVariables(pNewState, left, (CExpression)right);
 
       } else if (right instanceof CFunctionCallExpression) {
 

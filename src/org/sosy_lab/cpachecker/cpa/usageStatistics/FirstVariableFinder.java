@@ -27,9 +27,10 @@ import org.sosy_lab.common.Pair;
 import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFieldReference;
 import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
+import org.sosy_lab.cpachecker.cpa.local.IdentifierCreator;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
+import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
-import org.sosy_lab.cpachecker.util.identifiers.StructureFieldIdentifier;
 
 
 public class FirstVariableFinder extends ExpressionHandler {
@@ -44,10 +45,15 @@ public class FirstVariableFinder extends ExpressionHandler {
 
   @Override
   public Void visit(CFieldReference expression) throws HandleCodeException {
-    SingleIdentifier id = new StructureFieldIdentifier(expression.getFieldName(),
+    IdentifierCreator creator = new IdentifierCreator();
+    AbstractIdentifier fieldId = expression.accept(creator);
+    if (fieldId instanceof SingleIdentifier)
+    /*SingleIdentifier id = new StructureFieldIdentifier(expression.getFieldName(),
         expression.getExpressionType().toASTString(""), expression.getFieldOwner().getExpressionType(),
-        dereferenceCounter);
-      result.add(Pair.of(id, accessMode));
+        dereferenceCounter);*/
+      result.add(Pair.of((SingleIdentifier)fieldId, accessMode));
+    else
+      System.err.println("Can't creat id for expression " + expression.toASTString());
     return null;
   }
 

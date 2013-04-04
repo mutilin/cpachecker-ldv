@@ -23,12 +23,18 @@
  */
 package org.sosy_lab.cpachecker.util.identifiers;
 
+import org.sosy_lab.cpachecker.cfa.types.c.CType;
+
 
 
 public class GeneralLocalVariableIdentifier extends LocalVariableIdentifier implements GeneralIdentifier {
 
   public GeneralLocalVariableIdentifier(String pNm, int pDereference) {
     super(pNm, null, "", pDereference);
+  }
+
+  public GeneralLocalVariableIdentifier(String pNm, CType type, String function, int pDereference) {
+    super(pNm, type, function, pDereference);
   }
 
   @Override
@@ -61,7 +67,7 @@ public class GeneralLocalVariableIdentifier extends LocalVariableIdentifier impl
 
   @Override
   public GeneralLocalVariableIdentifier clone() {
-    return new GeneralLocalVariableIdentifier(name, dereference);
+    return new GeneralLocalVariableIdentifier(name, type, function, dereference);
   }
 
   @Override

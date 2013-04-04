@@ -97,17 +97,17 @@ public class IdentifierCreator implements CExpressionVisitor<AbstractIdentifier,
 
     if (decl instanceof CDeclaration) {
       if (((CDeclaration)decl).isGlobal())
-        return new GeneralGlobalVariableIdentifier(expression.getName(), dereference);
+        return new GeneralGlobalVariableIdentifier(expression.getName(), expression.getExpressionType(), dereference);
       else
-        return new GeneralLocalVariableIdentifier(expression.getName(), dereference);
+        return new GeneralLocalVariableIdentifier(expression.getName(), expression.getExpressionType(), "", dereference);
     } else if (decl instanceof CParameterDeclaration) {
-      return new GeneralLocalVariableIdentifier(expression.getName(), dereference);
+      return new GeneralLocalVariableIdentifier(expression.getName(), expression.getExpressionType(), "", dereference);
     } else if (decl instanceof CEnumerator) {
-      return new ConstantIdentifier(decl.getName());
+      return new ConstantIdentifier(decl.getName(), dereference);
     } else if (decl == null) {
       //In our cil-file it means, that we have function pointer
       //This data can't be shared (we wouldn't write)
-      return new GeneralLocalVariableIdentifier(expression.getName(), dereference);
+      return new GeneralLocalVariableIdentifier(expression.getName(), expression.getExpressionType(), "", dereference);
     } else {
       //Composite type
       return null;
@@ -116,27 +116,27 @@ public class IdentifierCreator implements CExpressionVisitor<AbstractIdentifier,
 
   @Override
   public AbstractIdentifier visit(CCharLiteralExpression expression) throws HandleCodeException {
-    return new ConstantIdentifier(expression.toASTString());
+    return new ConstantIdentifier(expression.toASTString(), dereference);
   }
 
   @Override
   public AbstractIdentifier visit(CFloatLiteralExpression expression) throws HandleCodeException {
-    return new ConstantIdentifier(expression.toASTString());
+    return new ConstantIdentifier(expression.toASTString(), dereference);
   }
 
   @Override
   public AbstractIdentifier visit(CIntegerLiteralExpression expression) throws HandleCodeException {
-    return new ConstantIdentifier(expression.toASTString());
+    return new ConstantIdentifier(expression.toASTString(), dereference);
   }
 
   @Override
   public AbstractIdentifier visit(CStringLiteralExpression expression) throws HandleCodeException {
-    return new ConstantIdentifier(expression.toASTString());
+    return new ConstantIdentifier(expression.toASTString(), dereference);
   }
 
   @Override
   public AbstractIdentifier visit(CTypeIdExpression expression) throws HandleCodeException {
-    return new ConstantIdentifier(expression.toASTString());
+    return new ConstantIdentifier(expression.toASTString(), dereference);
   }
 
   @Override

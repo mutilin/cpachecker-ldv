@@ -44,12 +44,7 @@ import org.sosy_lab.cpachecker.cpa.abm.ABMLockCPA;
 
 @Options(prefix="cpa.boundedrecursion")
 public class BoundedRecursionCPA extends AbstractSingleWrapperCPA {
-
-  //private BoundedRecursionDomain abstractDomain;
-  //private MergeOperator mergeOperator;
-  //private StopOperator stopOperator;
   private TransferRelation transferRelation;
-  //private PrecisionAdjustment precisionAdjustment;
 
   public static CPAFactory factory() {
     return AutomaticCPAFactory.forType(BoundedRecursionCPA.class);
@@ -59,16 +54,8 @@ public class BoundedRecursionCPA extends AbstractSingleWrapperCPA {
     super(pCpa);
     if (pCpa instanceof ABMLockCPA)
       ((ABMLockCPA)pCpa).getTransferRelation().changeAlgorithm(this, pConfig);
-    //this.abstractDomain = new BoundedRecursionDomain(pCpa.getAbstractDomain());
-    //this.mergeOperator = initializeMergeOperator();
-    //this.stopOperator = getWrappedCpa().getStopOperator();
     this.transferRelation = new BoundedRecursionTransferRelation(pCpa.getTransferRelation(), pConfig, pLogger);
-    //this.precisionAdjustment = new BoundedRecursionPrecisionAdjustment(pCpa.getPrecisionAdjustment());
   }
-
-  /*private MergeOperator initializeMergeOperator() {
-    return MergeSepOperator.getInstance();
-  }*/
 
   @Override
   public AbstractDomain getAbstractDomain() {

@@ -71,7 +71,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
   private Map<String, AnnotationInfo> annotatedfunctions;
 
   /*@Option(name="exceptions",
-      description="functions wuth parameters, which we don't need to use")
+      description="functions with parameters, which we don't need to use")
   private Set<String> exceptions;
 
 

@@ -55,7 +55,6 @@ class UsageStatisticsState extends AbstractSingleWrapperState  {
   }
 
   public void put(SingleIdentifier id1, SingleIdentifier id2) {
-   // System.out.println("Link " + (id1 == null ? "null" : id1.getName()) + " and " + (id2 == null ? "null" : id2.getName()));
     if (!id1.equals(id2))
       variableBindingRelation.put(id1, id2);
   }
@@ -111,8 +110,8 @@ class UsageStatisticsState extends AbstractSingleWrapperState  {
 
   boolean isLessOrEqual(UsageStatisticsState other) {
 
-    // this element is not less or equal than the other element, if it contains less elements
-    if (variableBindingRelation.size() < other.variableBindingRelation.size()) {
+    // this element is not less or equal than the other element, if that one contains less elements
+    if (this.variableBindingRelation.size() > other.variableBindingRelation.size()) {
       return false;
     }
 

@@ -23,15 +23,9 @@
  */
 package org.sosy_lab.cpachecker.util.identifiers;
 
-import org.sosy_lab.cpachecker.cfa.ast.c.CArraySubscriptExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CDeclaration;
-import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CFieldReference;
-import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CParameterDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CSimpleDeclaration;
-import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 
@@ -115,7 +109,7 @@ public abstract class SingleIdentifier implements AbstractIdentifier{
 
   public abstract GeneralIdentifier getGeneralId();
 
-  public static SingleIdentifier createIdentifier(CExpression expression, String function, int dereference) throws HandleCodeException {
+  /*public static SingleIdentifier createIdentifier(CExpression expression, String function, int dereference) throws HandleCodeException {
     if (expression instanceof CArraySubscriptExpression) {
       return createIdentifier(((CArraySubscriptExpression)expression).getArrayExpression(), function, dereference);
 
@@ -156,12 +150,12 @@ public abstract class SingleIdentifier implements AbstractIdentifier{
          * int f();
          * int (*a)() = &f;
          * Skip it
-         */
+
       return null;
     }
 
     return SingleIdentifier.createIdentifier(decl, function, dereference);
-  }
+  }*/
 
   public static SingleIdentifier createIdentifier(CSimpleDeclaration decl, String function, int dereference) throws HandleCodeException
   {

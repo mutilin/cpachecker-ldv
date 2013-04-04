@@ -39,7 +39,6 @@ import org.sosy_lab.cpachecker.cfa.model.c.CFunctionSummaryEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
-import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.exceptions.StopAnalysisException;
@@ -61,10 +60,6 @@ class BoundedRecursionTransferRelation implements TransferRelation {
       AbstractState pElement, Precision pPrecision, CFAEdge pCfaEdge)
       throws CPATransferException, InterruptedException {
 
-    ARGState oldState = (ARGState)pElement;
-    //LocationState state = AbstractStates.extractStateByType(oldState, LocationState.class);
-    //if (state.getCurrentFunction().equals("vsyslog"))*/
-    //  System.out.println(state.getLocationNode().getLineNumber());
     Collection<? extends AbstractState> results = Collections.emptySet();
 
     if (pCfaEdge == null) {
@@ -91,7 +86,7 @@ class BoundedRecursionTransferRelation implements TransferRelation {
 
         CFunctionSummaryEdge sEdge = ((CFunctionCallEdge)edge).getSummaryEdge();
         CFAEdge newEdge = new BlankEdge(edge.getRawStatement(), edge.getLineNumber(), edge.getPredecessor(), sEdge.getSuccessor(), "recursion edge");
-        results = wrappedTransfer.getAbstractSuccessors(oldState, pPrecision, newEdge);
+        results = wrappedTransfer.getAbstractSuccessors(pElement, pPrecision, newEdge);
       }
 
     } else {

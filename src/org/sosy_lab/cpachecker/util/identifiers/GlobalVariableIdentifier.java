@@ -55,6 +55,6 @@ public class GlobalVariableIdentifier extends VariableIdentifier {
 
   @Override
   public GeneralIdentifier getGeneralId() {
-    return new GeneralGlobalVariableIdentifier(name, dereference);
+    return new GeneralGlobalVariableIdentifier(name, type, dereference);
   }
 }

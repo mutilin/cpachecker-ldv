@@ -36,14 +36,14 @@ import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysisWithAB
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
 
 @Options(prefix="cpa.lockstatistics")
-public class LockStatisticsCPA extends AbstractCPA implements ConfigurableProgramAnalysisWithABM/*, StatisticsProvider*/{
+public class LockStatisticsCPA extends AbstractCPA implements ConfigurableProgramAnalysisWithABM{
 
   public static CPAFactory factory() {
     return AutomaticCPAFactory.forType(LockStatisticsCPA.class);
   }
 
   private final LockStatisticsReducer reducer;
-  
+
   private LockStatisticsCPA (Configuration config, LogManager logger) throws InvalidConfigurationException {
     super("sep", "sep", new LockStatisticsTransferRelation(config, logger));
     reducer             = new LockStatisticsReducer();

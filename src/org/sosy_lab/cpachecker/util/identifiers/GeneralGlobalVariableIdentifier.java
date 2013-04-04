@@ -23,9 +23,15 @@
  */
 package org.sosy_lab.cpachecker.util.identifiers;
 
+import org.sosy_lab.cpachecker.cfa.types.c.CType;
+
 
 
 public class GeneralGlobalVariableIdentifier extends GlobalVariableIdentifier implements GeneralIdentifier {
+
+  public GeneralGlobalVariableIdentifier(String pNm, CType type, int pDereference) {
+    super(pNm, type, pDereference);
+  }
 
   public GeneralGlobalVariableIdentifier(String pNm, int pDereference) {
     super(pNm, null, pDereference);
@@ -62,7 +68,7 @@ public class GeneralGlobalVariableIdentifier extends GlobalVariableIdentifier im
 
   @Override
   public GeneralGlobalVariableIdentifier clone() {
-    return new GeneralGlobalVariableIdentifier(name, dereference);
+    return new GeneralGlobalVariableIdentifier(name, type, dereference);
   }
 
   @Override

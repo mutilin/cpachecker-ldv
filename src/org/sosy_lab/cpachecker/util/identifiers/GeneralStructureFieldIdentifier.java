@@ -23,6 +23,8 @@
  */
 package org.sosy_lab.cpachecker.util.identifiers;
 
+import org.sosy_lab.cpachecker.cfa.types.c.CType;
+
 
 
 public class GeneralStructureFieldIdentifier extends StructureFieldIdentifier implements GeneralIdentifier {
@@ -31,6 +33,11 @@ public class GeneralStructureFieldIdentifier extends StructureFieldIdentifier im
     super(pNm, "", null, pDereference);
   }
 
+  public GeneralStructureFieldIdentifier(String pNm, String fType, CType type, int pDereference) {
+    super(pNm, fType, type, pDereference);
+    if (type == null)
+      System.out.println("Creating GeneralStructureFieldIdentifier with null field");
+  }
   @Override
   public int hashCode() {
     final int prime = 31;
@@ -61,7 +68,7 @@ public class GeneralStructureFieldIdentifier extends StructureFieldIdentifier im
 
   @Override
   public GeneralStructureFieldIdentifier clone() {
-    return new GeneralStructureFieldIdentifier(name, dereference);
+    return new GeneralStructureFieldIdentifier(name, fieldType, type, dereference);
   }
 
   @Override

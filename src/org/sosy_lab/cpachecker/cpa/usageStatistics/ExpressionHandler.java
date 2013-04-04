@@ -37,97 +37,21 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CFieldReference;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFloatLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CIntegerLiteralExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CParameterDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CSimpleDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStringLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CTypeIdExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
-import org.sosy_lab.cpachecker.cfa.types.c.CPointerType;
+import org.sosy_lab.cpachecker.cfa.types.c.CEnumType.CEnumerator;
+import org.sosy_lab.cpachecker.cpa.local.IdentifierCreator;
 import org.sosy_lab.cpachecker.cpa.usageStatistics.UsageInfo.Access;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
+import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
+import org.sosy_lab.cpachecker.util.identifiers.GlobalVariableIdentifier;
+import org.sosy_lab.cpachecker.util.identifiers.LocalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
-import org.sosy_lab.cpachecker.util.identifiers.StructureFieldIdentifier;
-
 
 public class ExpressionHandler implements CExpressionVisitor<Void, HandleCodeException> {
-
-  private class isLocalExpression implements CExpressionVisitor<Boolean, HandleCodeException> {
-    @Override
-    public Boolean visit(CArraySubscriptExpression expression) throws HandleCodeException {
-      if (expression.getExpressionType() instanceof CPointerType)
-        return false;
-      return expression.getArrayExpression().accept(this);
-    }
-
-    @Override
-    public Boolean visit(CBinaryExpression expression) throws HandleCodeException {
-      if (expression.getExpressionType() instanceof CPointerType)
-        return false;
-      boolean result = expression.getOperand1().accept(this);
-      if (!result)
-        return false;
-      result = expression.getOperand2().accept(this);
-      return result;
-    }
-
-    @Override
-    public Boolean visit(CCastExpression expression) throws HandleCodeException {
-      if (expression.getExpressionType() instanceof CPointerType)
-        return false;
-      return expression.getOperand().accept(this);
-    }
-
-    @Override
-    public Boolean visit(CFieldReference expression) throws HandleCodeException {
-      if (expression.getExpressionType() instanceof CPointerType)
-        return false;
-      if (expression.isPointerDereference()) {
-        return false;
-      } else {
-        return expression.getFieldOwner().accept(this);
-      }
-    }
-
-    @Override
-    public Boolean visit(CIdExpression expression) throws HandleCodeException {
-      if (expression.getExpressionType() instanceof CPointerType)
-        return false;
-      CSimpleDeclaration decl = expression.getDeclaration();
-
-      if (decl instanceof CDeclaration) {
-        return (!(((CDeclaration)decl).isGlobal()));
-      } else {
-        return true;
-      }
-    }
-
-    @Override
-    public Boolean visit(CCharLiteralExpression expression) {return true;}
-
-    @Override
-    public Boolean visit(CFloatLiteralExpression expression) {return true;}
-
-    @Override
-    public Boolean visit(CIntegerLiteralExpression expression) {return true;}
-
-    @Override
-    public Boolean visit(CStringLiteralExpression expression){return true;}
-
-    @Override
-    public Boolean visit(CTypeIdExpression expression) {return true;}
-
-    @Override
-    public Boolean visit(CUnaryExpression expression) throws HandleCodeException {
-      if (expression.getExpressionType() instanceof CPointerType)
-        return false;
-      if (expression.getOperator() == CUnaryExpression.UnaryOperator.STAR) {
-        return false;
-      } else {
-        return expression.getOperand().accept(this);
-      }
-    }
-
-  }
-
 
   public List<Pair<SingleIdentifier, Access>> result;
   protected Access accessMode;
@@ -168,30 +92,40 @@ public class ExpressionHandler implements CExpressionVisitor<Void, HandleCodeExc
 
   @Override
   public Void visit(CFieldReference expression) throws HandleCodeException {
-    isLocalExpression localChecker = new isLocalExpression();
+    IdentifierCreator creator = new IdentifierCreator();
     Access oldAccessMode = Access.READ;
-    SingleIdentifier fieldId = null;
-    //Checks, if this variable is local. If it is so, we don't need to save it in statistics
-    if (!(expression.getFieldOwner().accept(localChecker))
-        /*&& dereferenceCounter > 0*/
-        /*&& (expression.getExpressionType() instanceof CPointerType)*/) {
-      fieldId = new StructureFieldIdentifier(expression.getFieldName(),
-        expression.getExpressionType().toASTString(""), expression.getFieldOwner().getExpressionType(), dereferenceCounter);
-      //result.add(Pair.of(id, accessMode));
-      oldAccessMode = accessMode;
-    }
+    AbstractIdentifier fieldId = expression.accept(creator);
+    oldAccessMode = accessMode;
     accessMode = Access.READ;
     dereferenceCounter = (expression.isPointerDereference() ? 1 : 0);
     expression.getFieldOwner().accept(this);
     //save, if there was any dereference
-    if (dereferenceCounter > 0 && fieldId != null)
-      result.add(Pair.of(fieldId, oldAccessMode));
+    if (dereferenceCounter > 0 && !fieldId.isGlobal())
+      result.add(Pair.of((SingleIdentifier)fieldId, oldAccessMode));
     return null;
   }
 
   @Override
   public Void visit(CIdExpression expression) throws HandleCodeException {
-    SingleIdentifier id = SingleIdentifier.createIdentifier(expression, function, dereferenceCounter);
+    SingleIdentifier id;
+    CSimpleDeclaration decl = expression.getDeclaration();
+
+    if (decl instanceof CDeclaration) {
+      if (((CDeclaration)decl).isGlobal())
+        id = new GlobalVariableIdentifier(expression.getName(), expression.getExpressionType(), dereferenceCounter);
+      else
+        id = new LocalVariableIdentifier(expression.getName(), expression.getExpressionType(), function, dereferenceCounter);
+    } else if (decl instanceof CParameterDeclaration) {
+      id = new LocalVariableIdentifier(expression.getName(), expression.getExpressionType(), function, dereferenceCounter);
+    } else if (decl instanceof CEnumerator) {
+      return null;
+    } else if (decl == null) {
+      //In our cil-file it means, that we have function pointer
+      id = new LocalVariableIdentifier(expression.getName(), expression.getExpressionType(), function, dereferenceCounter);
+    } else {
+      //Composite type
+      return null;
+    }
     result.add(Pair.of(id, accessMode));
     return null;
   }

@@ -73,9 +73,6 @@ import org.sosy_lab.cpachecker.util.identifiers.StructureIdentifier;
 public class UsageStatisticsCPAStatistics implements Statistics {
 
   private Map<SingleIdentifier, Set<UsageInfo>> Stat;
-  //private int totalVarUsageCounter = 0;
-  //skipped by transfer relation
-  //private int skippedUsageCounter = 0;
   //ABM interface to restore original callstacks
   private ABMRestoreStack stackRestoration;
 
@@ -182,29 +179,18 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     LockStatisticsState lockState = AbstractStates.extractStateByType(state, LockStatisticsState.class);
     CallstackState callstackState = AbstractStates.extractStateByType(state, CallstackState.class);
 
-    if (line == 121464)
-      System.out.println("Adding that structure");
-
     callstackState = createStack(callstackState);
 
     LineInfo lineInfo = new LineInfo(line);
     EdgeInfo info = new EdgeInfo(type);
 
     for (Pair<SingleIdentifier, Access> tmpPair : result) {
-      //totalVarUsageCounter++;
       id = tmpPair.getFirst();
-      if (id == null) {
-        //skippedUsageCounter++;
+      if (id == null || (skippedvariables != null && skippedvariables.contains(id.getName()))) {
         continue;
       }
-      if (skippedvariables != null && skippedvariables.contains(id.getName())) {
-        //skippedUsageCounter++;
-        continue;
-      }
-      if (id instanceof LocalVariableIdentifier /*&& !(id.getType() instanceof CPointerType)*/
-          && id.getDereference() <= 0) {
+      if (id instanceof LocalVariableIdentifier && id.getDereference() <= 0) {
         //we don't save in statistics ordinary local variables
-        //skippedUsageCounter++;
         continue;
       }
       if (id instanceof StructureIdentifier && !id.isGlobal() && id.getType() != null
@@ -224,7 +210,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
             dataType = localInfo.get(generalId);
             if (dataType == DataType.LOCAL) {
               //System.out.println("Skip " + id.getName() + " as local");
-              //skippedUsageCounter++;
               continue;
             }
           }
@@ -237,7 +222,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
                 dataType = localInfo.get(generalId);
                 if (dataType == DataType.LOCAL) {
                   //System.out.println("Skip " + id.getName() + " as local");
-                  //skippedUsageCounter++;
                   continue;
                 }
               }

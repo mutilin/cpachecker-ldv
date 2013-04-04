@@ -55,9 +55,7 @@ public class LocalCPA implements ConfigurableProgramAnalysisWithABM  {
     private MergeOperator mergeOperator;
     private StopOperator stopOperator;
     private TransferRelation transferRelation;
-    //private PrecisionAdjustment precisionAdjustment;
     private final Reducer reducer;
-    //private final UsageStatisticsCPAStatistics statistics;
 
     public static CPAFactory factory() {
       return AutomaticCPAFactory.forType(LocalCPA.class);

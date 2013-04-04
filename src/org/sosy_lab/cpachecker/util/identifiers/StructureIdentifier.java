@@ -23,7 +23,11 @@
  */
 package org.sosy_lab.cpachecker.util.identifiers;
 
+import org.sosy_lab.cpachecker.cfa.types.c.CBasicType;
+import org.sosy_lab.cpachecker.cfa.types.c.CComplexType;
+import org.sosy_lab.cpachecker.cfa.types.c.CSimpleType;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
+import org.sosy_lab.cpachecker.cpa.local.LocalTransferRelation;
 
 
 
@@ -97,6 +101,28 @@ public class StructureIdentifier extends SingleIdentifier{
     return owner.isGlobal();
   }
 
+  public boolean isAnyPointer() {
+    if (LocalTransferRelation.findDereference(type) > 0)
+      return true;
+    else if (dereference > 0)
+      return true;
+    else {
+      if (owner instanceof GlobalVariableIdentifier || owner instanceof LocalVariableIdentifier
+          || owner instanceof StructureFieldIdentifier || owner instanceof ConstantIdentifier) {
+        return (owner.getDereference() > 0);
+      } else if ( owner instanceof BinaryIdentifier) {
+        return (((BinaryIdentifier)owner).id1.getDereference() > 0
+            && ((BinaryIdentifier)owner).id2.getDereference() > 0);
+      } else if (owner instanceof StructureIdentifier) {
+        return ((StructureIdentifier)owner).isAnyPointer();
+      } else {
+        //Strange situation
+        System.err.println("Unknown identifier: " + this.toString());
+        return true;//Conservatively
+      }
+    }
+  }
+
   @Override
   public String toLog() {
     return "s;" + name + ";" + dereference;
@@ -107,8 +133,25 @@ public class StructureIdentifier extends SingleIdentifier{
     }*/
   }
 
+  private CType getStructureType() {
+    if (owner instanceof SingleIdentifier)
+      return ((SingleIdentifier)owner).type;
+    else if (owner instanceof ConstantIdentifier) {
+      return new CSimpleType(false, false, CBasicType.INT, false, false, false, false, false, false, false);
+    } else if (owner instanceof BinaryIdentifier) {
+      return new CComplexType("Complex_type");
+    } else {
+      System.err.println("Can't create structureFieldId for " + this.toString());
+      return null;
+    }
+  }
+
   @Override
   public GeneralIdentifier getGeneralId() {
-    return new GeneralStructureFieldIdentifier(name, dereference);
+    return new GeneralStructureFieldIdentifier(name, type.toASTString(""), getStructureType(), dereference);
+  }
+
+  public StructureFieldIdentifier toStructureFieldIdentifier() {
+    return new StructureFieldIdentifier(name, type.toASTString(""), getStructureType(), dereference);
   }
 }
