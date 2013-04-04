@@ -87,18 +87,6 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
     this.mergeOperator = initializeMergeOperator();
     this.stopOperator = initializeStopOperator();
 
-    CodeCovering coverGenerator;
-    //only one file?
-    String path = pConfig.getProperty("analysis.programNames");
-    if (!covering){
-      coverGenerator = new CodeCoveringEmpty();
-    }
-    else {
-      if (path != "")
-        coverGenerator = new CodeCoveringSimple(pCfa, path);
-      else
-        throw new InvalidConfigurationException("Can't find path to file");
-    }
     this.precisionAdjustment = new UsageStatisticsPrecisionAdjustment(pCpa.getPrecisionAdjustment());
     if (pCpa instanceof ConfigurableProgramAnalysisWithABM) {
       Reducer wrappedReducer = ((ConfigurableProgramAnalysisWithABM)pCpa).getReducer();
@@ -110,8 +98,8 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
     } else {
       reducer = null;
     }
-    this.statistics = new UsageStatisticsCPAStatistics(pConfig, coverGenerator);
-    this.transferRelation = new UsageStatisticsTransferRelation(pCpa.getTransferRelation(), pConfig, statistics, coverGenerator);
+    this.statistics = new UsageStatisticsCPAStatistics(pConfig);
+    this.transferRelation = new UsageStatisticsTransferRelation(pCpa.getTransferRelation(), pConfig, statistics);
 
     LockStatisticsCPA LockCpa = ((WrapperCPA) getWrappedCpa()).retrieveWrappedCpa(LockStatisticsCPA.class);
     if (LockCpa != null) {

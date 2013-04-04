@@ -44,7 +44,6 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CExpressionStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallAssignmentStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallStatement;
-import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CInitializer;
 import org.sosy_lab.cpachecker.cfa.ast.c.CInitializerExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
@@ -76,7 +75,6 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
   private final TransferRelation wrappedTransfer;
   private final UsageStatisticsCPAStatistics statistics;
-  private final CodeCovering covering;
   private final ExpressionHandler handler;
 
   @Option(description = "functions, which we don't analize")
@@ -91,11 +89,10 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
   private UsageStatisticsState oldState;
 
   public UsageStatisticsTransferRelation(TransferRelation pWrappedTransfer,
-      Configuration config, UsageStatisticsCPAStatistics s, CodeCovering cover) throws InvalidConfigurationException {
+      Configuration config, UsageStatisticsCPAStatistics s) throws InvalidConfigurationException {
     config.inject(this);
     wrappedTransfer = pWrappedTransfer;
     statistics = s;
-    covering = cover;
 
     binderFunctionInfo = new HashMap<String, BinderFunctionInfo>();
     BinderFunctionInfo tmpInfo;
@@ -223,10 +220,10 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
     if (declEdge.getDeclaration().getClass() != CVariableDeclaration.class) {
       // not a variable declaration
-      if (declEdge.getDeclaration().getClass() == CFunctionDeclaration.class &&
+      /*if (declEdge.getDeclaration().getClass() == CFunctionDeclaration.class &&
           declEdge.getRawStatement().contains(";")) {
         covering.addException(declEdge.getLineNumber());
-      }
+      }*/
       return;
     }
     CVariableDeclaration decl = (CVariableDeclaration)declEdge.getDeclaration();
@@ -234,16 +231,16 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     if (!decl.toASTString().equals(declEdge.getRawStatement())) {
       //CPA replace "int t;" into "int t = 0;", so here there isn't assignment
 
-      if (!decl.toASTString().contains("CPAchecker_TMP"))
+      /*if (!decl.toASTString().contains("CPAchecker_TMP"))
         //sometimes CPAChecker insert some declarations
-        covering.addException(declEdge.getLineNumber());
+        covering.addException(declEdge.getLineNumber());*/
       return;
     }
 
     CInitializer init = decl.getInitializer();
 
     if (init == null) {
-      covering.addException(declEdge.getLineNumber());
+      //covering.addException(declEdge.getLineNumber());
       //no assumption
       return;
     }
@@ -299,7 +296,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       }
     }
 
-    covering.addFunctionUsage(functionCallName);
+    //covering.addFunctionUsage(functionCallName);
     if (skippedfunctions != null && skippedfunctions.contains(functionName)) {
       CallstackState callstack = AbstractStates.extractStateByType(pNewState, CallstackState.class);
       throw new StopAnalysisException("Function " + functionCallName + " is skipped", callstack.getCallNode());

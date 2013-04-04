@@ -50,6 +50,7 @@ import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.abm.ABMRestoreStack;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.local.LocalState.DataType;
+import org.sosy_lab.cpachecker.cpa.local.LocalTransferRelation;
 import org.sosy_lab.cpachecker.cpa.lockStatistics.AccessPoint;
 import org.sosy_lab.cpachecker.cpa.lockStatistics.LockStatisticsLock;
 import org.sosy_lab.cpachecker.cpa.lockStatistics.LockStatisticsState;
@@ -57,6 +58,7 @@ import org.sosy_lab.cpachecker.cpa.usageStatistics.EdgeInfo.EdgeType;
 import org.sosy_lab.cpachecker.cpa.usageStatistics.UsageInfo.Access;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
+import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.GeneralGlobalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.GeneralIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.GeneralLocalVariableIdentifier;
@@ -65,20 +67,19 @@ import org.sosy_lab.cpachecker.util.identifiers.GlobalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.LocalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.StructureFieldIdentifier;
+import org.sosy_lab.cpachecker.util.identifiers.StructureIdentifier;
 
 @Options(prefix="cpa.usagestatistics")
 public class UsageStatisticsCPAStatistics implements Statistics {
 
   private Map<SingleIdentifier, Set<UsageInfo>> Stat;
-  private int totalVarUsageCounter = 0;
+  //private int totalVarUsageCounter = 0;
   //skipped by transfer relation
-  private int skippedUsageCounter = 0;
+  //private int skippedUsageCounter = 0;
   //ABM interface to restore original callstacks
   private ABMRestoreStack stackRestoration;
 
   UnsafeDetector unsafeDetector = null;
-  //lcov data for code coverage generation
-  CodeCovering covering;
 
   @Option(name="localanalysis", description="should we use local analysis?")
   private boolean localAnalysis = false;
@@ -102,7 +103,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   //@Option(description="Do we need to store statistics of all variables or only pointers")
   //private boolean onlypointers = true;
 
-  public UsageStatisticsCPAStatistics(Configuration config, CodeCovering cover) throws InvalidConfigurationException{
+  public UsageStatisticsCPAStatistics(Configuration config) throws InvalidConfigurationException{
     Stat = new HashMap<SingleIdentifier, Set<UsageInfo>>();
     config.inject(this);
 
@@ -114,7 +115,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       System.out.println("Unknown data procession " + unsafeDetectorType);
       System.exit(0);
     }
-    covering = cover;
 
     if (localAnalysis) {
       //Restore all information
@@ -182,26 +182,35 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     LockStatisticsState lockState = AbstractStates.extractStateByType(state, LockStatisticsState.class);
     CallstackState callstackState = AbstractStates.extractStateByType(state, CallstackState.class);
 
+    if (line == 121464)
+      System.out.println("Adding that structure");
+
     callstackState = createStack(callstackState);
 
     LineInfo lineInfo = new LineInfo(line);
     EdgeInfo info = new EdgeInfo(type);
 
     for (Pair<SingleIdentifier, Access> tmpPair : result) {
-      totalVarUsageCounter++;
+      //totalVarUsageCounter++;
       id = tmpPair.getFirst();
       if (id == null) {
-        skippedUsageCounter++;
+        //skippedUsageCounter++;
         continue;
       }
       if (skippedvariables != null && skippedvariables.contains(id.getName())) {
-        skippedUsageCounter++;
+        //skippedUsageCounter++;
         continue;
       }
       if (id instanceof LocalVariableIdentifier /*&& !(id.getType() instanceof CPointerType)*/
           && id.getDereference() <= 0) {
         //we don't save in statistics ordinary local variables
-        skippedUsageCounter++;
+        //skippedUsageCounter++;
+        continue;
+      }
+      if (id instanceof StructureIdentifier && !id.isGlobal() && id.getType() != null
+          && LocalTransferRelation.findDereference(id.getType()) <= 0 && !((StructureIdentifier)id).isAnyPointer()) {
+        //skips such cases as, 'a.b'
+        //Now these cases aren't saved, but all can be in future...
         continue;
       }
       //last check: if this variable is local, because of local analysis
@@ -209,16 +218,36 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         CFANode node = AbstractStates.extractLocation(state);
         Map<GeneralIdentifier, DataType> localInfo = localStatistics.get(node.toString());
         GeneralIdentifier generalId = id.getGeneralId();
-
-        if (localInfo != null && localInfo.containsKey(generalId)) {
-          DataType dataType = localInfo.get(generalId);
-          if (dataType == DataType.LOCAL) {
-            //System.out.println("Skip " + id.getName() + " as local");
-            skippedUsageCounter++;
-            continue;
+        DataType dataType = null;
+        if (localInfo != null) {
+          if (localInfo.containsKey(generalId)) {
+            dataType = localInfo.get(generalId);
+            if (dataType == DataType.LOCAL) {
+              //System.out.println("Skip " + id.getName() + " as local");
+              //skippedUsageCounter++;
+              continue;
+            }
+          }
+          //may be, we have information about all structure?
+          if (id instanceof StructureIdentifier && dataType != DataType.GLOBAL) {
+            AbstractIdentifier tmpId = ((StructureIdentifier)id).getOwner();
+            if (tmpId instanceof SingleIdentifier) {
+              generalId = ((SingleIdentifier)tmpId).getGeneralId();
+              if (localInfo.containsKey(generalId)) {
+                dataType = localInfo.get(generalId);
+                if (dataType == DataType.LOCAL) {
+                  //System.out.println("Skip " + id.getName() + " as local");
+                  //skippedUsageCounter++;
+                  continue;
+                }
+              }
+            }
+            //else we can't say anything
           }
         }
       }
+      if (id instanceof StructureIdentifier)
+        id = ((StructureIdentifier)id).toStructureFieldIdentifier();
       UsageInfo usage = new UsageInfo(tmpPair.getSecond(), lineInfo, info, lockState, callstackState);
 
       if (!Stat.containsKey(id)) {
@@ -370,7 +399,11 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         System.out.println("Adress unsafe: " + id.getName());
       }
       writer.println(id.getDereference());
-      writer.println(id.getType().toASTString(id.getName()));
+      try {
+        writer.println(id.getType().toASTString(id.getName()));
+      } catch (Throwable e) {
+        System.out.println("Catch smth");
+      }
       writer.println("Line 0:     N0 -{/*Number of usages:" + uinfo.size() + "*/}-> N0");
       writer.println("Line 0:     N0 -{/*Two examples:*/}-> N0");
       try {
@@ -499,8 +532,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
 
     writer.close();
-
-    covering.generate();
   }
 
   @Override
