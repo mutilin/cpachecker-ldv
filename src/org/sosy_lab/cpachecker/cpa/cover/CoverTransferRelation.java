@@ -38,6 +38,7 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
@@ -97,46 +98,53 @@ public class CoverTransferRelation implements TransferRelation {
   private void handleEdge(CFAEdge pCfaEdge) throws UnrecognizedCFAEdgeException {
     switch(pCfaEdge.getEdgeType()) {
 
-    case DeclarationEdge: {
-      DeclarationLines.add(pCfaEdge.getLineNumber());
-      break;
-    }
-
-    // if edge is a statement edge, e.g. a = b + c
-    case StatementEdge: {
-      CStatementEdge statementEdge = (CStatementEdge) pCfaEdge;
-      CStatement pStatement = statementEdge.getStatement();
-
-      if (pStatement instanceof CAssignment) {
-        // assignment like "a = b" or "a = foo()"
-        CRightHandSide right = ((CAssignment)pStatement).getRightHandSide();
-
-        if (right instanceof CFunctionCallExpression) {
-          UsedFunctions.add(((CFunctionCallExpression)right).getFunctionNameExpression().toASTString());
-        }
-
-      } else if (pStatement instanceof CFunctionCallStatement) {
-        UsedFunctions.add(((CFunctionCallStatement)pStatement).getFunctionCallExpression().getFunctionNameExpression().toASTString());
+      case DeclarationEdge: {
+        DeclarationLines.add(pCfaEdge.getLineNumber());
+        break;
       }
-      break;
-    }
 
-    case FunctionCallEdge: {
-      UsedFunctions.add(((CFunctionCallEdge)pCfaEdge).getSuccessor().getFunctionName());
-      break;
-    }
+      // if edge is a statement edge, e.g. a = b + c
+      case StatementEdge: {
+        CStatementEdge statementEdge = (CStatementEdge) pCfaEdge;
+        CStatement pStatement = statementEdge.getStatement();
 
-    case AssumeEdge:
-    case FunctionReturnEdge:
-    case ReturnStatementEdge:
-    case BlankEdge:
-    case CallToReturnEdge: {
-      break;
-    }
+        if (pStatement instanceof CAssignment) {
+          // assignment like "a = b" or "a = foo()"
+          CRightHandSide right = ((CAssignment)pStatement).getRightHandSide();
 
-    default:
-      throw new UnrecognizedCFAEdgeException(pCfaEdge);
-  }
+          if (right instanceof CFunctionCallExpression) {
+            UsedFunctions.add(((CFunctionCallExpression)right).getFunctionNameExpression().toASTString());
+          }
+
+        } else if (pStatement instanceof CFunctionCallStatement) {
+          UsedFunctions.add(((CFunctionCallStatement)pStatement).getFunctionCallExpression().getFunctionNameExpression().toASTString());
+        }
+        break;
+      }
+
+      case FunctionCallEdge: {
+        UsedFunctions.add(((CFunctionCallEdge)pCfaEdge).getSuccessor().getFunctionName());
+        break;
+      }
+
+      case AssumeEdge:
+      case FunctionReturnEdge:
+      case ReturnStatementEdge:
+      case BlankEdge:
+      case CallToReturnEdge: {
+        break;
+      }
+
+      case MultiEdge: {
+        for (CFAEdge edge : (MultiEdge)pCfaEdge) {
+          handleEdge(edge);
+        }
+        break;
+      }
+
+      default:
+        throw new UnrecognizedCFAEdgeException(pCfaEdge);
+    }
   }
 
   @Override
