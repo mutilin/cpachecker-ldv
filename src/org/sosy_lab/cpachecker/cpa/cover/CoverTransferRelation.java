@@ -58,7 +58,7 @@ public class CoverTransferRelation implements TransferRelation {
     wrappedTransfer = pWrappedTransfer;
     UsedFunctions = used;
     DeclarationLines = lines;
-    }
+  }
 
   @Override
   public Collection<? extends AbstractState> getAbstractSuccessors(AbstractState pState, Precision pPrecision,
@@ -113,17 +113,20 @@ public class CoverTransferRelation implements TransferRelation {
           CRightHandSide right = ((CAssignment)pStatement).getRightHandSide();
 
           if (right instanceof CFunctionCallExpression) {
-            UsedFunctions.add(((CFunctionCallExpression)right).getFunctionNameExpression().toASTString());
+            String functionName = ((CFunctionCallExpression)right).getFunctionNameExpression().toASTString();
+            UsedFunctions.add(functionName);
           }
 
         } else if (pStatement instanceof CFunctionCallStatement) {
-          UsedFunctions.add(((CFunctionCallStatement)pStatement).getFunctionCallExpression().getFunctionNameExpression().toASTString());
+          String functionName = ((CFunctionCallStatement)pStatement).getFunctionCallExpression().getFunctionNameExpression().toASTString();
+          UsedFunctions.add(functionName);
         }
         break;
       }
 
       case FunctionCallEdge: {
-        UsedFunctions.add(((CFunctionCallEdge)pCfaEdge).getSuccessor().getFunctionName());
+        String functionName = ((CFunctionCallEdge)pCfaEdge).getSuccessor().getFunctionName();
+        UsedFunctions.add(functionName);
         break;
       }
 

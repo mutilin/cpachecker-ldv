@@ -62,7 +62,7 @@ public class CoverCPA extends AbstractSingleWrapperCPA implements ConfigurablePr
     Set<String> used = new HashSet<>();
     Set<Integer> lines = new HashSet<>();
     this.transferRelation = new CoverTransferRelation(pCpa.getTransferRelation(), used, lines);
-    this.statistics = new CoverCPAStatistics(path, pCfa, used, lines);
+    this.statistics = new CoverCPAStatistics(pConfig, path, pCfa, used, lines);
     if (pCpa instanceof ConfigurableProgramAnalysisWithABM) {
       Reducer wrappedReducer = ((ConfigurableProgramAnalysisWithABM)pCpa).getReducer();
       if (wrappedReducer != null) {
