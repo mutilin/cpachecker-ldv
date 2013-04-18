@@ -57,7 +57,7 @@ Additional options:
 --cil=CILFILE                      Path to original CIL file (if you want to override path saved in INFOFILE)
 --skip=SKIPEXPRESSION              Functions, satisfying this regular expression, will be skipped
 
-Example: gen-unsafes-report.pl --i=cil.out.i.info --o=./tmpdir
+Example: gen-coverage-report.pl --i=cil.out.i.info --o=./tmpdir --s=^func_(\d+)$
 
 usage_ends
         die;
@@ -82,7 +82,7 @@ print "Using output directory $output_dir\n";
 
 my $fname = basename($lcov_info_fname);
 my $info_dir = dirname($lcov_info_fname);
-my $output_lcov = join($output_dir, "$fname.orig");
+my $output_lcov = $output_dir.$fname.".orig";
 
 open(my $new_lcov_info_fh, ">", $output_lcov) or usage("Can't open LCOV file for write: $output_lcov");
 
@@ -125,7 +125,6 @@ sub process_cil_file ($)
       $src_map{$cil_line_cur} = {
           'file' => $src_cur
         , 'line' => $src_line_cur};
-      #$src_line_cur++;
     }
 
     $cil_line_cur++;
@@ -136,6 +135,7 @@ my %info_fn;
 my %info_fnda;
 my %info_da;
 my @skipped_lines;
+my $text;
 
 top:while (<$lcov_info_fh>)
 {
@@ -143,7 +143,9 @@ top:while (<$lcov_info_fh>)
   
   chomp($str);
   
-  next if ($str =~ /^TN/);
+  if ($str =~ /^TN:(.*)/) {
+    $text = $1;
+  }
   
   if ($str =~ /^SF:(.+)$/)
   {
@@ -160,10 +162,10 @@ top:while (<$lcov_info_fh>)
     chomp($str);
     $str =~ /^#FN:(\d+)$/;
     my $end_location = $1;
-    unless (defined($skip_expression) && $func_name =~ /$skip_expression/) {
-      push(@{$info_fn{$orig_location->{'file'}}}, {'line' => $start_line, 'func'=>$func_name});
-    } else {
+    if (defined($skip_expression) && $func_name =~ m/$skip_expression/) {
       push(@skipped_lines, {'start'=>$start_location, 'end'=>$end_location});
+    } else {
+      push(@{$info_fn{$orig_location->{'file'}}}, {'line' => $start_line, 'func'=>$func_name});
     }
   }
 
@@ -206,7 +208,7 @@ foreach my $file (keys(%info_fn))
     next;
   }
 
-  print ($new_lcov_info_fh "TN:\nSF:$file\n");
+  print ($new_lcov_info_fh "TN:$text\nSF:$file\n");
   
   my $info_fn_for_file = $info_fn{$file};
   my @fn_names;

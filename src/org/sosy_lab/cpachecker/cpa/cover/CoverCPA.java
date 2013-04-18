@@ -58,11 +58,9 @@ public class CoverCPA extends AbstractSingleWrapperCPA implements ConfigurablePr
 
   private CoverCPA(ConfigurableProgramAnalysis pCpa, CFA pCfa, LogManager pLogger, Configuration pConfig) throws InvalidConfigurationException {
     super(pCpa);
-    String path = pConfig.getProperty("analysis.programNames");
     Set<String> used = new HashSet<>();
-    Set<Integer> lines = new HashSet<>();
-    this.transferRelation = new CoverTransferRelation(pCpa.getTransferRelation(), used, lines);
-    this.statistics = new CoverCPAStatistics(pConfig, path, pCfa, used, lines);
+    this.transferRelation = new CoverTransferRelation(pCpa.getTransferRelation(), used);
+    this.statistics = new CoverCPAStatistics(pConfig, pCfa, used);
     if (pCpa instanceof ConfigurableProgramAnalysisWithABM) {
       Reducer wrappedReducer = ((ConfigurableProgramAnalysisWithABM)pCpa).getReducer();
       if (wrappedReducer != null) {

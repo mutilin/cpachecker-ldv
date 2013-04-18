@@ -47,6 +47,7 @@ import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
+import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
@@ -61,31 +62,26 @@ public class CoverCPAStatistics implements Statistics {
   private final String originFile;
   private final CFA cfa;
   private final Set<String> CoveredFunctions;
-  private final Set<Integer> DeclarationLines;
 
   private final static String TEXTNAME = "TN";
   private final static String SOURCEFILE = "SF";
   private final static String FUNCTION = "FN";
   private final static String FUNCTIONDATA = "FNDA";
-  private final static String FUNCTIONFOUND = "FNF";
-  private final static String FUNCTIONCOVERED = "FNH";
   private final static String LINEDATA = "DA";
 
-  CoverCPAStatistics(Configuration config, String file, CFA pCfa, Set<String> used, Set<Integer> lines) throws InvalidConfigurationException {
+  CoverCPAStatistics(Configuration config, CFA pCfa, Set<String> used) throws InvalidConfigurationException {
     config.inject(this);
-    originFile = file;
+    originFile = config.getProperty("analysis.programNames");
     cfa = pCfa;
     CoveredFunctions = used;
-    DeclarationLines = lines;
   }
 
   @Override
   public void printStatistics(PrintStream pOut, Result pResult, ReachedSet pReached) {
     Boolean inCoveredFunction = false;
     int lineNumber = 0;
-    int FNH = 0;
     Set<Integer> lineUsage = new HashSet<>();
-    Map<Integer, Boolean> functionHeads = new HashMap<>();
+    Map<Integer, Boolean> isCovered = new HashMap<>();
 
     CoveredFunctions.add(cfa.getMainFunction().getFunctionName());
 
@@ -99,7 +95,7 @@ public class CoverCPAStatistics implements Statistics {
         out.println(SOURCEFILE + ":" + originFile);
 
         for (FunctionEntryNode entry : cfa.getAllFunctionHeads()) {
-          functionHeads.put(entry.getLineNumber(), CoveredFunctions.contains(entry.getFunctionName()));
+          isCovered.put(entry.getLineNumber(), CoveredFunctions.contains(entry.getFunctionName()));
           out.println(FUNCTION + ":" + entry.getLineNumber() + "," + entry.getFunctionName());
           //Information about function end isn't used by lcov, but it is useful for some postprocessing
           //But lcov ignores all unknown lines, so, this additional information can't affect on its work
@@ -110,13 +106,8 @@ public class CoverCPAStatistics implements Statistics {
         for (String name : CoveredFunctions) {
           if (allFunctionNames.contains(name)) {
             out.println(FUNCTIONDATA + ":" + "1," + name);
-            FNH++;
           }
         }
-
-        out.println(FUNCTIONFOUND + ":" + cfa.getNumberOfFunctions());
-        out.println(FUNCTIONCOVERED + ":" + FNH);
-
 
         /* Now, get all lines, which are used in cfa (except comments, empty lines and so on)
          *
@@ -125,12 +116,16 @@ public class CoverCPAStatistics implements Statistics {
          * because some interesting lines (such as 'return 0') wasn't included.
          */
         for (CFANode node : cfa.getAllNodes()) {
+          //we shouldn't consider declarations
+          if (isDeclarationNode(node))
+            continue;
+
           //We add line number, if it isn't ExitNode
           if (node instanceof FunctionExitNode && ((FunctionExitNode)node).getNumEnteringEdges() > 0) {
             //'return' lines are missed, so add line number of entering edges
             FunctionExitNode exit = (FunctionExitNode)node;
             for (int i = 0; i < exit.getNumEnteringEdges(); i++) {
-              CFAEdge tmpEdge = ((FunctionExitNode)node).getEnteringEdge(i);
+              CFAEdge tmpEdge = exit.getEnteringEdge(i);
               lineUsage.add(tmpEdge.getLineNumber());
             }
           } else {
@@ -146,16 +141,13 @@ public class CoverCPAStatistics implements Statistics {
         while (in.readLine() != null) {
           lineNumber++;
 
-          if (functionHeads.containsKey(lineNumber)) {
-            inCoveredFunction = functionHeads.get(lineNumber);
-            if (inCoveredFunction) {
-              out.println(LINEDATA + ":" + lineNumber +",1");
-            } else {
-              out.println(LINEDATA + ":" + lineNumber +",0");
+          if (lineUsage.contains(lineNumber)) {
+            if (isCovered.containsKey(lineNumber)) {
+              //New function starts
+              inCoveredFunction = isCovered.get(lineNumber);
             }
 
-          } else if (lineUsage.contains(lineNumber)) {
-            if (inCoveredFunction || DeclarationLines.contains(lineNumber)) {
+            if (inCoveredFunction) {
               out.println(LINEDATA + ":" + lineNumber +",1");
             } else {
               out.println(LINEDATA + ":" + lineNumber +",0");
@@ -172,11 +164,20 @@ public class CoverCPAStatistics implements Statistics {
         in.close();
       }
     } catch(FileNotFoundException e) {
-      System.out.println("Cannot open input file " + originFile);
+      System.err.println("Cannot open input file " + originFile);
     } catch(IOException e) {
       e.printStackTrace();
     }
 
+  }
+
+  private Boolean isDeclarationNode(CFANode node) {
+    for (int i = 0; i < node.getNumEnteringEdges(); i++) {
+      CFAEdge tmpEdge = node.getEnteringEdge(i);
+      if (tmpEdge instanceof CDeclarationEdge)
+        return true;
+    }
+    return false;
   }
 
   @Override

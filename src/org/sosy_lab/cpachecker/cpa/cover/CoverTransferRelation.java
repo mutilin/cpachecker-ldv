@@ -52,12 +52,10 @@ public class CoverTransferRelation implements TransferRelation {
 
   private final TransferRelation wrappedTransfer;
   private Set<String> UsedFunctions;
-  private Set<Integer> DeclarationLines;
 
-  CoverTransferRelation(TransferRelation pWrappedTransfer, Set<String> used, Set<Integer> lines) throws InvalidConfigurationException {
+  CoverTransferRelation(TransferRelation pWrappedTransfer, Set<String> used) throws InvalidConfigurationException {
     wrappedTransfer = pWrappedTransfer;
     UsedFunctions = used;
-    DeclarationLines = lines;
   }
 
   @Override
@@ -98,18 +96,11 @@ public class CoverTransferRelation implements TransferRelation {
   private void handleEdge(CFAEdge pCfaEdge) throws UnrecognizedCFAEdgeException {
     switch(pCfaEdge.getEdgeType()) {
 
-      case DeclarationEdge: {
-        DeclarationLines.add(pCfaEdge.getLineNumber());
-        break;
-      }
-
-      // if edge is a statement edge, e.g. a = b + c
       case StatementEdge: {
         CStatementEdge statementEdge = (CStatementEdge) pCfaEdge;
         CStatement pStatement = statementEdge.getStatement();
 
         if (pStatement instanceof CAssignment) {
-          // assignment like "a = b" or "a = foo()"
           CRightHandSide right = ((CAssignment)pStatement).getRightHandSide();
 
           if (right instanceof CFunctionCallExpression) {
@@ -130,6 +121,7 @@ public class CoverTransferRelation implements TransferRelation {
         break;
       }
 
+      case DeclarationEdge:
       case AssumeEdge:
       case FunctionReturnEdge:
       case ReturnStatementEdge:
