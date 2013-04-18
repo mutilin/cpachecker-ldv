@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2012  Dirk Beyer
+ *  Copyright (C) 2007-2013  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,26 +23,20 @@
  */
 package org.sosy_lab.cpachecker.cpa.bdd;
 
-import java.util.Set;
-
-import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractQueryableState;
+import org.sosy_lab.cpachecker.exceptions.InvalidQueryException;
 import org.sosy_lab.cpachecker.util.predicates.NamedRegionManager;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.Region;
 
-public class BDDState implements AbstractState {
+import com.google.common.base.Joiner;
+
+public class BDDState implements AbstractQueryableState {
 
   private Region currentState;
   private final NamedRegionManager manager;
-  private Set<Region> currentVars;
-  private BDDState functionCallState;
-  private String functionName;
 
-  public BDDState(NamedRegionManager mgr, BDDState functionCallElement,
-      Region state, Set<Region> vars, String functionName) {
+  public BDDState(NamedRegionManager mgr, Region state) {
     this.currentState = state;
-    this.currentVars = vars;
-    this.functionCallState = functionCallElement;
-    this.functionName = functionName;
     this.manager = mgr;
   }
 
@@ -50,31 +44,12 @@ public class BDDState implements AbstractState {
     return currentState;
   }
 
-  public Set<Region> getVars() {
-    return currentVars;
-  }
-
-  public BDDState getFunctionCallState() {
-    return functionCallState;
-  }
-
-  public String getFunctionName() {
-    return functionName;
-  }
-
   public boolean isLessOrEqual(BDDState other) {
-    assert this.functionName.equals(other.functionName) : "same function needed: "
-        + this.functionName + " vs " + other.functionName;
-
     return manager.entails(this.currentState, other.currentState);
   }
 
   public BDDState join(BDDState other) {
-    assert this.functionName.equals(other.functionName) : "same function needed: "
-        + this.functionName + " vs " + other.functionName;
-    this.currentVars.addAll(other.currentVars); // some vars more make no difference
-
-    Region result = manager.makeOr(this.currentState, other.currentState);
+     Region result = manager.makeOr(this.currentState, other.currentState);
 
     // FIRST check the other element
     if (result.equals(other.currentState)) {
@@ -85,23 +60,25 @@ public class BDDState implements AbstractState {
       return this;
 
     } else {
-      return new BDDState(this.manager, this.functionCallState, result,
-          this.currentVars, this.functionName);
+      return new BDDState(this.manager, result);
     }
   }
 
   @Override
   public String toString() {
-    return manager.dumpRegion(currentState) + "\n"
-        + manager.regionToDot(currentState);
+    return //manager.dumpRegion(currentState) + "\n" +
+        manager.regionToDot(currentState);
+  }
+
+  public String toCompactString() {
+    return "";//manager.dumpRegion(currentState);
   }
 
   @Override
   public boolean equals(Object o) {
     if (o instanceof BDDState) {
       BDDState other = (BDDState) o;
-      return this.functionName.equals(other.functionName) &&
-          this.currentState.equals(other.currentState);
+      return this.currentState.equals(other.currentState);
     }
     return false;
   }
@@ -109,5 +86,46 @@ public class BDDState implements AbstractState {
   @Override
   public int hashCode() {
     return currentState.hashCode();
+  }
+
+  @Override
+  public String getCPAName() {
+    return "BDDCPA";
+  }
+
+  @Override
+  public boolean checkProperty(String pProperty) throws InvalidQueryException {
+    throw new InvalidQueryException("BDDCPA Element cannot check anything");
+  }
+
+  @Override
+  public Object evaluateProperty(String pProperty) throws InvalidQueryException {
+    if (pProperty.equals("VALUES")) {
+      return manager.dumpRegion(this.currentState);
+    } else if (pProperty.equals("VARSET")) {
+      return "(" + Joiner.on(", ").join(manager.getPredicates()) + ")";
+    } else if (pProperty.equals("VARSETSIZE")) {
+      return manager.getPredicates().size();
+    } else {
+      throw new InvalidQueryException("BDDCPA Element can only return the current values (\"VALUES\")");
+    }
+  }
+
+  @Override
+  public void modifyProperty(String pModification) throws InvalidQueryException {
+    throw new InvalidQueryException("BDDCPA Element cannot be modified");
+  }
+
+  /** this.state = this.state.and(pConstraint);
+   */
+  public void addConstraintToState(Region pConstraint) {
+    currentState = manager.makeAnd(currentState, pConstraint);
+  }
+
+  /**
+   * Returns the NamedRegionManager used by this state for storing the variables values. Do not modify!
+   */
+  public NamedRegionManager getManager() {
+    return this.manager;
   }
 }

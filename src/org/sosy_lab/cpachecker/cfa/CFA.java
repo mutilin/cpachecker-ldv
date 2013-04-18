@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2012  Dirk Beyer
+ *  Copyright (C) 2007-2013  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,6 +29,7 @@ import java.util.Set;
 
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
+import org.sosy_lab.cpachecker.cfa.types.MachineModel;
 import org.sosy_lab.cpachecker.util.CFAUtils.Loop;
 import org.sosy_lab.cpachecker.util.VariableClassification;
 
@@ -36,6 +37,8 @@ import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableMultimap;
 
 public interface CFA {
+
+  MachineModel getMachineModel();
 
   boolean isEmpty();
 
@@ -56,5 +59,7 @@ public interface CFA {
   Optional<ImmutableMultimap<String, Loop>> getLoopStructure();
 
   Optional<VariableClassification> getVarClassification();
+
+  Language getLanguage();
 
 }

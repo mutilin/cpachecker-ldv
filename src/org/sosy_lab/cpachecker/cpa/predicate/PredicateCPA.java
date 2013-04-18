@@ -23,16 +23,12 @@
  */
 package org.sosy_lab.cpachecker.cpa.predicate;
 
-import java.io.File;
-import java.io.IOException;
-import java.nio.charset.Charset;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.logging.Level;
 
 import org.sosy_lab.common.LogManager;
+import org.sosy_lab.common.collect.PathCopyingPersistentTreeMap;
 import org.sosy_lab.common.configuration.Configuration;
-import org.sosy_lab.common.configuration.FileOption;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
@@ -46,31 +42,25 @@ import org.sosy_lab.cpachecker.core.interfaces.CPAFactory;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.MergeOperator;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
-import org.sosy_lab.cpachecker.core.interfaces.ProofChecker;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
 import org.sosy_lab.cpachecker.core.interfaces.StopOperator;
+import org.sosy_lab.cpachecker.core.interfaces.pcc.ProofChecker;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.blocking.BlockedCFAReducer;
 import org.sosy_lab.cpachecker.util.blocking.interfaces.BlockComputer;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import org.sosy_lab.cpachecker.util.predicates.AbstractionManager;
-import org.sosy_lab.cpachecker.util.predicates.AbstractionPredicate;
 import org.sosy_lab.cpachecker.util.predicates.CachingPathFormulaManager;
-import org.sosy_lab.cpachecker.util.predicates.ExtendedFormulaManager;
 import org.sosy_lab.cpachecker.util.predicates.FormulaManagerFactory;
 import org.sosy_lab.cpachecker.util.predicates.PathFormulaManagerImpl;
 import org.sosy_lab.cpachecker.util.predicates.Solver;
 import org.sosy_lab.cpachecker.util.predicates.SymbolicRegionManager;
 import org.sosy_lab.cpachecker.util.predicates.bdd.BDDRegionManager;
-import org.sosy_lab.cpachecker.util.predicates.interfaces.Formula;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.PathFormulaManager;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.RegionManager;
-import org.sosy_lab.cpachecker.util.predicates.interfaces.TheoremProver;
-
-import com.google.common.collect.ImmutableSet;
-import com.google.common.io.Files;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.view.FormulaManagerView;
 
 /**
  * CPA that defines symbolic predicate abstraction.
@@ -85,14 +75,6 @@ public class PredicateCPA implements ConfigurableProgramAnalysis, StatisticsProv
   @Option(name="abstraction.type", toUppercase=true, values={"BDD", "FORMULA"},
       description="What to use for storing abstractions")
   private String abstractionType = "BDD";
-
-  @Option(name="abstraction.initialPredicates",
-      description="get an initial set of predicates from a file in MSAT format")
-  @FileOption(FileOption.Type.OPTIONAL_INPUT_FILE)
-  private File predicatesFile = null;
-
-  @Option(description="always check satisfiability at end of block, even if precision is empty")
-  private boolean checkBlockFeasibility = false;
 
   @Option(name="blk.useCache", description="use caching of path formulas")
   private boolean useCache = true;
@@ -113,7 +95,7 @@ public class PredicateCPA implements ConfigurableProgramAnalysis, StatisticsProv
   private final PredicatePrecisionAdjustment prec;
   private final StopOperator stop;
   private final PredicatePrecision initialPrecision;
-  private final ExtendedFormulaManager formulaManager;
+  private final FormulaManagerView formulaManager;
   private final FormulaManagerFactory formulaManagerFactory;
   private final PathFormulaManager pathFormulaManager;
   private final Solver solver;
@@ -121,6 +103,8 @@ public class PredicateCPA implements ConfigurableProgramAnalysis, StatisticsProv
   private final PredicateAbstractionManager predicateManager;
   private final PredicateCPAStatistics stats;
   private final PredicateAbstractState topState;
+  private final PredicatePrecisionBootstrapper precisionBootstraper;
+  private final PredicatePrecisionSweeper precisionSweeper;
 
   protected PredicateCPA(Configuration config, LogManager logger, BlockOperator blk, CFA cfa) throws InvalidConfigurationException {
     config.inject(this, PredicateCPA.class);
@@ -135,34 +119,37 @@ public class PredicateCPA implements ConfigurableProgramAnalysis, StatisticsProv
 
     formulaManagerFactory = new FormulaManagerFactory(config, logger);
 
-    formulaManager = new ExtendedFormulaManager(formulaManagerFactory.getFormulaManager(), config, logger);
+    formulaManager = new FormulaManagerView(formulaManagerFactory.getFormulaManager(), config, logger);
     String libraries = formulaManager.getVersion();
 
-    PathFormulaManager pfMgr = new PathFormulaManagerImpl(formulaManager, config, logger);
+    PathFormulaManager pfMgr = new PathFormulaManagerImpl(formulaManager, config, logger, cfa.getMachineModel());
     if (useCache) {
       pfMgr = new CachingPathFormulaManager(pfMgr);
     }
     pathFormulaManager = pfMgr;
 
-    TheoremProver theoremProver = formulaManagerFactory.createTheoremProver();
-    solver = new Solver(formulaManager, theoremProver);
+    solver = new Solver(formulaManager, formulaManagerFactory);
 
     RegionManager regionManager;
     if (abstractionType.equals("FORMULA")) {
       regionManager = new SymbolicRegionManager(formulaManager, solver);
     } else {
       assert abstractionType.equals("BDD");
-      regionManager = BDDRegionManager.getInstance(config);
+      regionManager = BDDRegionManager.getInstance(config, logger);
       libraries += " and " + ((BDDRegionManager)regionManager).getVersion();
     }
     logger.log(Level.INFO, "Using predicate analysis with", libraries + ".");
 
     abstractionManager = new AbstractionManager(regionManager, formulaManager, config, logger);
 
-    predicateManager = new PredicateAbstractionManager(abstractionManager, formulaManager, solver, config, logger);
+    predicateManager = new PredicateAbstractionManager(abstractionManager, formulaManager, pathFormulaManager, solver, config, logger);
     transfer = new PredicateTransferRelation(this, blk);
 
-    topState = PredicateAbstractState.abstractionState(pathFormulaManager.makeEmptyPathFormula(), predicateManager.makeTrueAbstractionFormula(null));
+    topState = PredicateAbstractState.mkAbstractionState(
+        formulaManager.getBooleanFormulaManager(),
+        pathFormulaManager.makeEmptyPathFormula(),
+        predicateManager.makeTrueAbstractionFormula(null),
+        PathCopyingPersistentTreeMap.<CFANode, Integer>of());
     domain = new PredicateAbstractDomain(this);
 
     if (mergeType.equals("SEP")) {
@@ -176,47 +163,16 @@ public class PredicateCPA implements ConfigurableProgramAnalysis, StatisticsProv
     prec = new PredicatePrecisionAdjustment(this);
     stop = new PredicateStopOperator(domain);
 
-    Collection<AbstractionPredicate> predicates = readPredicatesFromFile();
+    precisionSweeper = new PredicatePrecisionSweeper(logger, cfa);
+    precisionBootstraper = new PredicatePrecisionBootstrapper(config, logger, cfa, pathFormulaManager, abstractionManager, formulaManager, precisionSweeper);
+    initialPrecision = precisionBootstraper.prepareInitialPredicates();
+    logger.log(Level.FINEST, "Initial precision is", initialPrecision);
 
-    if (checkBlockFeasibility) {
-      AbstractionPredicate p = abstractionManager.makeFalsePredicate();
-      if (predicates == null) {
-        predicates = ImmutableSet.of(p);
-      } else {
-        predicates.add(p);
-      }
-    }
-    initialPrecision = new PredicatePrecision(predicates);
-
-    stats = new PredicateCPAStatistics(this, blk);
+    stats = new PredicateCPAStatistics(this, blk, regionManager, cfa, precisionSweeper);
 
     GlobalInfo.getInstance().storeFormulaManager(formulaManager);
   }
 
-  private Collection<AbstractionPredicate> readPredicatesFromFile() {
-    if (predicatesFile != null) {
-        try {
-        String fileContent = Files.toString(predicatesFile, Charset.defaultCharset());
-        Formula f = formulaManager.parse(fileContent);
-
-        Collection<Formula> atoms = formulaManager.extractAtoms(f, false, false);
-
-        Collection<AbstractionPredicate> predicates = new ArrayList<AbstractionPredicate>(atoms.size());
-
-        for (Formula atom : atoms) {
-          predicates.add(abstractionManager.makePredicate(atom));
-        }
-        return predicates;
-
-      } catch (IllegalArgumentException e) {
-        logger.logUserException(Level.WARNING, e, "Could not read predicates from file " + predicatesFile);
-      } catch (IOException e) {
-        logger.logUserException(Level.WARNING, e, "Could not read predicates from file");
-      }
-    }
-
-    return null;
-  }
 
   @Override
   public PredicateAbstractDomain getAbstractDomain() {
@@ -246,7 +202,7 @@ public class PredicateCPA implements ConfigurableProgramAnalysis, StatisticsProv
     return predicateManager;
   }
 
-  public ExtendedFormulaManager getFormulaManager() {
+  public FormulaManagerView getFormulaManager() {
     return formulaManager;
   }
 
@@ -288,6 +244,8 @@ public class PredicateCPA implements ConfigurableProgramAnalysis, StatisticsProv
   @Override
   public void collectStatistics(Collection<Statistics> pStatsCollection) {
     pStatsCollection.add(stats);
+    precisionBootstraper.collectStatistics(pStatsCollection);
+    precisionSweeper.collectStatistics(pStatsCollection);
   }
 
   @Override

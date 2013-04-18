@@ -41,6 +41,7 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CParameterDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CSimpleDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStringLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CTypeIdExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CTypeIdInitializerExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
 import org.sosy_lab.cpachecker.cfa.types.c.CEnumType.CEnumerator;
 import org.sosy_lab.cpachecker.cpa.local.IdentifierCreator;
@@ -59,7 +60,7 @@ public class ExpressionHandler implements CExpressionVisitor<Void, HandleCodeExc
   protected int dereferenceCounter;
 
   public void setMode(String funcName, Access mode) {
-    result = new LinkedList<Pair<SingleIdentifier, Access>>();
+    result = new LinkedList<>();
     function = funcName;
     dereferenceCounter = 0;
     accessMode = mode;
@@ -161,6 +162,11 @@ public class ExpressionHandler implements CExpressionVisitor<Void, HandleCodeExc
     //In all other unary operation we only read the operand
     accessMode = Access.READ;
     expression.getOperand().accept(this);
+    return null;
+  }
+
+  @Override
+  public Void visit(CTypeIdInitializerExpression pCTypeIdInitializerExpression) throws HandleCodeException {
     return null;
   }
 

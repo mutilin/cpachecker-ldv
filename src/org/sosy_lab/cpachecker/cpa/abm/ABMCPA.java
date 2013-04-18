@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2012  Dirk Beyer
+ *  Copyright (C) 2007-2013  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -38,8 +38,9 @@ import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.blocks.BlockPartitioning;
-import org.sosy_lab.cpachecker.cfa.blocks.builder.FunctionPartitioning;
+import org.sosy_lab.cpachecker.cfa.blocks.builder.FunctionAndLoopPartitioning;
 import org.sosy_lab.cpachecker.cfa.blocks.builder.PartitioningHeuristic;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.defaults.AbstractSingleWrapperCPA;
 import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
@@ -55,13 +56,17 @@ import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
 import org.sosy_lab.cpachecker.core.interfaces.StopOperator;
 import org.sosy_lab.cpachecker.core.interfaces.WrapperCPA;
+import org.sosy_lab.cpachecker.core.interfaces.pcc.ProofChecker;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSetFactory;
 import org.sosy_lab.cpachecker.cpa.predicate.ABMPredicateCPA;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
+import org.sosy_lab.cpachecker.exceptions.CPATransferException;
+
+import com.google.common.base.Preconditions;
 
 
-@Options(prefix="cpa.abm")
-public class ABMCPA extends AbstractSingleWrapperCPA implements StatisticsProvider {
+@Options(prefix = "cpa.abm")
+public class ABMCPA extends AbstractSingleWrapperCPA implements StatisticsProvider, ProofChecker {
 
   public static CPAFactory factory() {
     return AutomaticCPAFactory.forType(ABMCPA.class);
@@ -69,44 +74,51 @@ public class ABMCPA extends AbstractSingleWrapperCPA implements StatisticsProvid
 
   protected BlockPartitioning blockPartitioning;
 
-  protected final LogManager logger;
-  protected final TimedReducer reducer;
+  private final LogManager logger;
+  private final TimedReducer reducer;
   protected final ABMTransferRelation transfer;
   protected final ABMPrecisionAdjustment prec;
-  protected final ABMCPAStatistics stats;
+  private final ABMMergeOperator merge;
+  private final ABMCPAStatistics stats;
   protected final PartitioningHeuristic heuristic;
-  protected final CFA cfa;
+  private final CFA cfa;
+  private final ProofChecker wrappedProofChecker;
 
-  @Option(description="Type of partitioning (FunctionAndLoopPartitioning or DelayedFunctionAndLoopPartitioning)\n"
-                    + "or any class that implements a PartitioningHeuristic")
-  @ClassOption(packagePrefix="org.sosy_lab.cpachecker.cfa.blocks.builder")
-  protected Class<? extends PartitioningHeuristic> blockHeuristic = FunctionPartitioning.class;
+  @Option(description = "Type of partitioning (FunctionAndLoopPartitioning or DelayedFunctionAndLoopPartitioning)\n"
+      + "or any class that implements a PartitioningHeuristic")
+  @ClassOption(packagePrefix = "org.sosy_lab.cpachecker.cfa.blocks.builder")
+  private Class<? extends PartitioningHeuristic> blockHeuristic = FunctionAndLoopPartitioning.class;
 
-  public ABMCPA(ConfigurableProgramAnalysis pCpa, Configuration config, LogManager pLogger, ReachedSetFactory pReachedSetFactory,
-      CFA pCfa) throws InvalidConfigurationException, CPAException {
+  public ABMCPA(ConfigurableProgramAnalysis pCpa, Configuration config, LogManager pLogger,
+      ReachedSetFactory pReachedSetFactory, CFA pCfa) throws InvalidConfigurationException, CPAException {
     super(pCpa);
     config.inject(this);
 
     logger = pLogger;
     cfa = pCfa;
 
-    if (!(pCpa instanceof ConfigurableProgramAnalysisWithABM)) {
-      throw new InvalidConfigurationException("ABM needs CPAs that are capable for ABM");
-    }
-    Reducer wrappedReducer = ((ConfigurableProgramAnalysisWithABM)pCpa).getReducer();
-    if (wrappedReducer == null) {
-      throw new InvalidConfigurationException("ABM needs CPAs that are capable for ABM");
-    }
+    if (!(pCpa instanceof ConfigurableProgramAnalysisWithABM)) { throw new InvalidConfigurationException(
+        "ABM needs CPAs that are capable for ABM"); }
+    Reducer wrappedReducer = ((ConfigurableProgramAnalysisWithABM) pCpa).getReducer();
+    if (wrappedReducer == null) { throw new InvalidConfigurationException("ABM needs CPAs that are capable for ABM"); }
     reducer = new TimedReducer(wrappedReducer);
     prec = new ABMPrecisionAdjustment(getWrappedCpa().getPrecisionAdjustment());
     transfer = new ABMTransferRelation(config, logger, this, pReachedSetFactory);
+    prec.setABMTransferRelation(transfer);
+    merge = new ABMMergeOperator(pCpa.getMergeOperator(), transfer);
 
     stats = new ABMCPAStatistics(this);
     heuristic = getPartitioningHeuristic();
+
+    if (pCpa instanceof ProofChecker) {
+      this.wrappedProofChecker = (ProofChecker) pCpa;
+    } else {
+      this.wrappedProofChecker = null;
+    }
   }
 
   @Override
-  public AbstractState getInitialState(CFANode node)  {
+  public AbstractState getInitialState(CFANode node) {
     if (blockPartitioning == null) {
       blockPartitioning = heuristic.buildPartitioning(node);
       transfer.setBlockPartitioning(blockPartitioning);
@@ -116,7 +128,7 @@ public class ABMCPA extends AbstractSingleWrapperCPA implements StatisticsProvid
         predicateCpa.setPartitioning(blockPartitioning);
       }
 
-      Map<AbstractState, Precision> forwardPrecisionToExpandedPrecision = new HashMap<AbstractState, Precision>();
+      Map<AbstractState, Precision> forwardPrecisionToExpandedPrecision = new HashMap<>();
       transfer.setForwardPrecisionToExpandedPrecision(forwardPrecisionToExpandedPrecision);
       prec.setForwardPrecisionToExpandedPrecision(forwardPrecisionToExpandedPrecision);
     }
@@ -128,8 +140,9 @@ public class ABMCPA extends AbstractSingleWrapperCPA implements StatisticsProvid
     return getWrappedCpa().getInitialPrecision(pNode);
   }
 
-  protected PartitioningHeuristic getPartitioningHeuristic() throws CPAException, InvalidConfigurationException {
-    return Classes.createInstance(PartitioningHeuristic.class, blockHeuristic, new Class[]{LogManager.class, CFA.class}, new Object[]{logger, cfa}, CPAException.class);
+  private PartitioningHeuristic getPartitioningHeuristic() throws CPAException, InvalidConfigurationException {
+    return Classes.createInstance(PartitioningHeuristic.class, blockHeuristic, new Class[] { LogManager.class,
+        CFA.class }, new Object[] { logger, cfa }, CPAException.class);
   }
 
   @Override
@@ -139,7 +152,7 @@ public class ABMCPA extends AbstractSingleWrapperCPA implements StatisticsProvid
 
   @Override
   public MergeOperator getMergeOperator() {
-    return getWrappedCpa().getMergeOperator();
+    return merge;
   }
 
   @Override
@@ -180,5 +193,18 @@ public class ABMCPA extends AbstractSingleWrapperCPA implements StatisticsProvid
 
   ABMCPAStatistics getStatistics() {
     return stats;
+  }
+
+  @Override
+  public boolean areAbstractSuccessors(AbstractState pState, CFAEdge pCfaEdge,
+      Collection<? extends AbstractState> pSuccessors) throws CPATransferException, InterruptedException {
+    Preconditions.checkNotNull(wrappedProofChecker, "Wrapped CPA has to implement ProofChecker interface");
+    return transfer.areAbstractSuccessors(pState, pCfaEdge, pSuccessors, wrappedProofChecker);
+  }
+
+  @Override
+  public boolean isCoveredBy(AbstractState pState, AbstractState pOtherState) throws CPAException {
+    Preconditions.checkNotNull(wrappedProofChecker, "Wrapped CPA has to implement ProofChecker interface");
+    return wrappedProofChecker.isCoveredBy(pState, pOtherState);
   }
 }

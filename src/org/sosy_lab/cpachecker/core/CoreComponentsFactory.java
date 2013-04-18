@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2012  Dirk Beyer
+ *  Copyright (C) 2007-2013  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,6 +25,8 @@ package org.sosy_lab.cpachecker.core;
 
 import java.util.logging.Level;
 
+import javax.annotation.Nullable;
+
 import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
@@ -33,12 +35,12 @@ import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.core.algorithm.Algorithm;
 import org.sosy_lab.cpachecker.core.algorithm.AssumptionCollectorAlgorithm;
+import org.sosy_lab.cpachecker.core.algorithm.BDDCPARestrictionAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.BMCAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.CEGARAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.CPAAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.CPALocalSaveAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.CounterexampleCheckAlgorithm;
-import org.sosy_lab.cpachecker.core.algorithm.FeatureVarsRestrictionAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.ProofCheckAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.RestartAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.RestartWithConditionsAlgorithm;
@@ -56,7 +58,7 @@ import org.sosy_lab.cpachecker.exceptions.CPAException;
  * algorithm, cpa and reached set.
  */
 @Options(prefix="analysis")
-class CoreComponentsFactory {
+public class CoreComponentsFactory {
 
   @Option(description="use assumption collecting algorithm")
   private boolean useAssumptionCollector = false;
@@ -72,8 +74,8 @@ class CoreComponentsFactory {
   @Option(description="use CBMC to double-check counter-examples")
   private boolean useCBMC = false;
 
-  @Option(description="use CBMC and the FeatureVars Restriction option")
-  private boolean useFeatureVarsRestriction = false;
+  @Option(description="use CBMC and the BDDCPA Restriction option")
+  private boolean useBDDCPARestriction = false;
 
   @Option(description="use a BMC like algorithm that checks for satisfiability "
         + "after the analysis has finished, works only with PredicateCPA")
@@ -109,7 +111,7 @@ class CoreComponentsFactory {
   }
 
   public Algorithm createAlgorithm(final ConfigurableProgramAnalysis cpa,
-      final String filename, final CFA cfa, final MainCPAStatistics stats)
+      final String programDenotation, final CFA cfa, @Nullable final MainCPAStatistics stats)
       throws InvalidConfigurationException, CPAException {
     logger.log(Level.FINE, "Creating algorithms");
 
@@ -120,10 +122,10 @@ class CoreComponentsFactory {
       algorithm = new ProofCheckAlgorithm(cpa, config, logger);
     } else if (useRestartingAlgorithm) {
       logger.log(Level.INFO, "Using Restarting Algorithm");
-      algorithm = new RestartAlgorithm(config, logger, filename, cfa);
+      algorithm = new RestartAlgorithm(config, logger, programDenotation, cfa);
 
     } else if (useImpactAlgorithm) {
-      algorithm = new ImpactAlgorithm(config, logger, cpa);
+      algorithm = new ImpactAlgorithm(config, logger, cpa, cfa);
 
     } else if (saveLocalResults) {
       algorithm = new CPALocalSaveAlgorithm(cpa, logger, config, false);
@@ -140,11 +142,11 @@ class CoreComponentsFactory {
       }
 
       if (useCBMC) {
-        algorithm = new CounterexampleCheckAlgorithm(algorithm, cpa, config, logger, reachedSetFactory, cfa);
+        algorithm = new CounterexampleCheckAlgorithm(algorithm, cpa, config, logger, cfa, programDenotation);
       }
 
-      if (useFeatureVarsRestriction) {
-        algorithm = new FeatureVarsRestrictionAlgorithm(algorithm, cpa, config, logger, reachedSetFactory, cfa);
+      if (useBDDCPARestriction) {
+        algorithm = new BDDCPARestrictionAlgorithm(algorithm, cpa, config, logger, cfa, programDenotation);
       }
 
       if (useAssumptionCollector) {
@@ -156,7 +158,7 @@ class CoreComponentsFactory {
       }
     }
 
-    if (algorithm instanceof StatisticsProvider) {
+    if (stats != null && algorithm instanceof StatisticsProvider) {
       ((StatisticsProvider)algorithm).collectStatistics(stats.getSubStatistics());
     }
     return algorithm;
@@ -174,9 +176,12 @@ class CoreComponentsFactory {
     return reached;
   }
 
-  public ConfigurableProgramAnalysis createCPA(final CFA cfa, final MainCPAStatistics stats) throws InvalidConfigurationException, CPAException {
+  public ConfigurableProgramAnalysis createCPA(final CFA cfa,
+      @Nullable final MainCPAStatistics stats) throws InvalidConfigurationException, CPAException {
     logger.log(Level.FINE, "Creating CPAs");
-    stats.cpaCreationTime.start();
+    if (stats != null) {
+      stats.cpaCreationTime.start();
+    }
     try {
 
       if (useRestartingAlgorithm) {
@@ -186,13 +191,15 @@ class CoreComponentsFactory {
 
       ConfigurableProgramAnalysis cpa = cpaFactory.buildCPAs(cfa);
 
-      if (cpa instanceof StatisticsProvider) {
+      if (stats != null && cpa instanceof StatisticsProvider) {
         ((StatisticsProvider)cpa).collectStatistics(stats.getSubStatistics());
       }
       return cpa;
 
     } finally {
-      stats.cpaCreationTime.stop();
+      if (stats != null) {
+        stats.cpaCreationTime.stop();
+      }
     }
   }
 }

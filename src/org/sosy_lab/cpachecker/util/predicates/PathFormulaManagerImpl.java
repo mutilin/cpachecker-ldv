@@ -34,20 +34,26 @@ import java.util.regex.Pattern;
 
 import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.Pair;
+import org.sosy_lab.common.Triple;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
+import org.sosy_lab.cpachecker.cfa.types.MachineModel;
+import org.sosy_lab.cpachecker.cfa.types.c.CType;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.predicates.Model.AssignableTerm;
 import org.sosy_lab.cpachecker.util.predicates.Model.TermType;
-import org.sosy_lab.cpachecker.util.predicates.Model.Variable;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.Formula;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.FormulaList;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.FormulaType;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.PathFormulaManager;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.basicimpl.AbstractFormulaList;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.view.FormulaManagerView;
 
 import com.google.common.base.Function;
 import com.google.common.base.Predicates;
@@ -66,19 +72,20 @@ public class PathFormulaManagerImpl extends CtoFormulaConverter implements PathF
   private static final Pattern BRANCHING_PREDICATE_NAME_PATTERN = Pattern.compile(
       "^.*" + BRANCHING_PREDICATE_NAME + "(?=\\d+$)");
 
-  public PathFormulaManagerImpl(ExtendedFormulaManager pFmgr,
-      Configuration config, LogManager pLogger) throws InvalidConfigurationException {
-    super(config, pFmgr, pLogger);
+  public PathFormulaManagerImpl(FormulaManagerView pFmgr,
+      Configuration config, LogManager pLogger, MachineModel pMachineModel)
+          throws InvalidConfigurationException {
+    super(config, pFmgr, pMachineModel, pLogger);
   }
 
   @Override
   public PathFormula makeEmptyPathFormula() {
-    return new PathFormula(fmgr.makeTrue(), SSAMap.emptySSAMap(), 0);
+    return new PathFormula(bfmgr.makeBoolean(true), SSAMap.emptySSAMap(), 0);
   }
 
   @Override
   public PathFormula makeEmptyPathFormula(PathFormula oldFormula) {
-    return new PathFormula(fmgr.makeTrue(), oldFormula.getSsa(), 0);
+    return new PathFormula(bfmgr.makeBoolean(true), oldFormula.getSsa(), 0);
   }
 
   @Override
@@ -88,18 +95,18 @@ public class PathFormulaManagerImpl extends CtoFormulaConverter implements PathF
 
   @Override
   public PathFormula makeOr(PathFormula pF1, PathFormula pF2) {
-    Formula formula1 = pF1.getFormula();
-    Formula formula2 = pF2.getFormula();
+    BooleanFormula formula1 = pF1.getFormula();
+    BooleanFormula formula2 = pF2.getFormula();
     SSAMap ssa1 = pF1.getSsa();
     SSAMap ssa2 = pF2.getSsa();
 
-    Pair<Pair<Formula, Formula>,SSAMap> pm = mergeSSAMaps(ssa2, ssa1);
+    Pair<Pair<BooleanFormula, BooleanFormula>, SSAMap> pm = mergeSSAMaps(ssa2, ssa1);
 
     // do not swap these two lines, that makes a huge difference in performance!
-    Formula newFormula2 = fmgr.makeAnd(formula2, pm.getFirst().getFirst());
-    Formula newFormula1 = fmgr.makeAnd(formula1, pm.getFirst().getSecond());
+    BooleanFormula newFormula2 = bfmgr.and(formula2, pm.getFirst().getFirst());
+    BooleanFormula newFormula1 = bfmgr.and(formula1, pm.getFirst().getSecond());
 
-    Formula newFormula = fmgr.makeOr(newFormula1, newFormula2);
+    BooleanFormula newFormula = bfmgr.or(newFormula1, newFormula2);
     SSAMap newSsa = pm.getSecond();
 
     int newLength = Math.max(pF1.getLength(), pF2.getLength());
@@ -108,10 +115,10 @@ public class PathFormulaManagerImpl extends CtoFormulaConverter implements PathF
   }
 
   @Override
-  public PathFormula makeAnd(PathFormula pPathFormula, Formula pOtherFormula) {
+  public PathFormula makeAnd(PathFormula pPathFormula, BooleanFormula pOtherFormula) {
     SSAMap ssa = pPathFormula.getSsa();
-    Formula otherFormula =  fmgr.instantiate(pOtherFormula, ssa);
-    Formula resultFormula = fmgr.makeAnd(pPathFormula.getFormula(), otherFormula);
+    BooleanFormula otherFormula =  fmgr.instantiate(pOtherFormula, ssa);
+    BooleanFormula resultFormula = bfmgr.and(pPathFormula.getFormula(), otherFormula);
     return new PathFormula(resultFormula, ssa, pPathFormula.getLength());
   }
 
@@ -127,85 +134,86 @@ public class PathFormulaManagerImpl extends CtoFormulaConverter implements PathF
    * @param ssa2 an SSAMap
    * @return A pair (Formula, SSAMap)
    */
-  private Pair<Pair<Formula, Formula>, SSAMap> mergeSSAMaps(
+  private Pair<Pair<BooleanFormula, BooleanFormula>, SSAMap> mergeSSAMaps(
       SSAMap ssa1, SSAMap ssa2) {
-    SSAMap result = SSAMap.merge(ssa1, ssa2);
-    Formula mt1 = fmgr.makeTrue();
-    Formula mt2 = fmgr.makeTrue();
+    Pair<SSAMap, List<Triple<String, Integer, Integer>>> result = SSAMap.merge(ssa1, ssa2);
+    SSAMap resultSSA = result.getFirst();
+    List<Triple<String, Integer, Integer>> varDifferences = result.getSecond();
 
-    for (String var : result.allVariables()) {
-      if (var.equals(CtoFormulaConverter.NONDET_VARIABLE)) {
-        continue; // do not add index adjustment terms for __nondet__
-      }
-      int i1 = ssa1.getIndex(var);
-      int i2 = ssa2.getIndex(var);
+    BooleanFormula mt1 = bfmgr.makeBoolean(true);
+    BooleanFormula mt2 = bfmgr.makeBoolean(true);
+
+    for (Triple<String, Integer, Integer> difference : varDifferences) {
+      String name = difference.getFirst();
+      int i1 = difference.getSecond();
+      int i2 = difference.getThird();
 
       if (i1 > i2 && i1 > 1) {
         // i2:smaller, i1:bigger
         // => need correction term for i2
-        Formula t;
+        BooleanFormula t;
 
-        if (useNondetFlags && var.equals(CtoFormulaConverter.NONDET_FLAG_VARIABLE)) {
+        if (useNondetFlags && name.equals(CtoFormulaConverter.NONDET_FLAG_VARIABLE)) {
           t = makeNondetFlagMerger(Math.max(i2, 1), i1);
-        }
-        else {
-          t = makeSSAMerger(var, Math.max(i2, 1), i1);
+        } else {
+          t = makeSSAMerger(name, resultSSA.getType(name), Math.max(i2, 1), i1);
         }
 
-        mt2 = fmgr.makeAnd(mt2, t);
+        mt2 = bfmgr.and(mt2, t);
 
-      } else if (i1 < i2 && i2 > 1) {
+      } else if (i2 > 1) {
+        assert i1 < i2;
         // i1:smaller, i2:bigger
         // => need correction term for i1
-        Formula t;
+        BooleanFormula t;
 
-        if (useNondetFlags && var.equals(CtoFormulaConverter.NONDET_FLAG_VARIABLE)) {
+        if (useNondetFlags && name.equals(CtoFormulaConverter.NONDET_FLAG_VARIABLE)) {
           t = makeNondetFlagMerger(Math.max(i1, 1), i2);
-        }
-        else {
-          t = makeSSAMerger(var, Math.max(i1, 1), i2);
+        } else {
+          t = makeSSAMerger(name, resultSSA.getType(name), Math.max(i1, 1), i2);
         }
 
-        mt1 = fmgr.makeAnd(mt1, t);
+        mt1 = bfmgr.and(mt1, t);
       }
     }
 
-    for (Pair<String, FormulaList> f : result.allFunctions()) {
-      String name = f.getFirst();
+    for (Pair<Variable, FormulaList> f : resultSSA.allFunctions()) {
+      Variable name = f.getFirst();
       FormulaList args = f.getSecond();
-      int i1 = ssa1.getIndex(f);
-      int i2 = ssa2.getIndex(f);
+      int i1 = ssa1.getIndex(name.getName(), args);
+      int i2 = ssa2.getIndex(name.getName(), args);
 
       if (i1 > i2 && i1 > 1) {
         // i2:smaller, i1:bigger
         // => need correction term for i2
-        Formula t = makeSSAMerger(name, args, Math.max(i2, 1), i1);
-        mt2 = fmgr.makeAnd(mt2, t);
+        BooleanFormula t = makeSSAMerger(name, args, Math.max(i2, 1), i1);
+        mt2 = bfmgr.and(mt2, t);
 
       } else if (i1 < i2 && i2 > 1) {
         // i1:smaller, i2:bigger
         // => need correction term for i1
-        Formula t = makeSSAMerger(name, args, Math.max(i1, 1), i2);
-        mt1 = fmgr.makeAnd(mt1, t);
+        BooleanFormula t = makeSSAMerger(name, args, Math.max(i1, 1), i2);
+        mt1 = bfmgr.and(mt1, t);
       }
     }
 
-    return Pair.of(Pair.of(mt1, mt2), result);
+    return Pair.of(Pair.of(mt1, mt2), resultSSA);
   }
 
-  private Formula makeNondetFlagMerger(int iSmaller, int iBigger) {
-    return makeMerger(CtoFormulaConverter.NONDET_FLAG_VARIABLE, iSmaller, iBigger, fmgr.makeNumber(0));
+  private BooleanFormula makeNondetFlagMerger(int iSmaller, int iBigger) {
+    return makeMerger(CtoFormulaConverter.NONDET_FLAG_VARIABLE, iSmaller, iBigger, fmgr.makeNumber(NONDET_FORMULA_TYPE, 0));
   }
 
-  private Formula makeMerger(String var, int iSmaller, int iBigger, Formula pInitialValue) {
+  private BooleanFormula makeMerger(String var, int iSmaller, int iBigger, Formula pInitialValue) {
     assert iSmaller < iBigger;
 
-    Formula lResult = fmgr.makeTrue();
+    BooleanFormula lResult = bfmgr.makeBoolean(true);
+    FormulaType<Formula> type = fmgr.getFormulaType(pInitialValue);
 
     for (int i = iSmaller+1; i <= iBigger; ++i) {
-      Formula currentVar = fmgr.makeVariable(var, i);
-      Formula e = fmgr.makeEqual(currentVar, pInitialValue);
-      lResult = fmgr.makeAnd(lResult, e);
+      Formula currentVar = fmgr.makeVariable(type, var, i);
+      BooleanFormula e = fmgr.makeEqual(currentVar, pInitialValue);
+      lResult = bfmgr.and(lResult, e);
     }
 
     return lResult;
@@ -213,23 +221,32 @@ public class PathFormulaManagerImpl extends CtoFormulaConverter implements PathF
 
   // creates the mathsat terms
   // (var@iSmaller = var@iSmaller+1; ...; var@iSmaller = var@iBigger)
-  private Formula makeSSAMerger(String var, int iSmaller, int iBigger) {
-    return makeMerger(var, iSmaller, iBigger, fmgr.makeVariable(var, iSmaller));
+  private BooleanFormula makeSSAMerger(String name, CType type, int iSmaller, int iBigger) {
+    FormulaType<?> t = getFormulaTypeFromCType(type);
+    return makeMerger(name, iSmaller, iBigger,
+        fmgr.makeVariable(t, name, iSmaller));
   }
 
-  private Formula makeSSAMerger(String name,
+  private BooleanFormula makeSSAMerger(Variable var,
       FormulaList args, int iSmaller, int iBigger) {
     assert iSmaller < iBigger;
 
-    Formula intialFunc = fmgr.makeUIF(name, args, iSmaller);
-    Formula result = fmgr.makeTrue();
+    FormulaType<?> t = getFormulaTypeFromCType(var.getType());
+    Formula initialFunc = ffmgr.createFuncAndCall(var.getName(), iSmaller, t, fromList(args));
+    //BooleanFormula intialFunc = fmgr.makeUIF(name, args, iSmaller);
+    BooleanFormula result = bfmgr.makeBoolean(true);
 
     for (int i = iSmaller+1; i <= iBigger; ++i) {
-      Formula currentFunc = fmgr.makeUIF(name, args, i);
-      Formula e = fmgr.makeEqual(currentFunc, intialFunc);
-      result = fmgr.makeAnd(result, e);
+      //BooleanFormula currentFunc = fmgr.makeUIF(name, args, i);
+      Formula currentFunc = ffmgr.createFuncAndCall(var.getName(), i, t, fromList(args));
+      BooleanFormula e = fmgr.makeEqual(currentFunc, initialFunc);
+      result = bfmgr.and(result, e);
     }
     return result;
+  }
+
+  private List<Formula> fromList(FormulaList pArgs) {
+    return ((AbstractFormulaList)pArgs).getTerms();
   }
 
   @Override
@@ -255,16 +272,16 @@ public class PathFormulaManagerImpl extends CtoFormulaConverter implements PathF
    * @throws CPATransferException
    */
   @Override
-  public Formula buildBranchingFormula(Iterable<ARGState> elementsOnPath) throws CPATransferException {
+  public BooleanFormula buildBranchingFormula(Iterable<ARGState> elementsOnPath) throws CPATransferException {
     // build the branching formula that will help us find the real error path
-    Formula branchingFormula = fmgr.makeTrue();
+    BooleanFormula branchingFormula = bfmgr.makeBoolean(true);
     for (final ARGState pathElement : elementsOnPath) {
 
       if (pathElement.getChildren().size() > 1) {
         if (pathElement.getChildren().size() > 2) {
           // can't create branching formula
           logger.log(Level.WARNING, "ARG branching with more than two outgoing edges");
-          return fmgr.makeTrue();
+          return bfmgr.makeBoolean(true);
         }
 
         FluentIterable<CFAEdge> outgoingEdges = from(pathElement.getChildren()).transform(
@@ -276,7 +293,7 @@ public class PathFormulaManagerImpl extends CtoFormulaConverter implements PathF
         });
         if (!outgoingEdges.allMatch(Predicates.instanceOf(CAssumeEdge.class))) {
           logger.log(Level.WARNING, "ARG branching without CAssumeEdge");
-          return fmgr.makeTrue();
+          return  bfmgr.makeBoolean(true);
         }
 
         CAssumeEdge edge = null;
@@ -287,8 +304,7 @@ public class PathFormulaManagerImpl extends CtoFormulaConverter implements PathF
           }
         }
         assert edge != null;
-
-        Formula pred = fmgr.makePredicateVariable(BRANCHING_PREDICATE_NAME + pathElement.getStateId(), 0);
+        BooleanFormula pred = bfmgr.makeVariable(BRANCHING_PREDICATE_NAME + pathElement.getStateId(), 0);
 
         // create formula by edge, be sure to use the correct SSA indices!
         // TODO the class PathFormulaManagerImpl should not depend on PredicateAbstractState,
@@ -297,15 +313,15 @@ public class PathFormulaManagerImpl extends CtoFormulaConverter implements PathF
         PredicateAbstractState pe = AbstractStates.extractStateByType(pathElement, PredicateAbstractState.class);
         if (pe == null) {
           logger.log(Level.WARNING, "Cannot find precise error path information without PredicateCPA");
-          return fmgr.makeTrue();
+          return bfmgr.makeBoolean(true);
         } else {
           pf = pe.getPathFormula();
         }
         pf = this.makeEmptyPathFormula(pf); // reset everything except SSAMap
         pf = this.makeAnd(pf, edge);        // conjunct with edge
 
-        Formula equiv = fmgr.makeEquivalence(pred, pf.getFormula());
-        branchingFormula = fmgr.makeAnd(branchingFormula, equiv);
+        BooleanFormula equiv = bfmgr.equivalence(pred, pf.getFormula());
+        branchingFormula = bfmgr.and(branchingFormula, equiv);
       }
     }
     return branchingFormula;
@@ -330,7 +346,7 @@ public class PathFormulaManagerImpl extends CtoFormulaConverter implements PathF
 
     Map<Integer, Boolean> preds = Maps.newHashMap();
     for (AssignableTerm a : model.keySet()) {
-      if (a instanceof Variable && a.getType() == TermType.Boolean) {
+      if (a instanceof Model.Variable && a.getType() == TermType.Boolean) {
 
         String name = BRANCHING_PREDICATE_NAME_PATTERN.matcher(a.getName()).replaceFirst("");
         if (!name.equals(a.getName())) {

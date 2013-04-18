@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2012  Dirk Beyer
+ *  Copyright (C) 2007-2013  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,7 +29,8 @@ import java.util.List;
 import com.google.common.base.Joiner;
 import com.google.common.base.Strings;
 
-public final class CSimpleType extends CType {
+public final class CSimpleType implements CType {
+
 
   private final CBasicType type;
   private final boolean isLong;
@@ -39,13 +40,16 @@ public final class CSimpleType extends CType {
   private final boolean isComplex;
   private final boolean isImaginary;
   private final boolean isLongLong;
+  private boolean   isConst;
+  private boolean   isVolatile;
 
   public CSimpleType(final boolean pConst, final boolean pVolatile,
       final CBasicType pType, final boolean pIsLong, final boolean pIsShort,
       final boolean pIsSigned, final boolean pIsUnsigned,
       final boolean pIsComplex, final boolean pIsImaginary,
       final boolean pIsLongLong) {
-    super(pConst, pVolatile);
+    isConst = pConst;
+    isVolatile = pVolatile;
     type = pType;
     isLong = pIsLong;
     isShort = pIsShort;
@@ -54,6 +58,16 @@ public final class CSimpleType extends CType {
     isComplex = pIsComplex;
     isImaginary = pIsImaginary;
     isLongLong = pIsLongLong;
+  }
+
+  @Override
+  public boolean isConst() {
+    return isConst;
+  }
+
+  @Override
+  public boolean isVolatile() {
+    return isVolatile;
   }
 
   public CBasicType getType() {
@@ -89,8 +103,28 @@ public final class CSimpleType extends CType {
   }
 
   @Override
+  public int hashCode() {
+    throw new UnsupportedOperationException("Do not use hashCode of CType");
+  }
+
+  @Override
+  public boolean equals(Object obj) {
+    return CTypeUtils.equals(this, obj);
+  }
+
+  @Override
+  public <R, X extends Exception> R accept(CTypeVisitor<R, X> pVisitor) throws X {
+    return pVisitor.visit(this);
+  }
+
+  @Override
+  public String toString() {
+    return toASTString("");
+  }
+
+  @Override
   public String toASTString(String pDeclarator) {
-    List<String> parts = new ArrayList<String>();
+    List<String> parts = new ArrayList<>();
 
     if (isConst()) {
       parts.add("const");

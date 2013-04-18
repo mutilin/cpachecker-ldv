@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2012  Dirk Beyer
+ *  Copyright (C) 2007-2013  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -88,15 +88,15 @@ public class CPABuilder {
   }
 
   public ConfigurableProgramAnalysis buildCPAs(final CFA cfa) throws InvalidConfigurationException, CPAException {
-    Set<String> usedAliases = new HashSet<String>();
+    Set<String> usedAliases = new HashSet<>();
 
     // create automata cpas for specification given in specification file
     List<ConfigurableProgramAnalysis> cpas = null;
     if (specificationFiles != null) {
-      cpas = new ArrayList<ConfigurableProgramAnalysis>();
+      cpas = new ArrayList<>();
 
       for (File specFile : specificationFiles) {
-        List<Automaton> automata = AutomatonParser.parseAutomatonFile(specFile, config, logger);
+        List<Automaton> automata = AutomatonParser.parseAutomatonFile(specFile, config, logger, cfa.getMachineModel());
 
         for (Automaton automaton : automata) {
           String cpaAlias = automaton.getName();
@@ -107,6 +107,7 @@ public class CPABuilder {
           CPAFactory factory = ControlAutomatonCPA.factory();
           factory.setConfiguration(Configuration.copyWithNewPrefix(config, cpaAlias));
           factory.setLogger(logger);
+          factory.set(cfa, CFA.class);
           factory.set(automaton, Automaton.class);
           cpas.add(factory.createInstance());
           logger.log(Level.FINER, "Loaded Automaton\"" + automaton.getName() + "\"");

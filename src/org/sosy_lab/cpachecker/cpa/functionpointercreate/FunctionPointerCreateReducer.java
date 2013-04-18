@@ -82,4 +82,18 @@ public class FunctionPointerCreateReducer implements Reducer {
     return wrappedReducer.measurePrecisionDifference(pPrecision, pOtherPrecision);
   }
 
+  @Override
+  public AbstractState getVariableReducedStateForProofChecking(AbstractState pExpandedState, Block pContext,
+      CFANode pCallNode) {
+    // TODO Auto-generated method stub
+    return null;
+  }
+
+  @Override
+  public AbstractState getVariableExpandedStateForProofChecking(AbstractState pRootState, Block pReducedContext,
+      AbstractState pReducedState) {
+    // TODO Auto-generated method stub
+    return null;
+  }
+
 }

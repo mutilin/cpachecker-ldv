@@ -94,7 +94,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     wrappedTransfer = pWrappedTransfer;
     statistics = s;
 
-    binderFunctionInfo = new HashMap<String, BinderFunctionInfo>();
+    binderFunctionInfo = new HashMap<>();
     BinderFunctionInfo tmpInfo;
     for (String name : binderFunctions) {
       tmpInfo = new BinderFunctionInfo(name, config);
@@ -112,7 +112,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     Collection<UsageStatisticsState> results;
     if (pCfaEdge == null) {
       CFANode node = extractLocation(oldState);
-      results = new ArrayList<UsageStatisticsState>(node.getNumLeavingEdges());
+      results = new ArrayList<>(node.getNumLeavingEdges());
 
       for (int edgeIdx = 0; edgeIdx < node.getNumLeavingEdges(); edgeIdx++) {
         CFAEdge edge = node.getLeavingEdge(edgeIdx);
@@ -120,7 +120,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       }
 
     } else {
-      results = new ArrayList<UsageStatisticsState>(1);
+      results = new ArrayList<>(1);
       getAbstractSuccessorForEdge(oldState, pPrecision, pCfaEdge, results);
 
     }
@@ -246,7 +246,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       statistics.add(handler.result, pNewState, line, EdgeType.DECLARATION);
 
       SingleIdentifier id = SingleIdentifier.createIdentifier(decl, funcName, 0);
-      List<Pair<SingleIdentifier, Access>> result = new LinkedList<Pair<SingleIdentifier,Access>>();
+      List<Pair<SingleIdentifier, Access>> result = new LinkedList<>();
       result.add(Pair.of(id, Access.WRITE));
       statistics.add(result, pNewState, line, EdgeType.DECLARATION);
     }

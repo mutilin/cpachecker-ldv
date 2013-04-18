@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2012  Dirk Beyer
+ *  Copyright (C) 2007-2013  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,15 +23,19 @@
  */
 package org.sosy_lab.cpachecker.cfa.ast.c;
 
+import java.util.Objects;
+
+import org.sosy_lab.cpachecker.cfa.ast.AExpression;
+import org.sosy_lab.cpachecker.cfa.ast.FileLocation;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
 
-public final class CFieldReference extends CExpression {
+public final class CFieldReference extends AExpression implements CExpression {
 
   private final String         name;
   private final CExpression owner;
   private final boolean        isPointerDereference;
 
-  public CFieldReference(final CFileLocation pFileLocation,
+  public CFieldReference(final FileLocation pFileLocation,
                             final CType pType,
                             final String pName,
                             final CExpression pOwner,
@@ -40,6 +44,11 @@ public final class CFieldReference extends CExpression {
     name = pName;
     owner = pOwner;
     isPointerDereference = pIsPointerDereference;
+  }
+
+  @Override
+  public CType getExpressionType() {
+    return (CType) super.getExpressionType();
   }
 
   public String getFieldName() {
@@ -70,4 +79,40 @@ public final class CFieldReference extends CExpression {
     String op = isPointerDereference ? "->" : ".";
     return left + op  + name;
   }
+
+  /* (non-Javadoc)
+   * @see java.lang.Object#hashCode()
+   */
+  @Override
+  public int hashCode() {
+    final int prime = 31;
+    int result = 7;
+    result = prime * result + (isPointerDereference ? 1231 : 1237);
+    result = prime * result + Objects.hashCode(name);
+    result = prime * result + Objects.hashCode(owner);
+    result = prime * result + super.hashCode();
+    return result;
+  }
+
+  /* (non-Javadoc)
+   * @see java.lang.Object#equals(java.lang.Object)
+   */
+  @Override
+  public boolean equals(Object obj) {
+    if (this == obj) {
+      return true;
+    }
+
+    if (!(obj instanceof CFieldReference)
+        || !super.equals(obj)) {
+      return false;
+    }
+
+    CFieldReference other = (CFieldReference) obj;
+
+    return Objects.equals(other.isPointerDereference, isPointerDereference)
+            && Objects.equals(other.name, name)
+            && Objects.equals(other.owner, owner);
+  }
+
 }

@@ -25,12 +25,12 @@ package org.sosy_lab.cpachecker.util.predicates.smtInterpol;
 
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.apache.log4j.Level;
@@ -43,17 +43,15 @@ import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 
 import de.uni_freiburg.informatik.ultimate.logic.Annotation;
-import de.uni_freiburg.informatik.ultimate.logic.Assignments;
 import de.uni_freiburg.informatik.ultimate.logic.LoggingScript;
 import de.uni_freiburg.informatik.ultimate.logic.Logics;
-import de.uni_freiburg.informatik.ultimate.logic.Model;
 import de.uni_freiburg.informatik.ultimate.logic.QuotedObject;
 import de.uni_freiburg.informatik.ultimate.logic.SMTLIBException;
 import de.uni_freiburg.informatik.ultimate.logic.Script;
+import de.uni_freiburg.informatik.ultimate.logic.Script.LBool;
 import de.uni_freiburg.informatik.ultimate.logic.Sort;
 import de.uni_freiburg.informatik.ultimate.logic.Term;
 import de.uni_freiburg.informatik.ultimate.logic.TermVariable;
-import de.uni_freiburg.informatik.ultimate.logic.Valuation;
 import de.uni_freiburg.informatik.ultimate.smtinterpol.smtlib2.SMTInterpol;
 
 /** This is a Wrapper around SmtInterpol.
@@ -62,7 +60,7 @@ import de.uni_freiburg.informatik.ultimate.smtinterpol.smtlib2.SMTInterpol;
  * This Wrapper allows to set a logfile for all Smt-Queries (default "smtinterpol.smt2").
  */
 @Options(prefix="cpa.predicate.smtinterpol")
-public class SmtInterpolEnvironment implements Script {
+public class SmtInterpolEnvironment {
 
   /**
    * Enum listing possible types for SmtInterpol.
@@ -86,7 +84,10 @@ public class SmtInterpolEnvironment implements Script {
     }
   }
 
-  @Option(name="logfile", description="export solverqueries in smtlib-format")
+  @Option(description="Export solver queries in Smtlib format into a file.")
+  private boolean logAllQueries = false;
+
+  @Option(name="logfile", description="Export solver queries in Smtlib format into a file.")
   @FileOption(FileOption.Type.OUTPUT_FILE)
   private File smtLogfile = new File("smtinterpol.smt2");
 
@@ -99,15 +100,18 @@ public class SmtInterpolEnvironment implements Script {
 
   /** This Set stores declared functions.
    * It is used to guarantee, that functions are only declared once. */
-  private Set<String> declaredFunctions = new HashSet<String>();
+  private Set<String> declaredFunctions = new HashSet<>();
 
   /** The stack contains a List of Declarations for each levels on the assertion-stack.
    * It is used to declare functions again, if stacklevels are popped. */
-  private List<Collection<Triple<String, Sort[], Sort>>> stack =
-      new ArrayList<Collection<Triple<String, Sort[], Sort>>>();
+  private List<Collection<Triple<String, Sort[], Sort>>> stack = new ArrayList<>();
 
   /** This Collection is the toplevel of the stack. */
   private Collection<Triple<String, Sort[], Sort>> currentDeclarations;
+
+  private Term trueTerm;
+
+  private Term falseTerm;
 
   /** The Constructor creates the wrapped Element, sets some options
    * and initializes the logger. */
@@ -119,29 +123,31 @@ public class SmtInterpolEnvironment implements Script {
     logger.setLevel(Level.OFF);
 
     SMTInterpol smtInterpol = new SMTInterpol(logger);
-    if (smtLogfile == null) { // option -noout
-      script = smtInterpol;
-
-    } else {
+    if (logAllQueries && smtLogfile != null) {
       String filename = getFilename(smtLogfile.getAbsolutePath());
       try {
         // create a thin wrapper around Benchmark,
         // this allows to write most formulas of the solver to outputfile
-        // TODO how much faster is SmtInterpol without this Wrapper?
         script = new LoggingScript(smtInterpol, filename, true);
       } catch (FileNotFoundException e) {
-        e.printStackTrace();
+        throw new AssertionError(e);
       }
+
+    } else {
+      script = smtInterpol;
     }
 
     try {
-      script.setOption(":produce-proofs", true);
+      script.setOption(":produce-interpolants", true);
       script.setOption(":produce-models", true);
       script.setOption(":verbosity", new BigInteger("2"));
     } catch (SMTLIBException e) {
-      e.printStackTrace();
+      throw new AssertionError(e);
     }
   }
+
+  public Term getTrueTerm() { return trueTerm; }
+  public Term getFalseTerm() { return falseTerm; }
 
   /**  This function creates a filename with following scheme:
        first filename is unchanged, then a number is appended */
@@ -159,51 +165,34 @@ public class SmtInterpolEnvironment implements Script {
     return filename;
   }
 
-  @Override
-  public void setLogic(String logic) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
   public void setLogic(Logics logic) {
     assert !isLogicSet() : "Logic was set before, you cannot do this again.";
     try {
       script.setLogic(logic);
       this.logic = logic;
     } catch (SMTLIBException e) {
-      e.printStackTrace();
+      throw new AssertionError(e);
     }
+
+    trueTerm = term("true");
+    falseTerm = term("false");
   }
 
   public boolean isLogicSet() {
     return logic != null;
   }
 
-  @Override
   public void setOption(String opt, Object value) {
     try {
       script.setOption(opt, value);
     } catch (SMTLIBException e) {
-      e.printStackTrace();
+      throw new AssertionError(e);
     }
   }
 
-  @Override
-  public void setInfo(String info, Object value) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public void declareSort(String sort, int arity) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public void defineSort(String sort, Sort[] sortParams, Sort definition) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
+  /** This function declares a new functionSymbol, that has a given (result-) sort.
+   * The params for the functionSymbol also have sorts.
+   * If you want to declare a new variable, i.e. "X", paramSorts is an empty array. */
   public void declareFun(String fun, Sort[] paramSorts, Sort resultSort) {
     declareFun(fun, paramSorts, resultSort, true);
   }
@@ -218,7 +207,7 @@ public class SmtInterpolEnvironment implements Script {
         script.declareFun(fun, paramSorts, resultSort);
         declaredFunctions.add(funRepr);
       } catch (SMTLIBException e) {
-        e.printStackTrace();
+        throw new AssertionError(e);
       }
       if (stack.size() != 0) {
         currentDeclarations.add(Triple.of(fun, paramSorts, resultSort));
@@ -239,35 +228,28 @@ public class SmtInterpolEnvironment implements Script {
     return str.toString();
   }
 
-  @Override
-  public void defineFun(String fun, TermVariable[] params, Sort resultSort, Term definition) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
   public void push(int levels) {
     try {
       script.push(levels);
     } catch (SMTLIBException e) {
-      e.printStackTrace();
+      throw new AssertionError(e);
     }
 
     for (int i = 0; i < levels; i++) {
-      currentDeclarations = new ArrayList<Triple<String, Sort[], Sort>>();
+      currentDeclarations = new ArrayList<>();
       stack.add(currentDeclarations);
     }
   }
 
   /** This function pops levels from the assertion-stack.
    * It also declares popped functions on the lower level. */
-  @Override
   public void pop(int levels) {
     assert stack.size() >= levels : "not enough levels to remove";
     try {
      // for (int i=0;i<levels;i++) script.pop(1); // for old version of SmtInterpol
       script.pop(levels);
     } catch (SMTLIBException e) {
-      e.printStackTrace();
+      throw new AssertionError(e);
     }
 
     if (stack.size() - levels > 0) {
@@ -288,77 +270,41 @@ public class SmtInterpolEnvironment implements Script {
     }
   }
 
-  @Override
+  /** This function adds the term on top of the stack.
+   * In most cases LBool.UNKNOWN is returned. */
   public LBool assertTerm(Term term) {
     assert stack.size() > 0 : "assertions should be on higher levels";
     LBool result = null;
     try {
       result = script.assertTerm(term);
     } catch (SMTLIBException e) {
-      e.printStackTrace();
+      throw new AssertionError(e);
     }
     return result;
   }
 
-  @Override
+  /** This function causes the SatSolver to check all the terms on the stack,
+   * if their conjunction is SAT or UNSAT. */
   public LBool checkSat() {
-    LBool result = LBool.UNKNOWN;
     try {
-      result = script.checkSat();
+      return script.checkSat();
     } catch (SMTLIBException e) {
-      e.printStackTrace();
+      throw new AssertionError(e);
     }
-    return result;
   }
 
-  @Override
-  public Term[] getAssertions() {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public void getProof() {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public Term[] getUnsatCore() {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public Model getModel() {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public Valuation getValue(Term[] terms) {
+  /** This function returns a map,
+   * that contains assignments term->term for all terms in terms. */
+  public Map<Term, Term> getValue(Term[] terms) {
     try {
       return script.getValue(terms);
     } catch (SMTLIBException e) {
-      e.printStackTrace();
-      return null;
+      throw new AssertionError(e);
     }
   }
 
-  @Override
-  public Assignments getAssignment() {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public Object getOption(String opt) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
   public Object getInfo(String info) {
     return script.getInfo(info);
-  }
-
-  @Override
-  public void exit() {
-    throw new UnsupportedOperationException();
   }
 
   /** This function returns the Sort for a Type. */
@@ -366,135 +312,97 @@ public class SmtInterpolEnvironment implements Script {
     return sort(type.toString());
   }
 
-  @Override
-  public Sort sort(String sortname, Sort... params) {
+  /** This function returns an n-ary sort with given parameters. */
+  Sort sort(String sortname, Sort... params) {
     try {
       return script.sort(sortname, params);
     } catch (SMTLIBException e) {
-      e.printStackTrace();
-      return null;
+      throw new AssertionError(e);
     }
   }
 
-  @Override
-  public Sort sort(String pSortname, BigInteger[] pIndices, Sort... pParams) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
   public Term term(String funcname, Term... params) {
     try {
       return script.term(funcname, params);
     } catch (SMTLIBException e) {
-      e.printStackTrace();
-      return null;
+      throw new AssertionError(e);
     }
   }
 
-  @Override
-  public Term term(String funcname, BigInteger[] indices, Sort returnSort, Term... params) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
   public TermVariable variable(String varname, Sort sort) {
-    throw new UnsupportedOperationException();
+    try {
+      return script.variable(varname, sort);
+    } catch (SMTLIBException e) {
+      throw new AssertionError(e);
+    }
   }
 
-  @Override
   public Term quantifier(int quantor, TermVariable[] vars, Term body, Term[]... patterns) {
-    throw new UnsupportedOperationException();
+    try {
+      return script.quantifier(quantor, vars, body, patterns);
+    } catch (SMTLIBException e) {
+      throw new AssertionError(e);
+    }
   }
 
-  @Override
   public Term let(TermVariable[] pVars, Term[] pValues, Term pBody) {
     try {
       return script.let(pVars, pValues, pBody);
     } catch (SMTLIBException e) {
-      e.printStackTrace();
-      return null;
+      throw new AssertionError(e);
     }
   }
 
-  @Override
   public Term annotate(Term t, Annotation... annotations) {
     try {
       return script.annotate(t, annotations);
     } catch (SMTLIBException e) {
-      e.printStackTrace();
-      return null;
+      throw new AssertionError(e);
     }
   }
 
-  @Override
   public Term numeral(String num) {
     try {
       return script.numeral(num);
     } catch (SMTLIBException e) {
-      e.printStackTrace();
-      return null;
+      throw new AssertionError(e);
     }
   }
 
-  @Override
-  public Term numeral(BigInteger num) throws SMTLIBException {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
   public Term decimal(String num) {
     try {
       return script.decimal(num);
     } catch (SMTLIBException e) {
-      e.printStackTrace();
-      return null;
+      throw new AssertionError(e);
     }
   }
 
-  @Override
-  public Term decimal(BigDecimal decimal) throws SMTLIBException {
-    throw new UnsupportedOperationException();
+  public Term hexadecimal(String hex) {
+    try {
+      return script.hexadecimal(hex);
+    } catch (SMTLIBException e) {
+      throw new AssertionError(e);
+    }
   }
 
-  @Override
-  public Term string(String s) throws SMTLIBException {
-    throw new UnsupportedOperationException();
+  public Term binary(String bin) {
+    try {
+      return script.binary(bin);
+    } catch (SMTLIBException e) {
+      throw new AssertionError(e);
+    }
   }
 
-  @Override
-  public Term hexadecimal(String pHex) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public Term binary(String pBin) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public Term simplifyTerm(Term term) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public void reset() {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
+  /** This function returns a list of interpolants for the partitions.
+   * Each partition must be a named term or a conjunction of named terms.
+   * There should be (n-1) interpolants for n partitions. */
   public Term[] getInterpolants(Term[] partition) {
     assert stack.size() > 0 : "interpolants should be on higher levels";
     try {
       return script.getInterpolants(partition);
     } catch (SMTLIBException e) {
-      e.printStackTrace();
-      return null;
+      throw new AssertionError(e);
     }
-  }
-
-  @Override
-  public Sort[] sortVariables(String... pNames) {
-    throw new UnsupportedOperationException();
   }
 
   /** This function returns the version of SmtInterpol, for logging. */

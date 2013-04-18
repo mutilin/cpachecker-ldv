@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2012  Dirk Beyer
+ *  Copyright (C) 2007-2013  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,6 +25,7 @@ package org.sosy_lab.cpachecker.core.reachedset;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -64,6 +65,15 @@ public class PartitionedReachedSet extends DefaultReachedSet {
     super.add(pState, pPrecision);
 
     partitionedReached.put(getPartitionKey(pState), pState);
+  }
+
+  public Set<AbstractState> getReached() {
+    Set<AbstractState> result = new HashSet<>();
+
+    for (Object key : partitionedReached.keySet()) {
+      result.addAll(partitionedReached.get(key));
+    }
+    return result;
   }
 
   @Override

@@ -24,7 +24,7 @@
 package org.sosy_lab.cpachecker.util.identifiers;
 
 import org.sosy_lab.cpachecker.cfa.types.c.CBasicType;
-import org.sosy_lab.cpachecker.cfa.types.c.CComplexType;
+import org.sosy_lab.cpachecker.cfa.types.c.CProblemType;
 import org.sosy_lab.cpachecker.cfa.types.c.CSimpleType;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
 import org.sosy_lab.cpachecker.cpa.local.LocalTransferRelation;
@@ -139,7 +139,7 @@ public class StructureIdentifier extends SingleIdentifier{
     else if (owner instanceof ConstantIdentifier) {
       return new CSimpleType(false, false, CBasicType.INT, false, false, false, false, false, false, false);
     } else if (owner instanceof BinaryIdentifier) {
-      return new CComplexType("Complex_type");
+      return new CProblemType("Complex_type");
     } else {
       System.err.println("Can't create structureFieldId for " + this.toString());
       return null;

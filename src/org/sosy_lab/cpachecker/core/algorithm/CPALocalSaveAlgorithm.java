@@ -56,7 +56,7 @@ public class CPALocalSaveAlgorithm extends CPAAlgorithm {
     super(pCpa, pLogger, pConfig);
     addToEOF = b;
     if (reachedStatistics == null) {
-      reachedStatistics = new HashMap<CFANode, LocalState>();
+      reachedStatistics = new HashMap<>();
     }
   }
 

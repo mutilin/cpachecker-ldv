@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2012  Dirk Beyer
+ *  Copyright (C) 2007-2013  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -140,7 +140,7 @@ class GlobalConditionsSimplePrecisionAdjustment extends SimplePrecisionAdjustmen
       return false;
     }
 
-    return (memory.getHeapMemoryUsage().getUsed() > threshold);
+    return ((memory.getHeapMemoryUsage().getUsed() / (1024*1024)) > threshold);
   }
 
   private boolean checkProcessMemory() {

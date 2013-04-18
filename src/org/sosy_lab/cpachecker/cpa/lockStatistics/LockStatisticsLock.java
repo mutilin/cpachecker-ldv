@@ -52,7 +52,7 @@ public class LockStatisticsLock {
 
   LockStatisticsLock(String n, int l, LockType t, CallstackState s, String v) {
     name = n;
-    accessPoints = new Stack<AccessPoint>();
+    accessPoints = new Stack<>();
     accessPoints.add(new AccessPoint( new LineInfo(l), s));
     type = t;
     recursiveCounter = 0;
@@ -61,7 +61,7 @@ public class LockStatisticsLock {
 
   private LockStatisticsLock(String n, LockType t, Stack<AccessPoint> points, String v, int r) {
     name = n;
-    accessPoints = new Stack<AccessPoint>();
+    accessPoints = new Stack<>();
     for (AccessPoint point : points) {
       accessPoints.add(point);
     }

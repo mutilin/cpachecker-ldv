@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2012  Dirk Beyer
+ *  Copyright (C) 2007-2013  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,29 +23,20 @@
  */
 package org.sosy_lab.cpachecker.core;
 
+import static com.google.common.base.Preconditions.*;
 import static com.google.common.base.Predicates.notNull;
 import static com.google.common.collect.FluentIterable.from;
 import static org.sosy_lab.cpachecker.util.AbstractStates.*;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
-import java.lang.management.GarbageCollectorMXBean;
-import java.lang.management.ManagementFactory;
-import java.lang.management.MemoryMXBean;
-import java.lang.management.MemoryUsage;
+import java.io.Writer;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.logging.Level;
-
-import javax.management.JMException;
-import javax.management.MBeanServer;
-import javax.management.MalformedObjectNameException;
-import javax.management.ObjectName;
 
 import org.sosy_lab.common.Files;
 import org.sosy_lab.common.LogManager;
@@ -55,6 +46,7 @@ import org.sosy_lab.common.configuration.FileOption;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
+import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.CFACreator;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
@@ -64,6 +56,8 @@ import org.sosy_lab.cpachecker.core.reachedset.ForwardingReachedSet;
 import org.sosy_lab.cpachecker.core.reachedset.LocationMappedReachedSet;
 import org.sosy_lab.cpachecker.core.reachedset.PartitionedReachedSet;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
+import org.sosy_lab.cpachecker.util.CFAUtils;
+import org.sosy_lab.cpachecker.util.MemoryStatistics;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
@@ -74,140 +68,6 @@ import com.google.common.collect.Multiset;
 @Options
 class MainCPAStatistics implements Statistics {
 
-  /**
-   * Some hints on memory usage numbers that I have found out so far
-   * (as of 2011-11-21 with OpenJDK 6 on Linux, obtained by pwendler).
-   *
-   * There are four ways to get memory numbers:
-   * 1) The relevant methods in the {@link Runtime} class.
-   *    (Java heap memory)
-   * 2) The {@link java.lang.management.MemoryMXBean}.
-   *    (Java heap and non-heap memory)
-   * 3) The {@link java.lang.management.MemoryPoolMXBean}.
-   *    (Java heap and non-heap memory per memory pool)
-   * 4) The method {@link com.sun.management.OperatingSystemMXBean#getCommittedVirtualMemorySize()}.
-   *    (Total memory usage of process)
-   *
-   * 1) gives the same numbers as 2) for the heap memory.
-   * The sum of heap and non-heap given by 2) is the same as the sum of all pools from 3).
-   *
-   * 3) has the benefit of also providing peak usage and "collection usage" numbers,
-   * although I currently don't know how helpful they are. "Collection usage" is
-   * defined as the memory that was used after the JVM "most recently expended
-   * effort in recycling unused objects in this memory pool"
-   * (i.e., performed garbage collection). These numbers are not available for all
-   * memory pools. There is also support for defining usage thresholds which will
-   * result in MBean notifications being emitted.
-   *
-   * 4) is only supported on Sun-family JVMs (at least the method is defined only
-   * in internal JVM classes). I do not know whether this method works on other OS.
-   * On Linux this gives the same number as the "top" command in the "VIRT" column.
-   * According to the man page this includes "all code, data and shared libraries
-   * plus pages that pages that have been mapped but not used" (and thus this
-   * measure includes more than we would like).
-   *
-   *
-   * With the {@link java.lang.management.MemoryPoolMXBean}, one can configure
-   * thresholds for notification when they are full. There is also a threshold
-   * for notification when they are full even after a GC
-   * (see {@link java.lang.management.MemoryPoolMXBean#setCollectionUsageThreshold(long)}).
-   * However, as of 2012-04-02 with OpenJDK 6 on Linux, this is not really
-   * helpful. First, there is one pool (the "Survivor" pool), which supports
-   * thresholds but has a weird maximum size set (the pool grows beyond the
-   * maximum size). Second, there seem to be a lot of notifications even while
-   * GC is still running. I still haven't found a way how to reliably detect
-   * that an OutOfMemoryError would come soon.
-   */
-  private static class MemoryStatistics extends Thread {
-
-    private static final long MEMORY_CHECK_INTERVAL = 100; // milliseconds
-
-    private final LogManager logger;
-
-    private long maxHeap = 0;
-    private long sumHeap = 0;
-    private long maxHeapAllocated = 0;
-    private long sumHeapAllocated = 0;
-    private long maxNonHeap = 0;
-    private long sumNonHeap = 0;
-    private long maxNonHeapAllocated = 0;
-    private long sumNonHeapAllocated = 0;
-    private long maxProcess = 0;
-    private long sumProcess = 0;
-    private long count = 0;
-
-    // necessary stuff to query the OperatingSystemMBean
-    private final MBeanServer mbeanServer;
-    private ObjectName osMbean;
-    private static final String MEMORY_SIZE = "CommittedVirtualMemorySize";
-
-    private MemoryStatistics(LogManager pLogger) {
-      super("CPAchecker memory statistics collector");
-
-      logger = pLogger;
-
-      mbeanServer = ManagementFactory.getPlatformMBeanServer();
-      try {
-        osMbean = new ObjectName(ManagementFactory.OPERATING_SYSTEM_MXBEAN_NAME);
-      } catch (MalformedObjectNameException e) {
-        logger.logDebugException(e, "Accessing OperatingSystemMXBean failed");
-        osMbean = null;
-      }
-    }
-
-    @Override
-    public void run() {
-      MemoryMXBean mxBean = ManagementFactory.getMemoryMXBean();
-
-      while (true) { // no stop condition, call Thread#interrupt() to stop it
-        count++;
-
-        // get Java heap usage
-        MemoryUsage currentHeap = mxBean.getHeapMemoryUsage();
-        long currentHeapUsed = currentHeap.getUsed();
-        maxHeap = Math.max(maxHeap, currentHeapUsed);
-        sumHeap += currentHeapUsed;
-
-        long currentHeapAllocated = currentHeap.getCommitted();
-        maxHeapAllocated = Math.max(maxHeapAllocated, currentHeapAllocated);
-        sumHeapAllocated += currentHeapAllocated;
-
-        // get Java non-heap usage
-        MemoryUsage currentNonHeap = mxBean.getNonHeapMemoryUsage();
-        long currentNonHeapUsed = currentNonHeap.getUsed();
-        maxNonHeap = Math.max(maxNonHeap, currentNonHeapUsed);
-        sumNonHeap += currentNonHeapUsed;
-
-        long currentNonHeapAllocated = currentNonHeap.getCommitted();
-        maxNonHeapAllocated = Math.max(maxNonHeapAllocated, currentNonHeapAllocated);
-        sumNonHeapAllocated += currentNonHeapAllocated;
-
-        // get process virtual memory usage
-        if (osMbean != null) {
-          try {
-            long memUsed = (Long) mbeanServer.getAttribute(osMbean, MEMORY_SIZE);
-            maxProcess = Math.max(maxProcess, memUsed);
-            sumProcess += memUsed;
-
-          } catch (JMException e) {
-            logger.logDebugException(e, "Querying memory size failed");
-            osMbean = null;
-          } catch (ClassCastException e) {
-            logger.logDebugException(e, "Querying memory size failed");
-            osMbean = null;
-          }
-        }
-
-        try {
-          sleep(MEMORY_CHECK_INTERVAL);
-        } catch (InterruptedException e) {
-          return; // force thread exit
-        }
-      }
-    }
-
-  }
-
     @Option(name="reachedSet.export",
         description="print reached set to text file")
     private boolean exportReachedSet = true;
@@ -215,7 +75,7 @@ class MainCPAStatistics implements Statistics {
     @Option(name="reachedSet.file",
         description="print reached set to text file")
     @FileOption(FileOption.Type.OUTPUT_FILE)
-    private File outputFile = new File("reached.txt");
+    private Path outputFile = Paths.get("reached.txt");
 
     @Option(name="statistics.memory",
       description="track memory usage of JVM during runtime")
@@ -230,13 +90,14 @@ class MainCPAStatistics implements Statistics {
     final Timer cpaCreationTime = new Timer();
     final Timer analysisTime = new Timer();
 
-    private CFACreator cfaCreator;
+    private Statistics cfaCreatorStatistics;
+    private CFA cfa;
 
     public MainCPAStatistics(Configuration config, LogManager pLogger) throws InvalidConfigurationException {
         logger = pLogger;
         config.inject(this);
 
-        subStats = new ArrayList<Statistics>();
+        subStats = new ArrayList<>();
 
         if (monitorMemoryUsage) {
           memStats = new MemoryStatistics(pLogger);
@@ -260,6 +121,10 @@ class MainCPAStatistics implements Statistics {
 
     @Override
     public void printStatistics(PrintStream out, Result result, ReachedSet reached) {
+        checkNotNull(out);
+        checkNotNull(result);
+        checkArgument(result == Result.NOT_YET_STARTED || reached != null);
+
         // call stop again in case CPAchecker was terminated abnormally
         if (analysisTime.isRunning()) {
           analysisTime.stop();
@@ -271,56 +136,77 @@ class MainCPAStatistics implements Statistics {
           memStats.interrupt(); // stop memory statistics collection
         }
 
-        if (exportReachedSet && outputFile != null) {
-          try {
-            Files.writeFile(outputFile, Joiner.on('\n').join(reached));
-          } catch (IOException e) {
-            logger.logUserException(Level.WARNING, e, "Could not write reached set to file");
-          } catch (OutOfMemoryError e) {
-            logger.logUserException(Level.WARNING, e,
-                "Could not write reached set to file due to memory problems");
-          }
-        }
+        if (result != Result.NOT_YET_STARTED) {
+          dumpReachedSet(reached);
 
-        for (Statistics s : subStats) {
-          String name = s.getName();
-          if (!Strings.isNullOrEmpty(name)) {
-            name = name + " statistics";
-            out.println(name);
-            out.println(Strings.repeat("-", name.length()));
-          }
-
-          try {
-            s.printStatistics(out, result, reached);
-          } catch (OutOfMemoryError e) {
-            logger.logUserException(Level.WARNING, e,
-                "Out of memory while generating statistics and writing output files");
-          }
-
-          if (!Strings.isNullOrEmpty(name)) {
-            out.println();
-          }
+          printSubStatistics(out, result, reached);
         }
 
         out.println("CPAchecker general statistics");
         out.println("-----------------------------");
 
-        try {
-          printReachedSetStatistics(reached, out);
-        } catch (OutOfMemoryError e) {
-          logger.logUserException(Level.WARNING, e,
-              "Out of memory while generating statistics about final reached set");
+        if (result != Result.NOT_YET_STARTED) {
+          try {
+            printReachedSetStatistics(reached, out);
+          } catch (OutOfMemoryError e) {
+            logger.logUserException(Level.WARNING, e,
+                "Out of memory while generating statistics about final reached set");
+          }
         }
 
-        printTimeStatistics(out);
+        printCfaStatistics(out);
 
-        out.println("");
+        out.println();
+
+        printTimeStatistics(out, result, reached);
+
+        out.println();
 
         printMemoryStatistics(out);
     }
 
+    private void dumpReachedSet(ReachedSet reached) {
+      assert reached != null : "ReachedSet may be null only if analysis not yet started";
+
+      if (exportReachedSet && outputFile != null) {
+        try (Writer w = Files.openOutputFile(outputFile)) {
+          Joiner.on('\n').appendTo(w, reached);
+        } catch (IOException e) {
+          logger.logUserException(Level.WARNING, e, "Could not write reached set to file");
+        } catch (OutOfMemoryError e) {
+          logger.logUserException(Level.WARNING, e,
+              "Could not write reached set to file due to memory problems");
+        }
+      }
+    }
+
+    private void printSubStatistics(PrintStream out, Result result, ReachedSet reached) {
+      assert reached != null : "ReachedSet may be null only if analysis not yet started";
+
+      for (Statistics s : subStats) {
+        String name = s.getName();
+        if (!Strings.isNullOrEmpty(name)) {
+          name = name + " statistics";
+          out.println(name);
+          out.println(Strings.repeat("-", name.length()));
+        }
+
+        try {
+          s.printStatistics(out, result, reached);
+        } catch (OutOfMemoryError e) {
+          logger.logUserException(Level.WARNING, e,
+              "Out of memory while generating statistics and writing output files");
+        }
+
+        if (!Strings.isNullOrEmpty(name)) {
+          out.println();
+        }
+      }
+    }
 
     private void printReachedSetStatistics(ReachedSet reached, PrintStream out) {
+      assert reached != null : "ReachedSet may be null only if analysis not yet started";
+
       if (reached instanceof ForwardingReachedSet) {
         reached = ((ForwardingReachedSet)reached).getDelegate();
       }
@@ -375,41 +261,35 @@ class MainCPAStatistics implements Statistics {
         }
       }
       out.println("  Number of target states:    " + from(reached).filter(IS_TARGET_STATE).size());
+      if (reached.hasWaitingState()) {
+        out.println("  Size of final wait list     " + reached.getWaitlistSize());
+      }
     }
 
-    private void printTimeStatistics(PrintStream out) {
+    private void printCfaStatistics(PrintStream out) {
+      if (cfa != null) {
+        int loops = from(cfa.getAllNodes())
+                        .filter(CFAUtils.IS_LOOP_NODE)
+                        .size();
+
+        out.println("Number of program locations:  " + cfa.getAllNodes().size());
+        out.println("Number of functions:          " + cfa.getNumberOfFunctions());
+        out.println("Number of loops:              " + loops);
+      }
+    }
+
+    private void printTimeStatistics(PrintStream out, Result result, ReachedSet reached) {
       out.println("Time for analysis setup:      " + creationTime);
       out.println("  Time for loading CPAs:      " + cpaCreationTime);
-      if (cfaCreator != null) {
-        out.println("  Time for loading C parser:  " + cfaCreator.parserInstantiationTime);
-        out.println("  Time for CFA construction:  " + cfaCreator.totalTime);
-        out.println("    Time for parsing C file:  " + cfaCreator.parsingTime);
-        out.println("    Time for AST to CFA:      " + cfaCreator.conversionTime);
-        out.println("    Time for CFA sanity check:" + cfaCreator.checkTime);
-        out.println("    Time for post-processing: " + cfaCreator.processingTime);
-        if (cfaCreator.pruningTime.getNumberOfIntervals() > 0) {
-          out.println("    Time for CFA pruning:     " + cfaCreator.pruningTime);
-        }
-        if (cfaCreator.exportTime.getNumberOfIntervals() > 0) {
-          out.println("    Time for CFA export:      " + cfaCreator.exportTime);
-        }
+      if (cfaCreatorStatistics != null) {
+        cfaCreatorStatistics.printStatistics(out, result, reached);
       }
       out.println("Time for Analysis:            " + analysisTime);
       out.println("Total time for CPAchecker:    " + programTime);
     }
 
     private void printMemoryStatistics(PrintStream out) {
-      List<GarbageCollectorMXBean> gcBeans = ManagementFactory.getGarbageCollectorMXBeans();
-      Set<String> gcNames = new HashSet<String>();
-      long gcTime = 0;
-      int gcCount = 0;
-      for (GarbageCollectorMXBean gcBean : gcBeans) {
-        gcTime += gcBean.getCollectionTime();
-        gcCount += gcBean.getCollectionCount();
-        gcNames.add(gcBean.getName());
-      }
-      out.println("Time for Garbage Collector:   " + Timer.formatTime(gcTime) + " (in " + gcCount + " runs)");
-      out.println("Garbage Collector(s) used:    " + Joiner.on(", ").join(gcNames));
+      MemoryStatistics.printGcStatistics(out);
 
       if (memStats != null) {
         try {
@@ -418,22 +298,17 @@ class MainCPAStatistics implements Statistics {
         } catch (InterruptedException e) {
           Thread.currentThread().interrupt();
         }
-        out.println("Used heap memory:             " + formatMem(memStats.maxHeap) + " max (" + formatMem(memStats.sumHeap/memStats.count) + " avg)");
-        out.println("Used non-heap memory:         " + formatMem(memStats.maxNonHeap) + " max (" + formatMem(memStats.sumNonHeap/memStats.count) + " avg)");
-        out.println("Allocated heap memory:        " + formatMem(memStats.maxHeapAllocated) + " max (" + formatMem(memStats.sumHeapAllocated/memStats.count) + " avg)");
-        out.println("Allocated non-heap memory:    " + formatMem(memStats.maxNonHeapAllocated) + " max (" + formatMem(memStats.sumNonHeapAllocated/memStats.count) + " avg)");
-        if (memStats.osMbean != null) {
-          out.println("Total process virtual memory: " + formatMem(memStats.maxProcess) + " max (" + formatMem(memStats.sumProcess/memStats.count) + " avg)");
-        }
+        memStats.printStatistics(out);
       }
     }
 
-    private static String formatMem(long mem) {
-      return String.format("%,9dMB", mem >> 20);
+    public void setCFACreator(CFACreator pCfaCreator) {
+      Preconditions.checkState(cfaCreatorStatistics == null);
+      cfaCreatorStatistics = pCfaCreator.getStatistics();
     }
 
-    public void setCFACreator(CFACreator pCfaCreator) {
-      Preconditions.checkState(cfaCreator == null);
-      cfaCreator = pCfaCreator;
+    public void setCFA(CFA pCfa) {
+      Preconditions.checkState(cfa == null);
+      cfa = pCfa;
     }
 }

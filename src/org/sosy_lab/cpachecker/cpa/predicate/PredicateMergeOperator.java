@@ -23,6 +23,8 @@
  */
 package org.sosy_lab.cpachecker.cpa.predicate;
 
+import static org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState.mkNonAbstractionStateWithNewPathFormula;
+
 import java.util.logging.Level;
 
 import org.sosy_lab.common.LogManager;
@@ -67,12 +69,13 @@ public class PredicateMergeOperator implements MergeOperator {
       // we don't merge if this is an abstraction location
       merged = elem2;
     } else {
-      // don't merge if the elements are in different blocks (they have different abstractions)
+      // don't merge if the elements are in different blocks (they have different abstraction formulas)
       if (!elem1.getAbstractionFormula().equals(elem2.getAbstractionFormula())) {
         merged = elem2;
 
       } else {
         totalMergeTime.start();
+        assert elem1.getAbstractionLocationsOnPath().equals(elem2.getAbstractionLocationsOnPath());
         // create a new state
 
         logger.log(Level.FINEST, "Merging two non-abstraction nodes.");
@@ -81,7 +84,7 @@ public class PredicateMergeOperator implements MergeOperator {
 
         logger.log(Level.ALL, "New path formula is", pathFormula);
 
-        merged = PredicateAbstractState.nonAbstractionState(pathFormula, elem1.getAbstractionFormula());
+        merged = mkNonAbstractionStateWithNewPathFormula(pathFormula, elem1);
 
         // now mark elem1 so that coverage check can find out it was merged
         elem1.setMergedInto(merged);

@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2012  Dirk Beyer
+ *  Copyright (C) 2007-2013  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -35,7 +35,7 @@ import org.sosy_lab.cpachecker.core.interfaces.Precision;
  */
 public interface UnmodifiableReachedSet extends Iterable<AbstractState> {
 
-  public Collection<AbstractState> getReached();
+  public Collection<AbstractState> asCollection();
 
   @Override
   public Iterator<AbstractState> iterator();

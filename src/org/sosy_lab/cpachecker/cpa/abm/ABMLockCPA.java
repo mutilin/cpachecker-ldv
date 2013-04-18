@@ -71,7 +71,7 @@ public class ABMLockCPA extends ABMCPA {
         usCpa.getStats().setStackRestoration(transfer);
       }
 
-      Map<AbstractState, Precision> forwardPrecisionToExpandedPrecision = new HashMap<AbstractState, Precision>();
+      Map<AbstractState, Precision> forwardPrecisionToExpandedPrecision = new HashMap<>();
       transfer.setForwardPrecisionToExpandedPrecision(forwardPrecisionToExpandedPrecision);
       prec.setForwardPrecisionToExpandedPrecision(forwardPrecisionToExpandedPrecision);
     }

@@ -23,9 +23,13 @@
  */
 package org.sosy_lab.cpachecker.cpa.explicit;
 
-import java.util.Collection;
-import java.util.HashMap;
+import java.io.IOException;
+import java.io.Writer;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.regex.Pattern;
 
 import org.sosy_lab.common.Pair;
@@ -51,50 +55,48 @@ public class ExplicitPrecision implements Precision {
   private final Pattern blackListPattern;
 
   /**
-   * the current location, given by the ExplicitTransferRelation, needed for checking the white-list
-   */
-  private CFANode currentLocation                   = null;
-
-  /**
-   * the component responsible for thresholds concerning the reached set
-   */
-  private ReachedSetThresholds reachedSetThresholds = null;
-
-  /**
-   * the component responsible for thresholds concerning paths
-   */
-  private PathThresholds pathThresholds             = null;
-
-  /**
    * the component responsible for variables that need to be tracked, according to refinement
    */
-  private CegarPrecision cegarPrecision             = null;
+  private RefinablePrecision refinablePrecision = null;
 
-  private Ignore ignore = null;
+  @Option(description = "the threshold which controls whether or not variable valuations ought to be abstracted once the specified number of valuations per variable is reached in the set of reached states")
+  private int reachedSetThreshold = -1;
+
+  @Option(description = "whether or not to add newly-found variables only to the exact program location (i.e. scoped=false) or to their respective scope (i.e. scoped=true).")
+  private boolean scoped = true;
 
   @Option(description = "ignore boolean variables. if this option is used, "
       + "booleans from the cfa should tracked with another CPA, "
       + "i.e. with BDDCPA.")
-  private boolean ignoreBooleans = false;
+  private boolean ignoreBoolean = false;
 
-  @Option(description = "ignore variables with only simple numbers. "
+  @Option(description = "ignore variables, that are only compared for equality. "
       + "if this option is used, these variables from the cfa should "
       + "tracked with another CPA, i.e. with BDDCPA.")
-  private boolean ignoreSimpleNumbers = false;
+  private boolean ignoreIntEqual = false;
+
+  @Option(description = "ignore variables, that are only used in simple " +
+      "calculations (add, sub, lt, gt, eq). "
+      + "if this option is used, these variables from the cfa should "
+      + "tracked with another CPA, i.e. with BDDCPA.")
+  private boolean ignoreIntAdd = false;
 
   private Optional<VariableClassification> varClass;
 
   public ExplicitPrecision(String variableBlacklist, Configuration config,
-      Optional<VariableClassification> vc) throws InvalidConfigurationException {
+      Optional<VariableClassification> vc,
+      Multimap<CFANode, String> mapping) throws InvalidConfigurationException {
     config.inject(this);
 
     blackListPattern = Pattern.compile(variableBlacklist);
     this.varClass = vc;
 
-    cegarPrecision        = new CegarPrecision(config);
-    reachedSetThresholds  = new ReachedSetThresholds(config);
-    pathThresholds        = new PathThresholds(config);
-    ignore                = new Ignore(config);
+    if (Boolean.parseBoolean(config.getProperty("analysis.useRefinement"))) {
+      refinablePrecision = createInstance();
+    }
+    else {
+      refinablePrecision = new FullPrecision();
+    }
   }
 
   /**
@@ -102,38 +104,30 @@ public class ExplicitPrecision implements Precision {
    *
    * @param original the ExplicitPrecision to copy
    */
-  public ExplicitPrecision(ExplicitPrecision original) {
-
-    blackListPattern = original.blackListPattern;
-
-    cegarPrecision        = new CegarPrecision(original.cegarPrecision);
-    reachedSetThresholds  = new ReachedSetThresholds(original.reachedSetThresholds);
-    pathThresholds        = new PathThresholds(original.pathThresholds);
-    ignore                = new Ignore(original.ignore);
+  public ExplicitPrecision(ExplicitPrecision original, Multimap<CFANode, String> increment) {
+    refinablePrecision    = original.refinablePrecision.refine(increment);
+    blackListPattern      = original.blackListPattern;
+    reachedSetThreshold   = original.reachedSetThreshold;
   }
 
-  public CegarPrecision getCegarPrecision() {
-    return cegarPrecision;
-  }
-
-  public ReachedSetThresholds getReachedSetThresholds() {
-    return reachedSetThresholds;
-  }
-
-  public PathThresholds getPathThresholds() {
-    return pathThresholds;
-  }
-
-  public Ignore getIgnore() {
-    return ignore;
+  public RefinablePrecision getRefinablePrecision() {
+    return refinablePrecision;
   }
 
   public void setLocation(CFANode node) {
-    currentLocation = node;
+    refinablePrecision.setLocation(node);
   }
 
   boolean isOnBlacklist(String variable) {
     return this.blackListPattern.matcher(variable).matches();
+  }
+
+  boolean variableExceedsReachedSetThreshold(int numberOfDifferentValues) {
+    return numberOfDifferentValues > reachedSetThreshold;
+  }
+
+  boolean isReachedSetThresholdActive() {
+    return reachedSetThreshold > -1;
   }
 
   /**
@@ -146,25 +140,32 @@ public class ExplicitPrecision implements Precision {
    * @return true, if the variable has to be tracked, else false
    */
   public boolean isTracking(String variable) {
-    return reachedSetThresholds.allowsTrackingOf(variable)
-        && pathThresholds.allowsTrackingOf(variable)
-        && cegarPrecision.allowsTrackingOf(variable)
-        && ignore.allowsTrackingOf(variable)
-        && !isOnBlacklist(variable)
-        && !(ignoreBooleans && isBoolean(variable))
-        && !(ignoreSimpleNumbers && isSimpleNumber(variable));
+    boolean result = refinablePrecision.contains(variable)
+            && !isOnBlacklist(variable)
+            && !isInIgnoredVarClass(variable);
+
+    return result;
   }
 
-  private boolean isBoolean(String variable) {
-    Pair<String,String> var = splitVar(variable);
-    return varClass.isPresent()
-        && varClass.get().getBooleanVars().containsEntry(var.getFirst(), var.getSecond());
-  }
+  /** returns true, iff the variable is in an varClass, that should be ignored. */
+  private boolean isInIgnoredVarClass(String variable) {
+    if (varClass==null || !varClass.isPresent()) { return false; }
 
-  private boolean isSimpleNumber(String variable) {
-    Pair<String,String> var = splitVar(variable);
-    return varClass.isPresent()
-        && varClass.get().getSimpleNumberVars().containsEntry(var.getFirst(), var.getSecond());
+    Pair<String, String> var = splitVar(variable);
+
+    final boolean isBoolean = varClass.get().getBooleanVars().containsEntry(var.getFirst(), var.getSecond());
+    final boolean isIntEqual = varClass.get().getIntEqualVars().containsEntry(var.getFirst(), var.getSecond());
+    final boolean isIntAdd = varClass.get().getIntAddVars().containsEntry(var.getFirst(), var.getSecond());
+
+    final boolean isIgnoredBoolean = ignoreBoolean && isBoolean;
+
+    // if a var is boolean and intEqual, it is not handled as intEqual.
+    final boolean isIgnoredIntEqual = ignoreIntEqual && !isBoolean && isIntEqual;
+
+    // if a var is (boolean or intEqual) and intAdd, it is not handled as intAdd.
+    final boolean isIgnoredIntAdd = ignoreIntAdd && !isBoolean && !isIntEqual && isIntAdd;
+
+    return isIgnoredBoolean || isIgnoredIntEqual || isIgnoredIntAdd;
   }
 
   /** split var into function and varName */
@@ -182,233 +183,183 @@ public class ExplicitPrecision implements Precision {
     return Pair.of(function, varName);
   }
 
-  @Options(prefix="cpa.explicit.precision.ignore")
-  public class Ignore {
-    private Multimap<CFANode, String> mapping = null;
+  RefinablePrecision createInstance() {
+    return scoped ? new ScopedRefinablePrecision() : new LocalizedRefinablePrecision();
+  }
 
-    private Ignore(Configuration config) throws InvalidConfigurationException {
-      config.inject(this);
+  abstract public static class RefinablePrecision {
+    public static final String DELIMITER = ", ";
 
-      mapping = HashMultimap.create();
-    }
+    /**
+     * the current location needed for checking containment
+     */
+    CFANode location = null;
 
-    private Ignore(Ignore original) {
+    /**
+     * This method decides whether or not a variable is being tracked by this precision.
+     *
+     * @param variable the scoped name of the variable for which to make the decision
+     * @return true, when the variable is allowed to be tracked, else false
+     */
+    abstract public boolean contains(String variable);
 
-      if (original.mapping != null) {
-        mapping = HashMultimap.create(original.mapping);
-      }
-    }
+    /**
+     * This method refines the precision with the given increment.
+     *
+     * @param increment the increment to refine the precision with
+     * @return the refined precision
+     */
+    abstract protected RefinablePrecision refine(Multimap<CFANode, String> increment);
 
-    public boolean allowsTrackingOf(String variable) {
-      return mapping == null || !mapping.containsEntry(currentLocation, variable);
+    /**
+     * This method sets the location for the refinable precision.
+     *
+     * @param node the location to be set
+     */
+    private void setLocation(CFANode node) {
+      location = node;
     }
 
     /**
-     * This method sets the current mapping.
+     * This method transforms the precision and writes it using the given writer.
      *
-     * @param mapping the mapping to be set
+     * @param writer the write to write the precision to
+     * @throws IOException
      */
-    public void setMapping(Multimap<CFANode, String> mapping) {
-      this.mapping.putAll(mapping);
-    }
+    abstract void serialize(Writer writer) throws IOException;
+
+    /**
+     * This method joins this precision with another precision
+     *
+     * @param otherPrecision the precision to join with
+     */
+    abstract void join(RefinablePrecision otherPrecision);
   }
 
-  @Options(prefix="analysis")
-  public class CegarPrecision {
+  public static class LocalizedRefinablePrecision extends RefinablePrecision {
     /**
      * the collection that determines which variables are tracked at a specific location - if it is null, all variables are tracked
      */
-    private HashMultimap<CFANode, String> mapping = null;
+    private HashMultimap<CFANode, String> rawPrecision = HashMultimap.create();
 
-    @Option(description="whether or not to use refinement or not")
-    private boolean useRefinement = false;
-
-    private CegarPrecision(Configuration config) throws InvalidConfigurationException {
-      config.inject(this);
-
-      if (useRefinement) {
-        mapping = HashMultimap.create();
+    @Override
+    public LocalizedRefinablePrecision refine(Multimap<CFANode, String> increment) {
+      if(this.rawPrecision.entries().containsAll(increment.entries())) {
+        return this;
       }
-    }
+      else {
+        LocalizedRefinablePrecision refinedPrecision = new LocalizedRefinablePrecision();
 
-    /**
-     * copy constructor
-     *
-     * @param original the CegarPrecison to copy
-     */
-    private CegarPrecision(CegarPrecision original) {
-      if (original.mapping != null) {
-        mapping = HashMultimap.create(original.mapping);
+        refinedPrecision.rawPrecision = HashMultimap.create(rawPrecision);
+        refinedPrecision.rawPrecision.putAll(increment);
+
+        return refinedPrecision;
       }
-    }
-
-    /**
-     * This method decides whether or not a variable is being tracked by this precision.
-     *
-     * @param variable the scoped name of the variable for which to make the decision
-     * @return true, when the variable is allowed to be tracked, else false
-     */
-    boolean allowsTrackingOf(String variable) {
-      return mapping == null
-             || mapping.containsEntry(currentLocation, variable);
-    }
-
-    public boolean allowsTrackingAt(CFANode location, String variable) {
-      return mapping != null && mapping.containsEntry(location, variable);
-    }
-
-    /**
-     * This method adds the additional mapping to the current mapping, i.e., this precision can only grow in size, and never gets smaller.
-     *
-     * @param additionalMapping the additional mapping to be added to the current mapping
-     */
-    public void addToMapping(Multimap<CFANode, String> additionalMapping) {
-      mapping.putAll(additionalMapping);
-    }
-
-    public Collection<String> getVariablesInPrecision() {
-      return new HashSet<String>(mapping.values());
     }
 
     @Override
-    public String toString() {
-      return Joiner.on(",").join(mapping.entries());
+    public boolean contains(String variable) {
+      return rawPrecision.containsEntry(location, variable);
     }
 
     @Override
-    public boolean equals(Object other) {
-      if (this == other) {
-        return true;
-      }
+    void serialize(Writer writer) throws IOException {
+      for(CFANode currentLocation : rawPrecision.keySet()) {
+        writer.write("\n" + currentLocation + ":\n");
 
-      else if (other == null) {
-        return false;
+        for(String variable : rawPrecision.get(currentLocation)) {
+          writer.write(variable + "\n");
+        }
       }
+    }
 
-      else if (!getClass().equals(other.getClass())) {
-        return false;
-      }
-
-      return ((CegarPrecision)other).mapping.equals(mapping);
+    @Override
+    public void join(RefinablePrecision consolidatedPrecision) {
+      assert(getClass().equals(consolidatedPrecision.getClass()));
+      this.rawPrecision.putAll(((LocalizedRefinablePrecision)consolidatedPrecision).rawPrecision);
     }
   }
 
-  abstract class Thresholds {
+  public static class ScopedRefinablePrecision extends RefinablePrecision {
     /**
-     * the mapping of variable names to the threshold of the respective variable
-     *
-     * a value of null means, that the variable has reached its threshold and is no longer tracked
+     * the collection that determines which variables are tracked within a specific scope
      */
-    protected HashMap<String, Integer> thresholds = new HashMap<String, Integer>();
+    private Set<String> rawPrecision = new HashSet<>();
 
-    /**
-     * This method decides whether or not a variable is being tracked by this precision.
-     *
-     * @param variable the scoped name of the variable for which to make the decision
-     * @return true, when the variable is allowed to be tracked, else false
-     */
-    boolean allowsTrackingOf(String variable) {
-      return !thresholds.containsKey(variable) || thresholds.get(variable) != null;
+    @Override
+    public boolean contains(String variable) {
+      return rawPrecision.contains(variable);
     }
 
-    /**
-     * This method declares the given variable to have exceeded its threshold.
-     *
-     * @param variable the name of the variable
-     */
-    void setExceeded(String variable) {
-      thresholds.put(variable, null);
+    @Override
+    public ScopedRefinablePrecision refine(Multimap<CFANode, String> increment) {
+      if(this.rawPrecision.containsAll(increment.values())) {
+        return this;
+      }
+      else {
+        ScopedRefinablePrecision refinedPrecision = new ScopedRefinablePrecision();
+
+        refinedPrecision.rawPrecision = new HashSet<>(rawPrecision);
+        refinedPrecision.rawPrecision.addAll(increment.values());
+
+        return refinedPrecision;
+      }
+    }
+
+    @Override
+    void serialize(Writer writer) throws IOException {
+      SortedSet<String> sortedPrecision = new TreeSet<>(rawPrecision);
+
+      ArrayList<String> globals = new ArrayList<>();
+      String previousScope      = null;
+      for(String variable : sortedPrecision) {
+        if(variable.contains("::")) {
+          String functionName = variable.substring(0, variable.indexOf("::"));
+          if(!functionName.equals(previousScope)) {
+            writer.write("\n" + functionName + ":\n");
+          }
+          writer.write(variable + "\n");
+
+          previousScope = functionName;
+        }
+        else {
+          globals.add(variable);
+        }
+      }
+
+      if(previousScope != null) {
+        writer.write("\n");
+      }
+
+      writer.write("*:\n" + Joiner.on("\n").join(globals));
+    }
+
+    @Override
+    public void join(RefinablePrecision consolidatedPrecision) {
+      assert(getClass().equals(consolidatedPrecision.getClass()));
+      this.rawPrecision.addAll(((ScopedRefinablePrecision)consolidatedPrecision).rawPrecision);
     }
   }
 
-  @Options(prefix="cpa.explicit.precision.reachedSet")
-  class ReachedSetThresholds extends Thresholds {
-
-    /**
-     * the default threshold
-     */
-    @Option(description="threshold for amount of different values that "
-        + "are tracked for one variable within the reached set (-1 means infinitely)")
-    protected Integer defaultThreshold = -1;
-
-    private ReachedSetThresholds(Configuration config) throws InvalidConfigurationException {
-      config.inject(this);
+  public static class FullPrecision extends RefinablePrecision {
+    @Override
+    public boolean contains(String variable) {
+      return true;
     }
 
-    /**
-     * copy constructor
-     *
-     * @param original the ReachedSetThresholds to copy
-     */
-    private ReachedSetThresholds(ReachedSetThresholds original) {
-      defaultThreshold  = original.defaultThreshold;
-      thresholds        = new HashMap<String, Integer>(original.thresholds);
+    @Override
+    public FullPrecision refine(Multimap<CFANode, String> additionalMapping) {
+      return this;
     }
 
-    /**
-     * This method decides if the given variable with the given count exceeds the threshold.
-     *
-     * @param variable the scoped name of the variable to check
-     * @param count the value count to compare to the threshold
-     * @return true, if the variable with the given count exceeds the threshold, else false
-     */
-    boolean exceeds(String variable, Integer count) {
-      if (defaultThreshold == -1) {
-        return false;
-      }
-
-      else if ((thresholds.containsKey(variable) && thresholds.get(variable) == null)
-          || (thresholds.containsKey(variable) && thresholds.get(variable) < count)
-          || (!thresholds.containsKey(variable) && defaultThreshold < count)) {
-        return true;
-      }
-
-      return false;
-    }
-  }
-
-  @Options(prefix="cpa.explicit.precision.path")
-  class PathThresholds extends Thresholds {
-    /**
-     * the default threshold
-     */
-    @Option(description="threshold for amount of different values that "
-        + "are tracked for one variable per path (-1 means infinitely)")
-    protected Integer defaultThreshold = -1;
-
-    private PathThresholds(Configuration config) throws InvalidConfigurationException {
-      config.inject(this);
+    @Override
+    void serialize(Writer writer) throws IOException {
+      writer.write("# full precision used - nothing to show here");
     }
 
-    /**
-     * copy constructor
-     *
-     * @param original the PathThresholds to copy
-     */
-    private PathThresholds(PathThresholds original) {
-      defaultThreshold  = original.defaultThreshold;
-      thresholds        = new HashMap<String, Integer>(original.thresholds);
-    }
-
-    /**
-     * This method decides if the given variable with the given count exceeds the threshold.
-     *
-     * @param variable the scoped name of the variable to check
-     * @param count the value count to compare to the threshold
-     * @return true, if the variable with the given count exceeds the threshold, else false
-     */
-    boolean exceeds(String variable, Integer count) {
-      if (defaultThreshold == -1) {
-        return false;
-      }
-
-      else if ((thresholds.containsKey(variable) && thresholds.get(variable) == null)
-          || (thresholds.containsKey(variable) && thresholds.get(variable) < count)
-          || (!thresholds.containsKey(variable) && defaultThreshold < count)) {
-        return true;
-      }
-
-      return false;
+    @Override
+    public void join(RefinablePrecision consolidatedPrecision) {
+      assert(getClass().equals(consolidatedPrecision.getClass()));
     }
   }
 }

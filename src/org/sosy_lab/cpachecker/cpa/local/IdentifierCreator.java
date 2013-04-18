@@ -38,6 +38,7 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CParameterDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CSimpleDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStringLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CTypeIdExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CTypeIdInitializerExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
 import org.sosy_lab.cpachecker.cfa.types.c.CEnumType.CEnumerator;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
@@ -151,6 +152,13 @@ public class IdentifierCreator implements CExpressionVisitor<AbstractIdentifier,
 
   public void setDereference(int pDereference) {
     dereference = pDereference;
+  }
+
+  @Override
+  public AbstractIdentifier visit(CTypeIdInitializerExpression pCTypeIdInitializerExpression)
+      throws HandleCodeException {
+    //TODO Think about later
+    return null;
   }
 
 }

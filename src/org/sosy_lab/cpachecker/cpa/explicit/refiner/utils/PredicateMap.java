@@ -30,8 +30,9 @@ import java.util.Map;
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
+import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.predicates.AbstractionPredicate;
-import org.sosy_lab.cpachecker.util.predicates.interfaces.FormulaManager;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.view.FormulaManagerView;
 
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableMultimap;
@@ -55,13 +56,14 @@ public class PredicateMap {
    * @param pathPredicates the predicates as returned from the refinement
    * @param pPath the path to the error location
    */
-  public PredicateMap(List<Collection<AbstractionPredicate>> pathPredicates, List<Pair<ARGState, CFANode>> pPath) {
+  public PredicateMap(List<Collection<AbstractionPredicate>> pathPredicates, List<ARGState> pPath) {
     ImmutableSetMultimap.Builder<CFANode, AbstractionPredicate> builder = ImmutableSetMultimap.builder();
 
     int i = 0;
     for (Collection<AbstractionPredicate> predicates : pathPredicates) {
       if (predicates.size() > 0) {
-        CFANode currentLocation = pPath.get(i).getSecond();
+        ARGState currentState = pPath.get(i);
+        CFANode currentLocation = AbstractStates.extractLocation(currentState);
 
         // add each predicate to the respective set of the predicate map
         for (AbstractionPredicate predicate : predicates) {
@@ -69,7 +71,7 @@ public class PredicateMap {
         }
 
         if (firstInterpolationPoint == null) {
-          firstInterpolationPoint = Pair.of(pPath.get(i).getFirst(), pPath.get(i).getSecond());
+          firstInterpolationPoint = Pair.of(currentState, currentLocation);
         }
       }
 
@@ -98,7 +100,7 @@ public class PredicateMap {
    *
    * @return a mapping from program locations to variables referenced in predicates at that program location
    */
-  public Multimap<CFANode, String> determinePrecisionIncrement(FormulaManager fmgr) {
+  public Multimap<CFANode, String> determinePrecisionIncrement(FormulaManagerView fmgr) {
     Multimap<CFANode, String> increment = HashMultimap.create();
 
     // for each program location in the mapping ...

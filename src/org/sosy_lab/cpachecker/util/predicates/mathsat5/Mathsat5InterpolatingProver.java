@@ -27,48 +27,53 @@ import static org.sosy_lab.cpachecker.util.predicates.mathsat5.Mathsat5NativeApi
 
 import java.util.List;
 
+import org.sosy_lab.cpachecker.exceptions.SolverException;
 import org.sosy_lab.cpachecker.util.predicates.Model;
-import org.sosy_lab.cpachecker.util.predicates.interfaces.Formula;
-import org.sosy_lab.cpachecker.util.predicates.interfaces.InterpolatingTheoremProver;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.InterpolatingProverEnvironment;
 
 import com.google.common.base.Preconditions;
 
-public class Mathsat5InterpolatingProver implements InterpolatingTheoremProver<Integer> {
+public class Mathsat5InterpolatingProver implements InterpolatingProverEnvironment<Integer> {
 
     private final Mathsat5FormulaManager mgr;
     private long interpolEnv;
-    private long cfg;
 
     private final boolean useSharedEnv;
 
-    public Mathsat5InterpolatingProver(Mathsat5FormulaManager pMgr, boolean shared) {
+    public Mathsat5InterpolatingProver(
+        Mathsat5FormulaManager pMgr, boolean shared) {
         mgr = pMgr;
-        interpolEnv = 0;
         useSharedEnv = shared;
-    }
 
-    @Override
-    public void init() {
-        Preconditions.checkState(interpolEnv == 0);
+        long cfg = msat_create_config();
+        msat_set_option_checked(cfg, "interpolation", "true");
+        msat_set_option_checked(cfg, "model_generation", "true");
+        msat_set_option_checked(cfg, "theory.bv.eager", "false");
+        msat_set_option_checked(cfg, "theory.eq_propagation", "false");
 
-        cfg = msat_create_config();
-        msat_set_option(cfg, "interpolation", "true");
-        msat_set_option( cfg, "model_generation", "true");
         interpolEnv = mgr.createEnvironment(cfg, useSharedEnv, false);
+        Preconditions.checkState(interpolEnv != 0);
     }
 
     @Override
-    public Integer addFormula(Formula f) {
+    public Integer push(BooleanFormula f) {
         Preconditions.checkState(interpolEnv != 0);
-
-        long t = ((Mathsat5Formula)f).getTerm();
+        long t = Mathsat5FormulaManager.getMsatTerm(f);
+        //long t = ((Mathsat5Formula)f).getTerm();
         if (!useSharedEnv) {
             t = msat_make_copy_from(interpolEnv, t, mgr.getMsatEnv());
         }
         int group = msat_create_itp_group(interpolEnv);
+        msat_push_backtrack_point(interpolEnv);
         msat_set_itp_group(interpolEnv, group);
         msat_assert_formula(interpolEnv, t);
         return group;
+    }
+
+    @Override
+    public void pop() {
+        msat_pop_backtrack_point(interpolEnv);
     }
 
     @Override
@@ -76,13 +81,13 @@ public class Mathsat5InterpolatingProver implements InterpolatingTheoremProver<I
         Preconditions.checkState(interpolEnv != 0);
 
         int res = msat_solve(interpolEnv);
-        assert(res != MSAT_UNKNOWN);
+        assert (res != MSAT_UNKNOWN);
 
         return res == MSAT_UNSAT;
     }
 
     @Override
-    public Formula getInterpolant(List<Integer> formulasOfA) {
+    public BooleanFormula getInterpolant(List<Integer> formulasOfA) {
         Preconditions.checkState(interpolEnv != 0);
 
         int[] groupsOfA = new int[formulasOfA.size()];
@@ -95,11 +100,11 @@ public class Mathsat5InterpolatingProver implements InterpolatingTheoremProver<I
         if (!useSharedEnv) {
             itp = msat_make_copy_from(mgr.getMsatEnv(), itp, interpolEnv);
         }
-        return new Mathsat5Formula(mgr.getMsatEnv(), itp);
+        return mgr.encapsulateTerm(BooleanFormula.class, itp);
     }
 
     @Override
-    public void reset() {
+    public void close() {
         Preconditions.checkState(interpolEnv != 0);
 
         msat_destroy_env(interpolEnv);
@@ -107,10 +112,10 @@ public class Mathsat5InterpolatingProver implements InterpolatingTheoremProver<I
     }
 
     @Override
-    public Model getModel() {
+    public Model getModel() throws SolverException {
       Preconditions.checkState(interpolEnv != 0);
 
-      return Mathsat5Model.createMathsatModel(interpolEnv, mgr);
+      return Mathsat5Model.createMathsatModel(interpolEnv, mgr, useSharedEnv);
     }
 
 }

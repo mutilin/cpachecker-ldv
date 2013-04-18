@@ -32,7 +32,7 @@ import org.sosy_lab.common.Timer;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
-import org.sosy_lab.cpachecker.util.predicates.interfaces.Formula;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.PathFormulaManager;
 
 /**
@@ -46,14 +46,14 @@ public class CachingPathFormulaManager implements PathFormulaManager {
 
   private final PathFormulaManager delegate;
 
-  private final Map<Pair<PathFormula, CFAEdge>, PathFormula> pathFormulaCache
-            = new HashMap<Pair<PathFormula, CFAEdge>, PathFormula>();
+  private final Map<Pair<PathFormula, CFAEdge>, PathFormula> andFormulaCache
+            = new HashMap<>();
 
-  private final Map<Pair<PathFormula, PathFormula>, PathFormula> mergeCache
-            = new HashMap<Pair<PathFormula, PathFormula>, PathFormula>();
+  private final Map<Pair<PathFormula, PathFormula>, PathFormula> orFormulaCache
+            = new HashMap<>();
 
   private final Map<PathFormula, PathFormula> emptyFormulaCache
-            = new HashMap<PathFormula, PathFormula>();
+            = new HashMap<>();
 
   private final PathFormula emptyFormula;
 
@@ -66,13 +66,13 @@ public class CachingPathFormulaManager implements PathFormulaManager {
   public PathFormula makeAnd(PathFormula pOldFormula, CFAEdge pEdge) throws CPATransferException {
 
     final Pair<PathFormula, CFAEdge> formulaCacheKey = Pair.of(pOldFormula, pEdge);
-    PathFormula result = pathFormulaCache.get(formulaCacheKey);
+    PathFormula result = andFormulaCache.get(formulaCacheKey);
     if (result == null) {
       pathFormulaComputationTimer.start();
       // compute new pathFormula with the operation on the edge
       result = delegate.makeAnd(pOldFormula, pEdge);
       pathFormulaComputationTimer.stop();
-      pathFormulaCache.put(formulaCacheKey, result);
+      andFormulaCache.put(formulaCacheKey, result);
 
     } else {
       pathFormulaCacheHits++;
@@ -84,15 +84,15 @@ public class CachingPathFormulaManager implements PathFormulaManager {
   public PathFormula makeOr(PathFormula pF1, PathFormula pF2) {
     final Pair<PathFormula, PathFormula> formulaCacheKey = Pair.of(pF1, pF2);
 
-    PathFormula result = mergeCache.get(formulaCacheKey);
+    PathFormula result = orFormulaCache.get(formulaCacheKey);
     if (result == null) {
       // try again with other order
-      result = mergeCache.get(Pair.of(pF2, pF1));
+      result = orFormulaCache.get(Pair.of(pF2, pF1));
     }
 
     if (result == null) {
       result = delegate.makeOr(pF1, pF2);
-      mergeCache.put(formulaCacheKey, result);
+      orFormulaCache.put(formulaCacheKey, result);
     } else {
       pathFormulaCacheHits++;
     }
@@ -120,7 +120,7 @@ public class CachingPathFormulaManager implements PathFormulaManager {
   }
 
   @Override
-  public PathFormula makeAnd(PathFormula pPathFormula, Formula pOtherFormula) {
+  public PathFormula makeAnd(PathFormula pPathFormula, BooleanFormula pOtherFormula) {
     return delegate.makeAnd(pPathFormula, pOtherFormula);
   }
 
@@ -135,7 +135,7 @@ public class CachingPathFormulaManager implements PathFormulaManager {
   }
 
   @Override
-  public Formula buildBranchingFormula(Iterable<ARGState> pElementsOnPath)
+  public BooleanFormula buildBranchingFormula(Iterable<ARGState> pElementsOnPath)
       throws CPATransferException {
     return delegate.buildBranchingFormula(pElementsOnPath);
   }

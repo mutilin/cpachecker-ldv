@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2012  Dirk Beyer
+ *  Copyright (C) 2007-2013  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,53 +25,58 @@ package org.sosy_lab.cpachecker.cfa.types.c;
 
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.Iterables.transform;
-import static org.sosy_lab.cpachecker.cfa.ast.c.CAstNode.TO_AST_STRING;
 
 import java.util.List;
 
-import org.sosy_lab.cpachecker.cfa.ast.c.CParameterDeclaration;
+import org.sosy_lab.cpachecker.cfa.types.AFunctionType;
 
+import com.google.common.base.Function;
 import com.google.common.base.Joiner;
-import com.google.common.collect.ImmutableList;
+import com.google.common.base.Strings;
 
-public class CFunctionType extends CType {
+public class CFunctionType extends AFunctionType implements CType {
 
-  private final CType returnType;
+  private boolean   isConst;
+  private boolean   isVolatile;
   private String name = null;
-  private final List<CParameterDeclaration> parameters;
-  private final boolean takesVarArgs;
 
   public CFunctionType(
       boolean pConst,
       boolean pVolatile,
       CType pReturnType,
-      List<CParameterDeclaration> pParameters,
+      List<CType> pParameters,
       boolean pTakesVarArgs) {
-    super(pConst, pVolatile);
-    returnType = pReturnType;
-    parameters = ImmutableList.copyOf(pParameters);
-    takesVarArgs = pTakesVarArgs;
+    super(pReturnType, pParameters, pTakesVarArgs);
+
+    isConst = pConst;
+    isVolatile = pVolatile;
   }
 
+  @Override
   public CType getReturnType() {
-    return returnType;
+    return (CType) super.getReturnType();
   }
 
+  @Override
   public String getName() {
     return name;
   }
 
+  @Override
   public void setName(String pName) {
     checkState(name == null);
     name = pName;
   }
 
-  public List<CParameterDeclaration> getParameters() {
-    return parameters;
+  @SuppressWarnings("unchecked")
+  @Override
+  public List<CType> getParameters() {
+    return (List<CType>) super.getParameters();
   }
 
-  public boolean takesVarArgs() {
-    return takesVarArgs;
+  @Override
+  public String toString() {
+    return toASTString(Strings.nullToEmpty(getName()));
   }
 
   @Override
@@ -85,7 +90,7 @@ public class CFunctionType extends CType {
       lASTString.append("volatile ");
     }
 
-    lASTString.append(returnType.toASTString(""));
+    lASTString.append(getReturnType().toASTString(""));
     lASTString.append(" ");
 
     if (pDeclarator.startsWith("*")) {
@@ -98,9 +103,14 @@ public class CFunctionType extends CType {
     }
 
     lASTString.append("(");
-    Joiner.on(", ").appendTo(lASTString, transform(parameters, TO_AST_STRING));
-    if (takesVarArgs) {
-      if (!parameters.isEmpty()) {
+    Joiner.on(", ").appendTo(lASTString, transform(getParameters(), new Function<CType, String>() {
+                                                      @Override
+                                                      public String apply(CType pInput) {
+                                                        return pInput.toASTString("");
+                                                      }
+                                                    }));
+    if (takesVarArgs()) {
+      if (!getParameters().isEmpty()) {
         lASTString.append(", ");
       }
       lASTString.append("...");
@@ -108,5 +118,30 @@ public class CFunctionType extends CType {
     lASTString.append(")");
 
     return lASTString.toString();
+  }
+
+  @Override
+  public boolean isConst() {
+    return isConst;
+  }
+
+  @Override
+  public boolean isVolatile() {
+    return isVolatile;
+  }
+
+  @Override
+  public <R, X extends Exception> R accept(CTypeVisitor<R, X> pVisitor) throws X {
+    return pVisitor.visit(this);
+  }
+
+  @Override
+  public int hashCode() {
+    throw new UnsupportedOperationException("Do not use hashCode of CType");
+  }
+
+  @Override
+  public boolean equals(Object obj) {
+    return CTypeUtils.equals(this, obj);
   }
 }

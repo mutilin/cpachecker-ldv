@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2012  Dirk Beyer
+ *  Copyright (C) 2007-2013  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,9 +28,12 @@ import static org.sosy_lab.cpachecker.util.AbstractStates.*;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.Writer;
+import java.nio.file.Path;
 import java.util.Set;
 
 import org.sosy_lab.common.Files;
+import org.sosy_lab.common.Files.DeleteOnCloseFile;
 import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.FileOption;
@@ -40,13 +43,10 @@ import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
-import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
-import org.sosy_lab.cpachecker.core.CPABuilder;
+import org.sosy_lab.cpachecker.core.CoreComponentsFactory;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.CounterexampleChecker;
-import org.sosy_lab.cpachecker.core.reachedset.PartitionedReachedSet;
-import org.sosy_lab.cpachecker.core.reachedset.ReachedSetFactory;
-import org.sosy_lab.cpachecker.core.waitlist.Waitlist.TraversalMethod;
+import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CounterexampleAnalysisFailed;
@@ -56,48 +56,57 @@ import org.sosy_lab.cpachecker.util.AbstractStates;
 public class CounterexampleCPAChecker implements CounterexampleChecker {
 
   private final LogManager logger;
-  private final ReachedSetFactory reachedSetFactory;
   private final CFA cfa;
+  private final String filename;
 
   @Option(name="config",
       description="configuration file for counterexample checks with CPAchecker")
   @FileOption(FileOption.Type.REQUIRED_INPUT_FILE)
   private File configFile = new File("config/explicitAnalysis-no-cbmc.properties");
 
-  public CounterexampleCPAChecker(Configuration config, LogManager logger, ReachedSetFactory pReachedSetFactory, CFA pCfa) throws InvalidConfigurationException {
+  public CounterexampleCPAChecker(Configuration config, LogManager logger,
+      CFA pCfa, String pFilename) throws InvalidConfigurationException {
     this.logger = logger;
     config.inject(this);
-    this.reachedSetFactory = pReachedSetFactory;
     this.cfa = pCfa;
+    this.filename = pFilename;
   }
+
 
   @Override
   public boolean checkCounterexample(ARGState pRootState,
       ARGState pErrorState, Set<ARGState> pErrorPathStates)
       throws CPAException, InterruptedException {
 
-    String automaton =
-        produceGuidingAutomaton(pRootState, pErrorPathStates);
+    // This temp file will be automatically deleted when the try block terminates.
+    try (DeleteOnCloseFile automatonFile = Files.createTempFile("automaton", ".txt")) {
 
-    File automatonFile;
-    try {
-      automatonFile = Files.createTempFile("automaton", ".txt", automaton);
+      try (Writer w = Files.openOutputFile(automatonFile.toPath())) {
+        produceGuidingAutomaton(w, pRootState, pErrorPathStates);
+      }
+
+      return checkCounterexample(pRootState, automatonFile.toPath());
+
     } catch (IOException e) {
       throw new CounterexampleAnalysisFailed("Could not write path automaton to file " + e.getMessage(), e);
     }
+  }
 
-    FunctionEntryNode entryNode = (FunctionEntryNode)extractLocation(pRootState);
+  private boolean checkCounterexample(ARGState pRootState, Path automatonFile)
+      throws CPAException, InterruptedException {
+
+    CFANode entryNode = extractLocation(pRootState);
 
     try {
       Configuration lConfig = Configuration.builder()
               .loadFromFile(configFile)
-              .setOption("specification", automatonFile.getAbsolutePath())
+              .setOption("specification", automatonFile.toAbsolutePath().toString())
               .build();
 
-      CPABuilder lBuilder = new CPABuilder(lConfig, logger, reachedSetFactory);
-      ConfigurableProgramAnalysis lCpas = lBuilder.buildCPAs(cfa);
-      Algorithm lAlgorithm = new CPAAlgorithm(lCpas, logger, lConfig);
-      PartitionedReachedSet lReached = new PartitionedReachedSet(TraversalMethod.DFS);
+      CoreComponentsFactory factory = new CoreComponentsFactory(lConfig, logger);
+      ConfigurableProgramAnalysis lCpas = factory.createCPA(cfa, null);
+      Algorithm lAlgorithm = factory.createAlgorithm(lCpas, filename, cfa, null);
+      ReachedSet lReached = factory.createReachedSet();
       lReached.add(lCpas.getInitialState(entryNode), lCpas.getInitialPrecision(entryNode));
 
       lAlgorithm.run(lReached);
@@ -109,15 +118,11 @@ public class CounterexampleCPAChecker implements CounterexampleChecker {
       throw new CounterexampleAnalysisFailed("Invalid configuration in counterexample-check config: " + e.getMessage(), e);
     } catch (IOException e) {
       throw new CounterexampleAnalysisFailed(e.getMessage(), e);
-    } finally {
-      // delete temp file so it is gone even if JVM is killed
-      automatonFile.delete();
     }
   }
 
-  private String produceGuidingAutomaton(ARGState pRootState,
-      Set<ARGState> pPathStates) {
-    StringBuilder sb = new StringBuilder();
+  private void produceGuidingAutomaton(Appendable sb, ARGState pRootState,
+      Set<ARGState> pPathStates) throws IOException {
     sb.append("CONTROL AUTOMATON AssumptionAutomaton\n\n");
     sb.append("INITIAL STATE ARG" + pRootState.getStateId() + ";\n\n");
 
@@ -150,11 +155,9 @@ public class CounterexampleCPAChecker implements CounterexampleChecker {
       sb.append("    TRUE -> STOP;\n\n");
     }
     sb.append("END AUTOMATON\n");
-
-    return sb.toString();
   }
 
-  private static void escape(String s, StringBuilder appendTo) {
+  private static void escape(String s, Appendable appendTo) throws IOException {
     for (int i = 0; i < s.length(); i++) {
       char c = s.charAt(i);
       switch (c) {

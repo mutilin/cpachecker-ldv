@@ -25,17 +25,24 @@ package org.sosy_lab.cpachecker.util.predicates.mathsat5;
 
 import static org.sosy_lab.cpachecker.util.predicates.mathsat5.Mathsat5NativeApi.*;
 
+import java.math.BigInteger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import org.sosy_lab.common.Pair;
+import org.sosy_lab.cpachecker.exceptions.SolverException;
 import org.sosy_lab.cpachecker.util.predicates.Model;
 import org.sosy_lab.cpachecker.util.predicates.Model.AssignableTerm;
 import org.sosy_lab.cpachecker.util.predicates.Model.Function;
 import org.sosy_lab.cpachecker.util.predicates.Model.TermType;
 import org.sosy_lab.cpachecker.util.predicates.Model.Variable;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.view.FormulaManagerView;
 import org.sosy_lab.cpachecker.util.predicates.mathsat5.Mathsat5NativeApi.ModelIterator;
 
 import com.google.common.collect.ImmutableMap;
 
-public class Mathsat5Model {
+class Mathsat5Model {
 
   private static TermType toMathsatType(long e, long mType) {
 
@@ -62,7 +69,7 @@ public class Mathsat5Model {
     String lName = msat_decl_get_name(lDeclarationId);
     TermType lType = toMathsatType(env, msat_decl_get_return_type(lDeclarationId));
 
-    Pair<String, Integer> lSplitName = ArithmeticMathsat5FormulaManager.parseName(lName);
+    Pair<String, Integer> lSplitName = FormulaManagerView.parseName(lName);
     return new Variable(lSplitName.getFirst(), lSplitName.getSecond(), lType);
   }
 
@@ -86,22 +93,14 @@ public class Mathsat5Model {
       String lTermRepresentation = msat_term_repr(lArgument);
 
       Object lValue;
-
-      try {
-        lValue = Double.valueOf(lTermRepresentation);
-      }
-      catch (NumberFormatException e) {
-        // lets try special case for mathsat
-        String[] lNumbers = lTermRepresentation.split("/");
-
-        if (lNumbers.length != 2) {
-          throw new NumberFormatException("Unknown number format: " + lTermRepresentation);
-        }
-
-        double lNumerator = Double.valueOf(lNumbers[0]);
-        double lDenominator = Double.valueOf(lNumbers[1]);
-
-        lValue = lNumerator/lDenominator;
+      long msatType = msat_term_get_type(lArgument);
+      if (msat_is_integer_type(env, msatType)
+          || msat_is_rational_type(env, msatType)) {
+        lValue = parseReal(lTermRepresentation);
+      } else if (msat_is_bv_type(env, msatType)) {
+        lValue = interpreteBitvector(lTermRepresentation);
+      } else {
+        throw new NumberFormatException("Unknown number format: " + lTermRepresentation);
       }
 
       lArguments[lArgumentIndex] = lValue;
@@ -114,17 +113,25 @@ public class Mathsat5Model {
   private static AssignableTerm toAssignable(long env, long pTermId) {
     if (!msat_term_is_constant(env, pTermId)) {
       return toFunction(env, pTermId);
-    }
-    else {
+    } else {
       return toVariable(env, pTermId);
     }
   }
 
-  static Model createMathsatModel(long lMathsatEnvironmentID, Mathsat5FormulaManager fmgr) {
+  static Model createMathsatModel(final long sourceEnvironment,
+       final Mathsat5FormulaManager fmgr, final boolean sharedEnvironment) throws SolverException {
+    final long targetEnvironment = fmgr.getMsatEnv();
     ImmutableMap.Builder<AssignableTerm, Object> model = ImmutableMap.builder();
-    long modelFormula = msat_make_true(lMathsatEnvironmentID);
+    long modelFormula = msat_make_true(targetEnvironment);
 
-    ModelIterator lModelIterator = msat_create_ModelIterator(lMathsatEnvironmentID);
+    ModelIterator lModelIterator;
+    try {
+      lModelIterator = msat_create_ModelIterator(sourceEnvironment);
+    } catch (IllegalArgumentException e) {
+      // creating the iterator may fail,
+      // for example if some theories were disabled in the solver but are needed
+      throw new SolverException("Model iterator could not be created", e);
+    }
 
     while (lModelIterator.hasNext()) {
       long[] lModelElement = lModelIterator.next();
@@ -132,23 +139,27 @@ public class Mathsat5Model {
       long lKeyTerm = lModelElement[0];
       long lValueTerm = lModelElement[1];
 
+      if (!sharedEnvironment) {
+        lKeyTerm = msat_make_copy_from(targetEnvironment, lKeyTerm, sourceEnvironment);
+        lValueTerm = msat_make_copy_from(targetEnvironment, lValueTerm, sourceEnvironment);
+      }
 
       long equivalence;
 
-      if (msat_is_bool_type(lMathsatEnvironmentID, msat_term_get_type(lKeyTerm)) && msat_is_bool_type(lMathsatEnvironmentID, msat_term_get_type(lValueTerm))) {
-        equivalence = msat_make_iff(lMathsatEnvironmentID, lKeyTerm, lValueTerm);
+      if (msat_is_bool_type(targetEnvironment, msat_term_get_type(lKeyTerm)) && msat_is_bool_type(targetEnvironment, msat_term_get_type(lValueTerm))) {
+        equivalence = msat_make_iff(targetEnvironment, lKeyTerm, lValueTerm);
       } else {
-        equivalence = msat_make_equal(lMathsatEnvironmentID, lKeyTerm, lValueTerm);
+        equivalence = msat_make_equal(targetEnvironment, lKeyTerm, lValueTerm);
       }
 
-      modelFormula = msat_make_and(lMathsatEnvironmentID, modelFormula, equivalence);
+      modelFormula = msat_make_and(targetEnvironment, modelFormula, equivalence);
 
-      AssignableTerm lAssignable = toAssignable(lMathsatEnvironmentID, lKeyTerm);
+      AssignableTerm lAssignable = toAssignable(targetEnvironment, lKeyTerm);
 
       // TODO maybe we have to convert to SMTLIB format and then read in values in a controlled way, e.g., size of bitvector
       // TODO we are assuming numbers as values
-      if (!(msat_term_is_number(lMathsatEnvironmentID, lValueTerm)
-            || msat_term_is_boolean_constant(lMathsatEnvironmentID, lValueTerm) || msat_term_is_false(lMathsatEnvironmentID, lValueTerm) || msat_term_is_true(lMathsatEnvironmentID, lValueTerm))) {
+      if (!(msat_term_is_number(targetEnvironment, lValueTerm)
+            || msat_term_is_boolean_constant(targetEnvironment, lValueTerm) || msat_term_is_false(targetEnvironment, lValueTerm) || msat_term_is_true(targetEnvironment, lValueTerm))) {
         throw new IllegalArgumentException("Mathsat term is not a number!");
       }
 
@@ -167,23 +178,7 @@ public class Mathsat5Model {
         }
         break;
       case Real:
-        try {
-          lValue = Double.valueOf(lTermRepresentation);
-        }
-        catch (NumberFormatException e) {
-          // lets try special case for mathsat
-          String[] lNumbers = lTermRepresentation.split("/");
-
-          if (lNumbers.length != 2) {
-            throw new NumberFormatException("Unknown number format: " + lTermRepresentation);
-          }
-
-          double lNumerator = Double.valueOf(lNumbers[0]);
-          double lDenominator = Double.valueOf(lNumbers[1]);
-
-          lValue = lNumerator/lDenominator;
-        }
-
+        lValue = parseReal(lTermRepresentation);
         break;
 
       case Integer:
@@ -191,7 +186,7 @@ public class Mathsat5Model {
         break;
 
       case Bitvector:
-        lValue = fmgr.interpreteBitvector(lValueTerm);
+        lValue = interpreteBitvector(lTermRepresentation);
         break;
 
       default:
@@ -202,7 +197,58 @@ public class Mathsat5Model {
     }
 
     lModelIterator.free();
-    return new Model(model.build(), new Mathsat5Formula(lMathsatEnvironmentID, modelFormula));
+    return new Model(model.build(), fmgr.encapsulateTerm(BooleanFormula.class, modelFormula));
+  }
+
+  private static Pattern BITVECTOR_PATTERN = Pattern.compile("^(\\d+)_(\\d+)$");
+
+  //TODO: change this to the latest version (if possible try to use a BitvectorFormula instance here)
+  public static Object interpreteBitvector(String lTermRepresentation) {
+    // the term is of the format "<VALUE>_<WIDTH>"
+    Matcher matcher =  BITVECTOR_PATTERN.matcher(lTermRepresentation);
+    if (!matcher.matches()) {
+      throw new NumberFormatException("Unknown bitvector format: " + lTermRepresentation);
+    }
+
+    // TODO: calculate negative value?
+    String term = matcher.group(1);
+    String lengthValue = matcher.group(2);
+    long length = Long.valueOf(lengthValue);
+    Object value;
+    if (length < 64) {
+      try {
+        value = Long.valueOf(term);
+      } catch (NumberFormatException e) {
+        System.out.println();
+        throw e;
+      }
+    } else {
+      BigInteger i = new BigInteger(term);
+      value = i;
+    }
+
+    return value;
+  }
+
+  private static Object parseReal(String lTermRepresentation) {
+    Object lValue;
+    try {
+      lValue = Double.valueOf(lTermRepresentation);
+    }
+    catch (NumberFormatException e) {
+      // lets try special case for mathsat
+      String[] lNumbers = lTermRepresentation.split("/");
+
+      if (lNumbers.length != 2) {
+        throw new NumberFormatException("Unknown number format: " + lTermRepresentation);
+      }
+
+      double lNumerator = Double.valueOf(lNumbers[0]);
+      double lDenominator = Double.valueOf(lNumbers[1]);
+
+      lValue = lNumerator/lDenominator;
+    }
+    return lValue;
   }
 
 }

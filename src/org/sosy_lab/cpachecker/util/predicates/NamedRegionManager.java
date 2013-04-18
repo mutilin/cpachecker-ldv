@@ -25,8 +25,10 @@ package org.sosy_lab.cpachecker.util.predicates;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import java.io.PrintStream;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 import org.sosy_lab.common.Triple;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.Region;
@@ -71,11 +73,6 @@ public class NamedRegionManager implements RegionManager {
     return result;
   }
 
-  /** returns the number of named regions, this excludes anonymous regions */
-  public int getNumberOfNamedRegions() {
-    return regionMap.size() - anonymousPredicateCounter;
-  }
-
   @Override
   public Region createPredicate() {
     return createPredicate(ANONYMOUS_PREDICATE + anonymousPredicateCounter++);
@@ -85,7 +82,7 @@ public class NamedRegionManager implements RegionManager {
    * Returns a String representation of a region.
    */
   public String dumpRegion(Region r) {
-    Map<Region, String> cache = new HashMap<Region, String>(); // map for same regions
+    Map<Region, String> cache = new HashMap<>(); // map for same regions
     return dumpRegion(r, cache);
   }
 
@@ -144,7 +141,7 @@ public class NamedRegionManager implements RegionManager {
   /** Returns a representation of a region in dot-format (graphviz). */
   public String regionToDot(Region r) {
     nodeCounter = 2; // counter for nodes, values 0 and 1 are used for nodes FALSE and TRUE
-    Map<Region, Integer> cache = new HashMap<Region, Integer>(); // map for same regions
+    Map<Region, Integer> cache = new HashMap<>(); // map for same regions
     StringBuilder str = new StringBuilder("digraph G {\n");
 
     // make nodes for FALSE and TRUE
@@ -242,8 +239,17 @@ public class NamedRegionManager implements RegionManager {
   }
 
   @Override
-  public String getStatistics() {
-    return "Number of named predicates:   " + getNumberOfNamedRegions() + "\n" +
-        delegate.getStatistics();
+  public void printStatistics(PrintStream out) {
+    out.println("Number of named predicates:          " + (regionMap.size() - anonymousPredicateCounter));
+    delegate.printStatistics(out);
+  }
+
+  public Set<String> getPredicates() {
+    return this.regionMap.keySet();
+  }
+
+  @Override
+  public Region makeIte(Region pF1, Region pF2, Region pF3) {
+    return delegate.makeIte(pF1, pF2, pF3);
   }
 }

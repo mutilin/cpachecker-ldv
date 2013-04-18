@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2012  Dirk Beyer
+ *  Copyright (C) 2007-2013  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -101,8 +101,12 @@ public class AutomaticCPAFactory implements CPAFactory {
     Annotation parameterAnnotations[][] = cons.getParameterAnnotations();
 
     Object actualParameters[] = new Object[formalParameters.length];
+    boolean childCpaInjected = false;
     for (int i = 0; i < formalParameters.length; i++) {
       Class<?> formalParam = formalParameters[i];
+      if (formalParam.equals(ConfigurableProgramAnalysis.class)) {
+        childCpaInjected = true;
+      }
       Object actualParam = get(formalParam);
 
       boolean optional = false;
@@ -124,6 +128,10 @@ public class AutomaticCPAFactory implements CPAFactory {
     String exception = Classes.verifyDeclaredExceptions(cons, InvalidConfigurationException.class, CPAException.class);
     if (exception != null) {
       throw new UnsupportedOperationException("Cannot automatically create CPAs if the constructor declares the unsupported checked exception " + exception);
+    }
+
+    if (!childCpaInjected && injects.containsKey(ConfigurableProgramAnalysis.class)) {
+      throw new InvalidConfigurationException("Child CPA configured for " + type.getSimpleName() + ", but this is not a wrapper CPA.");
     }
 
     // instantiate
@@ -230,7 +238,7 @@ public class AutomaticCPAFactory implements CPAFactory {
       throw new IllegalArgumentException("Constructor of options holder class declares illegal checked exception: " + exception);
     }
 
-    return new AutomaticCPAFactoryWithOptions<T>(type, injects, optionsClass, constructor);
+    return new AutomaticCPAFactoryWithOptions<>(type, injects, optionsClass, constructor);
   }
 
   private static final class AutomaticCPAFactoryWithOptions<T> extends AutomaticCPAFactory {

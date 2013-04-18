@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2012  Dirk Beyer
+ *  Copyright (C) 2007-2013  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,9 +24,10 @@
 package org.sosy_lab.cpachecker.cpa.automaton;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.PrintStream;
+import java.nio.file.Files;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -34,8 +35,8 @@ import java.util.logging.Level;
 
 import java_cup.runtime.ComplexSymbolFactory;
 import java_cup.runtime.Symbol;
-import junit.framework.Assert;
 
+import org.junit.Assert;
 import org.junit.Test;
 import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.configuration.Configuration;
@@ -45,11 +46,12 @@ import org.sosy_lab.common.configuration.converters.FileTypeConverter;
 import org.sosy_lab.cpachecker.cfa.CParser;
 import org.sosy_lab.cpachecker.cfa.CParser.ParserOptions;
 import org.sosy_lab.cpachecker.cfa.ast.c.CAstNode;
+import org.sosy_lab.cpachecker.cfa.types.MachineModel;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.automaton.AutomatonASTComparator.ASTMatcher;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 
-import com.google.common.io.NullOutputStream;
+import com.google.common.io.ByteStreams;
 
 /**
  * This class contains Tests for the AutomatonAnalysis
@@ -58,6 +60,7 @@ public class AutomatonInternalTest {
 
   private final Configuration config;
   private final LogManager logger;
+  private final CParser parser;
 
   private static final File defaultSpec = new File("test/config/automata/defaultSpecification.spc");
 
@@ -68,28 +71,32 @@ public class AutomatonInternalTest {
     logger = new LogManager(config);
 
     ParserOptions options = CParser.Factory.getDefaultOptions();
-    AutomatonASTComparator.parser = CParser.Factory.getParser(logger, options);
+    parser = CParser.Factory.getParser(logger, options, MachineModel.LINUX32);
   }
 
   @Test
   public void testScanner() throws InvalidConfigurationException, IOException {
     ComplexSymbolFactory sf1 = new ComplexSymbolFactory();
-    AutomatonScanner s = new AutomatonScanner(new FileInputStream(defaultSpec), defaultSpec, config, logger, sf1);
-    Symbol symb = s.next_token();
-    while (symb.sym != AutomatonSym.EOF) {
-      symb = s.next_token();
+    try (InputStream input = Files.newInputStream(defaultSpec.toPath())) {
+      AutomatonScanner s = new AutomatonScanner(input, defaultSpec, config, logger, sf1);
+      Symbol symb = s.next_token();
+      while (symb.sym != AutomatonSym.EOF) {
+        symb = s.next_token();
+      }
     }
   }
 
   @Test
   public void testParser() throws Exception {
     ComplexSymbolFactory sf = new ComplexSymbolFactory();
-    AutomatonScanner scanner = new AutomatonScanner(new java.io.FileInputStream(defaultSpec), defaultSpec, config, logger, sf);
-    Symbol symbol = new AutomatonParser(scanner, sf, logger).parse();
-    @SuppressWarnings("unchecked")
-    List<Automaton> as = (List<Automaton>) symbol.value;
-    for (Automaton a : as) {
-      a.writeDotFile(new PrintStream(new NullOutputStream()));
+    try (InputStream input = Files.newInputStream(defaultSpec.toPath())) {
+      AutomatonScanner scanner = new AutomatonScanner(input, defaultSpec, config, logger, sf);
+      Symbol symbol = new AutomatonParser(scanner, sf, logger, parser).parse();
+      @SuppressWarnings("unchecked")
+      List<Automaton> as = (List<Automaton>) symbol.value;
+      for (Automaton a : as) {
+        a.writeDotFile(new PrintStream(ByteStreams.nullOutputStream()));
+      }
     }
   }
 
@@ -142,8 +149,8 @@ public class AutomatonInternalTest {
   @Test
   public void testJokerReplacementInAST() throws InvalidAutomatonException {
     // tests the replacement of Joker expressions in the AST comparison
-    ASTMatcher patternAST = AutomatonASTComparator.generatePatternAST("$20 = $5($1, $?);");
-    CAstNode sourceAST  = AutomatonASTComparator.generateSourceAST("var1 = function(var2, egal);");
+    ASTMatcher patternAST = AutomatonASTComparator.generatePatternAST("$20 = $5($1, $?);", parser);
+    CAstNode sourceAST  = AutomatonASTComparator.generateSourceAST("var1 = function(var2, egal);", parser);
     AutomatonExpressionArguments args = new AutomatonExpressionArguments(null, null, null, null);
 
     boolean result = patternAST.matches(sourceAST, args);
@@ -207,8 +214,8 @@ public class AutomatonInternalTest {
    */
   public void testAST(String src, String pattern, boolean result) throws InvalidAutomatonException {
     AutomatonExpressionArguments args = new AutomatonExpressionArguments(null, null, null, null);
-    CAstNode sourceAST  = AutomatonASTComparator.generateSourceAST(src);
-    ASTMatcher patternAST = AutomatonASTComparator.generatePatternAST(pattern);
+    CAstNode sourceAST  = AutomatonASTComparator.generateSourceAST(src, parser);
+    ASTMatcher patternAST = AutomatonASTComparator.generatePatternAST(pattern, parser);
 
     Assert.assertEquals(result, patternAST.matches(sourceAST, args));
   }

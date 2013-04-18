@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2012  Dirk Beyer
+ *  Copyright (C) 2007-2013  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,6 +24,7 @@
 package org.sosy_lab.cpachecker.cpa.abm;
 
 import static com.google.common.base.Preconditions.checkState;
+import static org.sosy_lab.cpachecker.util.StatisticsUtils.toPercent;
 
 import java.io.PrintStream;
 
@@ -62,7 +63,7 @@ class ABMCPAStatistics implements Statistics {
       int sumCalls = transferRelation.cacheMisses + transferRelation.partialCacheHits + transferRelation.fullCacheHits;
 
       int sumARTElemets = 0;
-      for (ReachedSet subreached : ABMARTUtils.gatherReachedSets(cpa, reached).values()) {
+      for (ReachedSet subreached : ABMARGUtils.gatherReachedSets(cpa, reached).values()) {
         sumARTElemets += subreached.size();
       }
 
@@ -95,8 +96,4 @@ class ABMCPAStatistics implements Statistics {
       }
     }
 
-
-    private String toPercent(double val, double full) {
-      return String.format("%1.0f", val/full*100) + "%";
-    }
 }

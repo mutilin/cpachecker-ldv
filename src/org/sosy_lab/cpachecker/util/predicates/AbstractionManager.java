@@ -38,12 +38,16 @@ import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
-import org.sosy_lab.cpachecker.util.predicates.interfaces.Formula;
-import org.sosy_lab.cpachecker.util.predicates.interfaces.FormulaManager;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.FormulaType;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.Region;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.RegionManager;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.UnsafeFormulaManager;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.view.BooleanFormulaManagerView;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.view.FormulaManagerView;
 
 import com.google.common.base.Joiner;
+import com.google.common.collect.Maps;
 
 /**
  * This class stores a mapping between abstract regions and the corresponding
@@ -51,23 +55,28 @@ import com.google.common.base.Joiner;
  * symbolic "worlds".
  * It is also responsible for the creation of {@link AbstractionPredicate}s.
  */
-@Options(prefix="cpa.predicate")
+@Options(prefix = "cpa.predicate")
 public final class AbstractionManager {
 
   public static interface AbstractionPredicatesMXBean {
+
     int getNumberOfPredicates();
+
     String getPredicates();
   }
 
   private class AbstractionPredicatesMBean extends AbstractMBean implements AbstractionPredicatesMXBean {
+
     public AbstractionPredicatesMBean() {
       super("org.sosy_lab.cpachecker:type=predicate,name=AbstractionPredicates", logger);
       register();
     }
+
     @Override
     public int getNumberOfPredicates() {
       return numberOfPredicates;
     }
+
     @Override
     public String getPredicates() {
       // TODO this may run into a ConcurrentModificationException
@@ -79,30 +88,32 @@ public final class AbstractionManager {
 
   private final LogManager logger;
   private final RegionManager rmgr;
-  private final FormulaManager fmgr;
+  private final FormulaManagerView fmgr;
 
   // Here we keep the mapping abstract predicate variable -> predicate
-  private final Map<Region, AbstractionPredicate> absVarToPredicate;
+  private final Map<Region, AbstractionPredicate> absVarToPredicate = Maps.newHashMap();
   // and the mapping symbolic variable -> predicate
-  private final Map<Formula, AbstractionPredicate> symbVarToPredicate;
+  private final Map<BooleanFormula, AbstractionPredicate> symbVarToPredicate = Maps.newHashMap();
+  // and the mapping atom -> predicate
+  private final Map<BooleanFormula, AbstractionPredicate> atomToPredicate = Maps.newHashMap();
 
-  @Option(name="abs.useCache", description="use caching of region to formula conversions")
+  @Option(name = "abs.useCache", description = "use caching of region to formula conversions")
   private boolean useCache = true;
 
-  private final Map<Region, Formula> toConcreteCache;
+  private final Map<Region, BooleanFormula> toConcreteCache;
 
-  public AbstractionManager(RegionManager pRmgr, FormulaManager pFmgr,
+  private BooleanFormulaManagerView bfmgr;
+
+  public AbstractionManager(RegionManager pRmgr, FormulaManagerView pFmgr,
       Configuration config, LogManager pLogger) throws InvalidConfigurationException {
     config.inject(this, AbstractionManager.class);
     logger = pLogger;
     rmgr = pRmgr;
     fmgr = pFmgr;
-
-    absVarToPredicate = new HashMap<Region, AbstractionPredicate>();
-    symbVarToPredicate = new HashMap<Formula, AbstractionPredicate>();
+    bfmgr = pFmgr.getBooleanFormulaManager();
 
     if (useCache) {
-      toConcreteCache = new HashMap<Region, Formula>();
+      toConcreteCache = new HashMap<>();
     } else {
       toConcreteCache = null;
     }
@@ -110,23 +121,27 @@ public final class AbstractionManager {
     new AbstractionPredicatesMBean(); // don't store it, we wouldn't know when to unregister anyway
   }
 
+  public int getNumberOfPredicates() {
+    return numberOfPredicates;
+  }
+
   /**
    * creates a Predicate from the Boolean symbolic variable (var) and
    * the atom that defines it
    */
-  public AbstractionPredicate makePredicate(Formula atom) {
-    Formula var = fmgr.createPredicateVariable(atom);
-    AbstractionPredicate result = symbVarToPredicate.get(var);
+  public AbstractionPredicate makePredicate(BooleanFormula atom) {
+    AbstractionPredicate result = atomToPredicate.get(atom);
     if (result == null) {
+      BooleanFormula symbVar = fmgr.createPredicateVariable("PRED"+numberOfPredicates++);
       Region absVar = rmgr.createPredicate();
 
       logger.log(Level.FINEST, "Created predicate", absVar,
-          "from variable", var, "and atom", atom);
-      numberOfPredicates++;
+          "from variable", symbVar, "and atom", atom);
 
-      result = new AbstractionPredicate(absVar, var, atom);
-      symbVarToPredicate.put(var, result);
+      result = new AbstractionPredicate(absVar, symbVar, atom);
+      symbVarToPredicate.put(symbVar, result);
       absVarToPredicate.put(absVar, result);
+      atomToPredicate.put(atom, result);
     }
     return result;
   }
@@ -135,7 +150,7 @@ public final class AbstractionManager {
    * creates a Predicate that represents "false"
    */
   public AbstractionPredicate makeFalsePredicate() {
-    return makePredicate(fmgr.makeFalse());
+    return makePredicate(bfmgr.makeBoolean(false));
   }
 
   /**
@@ -143,11 +158,10 @@ public final class AbstractionManager {
    * @param var A symbolic formula representing the variable. The same formula has to been passed to makePredicate earlier.
    * @return a Predicate
    */
-  private AbstractionPredicate getPredicate(Formula var) {
+  private AbstractionPredicate getPredicate(BooleanFormula var) {
     AbstractionPredicate result = symbVarToPredicate.get(var);
-    if (result == null) {
-      throw new IllegalArgumentException(var + " seems not to be a formula corresponding to a single predicate variable.");
-    }
+    if (result == null) { throw new IllegalArgumentException(var
+        + " seems not to be a formula corresponding to a single predicate variable."); }
     return result;
   }
 
@@ -156,18 +170,18 @@ public final class AbstractionManager {
    * its concrete representation (which is a symbolic formula corresponding
    * to the BDD, in which each predicate is replaced with its definition)
    */
-  public Formula toConcrete(Region af) {
+  public BooleanFormula toConcrete(Region af) {
 
-    Map<Region, Formula> cache;
+    Map<Region, BooleanFormula> cache;
     if (useCache) {
       cache = toConcreteCache;
     } else {
-      cache = new HashMap<Region, Formula>();
+      cache = new HashMap<>();
     }
-    Deque<Region> toProcess = new ArrayDeque<Region>();
+    Deque<Region> toProcess = new ArrayDeque<>();
 
-    cache.put(rmgr.makeTrue(), fmgr.makeTrue());
-    cache.put(rmgr.makeFalse(), fmgr.makeFalse());
+    cache.put(rmgr.makeTrue(), bfmgr.makeBoolean(true));
+    cache.put(rmgr.makeFalse(), bfmgr.makeBoolean(false));
 
     toProcess.push(af);
     while (!toProcess.isEmpty()) {
@@ -177,8 +191,8 @@ public final class AbstractionManager {
         continue;
       }
       boolean childrenDone = true;
-      Formula m1 = null;
-      Formula m2 = null;
+      BooleanFormula m1 = null;
+      BooleanFormula m2 = null;
 
       Triple<Region, Region, Region> parts = rmgr.getIfThenElse(n);
       Region c1 = parts.getSecond();
@@ -204,14 +218,14 @@ public final class AbstractionManager {
 
         AbstractionPredicate pred = absVarToPredicate.get(var);
         assert pred != null;
-        Formula atom = pred.getSymbolicAtom();
+        BooleanFormula atom = pred.getSymbolicAtom();
 
-        Formula ite = fmgr.makeIfThenElse(atom, m1, m2);
+        BooleanFormula ite = bfmgr.ifThenElse(atom, m1, m2);
         cache.put(n, ite);
       }
     }
 
-    Formula result = cache.get(af);
+    BooleanFormula result = cache.get(af);
     assert result != null;
 
     return result;
@@ -229,9 +243,9 @@ public final class AbstractionManager {
   }
 
   public Collection<AbstractionPredicate> extractPredicates(Region af) {
-    Collection<AbstractionPredicate> vars = new HashSet<AbstractionPredicate>();
+    Collection<AbstractionPredicate> vars = new HashSet<>();
 
-    Deque<Region> toProcess = new ArrayDeque<Region>();
+    Deque<Region> toProcess = new ArrayDeque<>();
     toProcess.push(af);
     while (!toProcess.isEmpty()) {
       Region n = toProcess.pop();
@@ -264,6 +278,59 @@ public final class AbstractionManager {
       vars.add(pred);
     }
     return vars;
+  }
+
+  public Region buildRegionFromFormula(BooleanFormula pF) {
+    // expect that pF is uninstantiated
+    if (bfmgr.isFalse(pF)) {
+      return getRegionCreator().makeFalse();
+    }
+
+    if (bfmgr.isTrue(pF)) {
+      return getRegionCreator().makeTrue();
+    }
+
+    FormulaOperator op = bfmgr.getOperator(pF);
+    //TODO: see if this can be done without unsafe-manager
+    UnsafeFormulaManager unsafe = fmgr.getUnsafeFormulaManager();
+    if (op == null) { return null; }
+    switch (op) {
+    case ATOM: {
+      return atomToPredicate.get(pF).getAbstractVariable();
+    }
+    case NOT: {
+      return getRegionCreator()
+          .makeNot(
+            buildRegionFromFormula(unsafe.typeFormula(FormulaType.BooleanType, unsafe.getArg(pF, 0))));
+    }
+    case AND: {
+      return getRegionCreator()
+          .makeAnd(
+            buildRegionFromFormula(unsafe.typeFormula(FormulaType.BooleanType, unsafe.getArg(pF, 0))),
+            buildRegionFromFormula(unsafe.typeFormula(FormulaType.BooleanType, unsafe.getArg(pF, 1))));
+    }
+    case OR: {
+      return getRegionCreator()
+          .makeOr(
+            buildRegionFromFormula(unsafe.typeFormula(FormulaType.BooleanType, unsafe.getArg(pF, 0))),
+            buildRegionFromFormula(unsafe.typeFormula(FormulaType.BooleanType, unsafe.getArg(pF, 1))));
+    }
+    case EQUIV: {
+      return getRegionCreator()
+          .makeEqual(
+            buildRegionFromFormula(unsafe.typeFormula(FormulaType.BooleanType, unsafe.getArg(pF, 0))),
+            buildRegionFromFormula(unsafe.typeFormula(FormulaType.BooleanType, unsafe.getArg(pF, 1))));
+    }
+    case ITE: {
+      return getRegionCreator()
+          .makeIte(
+            buildRegionFromFormula(unsafe.typeFormula(FormulaType.BooleanType, unsafe.getArg(pF, 0))),
+            buildRegionFromFormula(unsafe.typeFormula(FormulaType.BooleanType, unsafe.getArg(pF, 1))),
+            buildRegionFromFormula(unsafe.typeFormula(FormulaType.BooleanType, unsafe.getArg(pF, 2))));
+    }
+    default:
+      return null;
+    }
   }
 
   public RegionCreator getRegionCreator() {
@@ -316,6 +383,27 @@ public final class AbstractionManager {
     }
 
     /**
+     * Creates a region representing an equality (bi-implication) of the two argument
+     * @param f1 an AbstractFormula
+     * @param f2 an AbstractFormula
+     * @return (f1 <=> f2)
+     */
+    public Region makeEqual(Region f1, Region f2) {
+      return rmgr.makeEqual(f1, f2);
+    }
+
+    /**
+     * Creates a region representing an if then else construct of the three arguments
+     * @param f1 an AbstractFormula
+     * @param f2 an AbstractFormula
+     * @param f3 an AbstractFormula
+     * @return (if f1 then f2 else f3)
+     */
+    public Region makeIte(Region f1, Region f2, Region f3) {
+      return rmgr.makeIte(f1, f2, f3);
+    }
+
+    /**
      * Creates a region representing an existential quantification of the two argument
      * @param f1 an AbstractFormula
      * @param f2 an AbstractFormula
@@ -325,7 +413,7 @@ public final class AbstractionManager {
       return rmgr.makeExists(f1, f2);
     }
 
-    public Region getPredicate(Formula var) {
+    public Region getPredicate(BooleanFormula var) {
       return AbstractionManager.this.getPredicate(var).getAbstractVariable();
     }
   }

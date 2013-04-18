@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2012  Dirk Beyer
+ *  Copyright (C) 2007-2013  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -43,13 +43,13 @@ import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysisWithAB
 import org.sosy_lab.cpachecker.core.interfaces.MergeOperator;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustment;
-import org.sosy_lab.cpachecker.core.interfaces.ProofChecker;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
 import org.sosy_lab.cpachecker.core.interfaces.StopOperator;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.core.interfaces.WrapperCPA;
+import org.sosy_lab.cpachecker.core.interfaces.pcc.ProofChecker;
 import org.sosy_lab.cpachecker.cpa.explicit.OmniscientCompositePrecisionAdjustment;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
@@ -137,14 +137,18 @@ public class CompositeCPA implements ConfigurableProgramAnalysis, StatisticsProv
       CompositeStopOperator compositeStop = new CompositeStopOperator(stopOps);
 
       PrecisionAdjustment compositePrecisionAdjustment;
-      if (options.precAdjust.equals("IGNORANT")) {
+      if (options.precAdjust.equals("OMNISCIENT")) {
+        compositePrecisionAdjustment = new OmniscientCompositePrecisionAdjustment(
+            precisionAdjustments.build(),
+            getConfiguration());
+      }
+
+      else {
         if (simplePrec) {
           compositePrecisionAdjustment = new CompositeSimplePrecisionAdjustment(simplePrecisionAdjustments.build());
         } else {
           compositePrecisionAdjustment = new CompositePrecisionAdjustment(precisionAdjustments.build());
         }
-      } else {
-        compositePrecisionAdjustment = new OmniscientCompositePrecisionAdjustment(precisionAdjustments.build());
       }
 
       return new CompositeCPA(compositeDomain, compositeTransfer, compositeMerge, compositeStop,
@@ -181,13 +185,12 @@ public class CompositeCPA implements ConfigurableProgramAnalysis, StatisticsProv
 
   private final ImmutableList<ConfigurableProgramAnalysis> cpas;
 
-  protected CompositeCPA (AbstractDomain abstractDomain,
+  protected CompositeCPA(AbstractDomain abstractDomain,
       CompositeTransferRelation transferRelation,
       MergeOperator mergeOperator,
       CompositeStopOperator stopOperator,
       PrecisionAdjustment precisionAdjustment,
-      ImmutableList<ConfigurableProgramAnalysis> cpas)
-  {
+      ImmutableList<ConfigurableProgramAnalysis> cpas) {
     this.abstractDomain = abstractDomain;
     this.transferRelation = transferRelation;
     this.mergeOperator = mergeOperator;
@@ -195,7 +198,7 @@ public class CompositeCPA implements ConfigurableProgramAnalysis, StatisticsProv
     this.precisionAdjustment = precisionAdjustment;
     this.cpas = cpas;
 
-    List<Reducer> wrappedReducers = new ArrayList<Reducer>();
+    List<Reducer> wrappedReducers = new ArrayList<>();
     for (ConfigurableProgramAnalysis cpa : cpas) {
       if (cpa instanceof ConfigurableProgramAnalysisWithABM) {
         wrappedReducers.add(((ConfigurableProgramAnalysisWithABM) cpa).getReducer());
@@ -232,7 +235,7 @@ public class CompositeCPA implements ConfigurableProgramAnalysis, StatisticsProv
   }
 
   @Override
-  public PrecisionAdjustment getPrecisionAdjustment () {
+  public PrecisionAdjustment getPrecisionAdjustment() {
     return precisionAdjustment;
   }
 
@@ -242,7 +245,7 @@ public class CompositeCPA implements ConfigurableProgramAnalysis, StatisticsProv
   }
 
   @Override
-  public AbstractState getInitialState (CFANode node) {
+  public AbstractState getInitialState(CFANode node) {
     Preconditions.checkNotNull(node);
 
     ImmutableList.Builder<AbstractState> initialStates = ImmutableList.builder();
@@ -254,7 +257,7 @@ public class CompositeCPA implements ConfigurableProgramAnalysis, StatisticsProv
   }
 
   @Override
-  public Precision getInitialPrecision (CFANode node) {
+  public Precision getInitialPrecision(CFANode node) {
     Preconditions.checkNotNull(node);
 
     ImmutableList.Builder<Precision> initialPrecisions = ImmutableList.builder();

@@ -86,7 +86,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
     config.inject(this);
     this.logger = logger;
 
-    Set<LockInfo> tmpInfo = new HashSet<LockInfo>();
+    Set<LockInfo> tmpInfo = new HashSet<>();
     LockInfo tmpLockInfo;
     Map<String, Integer> lockFunctions;
     Map<String, Integer> unlockFunctions;
@@ -101,8 +101,8 @@ public class LockStatisticsTransferRelation implements TransferRelation
 
     for (String lockName : lockinfo) {
       tmpString = config.getProperty(lockName + ".lock");
-      tmpStringSet = new HashSet<String>(Arrays.asList(tmpString.split(", *")));
-      lockFunctions = new HashMap<String, Integer>();
+      tmpStringSet = new HashSet<>(Arrays.asList(tmpString.split(", *")));
+      lockFunctions = new HashMap<>();
       for (String funcName : tmpStringSet) {
         try {
           num = Integer.parseInt(config.getProperty(lockName + "." + funcName + ".parameters"));
@@ -111,9 +111,9 @@ public class LockStatisticsTransferRelation implements TransferRelation
         }
         lockFunctions.put(funcName, num);
       }
-      unlockFunctions = new HashMap<String, Integer>();
+      unlockFunctions = new HashMap<>();
       tmpString = config.getProperty(lockName + ".unlock");
-      tmpStringSet = new HashSet<String>(Arrays.asList(tmpString.split(", *")));
+      tmpStringSet = new HashSet<>(Arrays.asList(tmpString.split(", *")));
       for (String funcName : tmpStringSet) {
         try {
           num = Integer.parseInt(config.getProperty(lockName + "." + funcName + ".parameters"));
@@ -122,10 +122,10 @@ public class LockStatisticsTransferRelation implements TransferRelation
         }
         unlockFunctions.put(funcName, num);
       }
-      resetFunctions = new HashMap<String, Integer>();
+      resetFunctions = new HashMap<>();
       tmpString = config.getProperty(lockName + ".reset");
       if (tmpString != null) {
-        tmpStringSet = new HashSet<String>(Arrays.asList(tmpString.split(", *")));
+        tmpStringSet = new HashSet<>(Arrays.asList(tmpString.split(", *")));
         for (String funcName : tmpStringSet) {
           try {
             num = Integer.parseInt(config.getProperty(lockName + "." + funcName + ".parameters"));
@@ -145,14 +145,14 @@ public class LockStatisticsTransferRelation implements TransferRelation
       tmpInfo.add(tmpLockInfo);
     }
 
-    if (annotated != null) annotatedfunctions = new HashMap<String, AnnotationInfo>();
+    if (annotated != null) annotatedfunctions = new HashMap<>();
 
     for (String fName : annotated) {
       tmpString = config.getProperty("annotate." + fName + ".free");
       freeLocks = null;
       if (tmpString != null) {
-        tmpStringSet = new HashSet<String>(Arrays.asList(tmpString.split(", *")));
-        freeLocks = new HashMap<String, String>();
+        tmpStringSet = new HashSet<>(Arrays.asList(tmpString.split(", *")));
+        freeLocks = new HashMap<>();
         for (String fullName : tmpStringSet) {
           if (fullName.matches(".*\\(.*")) {
             String[] stringArray = fullName.split("\\(");
@@ -166,8 +166,8 @@ public class LockStatisticsTransferRelation implements TransferRelation
       tmpString = config.getProperty("annotate." + fName + ".restore");
       restoreLocks = null;
       if (tmpString != null) {
-        tmpStringSet = new HashSet<String>(Arrays.asList(tmpString.split(", *")));
-        restoreLocks = new HashMap<String, String>();
+        tmpStringSet = new HashSet<>(Arrays.asList(tmpString.split(", *")));
+        restoreLocks = new HashMap<>();
         for (String fullName : tmpStringSet) {
           if (fullName.matches(".*\\(.*")) {
             String[] stringArray = fullName.split("\\(");
@@ -181,8 +181,8 @@ public class LockStatisticsTransferRelation implements TransferRelation
       tmpString = config.getProperty("annotate." + fName + ".reset");
       resetLocks = null;
       if (tmpString != null) {
-        tmpStringSet = new HashSet<String>(Arrays.asList(tmpString.split(", *")));
-        resetLocks = new HashMap<String, String>();
+        tmpStringSet = new HashSet<>(Arrays.asList(tmpString.split(", *")));
+        resetLocks = new HashMap<>();
         for (String fullName : tmpStringSet) {
           if (fullName.matches(".*\\(.*")) {
             String[] stringArray = fullName.split("\\(");

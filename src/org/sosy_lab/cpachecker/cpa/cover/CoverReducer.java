@@ -69,4 +69,16 @@ public class CoverReducer implements Reducer {
     return wrappedReducer.measurePrecisionDifference(pPrecision, pOtherPrecision);
   }
 
+  @Override
+  public AbstractState getVariableReducedStateForProofChecking(AbstractState pExpandedState, Block pContext,
+      CFANode pCallNode) {
+    return getVariableReducedState(pExpandedState, pContext, pCallNode);
+  }
+
+  @Override
+  public AbstractState getVariableExpandedStateForProofChecking(AbstractState pRootState, Block pReducedContext,
+      AbstractState pReducedState) {
+    return getVariableExpandedState(pRootState, pReducedContext, pReducedState);
+  }
+
 }

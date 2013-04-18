@@ -68,13 +68,13 @@ public class LocalState implements AbstractState {
   //private static int counter = 0;
 
   public LocalState(LocalState state) {
-    DataInfo = new HashMap<AbstractIdentifier, DataType>();
+    DataInfo = new HashMap<>();
     previousState = state;
     returnExpression = null;
   }
 
   private LocalState(Map<AbstractIdentifier, DataType> oldMap, LocalState state, CExpression ret) {
-    DataInfo = new HashMap<AbstractIdentifier, DataType>(oldMap);
+    DataInfo = new HashMap<>(oldMap);
     previousState = state;
     returnExpression = ret;
   }
@@ -183,7 +183,7 @@ public class LocalState implements AbstractState {
     if (this.equals(pState2))
       return pState2;
     LocalState joinState = this.clone();
-    Set<AbstractIdentifier> toDelete = new HashSet<AbstractIdentifier>();
+    Set<AbstractIdentifier> toDelete = new HashSet<>();
 
     for (AbstractIdentifier name : joinState.DataInfo.keySet()) {
       if (!pState2.DataInfo.containsKey(name) && joinState.DataInfo.get(name) != DataType.GLOBAL)

@@ -24,12 +24,17 @@
 package org.sosy_lab.cpachecker.cpa.explicit;
 
 import java.io.PrintStream;
+import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Map;
 
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.Timer;
 import org.sosy_lab.common.Triple;
+import org.sosy_lab.common.configuration.Configuration;
+import org.sosy_lab.common.configuration.InvalidConfigurationException;
+import org.sosy_lab.common.configuration.Option;
+import org.sosy_lab.common.configuration.Options;
+import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
@@ -50,33 +55,46 @@ import org.sosy_lab.cpachecker.util.AbstractStates;
 
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Multimap;
 
+@Options(prefix="cpa.explicit.blk")
 public class OmniscientCompositePrecisionAdjustment extends CompositePrecisionAdjustment implements StatisticsProvider {
+
+  @Option(description="restrict abstractions to loop heads")
+  private boolean alwaysAtLoops = false;
+
+  @Option(description="restrict abstractions to function calls/returns")
+  private boolean alwaysAtFunctions = false;
+
+  // statistics
+  final Timer totalEnforceAbstraction         = new Timer();
+  final Timer totalEnforcePathThreshold       = new Timer();
+  final Timer totalEnforceReachedSetThreshold = new Timer();
+  final Timer totalComposite                  = new Timer();
+  final Timer total                           = new Timer();
+
+  private Statistics stats  = null;
+  private boolean modified = false;
 
   @Override
   public void collectStatistics(Collection<Statistics> pStatsCollection) {
     pStatsCollection.add(stats);
   }
 
-  // statistics
-  final Timer totalEnforcePathThreshold       = new Timer();
-  final Timer totalEnforceReachedSetThreshold = new Timer();
-  final Timer totalComposite = new Timer();
-  final Timer total = new Timer();
-  private Statistics stats = null;
-  private boolean modified = false;
-
-  public OmniscientCompositePrecisionAdjustment(ImmutableList<PrecisionAdjustment> precisionAdjustments) {
+  public OmniscientCompositePrecisionAdjustment(ImmutableList<PrecisionAdjustment> precisionAdjustments, Configuration config)
+      throws InvalidConfigurationException {
     super(precisionAdjustments);
 
-    stats = new Statistics() {
+    config.inject(this);
 
+    stats = new Statistics() {
       @Override
       public void printStatistics(PrintStream pOut, Result pResult, ReachedSet pReached) {
-        pOut.println("total time:                 " + OmniscientCompositePrecisionAdjustment.this.total.getSumTime());
-        pOut.println("total time for composite:   " + OmniscientCompositePrecisionAdjustment.this.totalComposite.getSumTime());
-        pOut.println("total time for reached set: " + OmniscientCompositePrecisionAdjustment.this.totalEnforceReachedSetThreshold.getSumTime());
-        pOut.println("total time for path:        " + OmniscientCompositePrecisionAdjustment.this.totalEnforcePathThreshold.getSumTime());
+        pOut.println("Total time:                 " + OmniscientCompositePrecisionAdjustment.this.total);
+        pOut.println("Total time for composite:   " + OmniscientCompositePrecisionAdjustment.this.totalComposite);
+        pOut.println("Total time for abstraction: " + OmniscientCompositePrecisionAdjustment.this.totalEnforceAbstraction);
+        pOut.println("Total time for reached set: " + OmniscientCompositePrecisionAdjustment.this.totalEnforceReachedSetThreshold);
+        pOut.println("Total time for path:        " + OmniscientCompositePrecisionAdjustment.this.totalEnforcePathThreshold);
       }
 
       @Override
@@ -106,39 +124,44 @@ public class OmniscientCompositePrecisionAdjustment extends CompositePrecisionAd
     }
 
     ImmutableList.Builder<AbstractState> outElements  = ImmutableList.builder();
-    ImmutableList.Builder<Precision> outPrecisions      = ImmutableList.builder();
+    ImmutableList.Builder<Precision> outPrecisions    = ImmutableList.builder();
 
     Action action = Action.CONTINUE;
 
     for (int i = 0, size = composite.getWrappedStates().size(); i < size; ++i) {
       UnmodifiableReachedSet slice = new UnmodifiableReachedSetView(pElements, stateProjectionFunctions.get(i), precisionProjectionFunctions.get(i));
       PrecisionAdjustment precisionAdjustment = precisionAdjustments.get(i);
-      AbstractState oldElement = composite.get(i);
+      AbstractState oldState = composite.get(i);
       Precision oldPrecision = precision.get(i);
 
       // enforce thresholds for explicit element, by incorporating information from reached set and path condition element
       if (i == indexOfExplicitState) {
-        ExplicitState explicit                  = (ExplicitState)oldElement;
-        ExplicitPrecision explicitPrecision       = (ExplicitPrecision)oldPrecision;
+        ExplicitState explicitState         = (ExplicitState)oldState;
+        ExplicitPrecision explicitPrecision = (ExplicitPrecision)oldPrecision;
+        LocationState location              = AbstractStates.extractStateByType(composite, LocationState.class);
 
-        LocationState location                  = AbstractStates.extractStateByType(composite, LocationState.class);
-        AssignmentsInPathConditionState assigns = AbstractStates.extractStateByType(composite, AssignmentsInPathConditionState.class);
+        // compute the abstraction for CEGAR
+        totalEnforceAbstraction.start();
+        explicitState = enforceAbstraction(explicitState, location, explicitPrecision);
+        totalEnforceAbstraction.stop();
 
+        // compute the abstraction for reached set thresholds
         totalEnforceReachedSetThreshold.start();
-        ExplicitState newElement = enforceReachedSetThreshold(explicit, explicitPrecision, slice.getReached(location.getLocationNode()));
+        explicitState = enforceReachedSetThreshold(explicitState, explicitPrecision, slice.getReached(location.getLocationNode()));
         totalEnforceReachedSetThreshold.stop();
 
+        // compute the abstraction for assignment thresholds
         totalEnforcePathThreshold.start();
-        Pair<ExplicitState, ExplicitPrecision> result = enforcePathThreshold(newElement, explicitPrecision, assigns);
+        AssignmentsInPathConditionState assigns       = AbstractStates.extractStateByType(composite, AssignmentsInPathConditionState.class);
+        Pair<ExplicitState, ExplicitPrecision> result = enforcePathThreshold(explicitState, explicitPrecision, assigns);
         totalEnforcePathThreshold.stop();
 
         outElements.add(result.getFirst());
         outPrecisions.add(result.getSecond());
-      }
-      else {
+      } else {
         totalComposite.start();
 
-        Triple<AbstractState, Precision, Action> result = precisionAdjustment.prec(oldElement, oldPrecision, slice);
+        Triple<AbstractState, Precision, Action> result = precisionAdjustment.prec(oldState, oldPrecision, slice);
         AbstractState newElement = result.getFirst();
         Precision newPrecision = result.getSecond();
 
@@ -146,7 +169,7 @@ public class OmniscientCompositePrecisionAdjustment extends CompositePrecisionAd
           action = Action.BREAK;
         }
 
-        if ((newElement != oldElement) || (newPrecision != oldPrecision)) {
+        if ((newElement != oldState) || (newPrecision != oldPrecision)) {
           // something has changed
           modified = true;
         }
@@ -157,68 +180,134 @@ public class OmniscientCompositePrecisionAdjustment extends CompositePrecisionAd
       }
     }
 
-    AbstractState outElement = modified ? new CompositeState(outElements.build())     : pElement;
-    Precision outPrecision     = modified ? new CompositePrecision(outPrecisions.build()) : pPrecision;
+    AbstractState outElement = pElement;
+    Precision outPrecision   = pPrecision;
+    if (modified) {
+      outElement    = new CompositeState(outElements.build());
+      outPrecision  = new CompositePrecision(outPrecisions.build());
+    }
 
     total.stop();
 
     return Triple.of(outElement, outPrecision, action);
   }
 
-  private ExplicitState enforceReachedSetThreshold(ExplicitState element, ExplicitPrecision precision, Collection<AbstractState> reachedSetAtLocation) {
-    // if an actual meaningful threshold is set
-    if (precision.getReachedSetThresholds().defaultThreshold != -1) {
-      // create the mapping from variable name to the number of different values this variable has
-      HashMultimap<String, Long> valueMapping = createMappingFromReachedSet(reachedSetAtLocation);
+  /**
+   * This method performs an abstraction computation on the current explicit state.
+   *
+   * @param location the current location
+   * @param state the current state
+   * @param precision the current precision
+   */
+  private ExplicitState enforceAbstraction(ExplicitState state, LocationState location, ExplicitPrecision precision) {
+    if (abstractAtEachLocation()
+        || abstractAtFunction(location)
+        || abstractAtLoopHead(location)) {
+      precision.setLocation(location.getLocationNode());
+      state.removeAll(getVariablesToDrop(state, precision));
+    }
+
+    return state;
+  }
+
+  /**
+   * This method determines whether or not to abstract at each location.
+   *
+   * @return true, if an abstraction should be computed at each location, else false
+   */
+  private boolean abstractAtEachLocation() {
+    return !alwaysAtFunctions && !alwaysAtLoops;
+  }
+
+  /**
+   * This method determines whether or not the given location is a function entry or exit,
+   * and whether or not an abstraction shall be computed or not.
+   *
+   * @param location the current location
+   * @return true, if at the current location an abstraction shall be computed, else false
+   */
+  private boolean abstractAtFunction(LocationState location) {
+    return alwaysAtFunctions && (location.getLocationNode() instanceof FunctionEntryNode
+        || location.getLocationNode().getEnteringSummaryEdge() != null);
+  }
+
+  /**
+   * This method determines whether or not the given location is a loop head,
+   * and whether or not an abstraction shall be computed or not.
+   *
+   * @param location the current location
+   * @return true, if at the current location an abstraction shall be computed, else false
+   */
+  private boolean abstractAtLoopHead(LocationState location) {
+    return alwaysAtLoops && location.getLocationNode().isLoopStart();
+  }
+
+  /**
+   * This method return the set of variables to be dropped according to the current precision.
+   *
+   * @param state the current state
+   * @param precision the current precision
+   * @return the variables to the dropped
+   */
+  private Collection<String> getVariablesToDrop(ExplicitState state, ExplicitPrecision precision) {
+    Collection<String> toDrop = new ArrayList<>();
+
+    for(String variableName : state.getTrackedVariableNames()) {
+      if(!precision.isTracking(variableName)) {
+        toDrop.add(variableName);
+      }
+    }
+
+    return toDrop;
+  }
+
+  /**
+   * This method abstracts variables that exceed the threshold of assignments along the current path.
+   *
+   * @param state the explicit state
+   * @param precision the current precision
+   * @param assignments the assignment information
+   * @return the abstracted explicit state
+   */
+  private Pair<ExplicitState, ExplicitPrecision> enforcePathThreshold(ExplicitState state, ExplicitPrecision precision, AssignmentsInPathConditionState assignments) {
+    if (assignments != null) {
+      if (assignments instanceof UniqueAssignmentsInPathConditionState) {
+        UniqueAssignmentsInPathConditionState unique = (UniqueAssignmentsInPathConditionState)assignments;
+        unique.addAssignment(state);
+      }
 
       // forget the value for all variables that exceed their threshold
+      for (String variableName: state.getTrackedVariableNames()) {
+        if (assignments.variableExceedsThreshold(variableName)) {
+          state.forget(variableName);
+        }
+      }
+    }
+
+    return Pair.of(state, precision);
+  }
+
+  /**
+   * This method abstracts variables that exceed the threshold of different values in a given slice of the reached set.
+   *
+   * @param state the explicit state
+   * @param precision the current precision
+   * @param reachedSetAtLocation the slice of the reached set from where to retrieve the values per variable
+   * @return the abstracted explicit state
+   */
+  private ExplicitState enforceReachedSetThreshold(ExplicitState state, ExplicitPrecision precision, Collection<AbstractState> reachedSetAtLocation) {
+    if (precision.isReachedSetThresholdActive()) {
+      // create the mapping from variable name to its different values in this slice of the reached set
+      Multimap<String, Long> valueMapping = createMappingFromReachedSet(reachedSetAtLocation);
+
       for (String variable : valueMapping.keySet()) {
-        if (precision.getReachedSetThresholds().exceeds(variable, valueMapping.get(variable).size())) {
-          precision.getReachedSetThresholds().setExceeded(variable);
-          element.forget(variable);
+        if (precision.variableExceedsReachedSetThreshold(valueMapping.get(variable).size())) {
+          state.forget(variable);
         }
       }
     }
 
-    return element;
-  }
-
-  private Pair<ExplicitState, ExplicitPrecision> enforcePathThreshold(ExplicitState element, ExplicitPrecision precision, AssignmentsInPathConditionState assigns) {
-    if (assigns != null) {
-      if (assigns instanceof UniqueAssignmentsInPathConditionState) {
-        UniqueAssignmentsInPathConditionState unique = (UniqueAssignmentsInPathConditionState)assigns;
-        unique.addAssignment(element);
-      }
-
-      // forget the value for all variables that exceed their threshold
-      for (Map.Entry<String, Integer> entry : assigns.getAssignmentCounts().entrySet()) {
-        if (precision.getPathThresholds().exceeds(entry.getKey(), entry.getValue())) {
-          //System.out.println((assigns instanceof AllAssignmentsInPathConditionState) ? "non-" : "" +
-              //"unique path: forgetting var " + entry.getKey());
-
-          // the path threshold precision is path sensitive, therefore, mutating a clone is mandatory
-          if (modified == false) {
-            precision = new ExplicitPrecision(precision);
-            modified = true;
-          }
-
-          precision.getReachedSetThresholds().setExceeded(entry.getKey());
-          element.forget(entry.getKey());
-        }
-      }
-    }
-
-    return Pair.of(element, precision);
-  }
-
-  private int getIndexOfExplicitState(CompositeState composite) {
-    for (int i = 0; i < composite.getWrappedStates().size(); ++i) {
-      if (composite.get(i) instanceof ExplicitState) {
-        return i;
-      }
-    }
-
-    return -1;
+    return state;
   }
 
   /**
@@ -226,15 +315,30 @@ public class OmniscientCompositePrecisionAdjustment extends CompositePrecisionAd
    *
    * @param reachedSetAtLocation the collection of AbstractStates in the reached set that refer to the current location
    */
-  private HashMultimap<String, Long> createMappingFromReachedSet(Collection<AbstractState> reachedSetAtLocation) {
-    HashMultimap<String, Long> valueMapping = HashMultimap.create();
+  private Multimap<String, Long> createMappingFromReachedSet(Collection<AbstractState> reachedSetAtLocation) {
+    Multimap<String, Long> valueMapping = HashMultimap.create();
 
     for (AbstractState element : reachedSetAtLocation) {
-      for (Map.Entry<String, Long> entry : ((ExplicitState)element).getConstantsMap().entrySet()) {
-        valueMapping.put(entry.getKey(), entry.getValue());
-      }
+      valueMapping = ((ExplicitState)element).addToValueMapping(valueMapping);
     }
 
     return valueMapping;
+  }
+
+  /**
+   * This helper gets the index of the explicit state within the composite state.
+   *
+   * @param composite the composite state in which to look for the explicit state
+   * @return the index of the explicit state within the composite state
+   * @throws CPAException if no explicit state could be found
+   */
+  private int getIndexOfExplicitState(CompositeState composite) throws CPAException {
+    for (int i = 0; i < composite.getWrappedStates().size(); ++i) {
+      if (composite.get(i) instanceof ExplicitState) {
+        return i;
+      }
+    }
+
+    throw new CPAException("Explicit-State could not be found within Composite-State.");
   }
 }

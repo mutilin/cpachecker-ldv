@@ -25,8 +25,11 @@ package org.sosy_lab.cpachecker.util.predicates;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import java.io.PrintStream;
+
 import org.sosy_lab.common.Triple;
-import org.sosy_lab.cpachecker.util.predicates.interfaces.Formula;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormulaManager;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.FormulaManager;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.Region;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.RegionManager;
@@ -40,20 +43,22 @@ public class SymbolicRegionManager implements RegionManager {
 
   public static class SymbolicRegion implements Region {
 
-    private final Formula f;
+    private final BooleanFormula f;
+    private final BooleanFormulaManager bfmgr;
 
-    public SymbolicRegion(Formula pF) {
+    public SymbolicRegion(BooleanFormulaManager bfmgr, BooleanFormula pF) {
       f = checkNotNull(pF);
+      this.bfmgr = bfmgr;
     }
 
     @Override
     public boolean isTrue() {
-      return f.isTrue();
+      return bfmgr.isTrue(f);
     }
 
     @Override
     public boolean isFalse() {
-      return f.isFalse();
+      return bfmgr.isFalse(f);
     }
 
     @Override
@@ -80,9 +85,9 @@ public class SymbolicRegionManager implements RegionManager {
 
   public SymbolicRegionManager(FormulaManager fmgr, Solver pSolver) {
     solver = pSolver;
-
-    trueRegion = new SymbolicRegion(fmgr.makeTrue());
-    falseRegion = new SymbolicRegion(fmgr.makeFalse());
+    BooleanFormulaManager bfmgr = fmgr.getBooleanFormulaManager();
+    trueRegion = new SymbolicRegion(bfmgr,  bfmgr.makeBoolean(true));
+    falseRegion = new SymbolicRegion(bfmgr,  bfmgr.makeBoolean(false));
   }
 
   @Override
@@ -110,12 +115,20 @@ public class SymbolicRegionManager implements RegionManager {
 
   @Override
   public Region makeAnd(Region pF1, Region pF2) {
-    throw new UnsupportedOperationException();
+    SymbolicRegion r1 = (SymbolicRegion)pF1;
+    SymbolicRegion r2 = (SymbolicRegion)pF2;
+    assert r1.bfmgr == r2.bfmgr;
+
+    return new SymbolicRegion(r1.bfmgr, r1.bfmgr.and(r1.f, r2.f));
   }
 
   @Override
   public Region makeOr(Region pF1, Region pF2) {
-    throw new UnsupportedOperationException();
+    SymbolicRegion r1 = (SymbolicRegion)pF1;
+    SymbolicRegion r2 = (SymbolicRegion)pF2;
+    assert r1.bfmgr == r2.bfmgr;
+
+    return new SymbolicRegion(r1.bfmgr, r1.bfmgr.or(r1.f, r2.f));
   }
 
   @Override
@@ -125,6 +138,11 @@ public class SymbolicRegionManager implements RegionManager {
 
   @Override
   public Region makeUnequal(Region pF1, Region pF2) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public Region makeIte(Region pF1, Region pF2, Region pF3) {
     throw new UnsupportedOperationException();
   }
 
@@ -144,8 +162,8 @@ public class SymbolicRegionManager implements RegionManager {
   }
 
   @Override
-  public String getStatistics() {
-    throw new UnsupportedOperationException();
+  public void printStatistics(PrintStream out) {
+    // do nothing
   }
 
 }

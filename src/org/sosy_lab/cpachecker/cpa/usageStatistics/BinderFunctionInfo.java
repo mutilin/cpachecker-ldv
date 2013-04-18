@@ -67,7 +67,7 @@ public class BinderFunctionInfo {
       String line = pConfig.getProperty(name + ".pInfo");
       Preconditions.checkNotNull(line);
       String[] options = line.split(", *");
-      pInfo = new LinkedList<ParameterInfo>();
+      pInfo = new LinkedList<>();
       for (String option : options) {
         pInfo.add(ParameterInfo.getValue(option));
       }

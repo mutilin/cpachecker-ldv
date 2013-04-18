@@ -2,33 +2,28 @@
 <!DOCTYPE benchmark SYSTEM "benchmark.dtd">
 <benchmark tool="cpachecker" timelimit="1800" memlimit="2000">
   <option name="-noout"/>
-  <option name="-heap">1200m</option>
+  <option name="-heap">1200M</option>
 
-  <test name="without-cbmc">
-    <sourcefiles>
-      <includesfile>test/test-sets/locks.set</includesfile>
-      <includesfile>test/test-sets/ntdrivers-simplified.set</includesfile>
-      <includesfile>test/test-sets/ntdrivers.set</includesfile>
-      <includesfile>test/test-sets/ssh-simplified.set</includesfile>
-      <includesfile>test/test-sets/ssh.set</includesfile>
-      <includesfile>test/test-sets/systemc.set</includesfile>
-      <includesfile>test/test-sets/nested.set</includesfile>
-    </sourcefiles>
+  <sourcefiles name="ControlFlowInteger-MemPrecise">
+    <includesfile>../programs/benchmarks/ControlFlowInteger-MemPrecise.set</includesfile>
+  </sourcefiles>
+  <sourcefiles name="ControlFlowInteger-MemSimple">
+    <includesfile>../programs/benchmarks/ControlFlowInteger-MemSimple.set</includesfile>
+  </sourcefiles>
+  <sourcefiles name="SystemC">
+    <includesfile>../programs/benchmarks/SystemC.set</includesfile>
+  </sourcefiles>
+  <sourcefiles name="Nested">
+    <includesfile>nested.set</includesfile>
+  </sourcefiles>
+
+  <rundefinition name="without-cbmc">
     <option name="-explicitAnalysis-no-cbmc"/>
-  </test>
+  </rundefinition>
 
-  <test name="with-cbmc">
-    <sourcefiles>
-      <includesfile>test/test-sets/locks.set</includesfile>
-      <includesfile>test/test-sets/ntdrivers-simplified.set</includesfile>
-      <includesfile>test/test-sets/ntdrivers.set</includesfile>
-      <includesfile>test/test-sets/ssh-simplified.set</includesfile>
-      <includesfile>test/test-sets/ssh.set</includesfile>
-      <includesfile>test/test-sets/systemc.set</includesfile>
-      <includesfile>test/test-sets/nested.set</includesfile>
-    </sourcefiles>
+  <rundefinition name="with-cbmc">
     <option name="-explicitAnalysis"/>
-  </test>
+  </rundefinition>
 
   <columns>
     <column title="total">time for CPAchecker</column>

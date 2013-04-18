@@ -48,7 +48,7 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
   private LockStatisticsState toRestore;
 
   public LockStatisticsState() {
-    locks  = new HashSet<LockStatisticsLock>();
+    locks  = new HashSet<>();
     toRestore = null;
   }
 
@@ -97,7 +97,7 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
   public String toString() {
     StringBuilder sb = new StringBuilder();
     LockStatisticsLock tmpLock;
-    Map<String, LockStatisticsLock> locksToString = new HashMap<String, LockStatisticsLock>();
+    Map<String, LockStatisticsLock> locksToString = new HashMap<>();
 
     for (LockStatisticsLock lock : locks) {
       if (!locksToString.containsKey(lock.getName() + lock.getVariable())) {
@@ -296,7 +296,7 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
    * @return a new element representing the join of this element and the other element
    */
   LockStatisticsState join(LockStatisticsState other) {
-    Set<LockStatisticsLock> newGlobalLocks = new HashSet<LockStatisticsLock>();
+    Set<LockStatisticsLock> newGlobalLocks = new HashSet<>();
 
     for (LockStatisticsLock otherLock : other.locks) {
 
@@ -363,7 +363,7 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
 
   @Override
   public LockStatisticsState clone() {
-    return new LockStatisticsState(new HashSet<LockStatisticsLock>(locks), this.toRestore);
+    return new LockStatisticsState(new HashSet<>(locks), this.toRestore);
   }
 
   public void initReplaceLabels() {

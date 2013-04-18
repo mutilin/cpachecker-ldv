@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2012  Dirk Beyer
+ *  Copyright (C) 2007-2013  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,29 +23,36 @@
 */
 package org.sosy_lab.cpachecker.cpa.arg;
 
-import static com.google.common.base.Preconditions.checkArgument;
-import static org.sosy_lab.cpachecker.util.AbstractStates.*;
+import static com.google.common.base.Preconditions.*;
+import static org.sosy_lab.cpachecker.util.AbstractStates.extractLocation;
 
+import java.util.AbstractCollection;
 import java.util.ArrayDeque;
 import java.util.Collection;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.Map;
 import java.util.Set;
 
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
+import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
 import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
-import org.sosy_lab.cpachecker.cpa.automaton.AutomatonState;
-import org.sosy_lab.cpachecker.cpa.explicit.ExplicitState;
-import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
+import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.util.AbstractStates;
+import org.sosy_lab.cpachecker.util.GraphUtils;
 
+import com.google.common.base.Function;
+import com.google.common.base.Predicate;
+import com.google.common.base.Predicates;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Multimaps;
+import com.google.common.collect.SetMultimap;
+import com.google.common.collect.UnmodifiableIterator;
 
 /**
  * Helper class with collection of ARG related utility methods.
@@ -62,8 +69,8 @@ public class ARGUtils {
    */
   public static Set<ARGState> getAllStatesOnPathsTo(ARGState pLastElement) {
 
-    Set<ARGState> result = new HashSet<ARGState>();
-    Deque<ARGState> waitList = new ArrayDeque<ARGState>();
+    Set<ARGState> result = new HashSet<>();
+    Deque<ARGState> waitList = new ArrayDeque<>();
 
     result.add(pLastElement);
     waitList.add(pLastElement);
@@ -87,9 +94,9 @@ public class ARGUtils {
    * @param pLastElement The last element in the path.
    * @return A path from root to lastElement.
    */
-  public static Path getOnePathTo(ARGState pLastElement) {
-    Path path = new Path();
-    Set<ARGState> seenElements = new HashSet<ARGState>();
+  public static ARGPath getOnePathTo(ARGState pLastElement) {
+    ARGPath path = new ARGPath();
+    Set<ARGState> seenElements = new HashSet<>();
 
     // each element of the path consists of the abstract state and the outgoing
     // edge to its successor
@@ -123,178 +130,54 @@ public class ARGUtils {
     return path;
   }
 
+
+  static final Function<ARGState, Collection<ARGState>> CHILDREN_OF_STATE = new Function<ARGState, Collection<ARGState>>() {
+        @Override
+        public Collection<ARGState> apply(ARGState pInput) {
+          return pInput.getChildren();
+        }
+      };
+
+  static final Function<ARGState, Collection<ARGState>> PARENTS_OF_STATE = new Function<ARGState, Collection<ARGState>>() {
+        @Override
+        public Collection<ARGState> apply(ARGState pInput) {
+          return pInput.getParents();
+        }
+      };
+
+  private static final Predicate<AbstractState> AT_RELEVANT_LOCATION = Predicates.compose(
+      new Predicate<CFANode>() {
+        @Override
+        public boolean apply(CFANode pInput) {
+          return pInput.isLoopStart()
+              || pInput instanceof FunctionEntryNode
+              || pInput instanceof FunctionExitNode;
+        }
+      },
+      AbstractStates.EXTRACT_LOCATION);
+
+  static final Predicate<ARGState> RELEVANT_STATE = Predicates.or(
+      AbstractStates.IS_TARGET_STATE,
+      AT_RELEVANT_LOCATION
+      );
+
   /**
-   * Get the set of all elements covered by any of the given elements,
-   * i.e., the union of calling {@link ARGState#getCoveredByThis()} on all
-   * elements.
+   * Project the ARG to a subset of "relevant" states.
+   * The result is a SetMultimap containing the successor relationships between all relevant states.
+   * A pair of states (a, b) is in the SetMultimap,
+   * if there is a path through the ARG from a to b which does not pass through
+   * any other relevant state.
    *
-   * However, elements in the given set are never in the returned set.
-   * If you pass in a subtree, this will return exactly the set of covering
-   * edges which enter the subtree.
+   * To get the predecessor relationship, you can use {@link Multimaps#invertFrom(com.google.common.collect.Multimap, com.google.common.collect.Multimap)}.
+   *
+   * @param root The start of the subgraph of the ARG to project (always considered relevant).
+   * @param isRelevant The predicate determining which states are in the resulting relationship.
    */
-  public static Set<ARGState> getCoveredBy(Set<ARGState> elements) {
-    Set<ARGState> result = new HashSet<ARGState>();
-    for (ARGState element : elements) {
-      result.addAll(element.getCoveredByThis());
-    }
+  static SetMultimap<ARGState, ARGState> projectARG(final ARGState root,
+      final Function<? super ARGState, ? extends Iterable<ARGState>> successorFunction,
+      Predicate<? super ARGState> isRelevant) {
 
-    result.removeAll(elements);
-    return result;
-  }
-
-  private static String determineColor(ARGState currentElement)
-  {
-    String color;
-
-    if (currentElement.isCovered()) {
-      color = "green";
-
-    } else if (currentElement.isTarget()) {
-      color = "red";
-
-    } else {
-      PredicateAbstractState abselem = AbstractStates.extractStateByType(currentElement, PredicateAbstractState.class);
-      if (abselem != null && abselem.isAbstractionState()) {
-        color = "cornflowerblue";
-      } else {
-        color = null;
-      }
-    }
-
-    return color;
-  }
-
-  /**
-   * Create String with ARG in the DOT format of Graphviz.
-   * @param rootState the root element of the ARG
-   * @param displayedElements An optional set of elements. If given, all other elements are ignored. If null, all elements are dumped.
-   * @param highlightedEdges Set of edges to highlight in the graph.
-   * @return the ARG as DOT graph
-   */
-  public static String convertARTToDot(final ARGState rootState,
-      final Set<ARGState> displayedElements,
-      final Set<Pair<ARGState, ARGState>> highlightedEdges) {
-    Deque<ARGState> worklist = new LinkedList<ARGState>();
-    Set<Integer> nodesList = new HashSet<Integer>();
-    Set<ARGState> processed = new HashSet<ARGState>();
-    StringBuilder sb = new StringBuilder();
-    StringBuilder edges = new StringBuilder();
-
-    sb.append("digraph ARG {\n");
-    // default style for nodes
-    sb.append("node [style=\"filled\" shape=\"box\" color=\"white\"]\n");
-
-    worklist.add(rootState);
-
-    while (worklist.size() != 0){
-      ARGState currentElement = worklist.removeLast();
-      if (processed.contains(currentElement)){
-        continue;
-      }
-      if (displayedElements != null && !displayedElements.contains(currentElement)) {
-        continue;
-      }
-
-      processed.add(currentElement);
-
-      if (!nodesList.contains(currentElement.getStateId())){
-
-        String label = determineLabel(currentElement);
-
-        sb.append(currentElement.getStateId());
-        sb.append(" [");
-        String color = determineColor(currentElement);
-        if (color != null) {
-          sb.append("fillcolor=\"" + color + "\" ");
-        }
-        sb.append("label=\"" + label +"\" ");
-        sb.append("id=\"" + currentElement.getStateId() + "\"");
-        sb.append("]");
-        sb.append("\n");
-
-        nodesList.add(currentElement.getStateId());
-      }
-
-      for (ARGState covered : currentElement.getCoveredByThis()) {
-        edges.append(covered.getStateId());
-        edges.append(" -> ");
-        edges.append(currentElement.getStateId());
-        edges.append(" [style=\"dashed\" label=\"covered by\"]\n");
-      }
-
-      for (ARGState child : currentElement.getChildren()) {
-        edges.append(currentElement.getStateId());
-        edges.append(" -> ");
-        edges.append(child.getStateId());
-        edges.append(" [");
-
-        boolean colored = highlightedEdges.contains(Pair.of(currentElement, child));
-        CFAEdge edge = currentElement.getEdgeToChild(child);
-        if (colored) {
-          edges.append("color=\"red\"");
-        }
-
-        if (edge != null) {
-          if (colored) {
-            edges.append(" ");
-          }
-          edges.append("label=\"");
-          edges.append("Line ");
-          edges.append(edge.getLineNumber());
-          edges.append(": ");
-          edges.append(edge.getDescription().replaceAll("\n", " ").replace('"', '\''));
-          edges.append("\"");
-          edges.append(" id=\"");
-          edges.append(currentElement.getStateId());
-          edges.append(" -> ");
-          edges.append(child.getStateId());
-          edges.append("\"");
-        }
-
-        edges.append("]\n");
-        if (!worklist.contains(child)){
-          worklist.add(child);
-        }
-      }
-    }
-    sb.append(edges);
-    sb.append("}\n");
-    return sb.toString();
-  }
-
-  private static String determineLabel(ARGState currentElement) {
-    StringBuilder builder = new StringBuilder();
-
-    builder.append(currentElement.getStateId());
-
-    CFANode loc = AbstractStates.extractLocation(currentElement);
-    if (loc != null) {
-      builder.append(" @ ");
-      builder.append(loc.toString());
-    }
-
-    for (AutomatonState state : asIterable(currentElement).filter(AutomatonState.class)) {
-      if (!state.getInternalStateName().equals("Init")) {
-        builder.append("\\n");
-        builder.append(state.getCPAName().replaceFirst("AutomatonAnalysis_", ""));
-        builder.append(": ");
-        builder.append(state.getInternalStateName());
-      }
-    }
-
-    PredicateAbstractState abstraction = AbstractStates.extractStateByType(currentElement, PredicateAbstractState.class);
-    if (abstraction != null && abstraction.isAbstractionState()) {
-      builder.append("\\n");
-      builder.append(abstraction.getAbstractionFormula());
-    }
-
-    ExplicitState explicit = AbstractStates.extractStateByType(currentElement, ExplicitState.class);
-    if (explicit != null) {
-      builder.append("\\n");
-      builder.append(explicit.toCompactString());
-    }
-
-    return builder.toString();
+    return GraphUtils.projectARG(root, successorFunction, isRelevant);
   }
 
   /**
@@ -308,16 +191,16 @@ public class ARGUtils {
    * @return A path through the ARG from root to target.
    * @throws IllegalArgumentException If the direction information doesn't match the ARG or the ARG is inconsistent.
    */
-  public static Path getPathFromBranchingInformation(
+  public static ARGPath getPathFromBranchingInformation(
       ARGState root, Collection<? extends AbstractState> arg,
       Map<Integer, Boolean> branchingInformation) throws IllegalArgumentException {
 
     checkArgument(arg.contains(root));
 
-    Path result = new Path();
+    ARGPath result = new ARGPath();
     ARGState currentElement = root;
     while (!currentElement.isTarget()) {
-      Set<ARGState> children = currentElement.getChildren();
+      Collection<ARGState> children = currentElement.getChildren();
 
       ARGState child;
       CFAEdge edge;
@@ -411,14 +294,14 @@ public class ARGUtils {
    * @return A path through the ARG from root to target.
    * @throws IllegalArgumentException If the direction information doesn't match the ARG or the ARG is inconsistent.
    */
-  public static Path getPathFromBranchingInformation(
+  public static ARGPath getPathFromBranchingInformation(
       ARGState root, ARGState target, Collection<? extends AbstractState> arg,
       Map<Integer, Boolean> branchingInformation) throws IllegalArgumentException {
 
     checkArgument(arg.contains(target));
     checkArgument(target.isTarget());
 
-    Path result = getPathFromBranchingInformation(root, arg, branchingInformation);
+    ARGPath result = getPathFromBranchingInformation(root, arg, branchingInformation);
 
     if (result.getLast().getFirst() != target) {
       throw new IllegalArgumentException("ARG target path reached the wrong target state!");
@@ -426,4 +309,93 @@ public class ARGUtils {
 
     return result;
   }
+
+  /**
+   * This method gets all children from an ARGState,
+   * but replaces all covered states by their respective covering state.
+   * It can be seen as giving a view of the ARG where the covered states are
+   * transparently replaced by their covering state.
+   *
+   * The returned collection is unmodifiable and a live view of the children of
+   * the given state.
+   *
+   * @param s an ARGState
+   * @return The children with covered states transparently replaced.
+   */
+  public static final Collection<ARGState> getUncoveredChildrenView(final ARGState s) {
+    return new AbstractCollection<ARGState>() {
+
+      @Override
+      public Iterator<ARGState> iterator() {
+
+        return new UnmodifiableIterator<ARGState>() {
+          private final Iterator<ARGState> children = s.getChildren().iterator();
+
+          @Override
+          public boolean hasNext() {
+            return children.hasNext();
+          }
+
+          @Override
+          public ARGState next() {
+            ARGState child = children.next();
+            if (child.isCovered()) {
+              return checkNotNull(child.getCoveringState());
+            }
+            return child;
+          }
+        };
+      }
+
+      @Override
+      public int size() {
+        return s.getChildren().size();
+      }
+    };
+  }
+
+  public static boolean checkARG(ReachedSet pReached) {
+
+      Deque<AbstractState> workList = new ArrayDeque<>();
+      Set<ARGState> arg = new HashSet<>();
+
+      workList.add(pReached.getFirstState());
+      while (!workList.isEmpty()) {
+        ARGState currentElement = (ARGState)workList.removeFirst();
+        assert !currentElement.isDestroyed();
+
+        for (ARGState parent : currentElement.getParents()) {
+          assert parent.getChildren().contains(currentElement) : "Reference from parent to child is missing in ARG";
+        }
+        for (ARGState child : currentElement.getChildren()) {
+          assert child.getParents().contains(currentElement) : "Reference from child to parent is missing in ARG";
+        }
+
+        // check if (e \in ARG) => (e \in Reached || e.isCovered())
+        if (currentElement.isCovered()) {
+          // Assertion removed because now covered states are allowed to be in the reached set.
+          // But they don't need to be!
+  //        assert !pReached.contains(currentElement) : "Reached set contains covered element";
+
+        } else {
+          // There is a special case here:
+          // If the element is the sibling of the target state, it might have not
+          // been added to the reached set if CPAAlgorithm stopped before.
+          // But in this case its parent is in the waitlist.
+
+          assert pReached.contains(currentElement)
+              || pReached.getWaitlist().containsAll(currentElement.getParents())
+              : "Element in ARG but not in reached set";
+        }
+
+        if (arg.add(currentElement)) {
+          workList.addAll(currentElement.getChildren());
+        }
+      }
+
+      // check if (e \in Reached) => (e \in ARG)
+      assert arg.containsAll(pReached.asCollection()) : "Element in reached set but not in ARG";
+
+      return true;
+    }
 }

@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2012  Dirk Beyer
+ *  Copyright (C) 2007-2013  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,22 +26,20 @@ package org.sosy_lab.cpachecker.cfa.types.c;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 
+import org.sosy_lab.cpachecker.cfa.ast.FileLocation;
 import org.sosy_lab.cpachecker.cfa.ast.c.CCharLiteralExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CFileLocation;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFloatLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CIntegerLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CLiteralExpression;
-import org.sosy_lab.cpachecker.cfa.types.c.CElaboratedType.ElaboratedType;
+import org.sosy_lab.cpachecker.cfa.types.c.CComplexType.ComplexTypeKind;
 
 public class CDefaults {
 
   private CDefaults() { }
 
-  private static CType INT_TYPE = new CSimpleType(false, false, CBasicType.INT, false, false, true, false, false, false, false);
-
-  public static CLiteralExpression forType(CType type, CFileLocation fileLoc) {
+  public static CLiteralExpression forType(CType type, FileLocation fileLoc) {
     if (type instanceof CPointerType) {
-      return new CIntegerLiteralExpression(fileLoc, INT_TYPE, BigInteger.ZERO);
+      return new CIntegerLiteralExpression(fileLoc, CNumericTypes.SIGNED_INT, BigInteger.ZERO);
 
     } else if (type instanceof CSimpleType) {
       CBasicType basicType = ((CSimpleType)type).getType();
@@ -65,11 +63,11 @@ public class CDefaults {
 
     } else if (type instanceof CEnumType) {
       // enum declaration: enum e { ... } var;
-      return new CIntegerLiteralExpression(fileLoc, INT_TYPE, BigInteger.ZERO);
+      return new CIntegerLiteralExpression(fileLoc, CNumericTypes.SIGNED_INT, BigInteger.ZERO);
 
-    } else if (type instanceof CElaboratedType && ((CElaboratedType)type).getKind() == ElaboratedType.ENUM) {
+    } else if (type instanceof CElaboratedType && ((CElaboratedType)type).getKind() == ComplexTypeKind.ENUM) {
       // enum declaration: enum e var;
-      return new CIntegerLiteralExpression(fileLoc, INT_TYPE, BigInteger.ZERO);
+      return new CIntegerLiteralExpression(fileLoc, CNumericTypes.SIGNED_INT, BigInteger.ZERO);
 
     } else {
       // TODO create initializer for arrays, structs, enums

@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2012  Dirk Beyer
+ *  Copyright (C) 2007-2013  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,18 +24,45 @@
 package org.sosy_lab.cpachecker.cfa.types.c;
 
 
-public final class CPointerType extends CType {
+
+public final class CPointerType implements CType {
+
 
   private final CType type;
+  private boolean   isConst;
+  private boolean   isVolatile;
 
   public CPointerType(final boolean pConst, final boolean pVolatile,
       final CType pType) {
-    super(pConst, pVolatile);
+    isConst = pConst;
+    isVolatile = pVolatile;
     type = pType;
+  }
+
+  @Override
+  public boolean isConst() {
+    return isConst;
+  }
+
+  @Override
+  public boolean isVolatile() {
+    return isVolatile;
   }
 
   public CType getType() {
     return type;
+  }
+
+  @Override
+  public String toString() {
+    String decl;
+
+    decl = "(" + type.toString() + ")*";
+
+
+    return (isConst() ? "const " : "")
+        + (isVolatile() ? "volatile " : "")
+        + decl;
   }
 
   @Override
@@ -53,5 +80,20 @@ public final class CPointerType extends CType {
     return (isConst() ? "const " : "")
         + (isVolatile() ? "volatile " : "")
         + decl;
+  }
+
+  @Override
+  public <R, X extends Exception> R accept(CTypeVisitor<R, X> pVisitor) throws X {
+    return pVisitor.visit(this);
+  }
+
+  @Override
+  public int hashCode() {
+    throw new UnsupportedOperationException("Do not use hashCode of CType");
+  }
+
+  @Override
+  public boolean equals(Object obj) {
+    return CTypeUtils.equals(this, obj);
   }
 }
