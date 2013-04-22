@@ -53,6 +53,9 @@ public class CallstackTransferRelation implements TransferRelation {
       " Treat function call as a statement (the same as for functions without bodies)")
   private boolean skipRecursion = false;
 
+  //This is flag, which ABM sets
+  private boolean goByStatementNow = false;
+
   public CallstackTransferRelation(Configuration config) throws InvalidConfigurationException {
     config.inject(this);
   }
@@ -160,6 +163,8 @@ public class CallstackTransferRelation implements TransferRelation {
   private boolean shouldGoByFunctionCall(CallstackState element, FunctionCallEdge callEdge) {
     if (!skipRecursion) {
       return true;
+    } else if (goByStatementNow) {
+      return false;
     } else {
       if (hasRecursion(element, callEdge, recursionBoundDepth)) {
         return false;
@@ -194,5 +199,13 @@ public class CallstackTransferRelation implements TransferRelation {
       }
     }
     return null;
+  }
+
+  public void setFlag() {
+    goByStatementNow = true;
+  }
+
+  public void resetFlag() {
+    goByStatementNow = false;
   }
 }

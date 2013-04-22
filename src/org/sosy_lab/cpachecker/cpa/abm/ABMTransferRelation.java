@@ -68,13 +68,16 @@ import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
 import org.sosy_lab.cpachecker.cpa.arg.ARGReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.boundedrecursion.BoundedRecursionCPA;
+import org.sosy_lab.cpachecker.cpa.callstack.CallstackCPA;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
+import org.sosy_lab.cpachecker.cpa.callstack.CallstackTransferRelation;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.exceptions.StopAnalysisException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
+import org.sosy_lab.cpachecker.util.CPAs;
 import org.sosy_lab.cpachecker.util.Precisions;
 
 import com.google.common.collect.HashMultimap;
@@ -330,6 +333,7 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
   private final Reducer wrappedReducer;
   private final ABMPrecisionAdjustment prec;
   private final ABMCPA abmCPA;
+  private final CallstackTransferRelation callstackTransfer;
 
   private final String entryFunction;
 
@@ -378,6 +382,7 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
     reachedSetFactory = pReachedSetFactory;
     wrappedTransfer = abmCpa.getWrappedCpa().getTransferRelation();
     wrappedReducer = abmCpa.getReducer();
+    callstackTransfer = (CallstackTransferRelation) (CPAs.retrieveCPA(abmCpa, CallstackCPA.class)).getTransferRelation();
     prec = abmCpa.getPrecisionAdjustment();
     PCCInformation.instantiate(pConfig);
     abmCPA = abmCpa;
@@ -494,7 +499,10 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
             for (Block block : BlockStack) {
               if (block.getCallNode().equals(e.getSuccessor())) {
                 //go throw block, where we've already been
-                throw new StopAnalysisException("ABM detects recursion", e.getPredecessor(), e);
+                callstackTransfer.setFlag();
+                result.addAll(getAbstractSuccessors0(pElement, pPrecision, e));
+                callstackTransfer.resetFlag();
+                return attachAdditionalInfoToCallNodes(result);
               }
             }
           }
