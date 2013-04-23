@@ -23,24 +23,14 @@
  */
 package org.sosy_lab.cpachecker.cpa.cover;
 
-import static org.sosy_lab.cpachecker.util.AbstractStates.extractLocation;
-
-import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import org.sosy_lab.common.configuration.InvalidConfigurationException;
-import org.sosy_lab.cpachecker.cfa.ast.c.CAssignment;
-import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallStatement;
-import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
-import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
-import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
-import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
-import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
@@ -49,78 +39,30 @@ import org.sosy_lab.cpachecker.exceptions.UnrecognizedCFAEdgeException;
 
 
 public class CoverTransferRelation implements TransferRelation {
+  private Set<Integer> CoveredFunctions;
 
-  private final TransferRelation wrappedTransfer;
-  private Set<String> UsedFunctions;
-
-  CoverTransferRelation(TransferRelation pWrappedTransfer, Set<String> used) throws InvalidConfigurationException {
-    wrappedTransfer = pWrappedTransfer;
-    UsedFunctions = used;
+  CoverTransferRelation() {
+    CoveredFunctions = new HashSet<>();
   }
 
   @Override
   public Collection<? extends AbstractState> getAbstractSuccessors(AbstractState pState, Precision pPrecision,
-      CFAEdge pCfaEdge) throws CPATransferException, InterruptedException {
+      CFAEdge pCfaEdge) throws UnrecognizedCFAEdgeException{
 
-    Collection<AbstractState> results;
-    if (pCfaEdge == null) {
-      CFANode node = extractLocation(pState);
-      results = new ArrayList<>(node.getNumLeavingEdges());
-
-      for (int edgeIdx = 0; edgeIdx < node.getNumLeavingEdges(); edgeIdx++) {
-        CFAEdge edge = node.getLeavingEdge(edgeIdx);
-        getAbstractSuccessorForEdge(pState, pPrecision, edge, results);
-      }
-
-    } else {
-      results = new ArrayList<>(1);
-      getAbstractSuccessorForEdge(pState, pPrecision, pCfaEdge, results);
-
-    }
-    return results;
-  }
-
-  private void getAbstractSuccessorForEdge(AbstractState oldState,
-      Precision pPrecision, CFAEdge pCfaEdge, Collection<AbstractState> results)
-      throws InterruptedException, CPATransferException {
-
-    Collection<? extends AbstractState> newWrappedStates = wrappedTransfer.getAbstractSuccessors(oldState, pPrecision, pCfaEdge);
     handleEdge(pCfaEdge);
-    for (AbstractState newWrappedState : newWrappedStates) {
-      if (newWrappedState != null) {
-        results.add(newWrappedState);
-      }
-    }
+    return Collections.singleton(pState);
   }
 
   private void handleEdge(CFAEdge pCfaEdge) throws UnrecognizedCFAEdgeException {
     switch(pCfaEdge.getEdgeType()) {
 
-      case StatementEdge: {
-        CStatementEdge statementEdge = (CStatementEdge) pCfaEdge;
-        CStatement pStatement = statementEdge.getStatement();
-
-        if (pStatement instanceof CAssignment) {
-          CRightHandSide right = ((CAssignment)pStatement).getRightHandSide();
-
-          if (right instanceof CFunctionCallExpression) {
-            String functionName = ((CFunctionCallExpression)right).getFunctionNameExpression().toASTString();
-            UsedFunctions.add(functionName);
-          }
-
-        } else if (pStatement instanceof CFunctionCallStatement) {
-          String functionName = ((CFunctionCallStatement)pStatement).getFunctionCallExpression().getFunctionNameExpression().toASTString();
-          UsedFunctions.add(functionName);
-        }
-        break;
-      }
-
+      //Remember only functionCallEdges (we have the body of function)
       case FunctionCallEdge: {
-        String functionName = ((CFunctionCallEdge)pCfaEdge).getSuccessor().getFunctionName();
-        UsedFunctions.add(functionName);
+        CoveredFunctions.add(pCfaEdge.getSuccessor().getLineNumber());
         break;
       }
 
+      case StatementEdge:
       case DeclarationEdge:
       case AssumeEdge:
       case FunctionReturnEdge:
@@ -148,4 +90,7 @@ public class CoverTransferRelation implements TransferRelation {
     return null;
   }
 
+  public Set<Integer> getUsedFunctions() {
+    return CoveredFunctions;
+  }
 }

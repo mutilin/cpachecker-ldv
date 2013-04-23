@@ -24,88 +24,40 @@
 package org.sosy_lab.cpachecker.cpa.cover;
 
 import java.util.Collection;
-import java.util.HashSet;
-import java.util.Set;
 
-import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
-import org.sosy_lab.cpachecker.core.defaults.AbstractSingleWrapperCPA;
+import org.sosy_lab.cpachecker.core.defaults.AbstractCPA;
 import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractDomain;
+import org.sosy_lab.cpachecker.core.defaults.NoOpReducer;
+import org.sosy_lab.cpachecker.core.defaults.SingletonAbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.CPAFactory;
-import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysisWithABM;
-import org.sosy_lab.cpachecker.core.interfaces.MergeOperator;
-import org.sosy_lab.cpachecker.core.interfaces.Precision;
-import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustment;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
-import org.sosy_lab.cpachecker.core.interfaces.StopOperator;
-import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
+import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
 
-public class CoverCPA extends AbstractSingleWrapperCPA implements ConfigurableProgramAnalysisWithABM {
-  private final TransferRelation transferRelation;
+public class CoverCPA extends AbstractCPA implements ConfigurableProgramAnalysisWithABM, StatisticsProvider {
   private final CoverCPAStatistics statistics;
-  private final CoverReducer reducer;
+  private final Reducer reducer;
 
   public static CPAFactory factory() {
     return AutomaticCPAFactory.forType(CoverCPA.class);
   }
 
-  private CoverCPA(ConfigurableProgramAnalysis pCpa, CFA pCfa, LogManager pLogger, Configuration pConfig) throws InvalidConfigurationException {
-    super(pCpa);
-    Set<String> used = new HashSet<>();
-    this.transferRelation = new CoverTransferRelation(pCpa.getTransferRelation(), used);
-    this.statistics = new CoverCPAStatistics(pConfig, pCfa, used);
-    if (pCpa instanceof ConfigurableProgramAnalysisWithABM) {
-      Reducer wrappedReducer = ((ConfigurableProgramAnalysisWithABM)pCpa).getReducer();
-      if (wrappedReducer != null) {
-        reducer = new CoverReducer(wrappedReducer);
-      } else {
-        reducer = null;
-      }
-    } else {
-      reducer = null;
-    }
-  }
-
-  @Override
-  public AbstractDomain getAbstractDomain() {
-    return getWrappedCpa().getAbstractDomain();
-  }
-
-  @Override
-  public TransferRelation getTransferRelation() {
-    return transferRelation;
-  }
-
-  @Override
-  public MergeOperator getMergeOperator() {
-    return getWrappedCpa().getMergeOperator();
-  }
-
-  @Override
-  public StopOperator getStopOperator() {
-    return getWrappedCpa().getStopOperator();
-  }
-
-  @Override
-  public PrecisionAdjustment getPrecisionAdjustment() {
-    return getWrappedCpa().getPrecisionAdjustment();
+  private CoverCPA(CFA pCfa, Configuration pConfig) throws InvalidConfigurationException {
+    super("sep", "sep", new CoverTransferRelation());
+    this.statistics = new CoverCPAStatistics(pConfig, pCfa
+        , ((CoverTransferRelation)this.getTransferRelation()).getUsedFunctions());
+    reducer = NoOpReducer.getInstance();
   }
 
   @Override
   public AbstractState getInitialState(CFANode pNode) {
-    return getWrappedCpa().getInitialState(pNode);
-  }
-
-  @Override
-  public Precision getInitialPrecision(CFANode pNode) {
-    return getWrappedCpa().getInitialPrecision(pNode);
+    return SingletonAbstractState.INSTANCE;
   }
 
   @Override
