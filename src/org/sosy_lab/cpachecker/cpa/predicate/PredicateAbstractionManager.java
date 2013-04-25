@@ -50,8 +50,6 @@ import org.sosy_lab.cpachecker.util.predicates.AbstractionFormula;
 import org.sosy_lab.cpachecker.util.predicates.AbstractionManager;
 import org.sosy_lab.cpachecker.util.predicates.AbstractionManager.RegionCreator;
 import org.sosy_lab.cpachecker.util.predicates.AbstractionPredicate;
-import org.sosy_lab.cpachecker.util.predicates.PathFormula;
-import org.sosy_lab.cpachecker.util.predicates.SSAMap;
 import org.sosy_lab.cpachecker.util.predicates.Solver;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.Formula;
@@ -62,8 +60,11 @@ import org.sosy_lab.cpachecker.util.predicates.interfaces.ProverEnvironment.AllS
 import org.sosy_lab.cpachecker.util.predicates.interfaces.Region;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.view.BooleanFormulaManagerView;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.view.FormulaManagerView;
+import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormula;
+import org.sosy_lab.cpachecker.util.predicates.pathformula.SSAMap;
 
 import com.google.common.base.Joiner;
+import com.google.common.collect.ImmutableList;
 
 @Options(prefix = "cpa.predicate")
 public class PredicateAbstractionManager {
@@ -104,6 +105,10 @@ public class PredicateAbstractionManager {
 
   @Option(name = "abs.useCache", description = "use caching of abstractions")
   private boolean useCache = true;
+
+  @Option(name="refinement.splitItpAtoms",
+      description="split each arithmetic equality into two inequalities when extracting predicates from interpolants")
+  private boolean splitItpAtoms = false;
 
   private boolean warnedOfCartesianAbstraction = false;
 
@@ -279,6 +284,25 @@ public class PredicateAbstractionManager {
     return new AbstractionFormula(fmgr, newAbstraction.asRegion(),
         newAbstraction.asFormula(), newAbstraction.asInstantiatedFormula(),
         blockFormula);
+  }
+
+  /**
+   * Create an abstraction from a single boolean formula without actually
+   * doing any abstraction computation. The formula is just converted into a
+   * region, but the result is equivalent to the input.
+   * This can be used to simply view the formula as a region.
+   * If BDDs are used, the result of this method is a minimized form of the input.
+   * @param f The formula to be converted to a region. Must NOT be instantiated!
+   * @param blockFormula A path formula that is not used for the abstraction,
+   *         but will be used as the block formula in the resulting AbstractionFormula instance.
+   *         Also it's SSAMap will be used for instantiating the result.
+   * @return An AbstractionFormula instance representing f
+   *          with blockFormula as the block formula.
+   */
+  public AbstractionFormula buildAbstraction(final BooleanFormula f,
+      final PathFormula blockFormula) {
+    Region r = amgr.buildRegionFromFormula(f);
+    return makeAbstractionFormula(r, blockFormula.getSsa(), blockFormula);
   }
 
   private Region buildCartesianAbstraction(final BooleanFormula f, final SSAMap ssa,
@@ -627,8 +651,17 @@ public class PredicateAbstractionManager {
     return makeAbstractionFormula(expandedRegion, newSSA, blockFormula);
   }
 
+  /**
+   * Extract all atoms from a formula and create predicates for them.
+   * @param pFormula The formula with the atoms (with SSA indices).
+   * @return A (possibly empty) collection of AbstractionPredicates.
+   */
   public Collection<AbstractionPredicate> extractPredicates(BooleanFormula pFormula) {
-    Collection<BooleanFormula> atoms = fmgr.extractAtoms(pFormula);
+    if (bfmgr.isFalse(pFormula)) {
+      return ImmutableList.of(amgr.makeFalsePredicate());
+    }
+
+    Collection<BooleanFormula> atoms = fmgr.extractAtoms(pFormula, splitItpAtoms, false);
 
     List<AbstractionPredicate> preds = new ArrayList<>(atoms.size());
 
@@ -637,6 +670,17 @@ public class PredicateAbstractionManager {
     }
 
     return preds;
+  }
+
+  /**
+   * Create a single AbstractionPredicate representing a formula.
+   * @param pFormula The formula to use (without SSA indices!), may not simply be "true".
+   * @return A single abstraction predicate.
+   */
+  public AbstractionPredicate createPredicateFor(BooleanFormula pFormula) {
+    checkArgument(!bfmgr.isTrue(pFormula));
+
+    return amgr.makePredicate(pFormula);
   }
 
   // delegate methods

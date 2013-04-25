@@ -136,6 +136,20 @@ public class SMGTest {
   }
 
   @Test
+  public void addRemoveHasValueEdgeTest() {
+    SMG smg = getNewSMG64();
+    SMGObject object = new SMGObject(4, "object");
+
+    SMGEdgeHasValue hv = new SMGEdgeHasValue(mockType, 0, object, smg.getNullValue());
+
+    smg.addHasValueEdge(hv);
+    Assert.assertTrue(smg.getHVEdges().contains(hv));
+
+    smg.removeHasValueEdge(hv);
+    Assert.assertFalse(smg.getHVEdges().contains(hv));
+  }
+
+  @Test
   public void validityTest() {
     Assert.assertFalse(smg.isObjectValid(smg.getNullObject()));
     Assert.assertTrue(smg.isObjectValid(obj1));
@@ -170,7 +184,7 @@ public class SMGTest {
   }
 
   @Test
-  public void ConsistencyViolationInvalidRegionHasValue() {
+  public void ConsistencyViolationInvalidRegionHasValueTest() {
     smg.setValidity(obj1, false);
     Assert.assertTrue(SMGConsistencyVerifier.verifySMG(logger, smg));
     smg.setValidity(obj2, false);

@@ -21,23 +21,24 @@
  *  CPAchecker web page:
  *    http://cpachecker.sosy-lab.org
  */
-package org.sosy_lab.cpachecker.util.predicates;
+package org.sosy_lab.cpachecker.util.predicates.pathformula.ctoformula;
 
 import org.junit.Assert;
 import org.junit.Test;
 import org.sosy_lab.common.Pair;
-import org.sosy_lab.cpachecker.util.predicates.SSAMap.SSAMapBuilder;
+import org.sosy_lab.cpachecker.util.predicates.pathformula.SSAMap;
+import org.sosy_lab.cpachecker.util.predicates.pathformula.SSAMap.SSAMapBuilder;
 
 public class CtoFormulaConverterTest {
 
-  static SSAMapBuilder emptyMap = new SSAMapBuilder(SSAMap.emptySSAMap());
+  static SSAMapBuilder emptyMap = SSAMap.emptySSAMap().builder();
 
   private String rawFieldTest(String name, Pair<Integer, Integer> msb_lsb) {
 
     String fieldName = CtoFormulaConverter.makeFieldVariableName(name, msb_lsb, emptyMap);
 
     Assert.assertTrue("Expected field as output", CtoFormulaConverter.IS_FIELD_VARIABLE.apply(fieldName));
-    Assert.assertFalse("Expected no PtrMask as output", CtoFormulaConverter.IS_POINTER_VARIABLE.apply(fieldName));
+    Assert.assertFalse("Expected no PtrMask as output", PointerAliasHandling.IS_POINTER_VARIABLE.apply(fieldName));
 
     Pair<String, Pair<Integer, Integer>> data = CtoFormulaConverter.removeFieldVariable(fieldName);
 
@@ -49,12 +50,12 @@ public class CtoFormulaConverterTest {
 
   private String rawPtrTest(String name) {
 
-    String ptrName = CtoFormulaConverter.makePointerMaskName(name, emptyMap);
+    String ptrName = PointerAliasHandling.makePointerMaskName(name, emptyMap);
 
-    Assert.assertTrue("Expected PtrMask as output", CtoFormulaConverter.IS_POINTER_VARIABLE.apply(ptrName));
+    Assert.assertTrue("Expected PtrMask as output", PointerAliasHandling.IS_POINTER_VARIABLE.apply(ptrName));
     Assert.assertFalse("Expected no Field as output", CtoFormulaConverter.IS_FIELD_VARIABLE.apply(ptrName));
 
-    String data = CtoFormulaConverter.removePointerMask(ptrName);
+    String data = PointerAliasHandling.removePointerMask(ptrName);
 
     Assert.assertTrue("Output name should match the input name", data.equals(name));
 

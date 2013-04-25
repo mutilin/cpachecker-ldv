@@ -24,9 +24,8 @@
 package org.sosy_lab.cpachecker.cpa.explicit.refiner;
 
 import java.io.PrintStream;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 
@@ -83,16 +82,15 @@ public class ExplicitInterpolationBasedExplicitRefiner implements Statistics {
   protected Multimap<CFANode, String> determinePrecisionIncrement(UnmodifiableReachedSet reachedSet,
       ARGPath errorPath) throws CPAException {
     timerInterpolation.start();
+    numberOfRefinements++;
+    numberOfErrorPathElements += errorPath.size();
 
     ExplicitInterpolator interpolator     = new ExplicitInterpolator();
     Map<String, Long> currentInterpolant  = new HashMap<>();
     Multimap<CFANode, String> increment   = HashMultimap.create();
     firstInterpolationPoint               = null;
 
-    numberOfRefinements++;
     for (int i = 0; i < errorPath.size(); i++) {
-      numberOfErrorPathElements++;
-
       CFAEdge currentEdge = errorPath.get(i).getSecond();
       if (currentEdge instanceof CFunctionReturnEdge) {
         currentEdge = ((CFunctionReturnEdge)currentEdge).getSummaryEdge();
@@ -102,8 +100,8 @@ public class ExplicitInterpolationBasedExplicitRefiner implements Statistics {
       // do interpolation
       Map<String, Long> inputInterpolant = new HashMap<>(currentInterpolant);
       try {
-        numberOfInterpolations++;
         //System.out.println("\t\tinput interpolant: " + inputInterpolant);
+        numberOfInterpolations++;
         Set<Pair<String, Long>> interpolant = interpolator.deriveInterpolant(errorPath, i, inputInterpolant);
 
         //System.out.println("\t\t ----> feasible: " + (interpolator.isFeasible() ? "YES" : "NO"));
@@ -155,15 +153,11 @@ public class ExplicitInterpolationBasedExplicitRefiner implements Statistics {
    * @return the current interpolant with the respective variables removed
    */
   private Map<String, Long> clearInterpolant(Map<String, Long> currentInterpolant, String functionName) {
-    List<String> toDrop = new ArrayList<>();
-
-    for (String variableName : currentInterpolant.keySet()) {
-      if (variableName.startsWith(functionName + "::")) {
-        toDrop.add(variableName);
+    for (Iterator<String> variableNames = currentInterpolant.keySet().iterator(); variableNames.hasNext(); ) {
+      if (variableNames.next().startsWith(functionName + "::")) {
+        variableNames.remove();
       }
     }
-
-    currentInterpolant.keySet().remove(toDrop);
 
     return currentInterpolant;
   }
