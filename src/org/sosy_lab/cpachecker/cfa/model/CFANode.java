@@ -123,8 +123,8 @@ public class CFANode implements Comparable<CFANode> {
         return edge;
       }
     }
-    return null; //now it means, that we found recursion and couldn't found changed edge here
-    //throw new IllegalArgumentException();
+    //return null; //now it means, that we found recursion and couldn't found changed edge here
+    throw new IllegalArgumentException();
   }
 
   public boolean hasEdgeTo(CFANode pOther) {

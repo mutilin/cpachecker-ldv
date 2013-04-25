@@ -50,11 +50,11 @@ public class BlockPartitioningBuilder {
 
   private final ReferencedVariablesCollector referenceCollector;
 
-  private final Map<CFANode, Set<ReferencedVariable>> referencedVariablesMap = new HashMap<>();
-  private final Map<CFANode, Set<CFANode>> callNodesMap = new HashMap<>();
-  private final Map<CFANode, Set<CFANode>> returnNodesMap = new HashMap<>();
-  private final Map<CFANode, Set<FunctionEntryNode>> innerFunctionCallsMap = new HashMap<>();
-  private final Map<CFANode, Set<CFANode>> blockNodesMap = new HashMap<>();
+  protected final Map<CFANode, Set<ReferencedVariable>> referencedVariablesMap = new HashMap<>();
+  protected final Map<CFANode, Set<CFANode>> callNodesMap = new HashMap<>();
+  protected final Map<CFANode, Set<CFANode>> returnNodesMap = new HashMap<>();
+  protected final Map<CFANode, Set<FunctionEntryNode>> innerFunctionCallsMap = new HashMap<>();
+  protected final Map<CFANode, Set<CFANode>> blockNodesMap = new HashMap<>();
 
   public BlockPartitioningBuilder(Set<CFANode> mainFunctionBody) {
     referenceCollector = new ReferencedVariablesCollector(mainFunctionBody);

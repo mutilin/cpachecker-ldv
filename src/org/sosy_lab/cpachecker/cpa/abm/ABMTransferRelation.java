@@ -413,7 +413,6 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
       throws CPATransferException, InterruptedException {
 
     Block nextBlock;
-    //System.out.println(pElement.toString());
     forwardPrecisionToExpandedPrecision.clear();
 
     if (edge == null) {
@@ -526,14 +525,12 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
         && currentNodeBlock.getNodes().contains(edge.getSuccessor())) {
       // we are not analyzing the block corresponding to currentNode (currentNodeBlock) but the currentNodeBlock is inside of this block
       // avoid a reanalysis
-      //System.out.println("We've lost1");
-      return wrappedTransfer.getAbstractSuccessors(pElement, pPrecision, edge);
-      //return Collections.emptySet();
+      //return wrappedTransfer.getAbstractSuccessors(pElement, pPrecision, edge);
+      return Collections.emptySet();
     }
 
     if (currentBlock.isReturnNode(currentNode) && !currentBlock.getNodes().contains(edge.getSuccessor())) {
       // do not perform analysis beyond the current block
-      //System.out.println("We've lost2");
       return Collections.emptySet();
     }
     return attachAdditionalInfoToCallNodes(wrappedTransfer.getAbstractSuccessors(pElement, pPrecision, edge));
