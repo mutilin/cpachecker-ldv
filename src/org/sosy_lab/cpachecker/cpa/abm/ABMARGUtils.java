@@ -80,7 +80,9 @@ class ABMARGUtils {
         if (edge == null) {
           //this is a summary edge
           Pair<Block, ReachedSet> pair = cpa.getTransferRelation().getCachedReachedSet(currentElement, reachedSet.getPrecision(currentElement));
-          gatherReachedSets(cpa, pair.getFirst(), pair.getSecond(), blockToReachedSet);
+          if (pair != null)
+            //if pair = null, it means, that we avoid recursion by going summary edge
+            gatherReachedSets(cpa, pair.getFirst(), pair.getSecond(), blockToReachedSet);
         }
         if (!worklist.contains(child)) {
           if (reachedSet.contains(child)) {

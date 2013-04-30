@@ -499,8 +499,8 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
               if (block.getCallNode().equals(e.getSuccessor())) {
                 //go throw block, where we've already been
                 callstackTransfer.setFlag();
+                e = node.getLeavingSummaryEdge();
                 result.addAll(getAbstractSuccessors0(pElement, pPrecision, e));
-                callstackTransfer.resetFlag();
                 return attachAdditionalInfoToCallNodes(result);
               }
             }

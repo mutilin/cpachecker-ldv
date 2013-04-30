@@ -71,10 +71,12 @@ public class CallstackTransferRelation implements TransferRelation {
         //has function call edge
         CFunctionSummaryStatementEdge summary = (CFunctionSummaryStatementEdge)pCfaEdge;
         CallstackState element = (CallstackState)pElement;
-        if (shouldGoByStatement(element, summary)) {//skip call, return the same element
+        if (shouldGoByStatement(element, summary)) {
+          //skip call, return the same element
           return Collections.singleton(pElement);
-        } else {//should go by function call (skip current edge)
-            return Collections.emptySet();
+        } else {
+          //should go by function call (skip current edge)
+          return Collections.emptySet();
         }
       } else {
         return Collections.singleton(pElement);
@@ -105,9 +107,6 @@ public class CallstackTransferRelation implements TransferRelation {
 
         CFANode returnNode = cfaEdge.getSuccessor();
         CFANode callNode = returnNode.getEnteringSummaryEdge().getPredecessor();
-
-        //System.out.println("calledFunction:  " + calledFunction);
-        //System.out.println("elementFunction: " + element.getCurrentFunction());
         assert calledFunction.equals(element.getCurrentFunction());
 
         if (!callNode.equals(element.getCallNode())) {
@@ -116,16 +115,8 @@ public class CallstackTransferRelation implements TransferRelation {
         }
 
         CallstackState returnElement = element.getPreviousState();
-        //System.out.println("callerFunction:  " + callerFunction);
-        //System.out.println("elementFunction: " + returnElement.getCurrentFunction());
 
         assert (callerFunction.equals(returnElement.getCurrentFunction()));
-        /*try {
-          if (!callerFunction.equals(returnElement.getCurrentFunction()))
-            System.out.println("here1");
-        } catch (NullPointerException e) {
-          System.out.println("here2");
-        }*/
         return Collections.singleton(returnElement);
       }
     default:
@@ -161,10 +152,11 @@ public class CallstackTransferRelation implements TransferRelation {
 
   //call edge
   private boolean shouldGoByFunctionCall(CallstackState element, FunctionCallEdge callEdge) {
-    if (!skipRecursion) {
-      return true;
-    } else if (goByStatementNow) {
+    if (goByStatementNow) {
+      goByStatementNow = false;
       return false;
+    } else if (!skipRecursion) {
+      return true;
     } else {
       if (hasRecursion(element, callEdge, recursionBoundDepth)) {
         return false;
@@ -203,9 +195,5 @@ public class CallstackTransferRelation implements TransferRelation {
 
   public void setFlag() {
     goByStatementNow = true;
-  }
-
-  public void resetFlag() {
-    goByStatementNow = false;
   }
 }
