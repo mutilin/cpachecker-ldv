@@ -50,7 +50,9 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CVariableDeclaration;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdgeType;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.FunctionCallEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
@@ -60,12 +62,11 @@ import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
-import org.sosy_lab.cpachecker.cpa.usageStatistics.BinderFunctionInfo.ParameterInfo;
+import org.sosy_lab.cpachecker.cpa.callstack.CallstackTransferRelation;
 import org.sosy_lab.cpachecker.cpa.usageStatistics.EdgeInfo.EdgeType;
 import org.sosy_lab.cpachecker.cpa.usageStatistics.UsageInfo.Access;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
-import org.sosy_lab.cpachecker.exceptions.StopAnalysisException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCFAEdgeException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
@@ -83,15 +84,18 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
   @Option(description = "functions, which are used to bind variables (like list elements are binded to list variable)")
   private Set<String> binderFunctions = null;
 
+  private final CallstackTransferRelation callstackTransfer;
+
   private Map<String, BinderFunctionInfo> binderFunctionInfo;
   //TODO: strengthen (CallStackCPA, LockStatisticsCPA)
   //pass the state to LockStatisticsCPA to bind Callstack to lock
   private UsageStatisticsState oldState;
 
   public UsageStatisticsTransferRelation(TransferRelation pWrappedTransfer,
-      Configuration config, UsageStatisticsCPAStatistics s) throws InvalidConfigurationException {
+      Configuration config, UsageStatisticsCPAStatistics s, CallstackTransferRelation transfer) throws InvalidConfigurationException {
     config.inject(this);
     wrappedTransfer = pWrappedTransfer;
+    callstackTransfer = transfer;
     statistics = s;
 
     binderFunctionInfo = new HashMap<>();
@@ -131,7 +135,13 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       Precision pPrecision, CFAEdge pCfaEdge, Collection<UsageStatisticsState> results)
       throws InterruptedException, CPATransferException {
 
-    Collection<? extends AbstractState> newWrappedStates = wrappedTransfer.getAbstractSuccessors(oldState.getWrappedState(), pPrecision, pCfaEdge);
+    CFAEdge currentEdge = pCfaEdge;
+    if (checkSkippedFunciton(pCfaEdge)) {
+      callstackTransfer.setFlag();
+      currentEdge = ((FunctionCallEdge)currentEdge).getSummaryEdge();
+    }
+
+    Collection<? extends AbstractState> newWrappedStates = wrappedTransfer.getAbstractSuccessors(oldState.getWrappedState(), pPrecision, currentEdge);
     for (AbstractState newWrappedState : newWrappedStates) {
       UsageStatisticsState newState = oldState.clone(newWrappedState);
 
@@ -140,6 +150,15 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
         results.add(newState);
       }
     }
+  }
+
+  private boolean checkSkippedFunciton(CFAEdge pCfaEdge) {
+    if (pCfaEdge.getEdgeType() == CFAEdgeType.FunctionCallEdge) {
+      String FunctionName = ((FunctionCallEdge)pCfaEdge).getSuccessor().getFunctionName();
+      if (skippedfunctions != null && skippedfunctions.contains(FunctionName))
+        return true;
+    }
+    return false;
   }
 
   private UsageStatisticsState handleEdge(UsageStatisticsState newState, CFAEdge pCfaEdge) throws CPATransferException {
@@ -160,8 +179,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       }
 
       case AssumeEdge: {
-        CAssumeEdge assumeEdge = (CAssumeEdge) pCfaEdge;
-        handleAssumption(newState, assumeEdge.getExpression(), pCfaEdge);
+        visitStatement(newState, ((CAssumeEdge)pCfaEdge).getExpression(), Access.READ, EdgeType.ASSUMPTION);
         break;
       }
 
@@ -186,18 +204,17 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
   private void handleFunctionCall(UsageStatisticsState pNewState, CFunctionCallEdge edge) throws HandleCodeException {
     CStatement statement = edge.getRawAST().get();
-
+    /*String functionName = edge.getSuccessor().getFunctionName();
+    if (functionName.equals("ddlInit"))
+      System.out.println("In ddlInit");*/
     if (statement instanceof CFunctionCallAssignmentStatement) {
       /*
        * a = f(b)
        */
       CRightHandSide right = ((CFunctionCallAssignmentStatement)statement).getRightHandSide();
       CExpression variable = ((CFunctionCallAssignmentStatement)statement).getLeftHandSide();
-      String functionName = AbstractStates.extractStateByType(pNewState, CallstackState.class).getCurrentFunction();
 
-      handler.setMode(functionName, Access.WRITE);
-      variable.accept(handler);
-      statistics.add(handler.result, pNewState, variable.getFileLocation().getStartingLineNumber(), EdgeType.ASSIGNMENT);
+      visitStatement(pNewState, variable, Access.WRITE, EdgeType.ASSIGNMENT);
       // expression - only name of function
       if (right instanceof CFunctionCallExpression) {
         handleFunctionCallExpression(pNewState, variable, (CFunctionCallExpression)right);
@@ -212,9 +229,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     } else {
       throw new HandleCodeException("No function found");
     }
-
   }
-
 
   private void handleDeclaration(UsageStatisticsState pNewState, CDeclarationEdge declEdge) throws CPATransferException {
 
@@ -238,12 +253,10 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
     if (init instanceof CInitializerExpression) {
       CExpression initExpression = ((CInitializerExpression)init).getExpression();
+      visitStatement(pNewState, initExpression, Access.READ, EdgeType.DECLARATION);
+
       int line = initExpression.getFileLocation().getStartingLineNumber();
       String funcName = AbstractStates.extractStateByType(pNewState, CallstackState.class).getCurrentFunction();
-      handler.setMode(funcName, Access.READ);
-      initExpression.accept(handler);
-
-      statistics.add(handler.result, pNewState, line, EdgeType.DECLARATION);
 
       SingleIdentifier id = SingleIdentifier.createIdentifier(decl, funcName, 0);
       List<Pair<SingleIdentifier, Access>> result = new LinkedList<>();
@@ -253,10 +266,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
   }
 
   private void handleFunctionCallExpression(UsageStatisticsState pNewState, CExpression left, CFunctionCallExpression fcExpression) throws HandleCodeException {
-    String functionName = AbstractStates.extractStateByType(pNewState, CallstackState.class).getCurrentFunction();
-
     String functionCallName = fcExpression.getFunctionNameExpression().toASTString();
-    int line = fcExpression.getFileLocation().getStartingLineNumber();
     if (binderFunctions != null && binderFunctions.contains(functionCallName))
     {
       BinderFunctionInfo currentInfo = binderFunctionInfo.get(functionCallName);
@@ -277,35 +287,17 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
               params.get(currentInfo.linkInfo.getSecond() - 1));
       }
       for (int i = 0; i < params.size(); i++) {
-        if (currentInfo.pInfo.get(i) == ParameterInfo.READ) {
-          handler.setMode(functionName, Access.READ);
-        } else if (currentInfo.pInfo.get(i) == ParameterInfo.WRITE) {
-          handler.setMode(functionName, Access.WRITE);
-        }
-        params.get(i).accept(handler);
-        statistics.add(handler.result, pNewState, line, EdgeType.FUNCTION_CALL);
+        visitStatement(pNewState, params.get(i), currentInfo.pInfo.get(i), EdgeType.FUNCTION_CALL);
       }
     }
 
-    if (skippedfunctions != null && skippedfunctions.contains(functionName)) {
-      CallstackState callstack = AbstractStates.extractStateByType(pNewState, CallstackState.class);
-      throw new StopAnalysisException("Function " + functionCallName + " is skipped", callstack.getCallNode());
-    }
-
-    List<CExpression> params = fcExpression.getParameterExpressions();
-    for (CExpression p : params) {
-      handler.setMode(functionName, Access.READ);
-      p.accept(handler);
-
-      statistics.add(handler.result, pNewState, p.getFileLocation().getStartingLineNumber(), EdgeType.FUNCTION_CALL);
+    for (CExpression p : fcExpression.getParameterExpressions()) {
+      visitStatement(pNewState, p, Access.READ, EdgeType.FUNCTION_CALL);
     }
   }
 
   private void handleStatement(UsageStatisticsState pNewState, CStatement pStatement,
         CFAEdge pCfaEdge) throws HandleCodeException {
-
-    String functionName = AbstractStates.extractStateByType(pNewState, CallstackState.class).getCurrentFunction();
-    int line = pStatement.getFileLocation().getStartingLineNumber();
 
     if (pStatement instanceof CAssignment) {
       // assignment like "a = b" or "a = foo()"
@@ -313,20 +305,14 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       CExpression left = assignment.getLeftHandSide();
       CRightHandSide right = assignment.getRightHandSide();
 
-      handler.setMode(functionName, Access.WRITE);
-      left.accept(handler);
-
-      statistics.add(handler.result, pNewState, line, EdgeType.ASSIGNMENT);
+      visitStatement(pNewState, left, Access.WRITE, EdgeType.ASSIGNMENT);
 
       if (right instanceof CExpression) {
-        handler.setMode(functionName, Access.READ);
-        ((CExpression)right).accept(handler);
-
-        statistics.add(handler.result, pNewState, line, EdgeType.ASSIGNMENT);
+        visitStatement(pNewState, (CExpression)right, Access.READ, EdgeType.ASSIGNMENT);
 
       } else if (right instanceof CFunctionCallExpression) {
-
         handleFunctionCallExpression(pNewState, left, (CFunctionCallExpression)right);
+
       }
       else {
         throw new HandleCodeException("Unrecognised type of right side of assignment: " + assignment.asStatement().toASTString());
@@ -336,24 +322,11 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       handleFunctionCallExpression(pNewState, null, ((CFunctionCallStatement)pStatement).getFunctionCallExpression());
 
     } else if (pStatement instanceof CExpressionStatement) {
-      handler.setMode(functionName, Access.WRITE);
-      ((CExpressionStatement)pStatement).getExpression().accept(handler);
-
-      statistics.add(handler.result, pNewState, line, EdgeType.STATEMENT);
+      visitStatement(pNewState, ((CExpressionStatement)pStatement).getExpression(), Access.WRITE, EdgeType.STATEMENT);
 
     } else {
       throw new HandleCodeException("Unrecognized statement: " + pStatement.toASTString());
     }
-  }
-
-  private void handleAssumption(UsageStatisticsState element, CExpression pExpression, CFAEdge cfaEdge) throws HandleCodeException {
-
-    String functionName = AbstractStates.extractStateByType(element, CallstackState.class).getCurrentFunction();
-
-    handler.setMode(functionName, Access.READ);
-    pExpression.accept(handler);
-
-    statistics.add(handler.result, element, cfaEdge.getLineNumber(), EdgeType.ASSUMPTION);
   }
 
   private void linkVariables(UsageStatisticsState state, CExpression in, CExpression from) throws HandleCodeException {
@@ -397,6 +370,14 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
        }
        state.put(idIn, idFrom.clearDereference());
      }
+  }
+
+  private void visitStatement(UsageStatisticsState state, CExpression expression, Access access, EdgeType eType) throws HandleCodeException {
+    String functionName = AbstractStates.extractStateByType(state, CallstackState.class).getCurrentFunction();
+    handler.setMode(functionName, access);
+    expression.accept(handler);
+
+    statistics.add(handler.result, state, expression.getFileLocation().getStartingLineNumber(), eType);
   }
 
   @Override

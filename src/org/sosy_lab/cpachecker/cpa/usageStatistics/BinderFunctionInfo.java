@@ -29,6 +29,7 @@ import java.util.List;
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
+import org.sosy_lab.cpachecker.cpa.usageStatistics.UsageInfo.Access;
 
 import com.google.common.base.Preconditions;
 
@@ -36,24 +37,9 @@ import com.google.common.base.Preconditions;
  * Information about special functions like sdlFirst() and sdlNext();
  */
 public class BinderFunctionInfo {
-
-  public static enum ParameterInfo {
-    READ,
-    WRITE,
-    NONE;
-
-    public static ParameterInfo getValue(String o) {
-      if (o.equalsIgnoreCase("READ"))
-        return ParameterInfo.READ;
-      else if (o.equalsIgnoreCase("WRITE"))
-        return ParameterInfo.WRITE;
-      else
-        return ParameterInfo.NONE;
-    }
-  }
   String name;
   int parameters;
-  List<ParameterInfo> pInfo;
+  List<Access> pInfo;
   /*
    * 0 - before equal,
    * 1 - first parameter, etc..
@@ -69,7 +55,7 @@ public class BinderFunctionInfo {
       String[] options = line.split(", *");
       pInfo = new LinkedList<>();
       for (String option : options) {
-        pInfo.add(ParameterInfo.getValue(option));
+        pInfo.add(Access.getValue(option));
       }
       line = pConfig.getProperty(name + ".linkInfo");
       if (line != null) {

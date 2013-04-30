@@ -303,6 +303,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
     case AssumeEdge:
     case ReturnStatementEdge:
     case DeclarationEdge:
+    case CallToReturnEdge:
       return element.clone();
 
     case MultiEdge:

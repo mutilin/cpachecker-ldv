@@ -25,6 +25,7 @@ package org.sosy_lab.cpachecker.cpa.usageStatistics;
 
 import java.util.Set;
 
+import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdgeType;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
@@ -39,6 +40,15 @@ public class UsageInfo {
 
     public String toASTString() {
       return name().toLowerCase() + " access";
+    }
+
+    public static Access getValue(String o) throws InvalidConfigurationException {
+      if (o.equalsIgnoreCase("READ"))
+        return Access.READ;
+      else if (o.equalsIgnoreCase("WRITE"))
+        return Access.WRITE;
+      else
+        throw new InvalidConfigurationException("Access can't be " + o);
     }
   }
 

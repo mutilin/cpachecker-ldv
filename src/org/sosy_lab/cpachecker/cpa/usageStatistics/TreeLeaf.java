@@ -39,7 +39,7 @@ public class TreeLeaf {
     stack = name;
     code = c;
     line = l;
-    children = new LinkedList<TreeLeaf>();
+    children = new LinkedList<>();
   }
 
   public static TreeLeaf create(CallstackState state) {

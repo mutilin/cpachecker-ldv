@@ -55,8 +55,8 @@ public class PairwiseUnsafeDetector implements UnsafeDetector {
   @Override
   public Collection<SingleIdentifier> getUnsafes(Map<SingleIdentifier, Set<UsageInfo>> stat) {
 
-    Collection<SingleIdentifier> unsafe = new HashSet<SingleIdentifier>();
-    Collection<SingleIdentifier> toDelete = new HashSet<SingleIdentifier>();
+    Collection<SingleIdentifier> unsafe = new HashSet<>();
+    Collection<SingleIdentifier> toDelete = new HashSet<>();
 
 nextId:for (SingleIdentifier id : stat.keySet()) {
       Set<UsageInfo> uset = stat.get(id);

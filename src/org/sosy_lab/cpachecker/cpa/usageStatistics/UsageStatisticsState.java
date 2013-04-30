@@ -42,12 +42,12 @@ class UsageStatisticsState extends AbstractSingleWrapperState  {
 
   public UsageStatisticsState(AbstractState pWrappedElement) {
     super(pWrappedElement);
-    variableBindingRelation = new HashMap<SingleIdentifier, SingleIdentifier>();
+    variableBindingRelation = new HashMap<>();
   }
 
   public UsageStatisticsState(AbstractState pWrappedElement, Map<SingleIdentifier, SingleIdentifier> map) {
     super(pWrappedElement);
-    variableBindingRelation = new HashMap<SingleIdentifier, SingleIdentifier>(map);
+    variableBindingRelation = new HashMap<>(map);
   }
 
   public boolean contains(SingleIdentifier id) {

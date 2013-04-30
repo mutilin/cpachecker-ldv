@@ -35,11 +35,9 @@ import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.ast.c.CAssignment;
 import org.sosy_lab.cpachecker.cfa.ast.c.CDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CExpressionStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCall;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallAssignmentStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CVariableDeclaration;
@@ -107,7 +105,7 @@ public class LocalTransferRelation implements TransferRelation {
       }
 
       case FunctionCallEdge: {
-        successor = handleFunctionCall(successor, (CFunctionCallEdge)pCfaEdge);
+        successor = createNewScopeInState(successor, (CFunctionCallEdge)pCfaEdge);
         break;
       }
 
@@ -171,31 +169,7 @@ public class LocalTransferRelation implements TransferRelation {
         //set(newElement, op1, returnType, dereference);
       }
     }
-
     return newElement;
-  }
-
-  private LocalState handleFunctionCall(LocalState pSuccessor, CFunctionCallEdge cfaEdge) throws HandleCodeException {
-    CStatement statement = cfaEdge.getRawAST().get();
-    if (statement instanceof CFunctionCallAssignmentStatement) {
-      CRightHandSide right = ((CFunctionCallAssignmentStatement)statement).getRightHandSide();
-      CExpression left = ((CFunctionCallAssignmentStatement)statement).getLeftHandSide();
-      // expression - only name of function
-      if (right instanceof CFunctionCallExpression && left.getExpressionType() instanceof CPointerType) {
-        //AbstractIdentifier leftId = createId(left, findDereference(left.getExpressionType()));
-        //handleFunctionCallExpression(pSuccessor, leftId, (CFunctionCallExpression)right);
-      }
-
-    } else if (statement instanceof CFunctionCallStatement) {
-      //nothing to save
-      //handleFunctionCallExpression(pSuccessor, null, ((CFunctionCallStatement)statement).getFunctionCallExpression());
-
-    } else {
-      throw new HandleCodeException("No function found");
-    }
-
-    pSuccessor = createNewScopeInState(pSuccessor, cfaEdge);
-    return pSuccessor;
   }
 
   private boolean handleFunctionCallExpression(LocalState pSuccessor, AbstractIdentifier leftId, CFunctionCallExpression right) throws HandleCodeException {
@@ -267,16 +241,6 @@ public class LocalTransferRelation implements TransferRelation {
           handleFunctionCallExpression(pSuccessor, leftId, (CFunctionCallExpression)assignment.getRightHandSide());
         }
       }
-
-    } else if (pStatement instanceof CFunctionCallStatement) {
-      //do nothing, because there isn't left side, and we won't enter into
-      //handleFunctionCallExpression(pSuccessor, null, ((CFunctionCallStatement)pStatement).getFunctionCallExpression());
-
-    } else if (pStatement instanceof CExpressionStatement) {
-      System.err.println("Do you know, how CExpressionStatement look like? This: " + pStatement);
-
-    } else {
-      throw new HandleCodeException("Unrecognized statement: " + pStatement.toASTString());
     }
   }
 
@@ -338,7 +302,6 @@ public class LocalTransferRelation implements TransferRelation {
   }
 
   private void handleDeclaration(LocalState pSuccessor, CDeclarationEdge declEdge) throws HandleCodeException {
-
     if (declEdge.getDeclaration().getClass() != CVariableDeclaration.class)
       return;
 

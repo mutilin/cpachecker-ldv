@@ -94,9 +94,8 @@ public class ExpressionHandler implements CExpressionVisitor<Void, HandleCodeExc
   @Override
   public Void visit(CFieldReference expression) throws HandleCodeException {
     IdentifierCreator creator = new IdentifierCreator();
-    Access oldAccessMode = Access.READ;
     AbstractIdentifier fieldId = expression.accept(creator);
-    oldAccessMode = accessMode;
+    Access oldAccessMode = accessMode;
     accessMode = Access.READ;
     dereferenceCounter = (expression.isPointerDereference() ? 1 : 0);
     expression.getFieldOwner().accept(this);

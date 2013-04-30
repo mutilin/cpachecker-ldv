@@ -42,7 +42,7 @@ public class SetDifferenceUnsafeDetector implements UnsafeDetector {
 
 @Override
   public Collection<SingleIdentifier> getUnsafes(Map<SingleIdentifier, Set<UsageInfo>> variables) {
-    Collection<SingleIdentifier> unsafe = new HashSet<SingleIdentifier>();
+    Collection<SingleIdentifier> unsafe = new HashSet<>();
     //Map<Integer, Set<Set<LockStatisticsLock>>> Cases = new HashMap<Integer, Set<Set<LockStatisticsLock>>>();
 /*
     for (String name : variables.keySet()) {

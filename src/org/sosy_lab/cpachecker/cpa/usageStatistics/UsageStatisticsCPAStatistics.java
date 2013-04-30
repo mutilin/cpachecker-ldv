@@ -101,7 +101,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   //private boolean onlypointers = true;
 
   public UsageStatisticsCPAStatistics(Configuration config) throws InvalidConfigurationException{
-    Stat = new HashMap<SingleIdentifier, Set<UsageInfo>>();
+    Stat = new HashMap<>();
     config.inject(this);
 
     if (unsafeDetectorType.equals("PAIR"))
@@ -115,7 +115,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
     if (localAnalysis) {
       //Restore all information
-      localStatistics = new HashMap<String, Map<GeneralIdentifier, DataType>>();
+      localStatistics = new HashMap<>();
       try {
         BufferedReader reader = new BufferedReader(new FileReader(outputFileName));
         String line, node = null, local;
@@ -130,7 +130,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
               localStatistics.put(node, info);
             }
             node = line;
-            info = new HashMap<GeneralIdentifier, DataType>();
+            info = new HashMap<>();
           } else if (line.length() > 0) {
             // it's information about local statistics
             local = line;
@@ -235,7 +235,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       UsageInfo usage = new UsageInfo(tmpPair.getSecond(), lineInfo, info, lockState, callstackState);
 
       if (!Stat.containsKey(id)) {
-        uset = new HashSet<UsageInfo>();
+        uset = new HashSet<>();
         Stat.put(id, uset);
       } else {
         uset = Stat.get(id);
@@ -245,7 +245,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   }
 
   private Set<LockStatisticsLock> findAllLocks() {
-    Set<LockStatisticsLock> locks = new HashSet<LockStatisticsLock>();
+    Set<LockStatisticsLock> locks = new HashSet<>();
 
     for (SingleIdentifier id : Stat.keySet()) {
       Set<UsageInfo> uset = Stat.get(id);
@@ -266,8 +266,8 @@ public class UsageStatisticsCPAStatistics implements Statistics {
    * looks through all unsafe cases of current identifier and find the example of two lines with different locks, one of them must be 'write'
    */
   private void createVisualization(SingleIdentifier id, UsageInfo ui, PrintWriter writer) {
-    LinkedList<CallstackState> tmpList = new LinkedList<CallstackState>();
-    LinkedList<TreeLeaf> leafStack = new LinkedList<TreeLeaf>();
+    LinkedList<CallstackState> tmpList = new LinkedList<>();
+    LinkedList<TreeLeaf> leafStack = new LinkedList<>();
     TreeLeaf tmpLeaf, currentLeaf;
     CallstackState tmpState;
 
