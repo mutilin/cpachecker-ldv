@@ -1,5 +1,5 @@
 analysis.entryFunction = ldv_main
-analysis.saveLocalResults = true
+# analysis.saveLocalResults = true
 analysis.functionPointerCalls = false
 
 cpa = cpa.abm.ABMLockCPA
@@ -10,7 +10,7 @@ ARGCPA.cpa = cpa.composite.CompositeCPA
 
 output.disable = true
 coverage.output = coverage.info
-CompositeCPA.cpas = cpa.location.LocationCPA, cpa.callstack.CallstackCPA, cpa.cover.CoverCPA, cpa.local.LocalCPA
+CompositeCPA.cpas = cpa.location.LocationCPA, cpa.callstack.CallstackCPA, cpa.cover.CoverCPA
  
 cpa.local.allocatefunctions = memAlloc, malloc, objCreate, memSplitBlock
 cpa.callstack.skipRecursion = true

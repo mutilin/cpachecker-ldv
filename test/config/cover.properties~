@@ -1,0 +1,35 @@
+#include ../../config/explicitAnalysis-ItpRefiner-ABElf.properties
+
+cpa = cpa.abm.ABMCPA
+ABMCPA.cpa = cpa.arg.ARGCPA
+ARGCPA.cpa = cpa.composite.CompositeCPA
+CompositeCPA.cpas       = cpa.location.LocationCPA,cpa.callstack.CallstackCPA,cpa.explicit.ExplicitCPA,cpa.functionpointer.FunctionPointerCPA,cpa.predicate.ABMPredicateCPA,cpa.conditions.global.GlobalConditionsCPA, cpa.cover.CoverCPA
+
+# this automaton defines which locations are the error locations
+specification = config/specification/sv-comp.spc
+
+# drop variables from abstract state once they have more then 22 distinct assignments along the current path
+cpa.conditions.path.condition                 = AssignmentsInPathCondition
+cpa.explicit.precision.path.defaultThreshold  = 22
+
+output.disable         = true 
+statistics.memory      = false
+cpa.arg.errorPath.file = ErrorPath.txt
+
+# Set 64-bit machine model
+analysis.machineModel = Linux64
+
+# Disable counterexample double-check with CBMC
+analysis.useCBMC = false
+
+# Turn on Immutable CFA 3
+analysis.completeEdges = true
+analysis.functionPointerCalls = true
+analysis.summaryEdges = true
+analysis.createUndefinedFunctionCall = true
+cpa.functionpointer.immutableCFA = true
+cpa.callstack.skipRecursion = true
+
+# Set several custom (LDV-specific) nondet functions
+cpa.predicate.nondetFunctions = nondet_int,malloc,__kmalloc,kzalloc,sscanf,random
+

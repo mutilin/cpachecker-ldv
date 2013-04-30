@@ -4,7 +4,6 @@ analysis.traversal.useReversePostorder = true
 # analysis.traversal.useReversePostorder = false
 analysis.traversal.useCallstack = true
 # analysis.traversal.useCallstack = false
-analysis.functionPointerCalls = false
 
 # analysis.useCBMC = true
 # analysis.useRefinement = true
@@ -12,8 +11,6 @@ analysis.functionPointerCalls = false
 analysis.entryFunction = ldv_main
 
 output.disable = true
-
-cpa.callstack.skipRecursion = true
 
 # parser.dialect = GNUC
 
@@ -30,7 +27,7 @@ ARGCPA.cpa = cpa.usageStatistics.UsageStatisticsCPA
 
 UsageStatisticsCPA.cpa = cpa.composite.CompositeCPA
 
-CompositeCPA.cpas = cpa.location.LocationCPA, cpa.callstack.CallstackCPA, cpa.lockStatistics.LockStatisticsCPA, cpa.cover.CoverCPA
+CompositeCPA.cpas = cpa.location.LocationCPA, cpa.callstack.CallstackCPA
 
 cpa.arg.export = false
 cpa.arg.errorPath.export = false
