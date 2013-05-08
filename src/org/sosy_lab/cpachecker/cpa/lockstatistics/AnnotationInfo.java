@@ -21,27 +21,22 @@
  *  CPAchecker web page:
  *    http://cpachecker.sosy-lab.org
  */
-package org.sosy_lab.cpachecker.cpa.lockStatistics;
+package org.sosy_lab.cpachecker.cpa.lockstatistics;
 
 import java.util.Map;
 
 
-public class LockInfo {
-  public final String lockName;
-  public final Map<String, Integer> LockFunctions;  /* integer: 0 - if we don't use parameter as identifier */
-  public final Map<String, Integer> UnlockFunctions;/*          i - we use parameter number i as identifier */
-  public final Map<String, Integer> ResetFunctions;
-  public final String setLevel;
-  public final int maxLock;
+public class AnnotationInfo {
+  public final String funcName;
+  public final Map<String, String> freeLocks;
+  public final Map<String, String> restoreLocks;
+  public final Map<String, String> resetLocks;
 
-  public LockInfo(String name, Map<String, Integer> lock, Map<String, Integer> unlock, Map<String, Integer> reset
-      , String level, int max) {
-    lockName = name;
-    LockFunctions = lock;
-    UnlockFunctions = unlock;
-    ResetFunctions = reset;
-    setLevel = level;
-    maxLock = max;
+  public AnnotationInfo(String name, Map<String, String> free, Map<String, String> restore, Map<String, String> reset) {
+    funcName = name;
+    freeLocks = free;
+    restoreLocks = restore;
+    resetLocks = reset;
   }
 
 }

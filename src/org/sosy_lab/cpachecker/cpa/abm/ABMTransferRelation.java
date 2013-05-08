@@ -364,7 +364,7 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
     //evil hack
     String saveLocal = pConfig.getProperty("analysis.saveLocalResults");
     if (saveLocal != null && saveLocal.equals("true"))
-      algorithm = new CPALocalSaveAlgorithm(brCpa, logger, pConfig, true);
+      algorithm = new CPALocalSaveAlgorithm(brCpa, logger, pConfig);
     else
       algorithm = new CPAAlgorithm(brCpa, logger, pConfig);
   }
@@ -376,7 +376,7 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
     //TODO make it better
     String saveLocal = pConfig.getProperty("analysis.saveLocalResults");
     if (saveLocal != null && saveLocal.equals("true"))
-      algorithm = new CPALocalSaveAlgorithm(abmCpa, logger, pConfig, true);
+      algorithm = new CPALocalSaveAlgorithm(abmCpa, logger, pConfig);
     else
       algorithm = new CPAAlgorithm(abmCpa, logger, pConfig);
     reachedSetFactory = pReachedSetFactory;

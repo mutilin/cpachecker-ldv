@@ -21,7 +21,7 @@
  *  CPAchecker web page:
  *    http://cpachecker.sosy-lab.org
  */
-package org.sosy_lab.cpachecker.cpa.usageStatistics;
+package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
 import java.util.Collection;
 import java.util.Map;

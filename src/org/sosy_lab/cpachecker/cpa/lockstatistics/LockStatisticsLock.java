@@ -21,13 +21,13 @@
  *  CPAchecker web page:
  *    http://cpachecker.sosy-lab.org
  */
-package org.sosy_lab.cpachecker.cpa.lockStatistics;
+package org.sosy_lab.cpachecker.cpa.lockstatistics;
 
 import java.util.Set;
 import java.util.Stack;
 
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
-import org.sosy_lab.cpachecker.cpa.usageStatistics.LineInfo;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.LineInfo;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 
 

@@ -21,7 +21,7 @@
  *  CPAchecker web page:
  *    http://cpachecker.sosy-lab.org
  */
-package org.sosy_lab.cpachecker.cpa.lockStatistics;
+package org.sosy_lab.cpachecker.cpa.lockstatistics;
 
 import java.io.Serializable;
 import java.util.HashMap;
@@ -33,8 +33,8 @@ import java.util.logging.Level;
 import org.sosy_lab.common.LogManager;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractQueryableState;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
-import org.sosy_lab.cpachecker.cpa.lockStatistics.LockStatisticsLock.LockType;
-import org.sosy_lab.cpachecker.cpa.usageStatistics.LineInfo;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsLock.LockType;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.LineInfo;
 import org.sosy_lab.cpachecker.exceptions.InvalidQueryException;
 
 import com.google.common.base.Preconditions;

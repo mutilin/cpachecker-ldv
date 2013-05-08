@@ -92,6 +92,9 @@ analysis.reachedSet = PARTITIONED
 # restart the algorithm using a different CPA after unknown result
 analysis.restartAfterUnknown = false
 
+# Save results of local analysis
+analysis.saveLocalResults = false
+
 # stop after the first error has been found
 analysis.stopAfterError = true
 
@@ -145,11 +148,6 @@ analysis.useImpactAlgorithm = false
 # use a proof check algorithm to validate a previously generated proof
 analysis.useProofCheckAlgorithm = false
 
-<<<<<<< HEAD
-# whether or not to use refinement or not
-# whether or not to use refinement or not
-=======
->>>>>>> master
 # use CEGAR algorithm for lazy counter-example guided analysis
 # You need to specify a refiner with the cegar.refiner option.
 # Currently all refiner require the use of the ARGCPA.
@@ -299,6 +297,9 @@ counterexample.continueAfterInfeasibleError = true
 # similar infeasible counterexamples to get discovered, but is unsound
 counterexample.removeInfeasibleErrors = false
 
+# print information about coverage
+coverage.output = "coverage.info"
+
 # CPA to use (see doc/Configuration.txt for more documentation on this)
 cpa = CompositeCPA.class.getCanonicalName()
 
@@ -408,9 +409,6 @@ cpa.callstack.depth = 0
 # Skip recursion. Treat function call as a statement (the same as for
 # functions without bodies)
 cpa.callstack.skipRecursion = false
-
-# depth of recursion bound
-cpa.callstack.depth = 0
 
 # which composite merge operator to use (plain or agree)
 # Both delegate to the component cpas, but agree only allows merging if all
@@ -566,11 +564,19 @@ cpa.interval.threshold = 0
 cpa.invariants.merge = "JOIN"
   allowed values: [JOIN, SEP]
 
+# functions, which allocate new free memory
+cpa.local.allocatefunctions = no default value
+
+# which merge operator to use for LocalCPA
+cpa.local.merge = "JOIN"
+  allowed values: [SEP, JOIN]
+
+# which stop operator to use for LocalCPA
+cpa.local.stop = "SEP"
+  allowed values: [SEP, JOIN, NEVER]
+
 #  annotated functions, which are known to works right
 cpa.lockStatistics.annotate = no default value
-
-# functions, which are returned without locks
-cpa.lockStatistics.lockfree = no default value
 
 # contains all lock names
 cpa.lockStatistics.lockinfo = no default value
@@ -902,45 +908,40 @@ cpa.uninitvars.printWarnings = "true"
 cpa.uninitvars.stop = "sep"
   allowed values: [sep, join]
 
-# functions, which we analize special way: simple pointer analisys
-cpa.usagestatistics.analizedfunctions = no default value
-
-# variables, which will be unsafes even only with read access (they can be
-# changed invisibly)
-cpa.usagestatistics.annotatedvariables = no default value
+# functions, which are used to bind variables (like list elements are binded
+# to list variable)
+cpa.usagestatistics.binderFunctions = no default value
 
 # do we need to collect statistics to generate file for Lcov
 cpa.usagestatistics.covering = false
 
-# if we need to print all variables, not only unsafe cases
-cpa.usagestatistics.fullstatistics = true
+# should we use local analysis?
+cpa.usagestatistics.localanalysis = false
 
 # which merge operator to use for LockStatisticsCPA
 cpa.usagestatistics.merge = "SEP"
   allowed values: [SEP, JOIN]
 
-# Do we need to store statistics of all variables or only pointers
-cpa.usagestatistics.onlypointers = true
-
-# directory to write results
-cpa.usagestatistics.output = "test/"
-
-# path to file to analize
-cpa.usagestatistics.path = ""
-
-# which data process we should use
-cpa.usagestatistics.process = "SIMPLE"
-  allowed values: [SIMPLE, SET]
+# path to write results
+cpa.usagestatistics.output = "test/rawstat"
 
 # functions, which we don't analize
 cpa.usagestatistics.skippedfunctions = no default value
 
-# variables, which we don't save in statistics
+# variables, which will not be saved in statistics
 cpa.usagestatistics.skippedvariables = no default value
 
 # which stop operator to use for LockStatisticsCPA
 cpa.usagestatistics.stop = "SEP"
   allowed values: [SEP, JOIN, NEVER]
+
+# which data process we should use
+cpa.usagestatistics.unsafeDetectorType = "PAIR"
+  allowed values: [PAIR, SETDIFF]
+
+# variables, which will be unsafes even only with read access (they can be
+# changed invisibly)
+cpa.usagestatistics.unsafedetector.detectByReadAccess = no default value
 
 # enable the Forced Covering optimization
 impact.useForcedCovering = true
@@ -1008,6 +1009,10 @@ predicate.mining.maxBackscanPathAssumes = 1
 # print reached set to text file
 reachedSet.export = true
 reachedSet.file = "reached.txt"
+
+# if it's true, we always run other algorithm, even previous is sound and
+# finished correctly
+restartAlgorithm.alwaysrun = false
 
 # list of files with configurations to use
 restartAlgorithm.configFiles = no default value

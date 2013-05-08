@@ -21,7 +21,7 @@
  *  CPAchecker web page:
  *    http://cpachecker.sosy-lab.org
  */
-package org.sosy_lab.cpachecker.cpa.lockStatistics;
+package org.sosy_lab.cpachecker.cpa.lockstatistics;
 
 import java.util.List;
 import java.util.Set;
@@ -36,8 +36,8 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
-import org.sosy_lab.cpachecker.cpa.usageStatistics.UsageStatisticsCPA;
-import org.sosy_lab.cpachecker.cpa.usageStatistics.UsageStatisticsTransferRelation;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsCPA;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsTransferRelation;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 

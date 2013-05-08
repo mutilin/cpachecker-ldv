@@ -21,7 +21,7 @@
  *  CPAchecker web page:
  *    http://cpachecker.sosy-lab.org
  */
-package org.sosy_lab.cpachecker.cpa.usageStatistics;
+package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
@@ -51,11 +51,11 @@ import org.sosy_lab.cpachecker.cpa.abm.ABMRestoreStack;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.local.LocalState.DataType;
 import org.sosy_lab.cpachecker.cpa.local.LocalTransferRelation;
-import org.sosy_lab.cpachecker.cpa.lockStatistics.AccessPoint;
-import org.sosy_lab.cpachecker.cpa.lockStatistics.LockStatisticsLock;
-import org.sosy_lab.cpachecker.cpa.lockStatistics.LockStatisticsState;
-import org.sosy_lab.cpachecker.cpa.usageStatistics.EdgeInfo.EdgeType;
-import org.sosy_lab.cpachecker.cpa.usageStatistics.UsageInfo.Access;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.AccessPoint;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsLock;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.EdgeInfo.EdgeType;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
@@ -189,6 +189,8 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       if (id == null || (skippedvariables != null && skippedvariables.contains(id.getName()))) {
         continue;
       }
+      /*if (id.getName().equals("_r"))
+        System.out.println("Checker _r");*/
       if (id instanceof LocalVariableIdentifier && id.getDereference() <= 0) {
         //we don't save in statistics ordinary local variables
         continue;

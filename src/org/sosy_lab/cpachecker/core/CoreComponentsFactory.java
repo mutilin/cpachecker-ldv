@@ -39,10 +39,10 @@ import org.sosy_lab.cpachecker.core.algorithm.BDDCPARestrictionAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.BMCAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.CEGARAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.CPAAlgorithm;
-import org.sosy_lab.cpachecker.core.algorithm.CPALocalSaveAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.CounterexampleCheckAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.ProofCheckAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.RestartAlgorithm;
+import org.sosy_lab.cpachecker.core.algorithm.RestartLockAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.RestartWithConditionsAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.ResultCheckAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.impact.ImpactAlgorithm;
@@ -112,6 +112,9 @@ public class CoreComponentsFactory {
 
     reachedSetFactory = new ReachedSetFactory(config, logger);
     cpaFactory = new CPABuilder(config, logger, reachedSetFactory);
+    if (saveLocalResults)
+      //it needs to pass some checkings (this algorithm is also restart)
+      useRestartingAlgorithm = true;
   }
 
   public Algorithm createAlgorithm(final ConfigurableProgramAnalysis cpa,
@@ -124,15 +127,15 @@ public class CoreComponentsFactory {
     if (useProofCheckAlgorithm) {
       logger.log(Level.INFO, "Using Proof Check Algorithm");
       algorithm = new ProofCheckAlgorithm(cpa, config, logger);
+    } else if (saveLocalResults) {
+      algorithm = new RestartLockAlgorithm(config, logger, cfa);
+
     } else if (useRestartingAlgorithm) {
       logger.log(Level.INFO, "Using Restarting Algorithm");
       algorithm = new RestartAlgorithm(config, logger, programDenotation, cfa);
 
     } else if (useImpactAlgorithm) {
       algorithm = new ImpactAlgorithm(config, logger, cpa, cfa);
-
-    } else if (saveLocalResults) {
-      algorithm = new CPALocalSaveAlgorithm(cpa, logger, config, false);
 
     } else {
       algorithm = new CPAAlgorithm(cpa, logger, config);

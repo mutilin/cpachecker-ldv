@@ -50,7 +50,7 @@ import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 
 
 @Options(prefix="cpa.local")
-public class LocalCPA implements ConfigurableProgramAnalysisWithABM  {
+public class LocalCPA implements ConfigurableProgramAnalysisWithABM {
     private LocalDomain abstractDomain;
     private MergeOperator mergeOperator;
     private StopOperator stopOperator;

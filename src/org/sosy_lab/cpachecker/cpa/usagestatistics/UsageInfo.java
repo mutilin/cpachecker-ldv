@@ -21,7 +21,7 @@
  *  CPAchecker web page:
  *    http://cpachecker.sosy-lab.org
  */
-package org.sosy_lab.cpachecker.cpa.usageStatistics;
+package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
 import java.util.Set;
 
@@ -29,8 +29,8 @@ import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdgeType;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
-import org.sosy_lab.cpachecker.cpa.lockStatistics.LockStatisticsLock;
-import org.sosy_lab.cpachecker.cpa.lockStatistics.LockStatisticsState;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsLock;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
 
 
 public class UsageInfo {

@@ -52,6 +52,7 @@ import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
 import org.sosy_lab.cpachecker.cfa.types.c.CComplexType;
 import org.sosy_lab.cpachecker.cfa.types.c.CPointerType;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
+import org.sosy_lab.cpachecker.cfa.types.c.CTypedefType;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
@@ -84,6 +85,8 @@ public class LocalTransferRelation implements TransferRelation {
 
     LocalState LocalElement = (LocalState) pState;
     LocalState successor = LocalElement.clone();
+   /* if (pCfaEdge.getLineNumber() > 211552 && pCfaEdge.getLineNumber() < 211578)
+      System.out.println("In mq_open()");*/
     switch(pCfaEdge.getEdgeType()) {
 
       case DeclarationEdge: {
@@ -96,11 +99,6 @@ public class LocalTransferRelation implements TransferRelation {
       case StatementEdge: {
         CStatementEdge statementEdge = (CStatementEdge) pCfaEdge;
         handleStatement(successor, statementEdge.getStatement(), pCfaEdge);
-        break;
-      }
-
-      case AssumeEdge: {
-        //no attention to 'if (...)'
         break;
       }
 
@@ -117,6 +115,8 @@ public class LocalTransferRelation implements TransferRelation {
         handleReturnStatementEdge(successor, (CReturnStatementEdge)pCfaEdge);
         break;
       }
+
+      case AssumeEdge:
       case BlankEdge:
       case CallToReturnEdge: {
         break;
@@ -187,6 +187,8 @@ public class LocalTransferRelation implements TransferRelation {
     LocalState newState = new LocalState(pSuccessor);
 
     CFunctionEntryNode functionEntryNode = callEdge.getSuccessor();
+    if (functionEntryNode.getFunctionName().equals("mqpInitPrivate"))
+      System.out.println("In mqpInitPrivate");
     List<String> paramNames = functionEntryNode.getFunctionParameterNames();
     List<CExpression> arguments = callEdge.getArguments();
 
@@ -227,7 +229,10 @@ public class LocalTransferRelation implements TransferRelation {
       CAssignment assignment = (CAssignment)pStatement;
       CExpression left = assignment.getLeftHandSide();
 
-      if (left.getExpressionType() instanceof CPointerType) {
+      CType type = left.getExpressionType();
+      if (type instanceof CPointerType ||
+          (type instanceof CTypedefType && ((CTypedefType)type).getRealType() instanceof CPointerType)
+          ) {
         CRightHandSide right = assignment.getRightHandSide();
         AbstractIdentifier leftId = createId(left, findDereference(left.getExpressionType()));
 
@@ -248,6 +253,8 @@ public class LocalTransferRelation implements TransferRelation {
     if (type instanceof CPointerType) {
       CPointerType pointerType = (CPointerType) type;
       return (findDereference(pointerType.getType()) + 1);
+    } else if (type instanceof CTypedefType) {
+      return findDereference(((CTypedefType)type).getRealType());
     } else {
       return 0;
     }

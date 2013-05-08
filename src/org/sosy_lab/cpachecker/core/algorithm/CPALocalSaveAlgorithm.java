@@ -23,9 +23,6 @@
  */
 package org.sosy_lab.cpachecker.core.algorithm;
 
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.PrintWriter;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -48,13 +45,9 @@ import org.sosy_lab.cpachecker.util.AbstractStates;
 @Options(prefix="cpa")
 public class CPALocalSaveAlgorithm extends CPAAlgorithm {
 
-  private String outputFileName = "output/localsave";
-  private final boolean addToEOF;
   private static Map<CFANode, LocalState> reachedStatistics;
-  public CPALocalSaveAlgorithm(ConfigurableProgramAnalysis pCpa, LogManager pLogger, Configuration pConfig,
-      boolean b)  throws InvalidConfigurationException {
+  public CPALocalSaveAlgorithm(ConfigurableProgramAnalysis pCpa, LogManager pLogger, Configuration pConfig)  throws InvalidConfigurationException {
     super(pCpa, pLogger, pConfig);
-    addToEOF = b;
     if (reachedStatistics == null) {
       reachedStatistics = new HashMap<>();
     }
@@ -82,33 +75,13 @@ public class CPALocalSaveAlgorithm extends CPAAlgorithm {
 
   }
 
-  private void printReachedSet() {
-    PrintWriter writer = null;
-    FileOutputStream file = null;
-    try {
-      file = new FileOutputStream (outputFileName);
-      writer = new PrintWriter(file);
-      for (CFANode node : reachedStatistics.keySet()) {
-        writer.println(node.toString());
-        writer.println(reachedStatistics.get(node).toLog());
-      }
-      writer.close();
-    } catch(FileNotFoundException e) {
-      System.out.println("Cannot open file " + outputFileName);
-      return;
-    }
-  }
-
   @Override
   public boolean run(final ReachedSet reachedSet) throws CPAException, InterruptedException {
 
     stats.totalTimer.start();
     try {
-
       boolean b = run0(reachedSet);
       addReachedSet(reachedSet);
-      if (!addToEOF)
-        printReachedSet();
       return b;
 
     } finally {
@@ -121,5 +94,9 @@ public class CPALocalSaveAlgorithm extends CPAAlgorithm {
       stats.addTimer.stop();
       stats.forcedCoveringTimer.stop();
     }
+  }
+
+  public Map<CFANode, LocalState> getStatistics() {
+    return reachedStatistics;
   }
 }

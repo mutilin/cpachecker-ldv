@@ -25,16 +25,18 @@ package org.sosy_lab.cpachecker.core.algorithm;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Strings.isNullOrEmpty;
-import static com.google.common.collect.FluentIterable.from;
-import static org.sosy_lab.cpachecker.util.AbstractStates.IS_TARGET_STATE;
 
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.logging.Level;
 
 import org.sosy_lab.common.LogManager;
@@ -58,14 +60,14 @@ import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
 import org.sosy_lab.cpachecker.core.reachedset.ForwardingReachedSet;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSetFactory;
+import org.sosy_lab.cpachecker.cpa.local.LocalState;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 
 import com.google.common.base.Strings;
 
 @Options(prefix="restartAlgorithm")
-public class RestartAlgorithm implements Algorithm, StatisticsProvider {
-
+public class RestartLockAlgorithm implements Algorithm, StatisticsProvider {
   private static class RestartAlgorithmStatistics implements Statistics {
 
     private final int noOfAlgorithms;
@@ -134,20 +136,17 @@ public class RestartAlgorithm implements Algorithm, StatisticsProvider {
   @FileOption(FileOption.Type.REQUIRED_INPUT_FILE)
   private List<File> configFiles;
 
-  @Option(name="alwaysrun",
-      description="if it's true, we always run other algorithm, even previous is sound and finished correctly")
-  private boolean alwaysRunOtherAlgorithm = false;
-
   private final LogManager logger;
   private final RestartAlgorithmStatistics stats;
-  private final String filename;
   private final CFA cfa;
   private final Configuration globalConfig;
+  private String outputFileName = "output/localsave";
 
   private Algorithm currentAlgorithm;
 
-  public RestartAlgorithm(Configuration config, LogManager pLogger, String pFilename, CFA pCfa) throws InvalidConfigurationException {
-    config.inject(this);
+  public RestartLockAlgorithm(Configuration pConfig, LogManager pLogger, CFA pCfa)
+      throws InvalidConfigurationException {
+    pConfig.inject(this);
 
     if (configFiles.isEmpty()) {
       throw new InvalidConfigurationException("Need at least one configuration for restart algorithm!");
@@ -155,13 +154,13 @@ public class RestartAlgorithm implements Algorithm, StatisticsProvider {
 
     this.stats = new RestartAlgorithmStatistics(configFiles.size());
     this.logger = pLogger;
-    this.filename = pFilename;
     this.cfa = pCfa;
-    this.globalConfig = config;
+    this.globalConfig = pConfig;
   }
 
   @Override
   public boolean run(ReachedSet pReached) throws CPAException, InterruptedException {
+    boolean isFirst = true;
     checkArgument(pReached instanceof ForwardingReachedSet, "RestartAlgorithm needs ForwardingReachedSet");
     checkArgument(pReached.size() <= 1, "RestartAlgorithm does not support being called several times with the same reached set");
     checkArgument(!pReached.isEmpty(), "RestartAlgorithm needs non-empty reached set");
@@ -180,7 +179,7 @@ public class RestartAlgorithm implements Algorithm, StatisticsProvider {
         File singleConfigFileName = configFilesIterator.next();
 
         try {
-          Pair<Algorithm, ReachedSet> currentPair = createNextAlgorithm(singleConfigFileName, mainFunction);
+          Pair<Algorithm, ReachedSet> currentPair = createNextAlgorithm(singleConfigFileName, mainFunction, isFirst);
           currentAlgorithm = currentPair.getFirst();
           currentReached = currentPair.getSecond();
         } catch (InvalidConfigurationException e) {
@@ -203,8 +202,10 @@ public class RestartAlgorithm implements Algorithm, StatisticsProvider {
         try {
           boolean sound = currentAlgorithm.run(currentReached);
 
-          if (from(currentReached).anyMatch(IS_TARGET_STATE)) {
-            return sound;
+          if (isFirst) {
+            isFirst = false;
+            assert (currentAlgorithm instanceof CPALocalSaveAlgorithm);
+            printReachedSet(((CPALocalSaveAlgorithm)currentAlgorithm).getStatistics());
           }
 
           if (!sound) {
@@ -217,12 +218,8 @@ public class RestartAlgorithm implements Algorithm, StatisticsProvider {
             // continue with the next algorithm
             logger.log(Level.INFO, "Analysis not completed: There are still states to be processed.");
 
-          } else if (alwaysRunOtherAlgorithm && configFilesIterator.hasNext()) {
-            logger.log(Level.INFO, "Analysis is finished");
-
           } else {
-            // sound analysis and completely finished, terminate
-            return true;
+            logger.log(Level.INFO, "Analysis is finished");
           }
         } catch (CPAException e) {
           if (configFilesIterator.hasNext()) {
@@ -247,63 +244,22 @@ public class RestartAlgorithm implements Algorithm, StatisticsProvider {
     return false;
   }
 
-  @Options
-  private static class RestartAlgorithmOptions {
-
-    @Option(name="analysis.useAssumptionCollector",
-        description="use assumption collecting algorithm")
-        boolean useAssumptionCollector = false;
-
-    @Option(name = "analysis.useRefinement",
-        description = "use CEGAR algorithm for lazy counter-example guided analysis"
-          + "\nYou need to specify a refiner with the cegar.refiner option."
-          + "\nCurrently all refiner require the use of the ARGCPA.")
-          boolean useRefinement = false;
-
-    @Option(name="analysis.useCBMC",
-        description="use CBMC to double-check counter-examples")
-        boolean useCBMC = false;
-
-    @Option(name="analysis.useBMC",
-        description="use a BMC like algorithm that checks for satisfiability "
-          + "after the analysis has finished, works only with PredicateCPA")
-          boolean useBMC = false;
-
-    @Option(name="analysis.externalCBMC",
-        description="use CBMC as an external tool from CPAchecker")
-        boolean runCBMCasExternalTool = false;
-
-    @Option(name="analysis.saveLocalResults",
-        description="Save results of local analysis")
-        private boolean saveLocalResults = false;
-
-  }
-
-  private Pair<Algorithm, ReachedSet> createNextAlgorithm(File singleConfigFileName, CFANode mainFunction) throws InvalidConfigurationException, CPAException, InterruptedException, IOException {
+  private Pair<Algorithm, ReachedSet> createNextAlgorithm(File singleConfigFileName, CFANode mainFunction
+      , boolean isFirst) throws InvalidConfigurationException, CPAException, InterruptedException, IOException {
 
     ReachedSet reached;
     Algorithm algorithm;
 
     Configuration.Builder singleConfigBuilder = Configuration.builder();
     singleConfigBuilder.copyFrom(globalConfig);
-    singleConfigBuilder.clearOption("restartAlgorithm.configFiles");
-    singleConfigBuilder.clearOption("analysis.restartAfterUnknown");
-    singleConfigBuilder.clearOption("analysis.saveLocalResult");
 
-    RestartAlgorithmOptions singleOptions = new RestartAlgorithmOptions();
     singleConfigBuilder.loadFromFile(singleConfigFileName);
     Configuration singleConfig = singleConfigBuilder.build();
-    singleConfig.inject(singleOptions);
 
-    if (singleOptions.runCBMCasExternalTool) {
-      algorithm = new ExternalCBMCAlgorithm(filename, singleConfig, logger);
-      reached = new ReachedSetFactory(singleConfig, logger).create();
-    } else {
-      ReachedSetFactory singleReachedSetFactory = new ReachedSetFactory(singleConfig, logger);
-      ConfigurableProgramAnalysis cpa = createCPA(singleReachedSetFactory, singleConfig, stats);
-      algorithm = createAlgorithm(cpa, singleConfig, stats, singleReachedSetFactory, singleOptions);
-      reached = createInitialReachedSetForRestart(cpa, mainFunction, singleReachedSetFactory);
-    }
+    ReachedSetFactory singleReachedSetFactory = new ReachedSetFactory(singleConfig, logger);
+    ConfigurableProgramAnalysis cpa = createCPA(singleReachedSetFactory, singleConfig, stats);
+    algorithm = createAlgorithm(cpa, singleConfig, isFirst);
+    reached = createInitialReachedSetForRestart(cpa, mainFunction, singleReachedSetFactory);
 
     CPAchecker.stopIfNecessary();
 
@@ -336,37 +292,32 @@ public class RestartAlgorithm implements Algorithm, StatisticsProvider {
     return cpa;
   }
 
-  private Algorithm createAlgorithm(
-      final ConfigurableProgramAnalysis cpa, Configuration pConfig,
-      final RestartAlgorithmStatistics stats, ReachedSetFactory singleReachedSetFactory,
-      RestartAlgorithmOptions pOptions)
-  throws InvalidConfigurationException, CPAException {
+  private Algorithm createAlgorithm(final ConfigurableProgramAnalysis cpa, Configuration pConfig,
+      boolean isFirst) throws InvalidConfigurationException, CPAException {
     logger.log(Level.FINE, "Creating algorithms");
 
-    Algorithm algorithm;
-    if (pOptions.saveLocalResults) {
-      algorithm = new CPALocalSaveAlgorithm(cpa, logger, pConfig);
+    if (isFirst) {
+      return new CPALocalSaveAlgorithm(cpa, logger, pConfig);
     } else {
-      algorithm = new CPAAlgorithm(cpa, logger, pConfig);
+      return new CPAAlgorithm(cpa, logger, pConfig);
     }
+  }
 
-    if (pOptions.useRefinement) {
-      algorithm = new CEGARAlgorithm(algorithm, cpa, pConfig, logger);
+  private void printReachedSet(Map<CFANode, LocalState> reachedStatistics) {
+    PrintWriter writer = null;
+    FileOutputStream file = null;
+    try {
+      file = new FileOutputStream (outputFileName);
+      writer = new PrintWriter(file);
+      for (CFANode node : reachedStatistics.keySet()) {
+        writer.println(node.toString());
+        writer.println(reachedStatistics.get(node).toLog());
+      }
+      writer.close();
+    } catch(FileNotFoundException e) {
+      System.out.println("Cannot open file " + outputFileName);
+      return;
     }
-
-    if (pOptions.useBMC) {
-      algorithm = new BMCAlgorithm(algorithm, cpa, pConfig, logger, singleReachedSetFactory, cfa);
-    }
-
-    if (pOptions.useCBMC) {
-      algorithm = new CounterexampleCheckAlgorithm(algorithm, cpa, pConfig, logger, cfa, filename);
-    }
-
-    if (pOptions.useAssumptionCollector) {
-      algorithm = new AssumptionCollectorAlgorithm(algorithm, cpa, pConfig, logger);
-    }
-
-    return algorithm;
   }
 
   @Override

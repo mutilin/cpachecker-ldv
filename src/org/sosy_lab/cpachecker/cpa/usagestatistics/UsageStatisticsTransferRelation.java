@@ -21,7 +21,7 @@
  *  CPAchecker web page:
  *    http://cpachecker.sosy-lab.org
  */
-package org.sosy_lab.cpachecker.cpa.usageStatistics;
+package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
 import static org.sosy_lab.cpachecker.util.AbstractStates.extractLocation;
 
@@ -63,8 +63,8 @@ import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackTransferRelation;
-import org.sosy_lab.cpachecker.cpa.usageStatistics.EdgeInfo.EdgeType;
-import org.sosy_lab.cpachecker.cpa.usageStatistics.UsageInfo.Access;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.EdgeInfo.EdgeType;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCFAEdgeException;
@@ -83,6 +83,9 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
   @Option(description = "functions, which are used to bind variables (like list elements are binded to list variable)")
   private Set<String> binderFunctions = null;
+
+  @Option(name="abortfunctions", description="functions, which stops analysis")
+  private Set<String> abortfunctions;
 
   private final CallstackTransferRelation callstackTransfer;
 
@@ -136,6 +139,10 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       throws InterruptedException, CPATransferException {
 
     CFAEdge currentEdge = pCfaEdge;
+
+    if (checkAbortFunciton(currentEdge))
+      return;
+
     if (checkSkippedFunciton(pCfaEdge)) {
       callstackTransfer.setFlag();
       currentEdge = ((FunctionCallEdge)currentEdge).getSummaryEdge();
@@ -150,6 +157,15 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
         results.add(newState);
       }
     }
+  }
+
+  private boolean checkAbortFunciton(CFAEdge pCfaEdge) {
+    if (pCfaEdge.getEdgeType() == CFAEdgeType.FunctionCallEdge) {
+      String FunctionName = ((FunctionCallEdge)pCfaEdge).getSuccessor().getFunctionName();
+      if (abortfunctions != null && abortfunctions.contains(FunctionName))
+        return true;
+    }
+    return false;
   }
 
   private boolean checkSkippedFunciton(CFAEdge pCfaEdge) {
@@ -204,8 +220,12 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
   private void handleFunctionCall(UsageStatisticsState pNewState, CFunctionCallEdge edge) throws HandleCodeException {
     CStatement statement = edge.getRawAST().get();
-    /*String functionName = edge.getSuccessor().getFunctionName();
-    if (functionName.equals("ddlInit"))
+    String functionName = edge.getSuccessor().getFunctionName();
+    if (abortfunctions != null && abortfunctions.contains(functionName)) {
+      pNewState = null;
+      return;
+    }
+    /*if (functionName.equals("ddlInit"))
       System.out.println("In ddlInit");*/
     if (statement instanceof CFunctionCallAssignmentStatement) {
       /*
