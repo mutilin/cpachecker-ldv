@@ -236,6 +236,8 @@ public class RestartLockAlgorithm implements Algorithm, StatisticsProvider {
         stats.printIntermediateStatistics(System.out, Result.UNKNOWN, currentReached);
         stats.resetSubStatistics();
         logger.log(Level.INFO, "RestartAlgorithm switches to the next configuration...");
+      } else {
+        return true;
       }
     }
 
@@ -252,6 +254,7 @@ public class RestartLockAlgorithm implements Algorithm, StatisticsProvider {
 
     Configuration.Builder singleConfigBuilder = Configuration.builder();
     singleConfigBuilder.copyFrom(globalConfig);
+    singleConfigBuilder.clearOption("analysis.saveLocalResults");
 
     singleConfigBuilder.loadFromFile(singleConfigFileName);
     Configuration singleConfig = singleConfigBuilder.build();
