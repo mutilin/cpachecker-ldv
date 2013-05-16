@@ -55,19 +55,22 @@ class UsageStatisticsPrecisionAdjustment implements PrecisionAdjustment {
 
     AbstractState oldElement = element.getWrappedState();
 
-    Triple<AbstractState, Precision, Action> unwrappedResult = wrappedPrecAdjustment.prec(oldElement, oldPrecision, elements);
+    Precision oldWrappedPrecision = ((UsageStatisticsPrecision)oldPrecision).wrappedPrecision;
+    Triple<AbstractState, Precision, Action> unwrappedResult = wrappedPrecAdjustment.prec(oldElement, oldWrappedPrecision, elements);
 
     AbstractState newElement = unwrappedResult.getFirst();
-    Precision newPrecision = unwrappedResult.getSecond();
+    Precision newWrappedPrecision = unwrappedResult.getSecond();
     Action action = unwrappedResult.getThird();
 
-    if ((oldElement == newElement) && (oldPrecision == newPrecision)) {
+    if ((oldElement == newElement) && (oldWrappedPrecision == newWrappedPrecision)) {
       // nothing has changed
       return Triple.of(pElement, oldPrecision, action);
     }
 
     AbstractState resultElement = new UsageStatisticsState(newElement);
 
-    return Triple.of(resultElement, newPrecision, action);
+    UsageStatisticsPrecision newPrecision = ((UsageStatisticsPrecision)oldPrecision).clone();
+    newPrecision.setPrecision(newWrappedPrecision);
+    return Triple.of(resultElement, (Precision)newPrecision, action);
   }
 }

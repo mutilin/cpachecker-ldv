@@ -29,10 +29,7 @@ import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
 
-// TODO implements a no-op for the function pointer map and passes the wrapped abstract element to the wrappedReducer; could be improved
-// TODO functions called through function pointers are yet not considered for the computation of relevant predicates of a block. Using ABM with FunctionPointerCPA might thus yield unsound verification results.
 public class UsageStatisticsReducer implements Reducer {
-
   private final Reducer wrappedReducer;
 
   public UsageStatisticsReducer(Reducer pWrappedReducer) {
@@ -67,24 +64,34 @@ public class UsageStatisticsReducer implements Reducer {
   @Override
   public Object getHashCodeForState(AbstractState pElementKey, Precision pPrecisionKey) {
     UsageStatisticsState funElement = (UsageStatisticsState)pElementKey;
+    UsageStatisticsPrecision precision = (UsageStatisticsPrecision) pPrecisionKey;
     //return wrappedReducer.getHashCodeForState(funElement.getWrappedState(), pPrecisionKey);
-    return wrappedReducer.getHashCodeForState(funElement.getWrappedState(), pPrecisionKey);
+    return wrappedReducer.getHashCodeForState(funElement.getWrappedState(), precision.getWrappedPrecision());
   }
 
   @Override
-  public Precision getVariableReducedPrecision(Precision pPrecision,
-      Block pContext) {
-    return wrappedReducer.getVariableReducedPrecision(pPrecision, pContext);
+  public Precision getVariableReducedPrecision(Precision pPrecision, Block pContext) {
+    UsageStatisticsPrecision newPrecision = ((UsageStatisticsPrecision)pPrecision).clone(wrappedReducer.getVariableReducedPrecision(
+        ((UsageStatisticsPrecision)pPrecision).wrappedPrecision, pContext));
+    return newPrecision;
+    //return pPrecision;
   }
 
   @Override
   public Precision getVariableExpandedPrecision(Precision rootPrecision, Block rootContext, Precision reducedPrecision) {
-    return wrappedReducer.getVariableExpandedPrecision(rootPrecision, rootContext, reducedPrecision);
+    UsageStatisticsPrecision redPrecision = (UsageStatisticsPrecision)reducedPrecision;
+    UsageStatisticsPrecision newPrecision = ((UsageStatisticsPrecision)rootPrecision).clone(
+        wrappedReducer.getVariableExpandedPrecision(((UsageStatisticsPrecision)rootPrecision).getWrappedPrecision()
+        , rootContext, redPrecision.getWrappedPrecision()));
+    return newPrecision;
   }
 
   @Override
   public int measurePrecisionDifference(Precision pPrecision, Precision pOtherPrecision) {
-    return wrappedReducer.measurePrecisionDifference(pPrecision, pOtherPrecision);
+    UsageStatisticsPrecision first = (UsageStatisticsPrecision) pPrecision;
+    UsageStatisticsPrecision second = (UsageStatisticsPrecision) pOtherPrecision;
+    int wrapperDifference = wrappedReducer.measurePrecisionDifference(first.getWrappedPrecision(), second.getWrappedPrecision());
+    return wrapperDifference + Math.abs(first.getTotalRecords() - second.getTotalRecords());
   }
 
   @Override

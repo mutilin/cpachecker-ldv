@@ -49,56 +49,43 @@ public class PairwiseUnsafeDetector implements UnsafeDetector {
   private Set<String> detectByReadAccess;
 
   public PairwiseUnsafeDetector(Configuration config) throws InvalidConfigurationException {
-	    config.inject(this);
+	  config.inject(this);
   }
 
   @Override
   public Collection<SingleIdentifier> getUnsafes(Map<SingleIdentifier, Set<UsageInfo>> stat) {
-
     Collection<SingleIdentifier> unsafe = new HashSet<>();
-    Collection<SingleIdentifier> toDelete = new HashSet<>();
 
-nextId:for (SingleIdentifier id : stat.keySet()) {
+    for (SingleIdentifier id : stat.keySet()) {
       Set<UsageInfo> uset = stat.get(id);
-      for (UsageInfo uinfo : uset) {
-        for (UsageInfo uinfo2 : uset) {
-          if (!uinfo.intersect(uinfo2) && !unsafe.contains(id)) {
-            unsafe.add(id);
-            continue nextId;
-          }
-        }
+      if (isUnsafeId(uset) && !unsafe.contains(id)) {
+        unsafe.add(id);
       }
-    }
-    //now we should check, that all unsafe cases have at least one write access
-next:for (SingleIdentifier id : unsafe) {
-      if (detectByReadAccess != null && detectByReadAccess.contains(id.getName())) continue;
-      Set<UsageInfo> uset = stat.get(id);
-      for (UsageInfo uinfo : uset) {
-        if (uinfo.getAccess() == Access.WRITE/* && uinfo.getCallStack().getDepth() > 1*/)
-          continue next;
-      }
-      //no write access
-      //we couldn't delete from unsafe here, because we use it in cycle for
-      toDelete.add(id);
-    }
-
-    //deleting
-    for (SingleIdentifier id : toDelete) {
-      unsafe.remove(id);
     }
     return unsafe;
   }
 
   @Override
   public Pair<UsageInfo, UsageInfo> getSomeUnsafePair(Set<UsageInfo> uinfo) throws HandleCodeException {
-	    for (UsageInfo info1 : uinfo) {
-	      for (UsageInfo info2 : uinfo) {
-	        if ((info1.getAccess() == Access.WRITE || info2.getAccess() == Access.WRITE) && !info1.intersect(info2)) {
-	          return Pair.of(info1, info2);
-	        }
-	      }
-	    }
-	    throw new HandleCodeException("Can't find example of unsafe cases");
+    for (UsageInfo info1 : uinfo) {
+      for (UsageInfo info2 : uinfo) {
+        if ((info1.getAccess() == Access.WRITE || info2.getAccess() == Access.WRITE) && !info1.intersect(info2)) {
+          return Pair.of(info1, info2);
+        }
+      }
+    }
+    throw new HandleCodeException("Can't find example of unsafe cases");
+  }
+
+  private boolean isUnsafeId(Set<UsageInfo> uset) {
+    for (UsageInfo uinfo : uset) {
+      for (UsageInfo uinfo2 : uset) {
+        if (!uinfo.intersect(uinfo2) && (uinfo.getAccess() == Access.WRITE || uinfo2.getAccess() == Access.WRITE)) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   @Override

@@ -67,6 +67,7 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
   private PrecisionAdjustment precisionAdjustment;
   private final Reducer reducer;
   private final UsageStatisticsCPAStatistics statistics;
+  private UsageStatisticsPrecision precision;
 
   public static CPAFactory factory() {
     return AutomaticCPAFactory.forType(UsageStatisticsCPA.class);
@@ -79,6 +80,8 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
   @Option(name="stop", toUppercase=true, values={"SEP", "JOIN", "NEVER"},
       description="which stop operator to use for LockStatisticsCPA")
   private String stopType = "SEP";
+
+  private String outputFileName = "output/localsave";
 
   @Option(description="do we need to collect statistics to generate file for Lcov")
   private boolean covering = false;
@@ -110,6 +113,8 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
       ((LockStatisticsTransferRelation)LockCpa.getTransferRelation()).getFunctionHandler().setUsCPA(this);
     }
 
+    PresisionParser parser = new PresisionParser(outputFileName, pCfa);
+    this.precision = parser.parse();
   }
 
   private MergeOperator initializeMergeOperator() {
@@ -171,7 +176,8 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
 
   @Override
   public Precision getInitialPrecision(CFANode pNode) {
-    return getWrappedCpa().getInitialPrecision(pNode);
+    precision.setPrecision(this.getWrappedCpa().getInitialPrecision(pNode));
+    return precision;
   }
 
   @Override

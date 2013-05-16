@@ -23,11 +23,8 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
-import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
-import java.io.FileReader;
-import java.io.IOException;
 import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.util.Collection;
@@ -43,13 +40,11 @@ import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
-import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.abm.ABMRestoreStack;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
-import org.sosy_lab.cpachecker.cpa.local.LocalState.DataType;
 import org.sosy_lab.cpachecker.cpa.local.LocalTransferRelation;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.AccessPoint;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsLock;
@@ -58,11 +53,6 @@ import org.sosy_lab.cpachecker.cpa.usagestatistics.EdgeInfo.EdgeType;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
-import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
-import org.sosy_lab.cpachecker.util.identifiers.GeneralGlobalVariableIdentifier;
-import org.sosy_lab.cpachecker.util.identifiers.GeneralIdentifier;
-import org.sosy_lab.cpachecker.util.identifiers.GeneralLocalVariableIdentifier;
-import org.sosy_lab.cpachecker.util.identifiers.GeneralStructureFieldIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.GlobalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.LocalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
@@ -84,21 +74,15 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   @Option(name="output", description="path to write results")
   private String outputStatFileName = "test/rawstat";
 
-  private String outputFileName = "output/localsave";
-
   @Option(description = "variables, which will not be saved in statistics")
   private Set<String> skippedvariables = null;
 
   @Option(values={"PAIR", "SETDIFF"},toUppercase=true,
       description="which data process we should use")
   private String unsafeDetectorType = "PAIR";
-  private Map<String, Map<GeneralIdentifier, DataType>> localStatistics;
 
   //@Option(description="if we need to print all variables, not only unsafe cases")
   //private boolean fullstatistics = true;
-
-  //@Option(description="Do we need to store statistics of all variables or only pointers")
-  //private boolean onlypointers = true;
 
   public UsageStatisticsCPAStatistics(Configuration config) throws InvalidConfigurationException{
     Stat = new HashMap<>();
@@ -111,64 +95,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     else {
       System.out.println("Unknown data procession " + unsafeDetectorType);
       System.exit(0);
-    }
-
-    if (localAnalysis) {
-      //Restore all information
-      localStatistics = new HashMap<>();
-      try {
-        BufferedReader reader = new BufferedReader(new FileReader(outputFileName));
-        String line, node = null, local;
-        String[] localSet;
-        DataType type;
-        Map<GeneralIdentifier, DataType> info = null;
-        GeneralIdentifier id;
-        while ((line = reader.readLine()) != null) {
-          if (line.startsWith("N")) {
-            //N1 - it's node identifier
-            if (node != null && info != null) {
-              localStatistics.put(node, info);
-            }
-            node = line;
-            info = new HashMap<>();
-          } else if (line.length() > 0) {
-            // it's information about local statistics
-            local = line;
-            localSet = local.split(";");
-            if (localSet[0].equalsIgnoreCase("g")) {
-              //Global variable
-              id = new GeneralGlobalVariableIdentifier(localSet[1], Integer.parseInt(localSet[2]));
-            } else if (localSet[0].equalsIgnoreCase("l")) {
-              //Local identifier
-              id = new GeneralLocalVariableIdentifier(localSet[1], Integer.parseInt(localSet[2]));
-            } else if (localSet[0].equalsIgnoreCase("s") || localSet[0].equalsIgnoreCase("f")) {
-              //Structure (field) identifier
-              id = new GeneralStructureFieldIdentifier(localSet[1], Integer.parseInt(localSet[2]));
-            } else {
-              System.err.println("Can't resolve such line: " + line);
-              continue;
-            }
-            if (localSet[3].equalsIgnoreCase("global")) {
-              type = DataType.GLOBAL;
-            } else if (localSet[3].equalsIgnoreCase("local")){
-              type = DataType.LOCAL;
-            } else {
-              System.err.println("Can't resolve such data type: " + localSet[3]);
-              continue;
-            }
-            info.put(id, type);
-          }
-        }
-        if (node != null && info != null) {
-          localStatistics.put(node, info);
-        }
-        reader.close();
-      } catch(FileNotFoundException e) {
-        System.err.println("Cannot open file " + outputFileName);
-      } catch (IOException e) {
-        e.printStackTrace();
-      }
-
     }
   }
 
@@ -197,40 +123,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       }
       if (id instanceof StructureIdentifier && !id.isGlobal() && id.getType() != null
           && LocalTransferRelation.findDereference(id.getType()) <= 0 && !((StructureIdentifier)id).isAnyPointer()) {
-        //skips such cases as, 'a.b'
+        //skips such cases, as 'a.b'
         //Now these cases aren't saved, but all can be in future...
         continue;
-      }
-      //last check: if this variable is local, because of local analysis
-      if (localAnalysis) {
-        CFANode node = AbstractStates.extractLocation(state);
-        Map<GeneralIdentifier, DataType> localInfo = localStatistics.get(node.toString());
-        GeneralIdentifier generalId = id.getGeneralId();
-        DataType dataType = null;
-        if (localInfo != null) {
-          if (localInfo.containsKey(generalId)) {
-            dataType = localInfo.get(generalId);
-            if (dataType == DataType.LOCAL) {
-              //System.out.println("Skip " + id.getName() + " as local");
-              continue;
-            }
-          }
-          //may be, we have information about all structure?
-          if (id instanceof StructureIdentifier && dataType != DataType.GLOBAL) {
-            AbstractIdentifier tmpId = ((StructureIdentifier)id).getOwner();
-            if (tmpId instanceof SingleIdentifier) {
-              generalId = ((SingleIdentifier)tmpId).getGeneralId();
-              if (localInfo.containsKey(generalId)) {
-                dataType = localInfo.get(generalId);
-                if (dataType == DataType.LOCAL) {
-                  //System.out.println("Skip " + id.getName() + " as local");
-                  continue;
-                }
-              }
-            }
-            //else we can't say anything
-          }
-        }
       }
       if (id instanceof StructureIdentifier)
         id = ((StructureIdentifier)id).toStructureFieldIdentifier();
@@ -292,7 +187,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         for (CallstackState callstack : tmpList) {
           currentLeaf = currentLeaf.add(callstack);
         }
-        //System.out.println("Add " + lock.getName());
         currentLeaf.add(lock.getName() + "()", accessPoint.line.line);
       }
     }
@@ -335,7 +229,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       leafStack.push(currentLeaf);
       currentLeaf = currentLeaf.children.getFirst();
     } else {
-      //strange, but we don't have any stacks
+      System.err.println("Empty error path, can't proceed");
       return;
     }
     writer.println("Line 0:     N0 -{/*_____________________*/}-> N0");
@@ -366,48 +260,39 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
   }
 
-  private void createVisualization(SingleIdentifier id, PrintWriter writer, boolean allStats) {
+  private void createVisualization(SingleIdentifier id, PrintWriter writer) {
     Set<UsageInfo> uinfo = Stat.get(id);
 
     if (uinfo == null || uinfo.size() == 0)
       return;
-    if (allStats) {
-      if (id instanceof StructureFieldIdentifier)
-        writer.println("###");
-      else if (id instanceof GlobalVariableIdentifier) {
-        writer.println("#");
-      }
-      else if (id instanceof LocalVariableIdentifier)
-        writer.println("##" + ((LocalVariableIdentifier)id).getFunction());
-      else
-        System.err.println("What is it?" + id.toString());
-      if (id.getDereference() < 0) {
-        System.out.println("Adress unsafe: " + id.getName());
-      }
-      writer.println(id.getDereference());
-      try {
-        writer.println(id.getType().toASTString(id.getName()));
-      } catch (Throwable e) {
-        System.out.println("Catch smth");
-      }
-      writer.println("Line 0:     N0 -{/*Number of usages:" + uinfo.size() + "*/}-> N0");
-      writer.println("Line 0:     N0 -{/*Two examples:*/}-> N0");
-      try {
-        Pair<UsageInfo, UsageInfo> tmpPair = unsafeDetector.getSomeUnsafePair(uinfo);
-        createVisualization(id, tmpPair.getFirst(), writer);
-        createVisualization(id, tmpPair.getSecond(), writer);
-        /*writer.println("Line 0:     N0 -{_____________________}-> N0");
-        writer.println("Line 0:     N0 -{All usages:}-> N0");
-        for (UsageInfo ui : uinfo)
-          createVisualization(id, ui, writer);
-        */
-      } catch (HandleCodeException e) {
-        //strange, but we didn't find unsafe example. So, return.
-        return;
-      }
+    if (id instanceof StructureFieldIdentifier) {
+      writer.println("###");
+    } else if (id instanceof GlobalVariableIdentifier) {
+      writer.println("#");
+    } else if (id instanceof LocalVariableIdentifier) {
+      writer.println("##" + ((LocalVariableIdentifier)id).getFunction());
     } else {
-    for (UsageInfo ui : uinfo)
-      createVisualization(id, ui, writer);
+      System.err.println("What is it?" + id.toString());
+    }
+    if (id.getDereference() < 0) {
+      System.out.println("Adress unsafe: " + id.getName());
+    }
+    writer.println(id.getDereference());
+    writer.println(id.getType().toASTString(id.getName()));
+    writer.println("Line 0:     N0 -{/*Number of usages:" + uinfo.size() + "*/}-> N0");
+    writer.println("Line 0:     N0 -{/*Two examples:*/}-> N0");
+    try {
+      Pair<UsageInfo, UsageInfo> tmpPair = unsafeDetector.getSomeUnsafePair(uinfo);
+      createVisualization(id, tmpPair.getFirst(), writer);
+      createVisualization(id, tmpPair.getSecond(), writer);
+      /*writer.println("Line 0:     N0 -{_____________________}-> N0");
+      writer.println("Line 0:     N0 -{All usages:}-> N0");
+      for (UsageInfo ui : uinfo)
+        createVisualization(id, ui, writer);
+      */
+    } catch (HandleCodeException e) {
+      System.err.println("Can't find unsafes in " + id.getName());
+      return;
     }
   }
 
@@ -426,18 +311,12 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     try {
       file = new FileOutputStream (outputStatFileName);
       writer = new PrintWriter(file);
-    }
-    catch(FileNotFoundException e)
-    {
+    } catch(FileNotFoundException e) {
       System.out.println("Cannot open file " + outputStatFileName);
       return;
     }
 
-    //int counter = 0;
-
     for (SingleIdentifier id : Stat.keySet()) {
-      //counter += Stat.get(id).size();
-
       if (id instanceof GlobalVariableIdentifier) {
         if (id.getDereference() == 0)
           global++;
@@ -473,8 +352,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     Collection<SingleIdentifier> unsafeCases = unsafeDetector.getUnsafes(Stat);
     global = globalPointer = local = localPointer = fields = fieldPointer= 0;
     for (SingleIdentifier id : unsafeCases) {
-      //counter += Stat.get(id).size();
-
       if (id instanceof GlobalVariableIdentifier) {
         if (id.getDereference() == 0)
           global++;
@@ -514,7 +391,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     //printCases(dataProcess.getDescription(), unsafeCases);
 
     for (SingleIdentifier id : unsafeCases) {
-      createVisualization(id, writer, true);
+      createVisualization(id, writer);
     }
 
     writer.close();

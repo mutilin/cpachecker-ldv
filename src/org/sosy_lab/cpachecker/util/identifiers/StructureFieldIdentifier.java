@@ -55,6 +55,31 @@ public class StructureFieldIdentifier extends SingleIdentifier {
   }
 
   @Override
+  public int hashCode() {
+    final int prime = 31;
+    int result = super.hashCode();
+    result = prime * result + ((fieldType == null) ? 0 : fieldType.hashCode());
+    return result;
+  }
+
+  @Override
+  public boolean equals(Object obj) {
+    if (this == obj)
+      return true;
+    if (!super.equals(obj))
+      return false;
+    if (getClass() != obj.getClass())
+      return false;
+    StructureFieldIdentifier other = (StructureFieldIdentifier) obj;
+    if (fieldType == null) {
+      if (other.fieldType != null)
+        return false;
+    } else if (!fieldType.equals(other.fieldType))
+      return false;
+    return true;
+  }
+
+  @Override
   public StructureFieldIdentifier clone() {
     return new StructureFieldIdentifier(name, fieldType, type, dereference);
   }
