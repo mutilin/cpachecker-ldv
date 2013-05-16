@@ -63,74 +63,60 @@ public class FunctionHandlerOS {
       CRightHandSide op2 = ((CAssignment)expression).getRightHandSide();
 
       if (op2 instanceof CFunctionCallExpression) {
-        return CheckIsLock(newElement, ((CFunctionCallExpression) op2).getFunctionNameExpression().toASTString(),
-                           op2.getFileLocation().getStartingLineNumber(), currentFunction, ((CFunctionCallExpression) op2).getParameterExpressions());
+        CFunctionCallExpression function = (CFunctionCallExpression) op2;
+        String functionName = function.getFunctionNameExpression().toASTString();
+        if (needToChangeState(functionName)) {
+          changeState(newElement, functionName, op2.getFileLocation().getStartingLineNumber(), currentFunction,
+                           function.getParameterExpressions());
+        }
       }
-      else
-        return newElement;
 
-    }
-    else if (expression instanceof CFunctionCallStatement) {
+    } else if (expression instanceof CFunctionCallStatement) {
       /*
        * queLock(que);
        */
-      return CheckIsLock(newElement,
-          ((CFunctionCallStatement) expression).getFunctionCallExpression().getFunctionNameExpression().toASTString(),
-          ((CFunctionCallStatement) expression).getFileLocation().getStartingLineNumber(), currentFunction,
-          ((CFunctionCallStatement) expression).getFunctionCallExpression().getParameterExpressions());
+      CFunctionCallStatement statement = (CFunctionCallStatement) expression;
+      String functionName = statement.getFunctionCallExpression().getFunctionNameExpression().toASTString();
+      if (needToChangeState(functionName)) {
+       changeState(newElement, functionName, statement.getFileLocation().getStartingLineNumber(), currentFunction,
+          statement.getFunctionCallExpression().getParameterExpressions());
+      }
     }
-    else {
-      return newElement;
-    }
-
-
+    return newElement;
   }
 
   public LockStatisticsState handleFunctionCall(LockStatisticsState element, CFunctionCallEdge callEdge) throws HandleCodeException {
     Set<CStatement> expressions = callEdge.getRawAST().asSet();
     LockStatisticsState newElement = element.clone();
 
-
     if (expressions.size() > 0) {
       for (CStatement statement : expressions) {
         newElement = handleStatement(newElement, statement, callEdge.getPredecessor().getFunctionName());
       }
-    }
-    else {
-      return CheckIsLock(newElement, callEdge.getSuccessor().getFunctionName(), callEdge.getLineNumber(), callEdge.getPredecessor().getFunctionName(),
+    } else {
+      String functionName = callEdge.getSuccessor().getFunctionName();
+      if (needToChangeState(functionName)) {
+        changeState(newElement, functionName, callEdge.getLineNumber(), callEdge.getPredecessor().getFunctionName(),
           callEdge.getArguments());
+      }
     }
     return newElement;
   }
 
-  /*private boolean isGlobal(CExpression expression) throws HandleCodeException {
-    if (expression instanceof CArraySubscriptExpression) {
-      return isGlobal(((CArraySubscriptExpression)expression).getArrayExpression());
-
-    } else if (expression instanceof CFieldReference) {
-      return isGlobal(((CFieldReference)expression).getFieldOwner());
-
-    } else if (expression instanceof CIdExpression) {
-      CSimpleDeclaration decl = ((CIdExpression)expression).getDeclaration();
-      if (decl instanceof CDeclaration)
-        return (((CDeclaration)decl).isGlobal());
-      else if (decl instanceof CParameterDeclaration) {
-        CParameterDeclaration pDecl = (CParameterDeclaration) decl;
-        if (pDecl.getType() instanceof CPointerType)
-          return true;
-        else
-          return false;
-      } else
-        throw new HandleCodeException("Can't handle expression " + expression.toASTString() + " as lock parameter");
-
-    } else if (expression instanceof CUnaryExpression) {
-      return isGlobal(((CUnaryExpression)expression).getOperand());
-    } else {
-      throw new HandleCodeException("Can't handle expression " + expression.toASTString() + " as lock parameter");
+  private boolean needToChangeState(String functionName) {
+    for (LockInfo lock : locks) {
+      if (lock.LockFunctions.containsKey(functionName)
+          || lock.UnlockFunctions.containsKey(functionName)
+          || (lock.ResetFunctions != null && lock.ResetFunctions.containsKey(functionName))
+          || (lock.setLevel != null && lock.setLevel.equals(functionName))
+          ) {
+        return true;
+      }
     }
-  }*/
+    return false;
+  }
 
-  private LockStatisticsState CheckIsLock(LockStatisticsState newElement, String functionName, int lineNumber, String currentFunction,
+  private void changeState(LockStatisticsState newElement, String functionName, int lineNumber, String currentFunction,
       List<CExpression> params) throws HandleCodeException {
     CallstackState callstack =
         AbstractStates.extractStateByType(((UsageStatisticsTransferRelation)stateGetter.getTransferRelation()).getOldState(),
@@ -155,7 +141,7 @@ public class FunctionHandlerOS {
           System.err.println("Try to lock " + lock.lockName + " more, than " + lock.maxLock + " in " + lineNumber + " line");
           //System.err.println("Lines: " + newElement.getAllLines(lock.lockName));
         }
-        return newElement;
+        return;
 
       } else if (lock.UnlockFunctions.containsKey(functionName)) {
     	  logger.log(Level.FINER, "Unlock at line " + lineNumber + ", Callstack: " + callstack);
@@ -164,7 +150,7 @@ public class FunctionHandlerOS {
           newElement.delete(lock.lockName, "", logger);
         else
           newElement.delete(lock.lockName, params.get(p - 1).toASTString(), logger);
-        return newElement;
+        return;
 
       } else if (lock.ResetFunctions != null && lock.ResetFunctions.containsKey(functionName)) {
     	  logger.log(Level.FINER, "Reset at line " + lineNumber + ", Callstack: " + callstack);
@@ -173,15 +159,14 @@ public class FunctionHandlerOS {
           newElement.reset(lock.lockName, "", logger);
         else
           newElement.reset(lock.lockName, params.get(p - 1).toASTString(), logger);
-        return newElement;
+        return;
 
       } else if (lock.setLevel != null && lock.setLevel.equals(functionName)) {
         int p = Integer.parseInt(params.get(0).toASTString()); //new level
         newElement.set(lock.lockName, p - 1, lineNumber, callstack, ""); //they count from 1
-        return newElement;
+        return;
       }
     }
-    return newElement;
   }
 
   public void setUsCPA(UsageStatisticsCPA cpa) {

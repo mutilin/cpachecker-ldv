@@ -265,12 +265,11 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
   }
 
   public int getCounter(String lockName, String varName) {
-    int counter = 0;
     for (LockStatisticsLock lock : locks) {
       if (lock.hasEqualNameAndVariable(lockName, varName))
         return lock.getRecursiveCounter();
     }
-    return counter;
+    return 0;
   }
 
   //this function is used only in debugging. Do not delete!
@@ -307,19 +306,6 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
 
     return new LockStatisticsState(newGlobalLocks, this.toRestore);
   }
-
-  /*LockStatisticsState combine(LockStatisticsState other) {
-    Set<LockStatisticsLock> newGlobalLocks = new HashSet<LockStatisticsLock>();
-    //Set<LockStatisticsLock> newLocalLocks = new HashSet<LockStatisticsLock>();
-
-    for (LockStatisticsLock lock : other.locks) {
-      newGlobalLocks.add(lock);
-    }
-    /*for (LockStatisticsLock lock : other.LocalLocks) {
-      newLocalLocks.add(lock);
-    }
-    return new LockStatisticsState(newGlobalLocks/*, newLocalLocks);
-  }*/
 
   /**
    * This method decides if this element is less or equal than the other element, based on the order imposed by the lattice.

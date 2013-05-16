@@ -49,6 +49,7 @@ import org.sosy_lab.cpachecker.cfa.model.c.CFunctionReturnEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionSummaryEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CReturnStatementEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
+import org.sosy_lab.cpachecker.cfa.types.c.CArrayType;
 import org.sosy_lab.cpachecker.cfa.types.c.CComplexType;
 import org.sosy_lab.cpachecker.cfa.types.c.CPointerType;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
@@ -85,7 +86,7 @@ public class LocalTransferRelation implements TransferRelation {
 
     LocalState LocalElement = (LocalState) pState;
     LocalState successor = LocalElement.clone();
-   /* if (pCfaEdge.getLineNumber() > 211552 && pCfaEdge.getLineNumber() < 211578)
+    /*if (pCfaEdge.getLineNumber() > 98702 && pCfaEdge.getLineNumber() < 98710)
       System.out.println("In mq_open()");*/
     switch(pCfaEdge.getEdgeType()) {
 
@@ -187,8 +188,8 @@ public class LocalTransferRelation implements TransferRelation {
     LocalState newState = new LocalState(pSuccessor);
 
     CFunctionEntryNode functionEntryNode = callEdge.getSuccessor();
-    if (functionEntryNode.getFunctionName().equals("mqpInitPrivate"))
-      System.out.println("In mqpInitPrivate");
+    /*if (functionEntryNode.getFunctionName().equals("drv2qDevIns"))
+      System.out.println("In drv2qDevIns");*/
     List<String> paramNames = functionEntryNode.getFunctionParameterNames();
     List<CExpression> arguments = callEdge.getArguments();
 
@@ -253,6 +254,9 @@ public class LocalTransferRelation implements TransferRelation {
     if (type instanceof CPointerType) {
       CPointerType pointerType = (CPointerType) type;
       return (findDereference(pointerType.getType()) + 1);
+    } else if (type instanceof CArrayType) {
+      CArrayType arrayType = (CArrayType) type;
+      return (findDereference(arrayType.getType()) + 1);
     } else if (type instanceof CTypedefType) {
       return findDereference(((CTypedefType)type).getRealType());
     } else {
@@ -313,7 +317,7 @@ public class LocalTransferRelation implements TransferRelation {
       return;
 
     CDeclaration decl = declEdge.getDeclaration();
-    if (decl.getType() instanceof CPointerType && !decl.isGlobal()) {
+    if ((decl.getType() instanceof CPointerType || decl.getType() instanceof CArrayType) && !decl.isGlobal()) {
       //we don't save global variables
       pSuccessor.set(new GeneralLocalVariableIdentifier(decl.getName(), findDereference(decl.getType())), DataType.LOCAL);
 

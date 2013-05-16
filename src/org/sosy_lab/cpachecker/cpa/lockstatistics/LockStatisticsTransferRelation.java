@@ -23,11 +23,8 @@
  */
 package org.sosy_lab.cpachecker.cpa.lockstatistics;
 
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -60,14 +57,6 @@ public class LockStatisticsTransferRelation implements TransferRelation
       description="function to reset state")
   private String lockreset;
 
-  @Option(name="lockinfo",
-      description="contains all lock names")
-  private Set<String> lockinfo;
-
-  @Option(name="annotate",
-      description=" annotated functions, which are known to works right")
-  private Set<String> annotated;
-
   private Map<String, AnnotationInfo> annotatedfunctions;
 
   /*@Option(name="exceptions",
@@ -86,120 +75,10 @@ public class LockStatisticsTransferRelation implements TransferRelation
     config.inject(this);
     this.logger = logger;
 
-    Set<LockInfo> tmpInfo = new HashSet<>();
-    LockInfo tmpLockInfo;
-    Map<String, Integer> lockFunctions;
-    Map<String, Integer> unlockFunctions;
-    Map<String, Integer> resetFunctions;
-    Map<String, String> freeLocks;
-    Map<String, String> restoreLocks;
-    Map<String, String> resetLocks;
-    Set<String> tmpStringSet;
-    String tmpString;
-    AnnotationInfo tmpAnnotationInfo;
-    int num;
+    ConfigurationParser parser = new ConfigurationParser(config);
 
-    for (String lockName : lockinfo) {
-      tmpString = config.getProperty(lockName + ".lock");
-      tmpStringSet = new HashSet<>(Arrays.asList(tmpString.split(", *")));
-      lockFunctions = new HashMap<>();
-      for (String funcName : tmpStringSet) {
-        try {
-          num = Integer.parseInt(config.getProperty(lockName + "." + funcName + ".parameters"));
-        } catch (NumberFormatException e) {
-          num = 0;
-        }
-        lockFunctions.put(funcName, num);
-      }
-      unlockFunctions = new HashMap<>();
-      tmpString = config.getProperty(lockName + ".unlock");
-      tmpStringSet = new HashSet<>(Arrays.asList(tmpString.split(", *")));
-      for (String funcName : tmpStringSet) {
-        try {
-          num = Integer.parseInt(config.getProperty(lockName + "." + funcName + ".parameters"));
-        } catch (NumberFormatException e) {
-          num = 0;
-        }
-        unlockFunctions.put(funcName, num);
-      }
-      resetFunctions = new HashMap<>();
-      tmpString = config.getProperty(lockName + ".reset");
-      if (tmpString != null) {
-        tmpStringSet = new HashSet<>(Arrays.asList(tmpString.split(", *")));
-        for (String funcName : tmpStringSet) {
-          try {
-            num = Integer.parseInt(config.getProperty(lockName + "." + funcName + ".parameters"));
-          } catch (NumberFormatException e) {
-            num = 0;
-          }
-          resetFunctions.put(funcName, num);
-        }
-      }
-      tmpString = config.getProperty(lockName + ".setlevel");
-      try {
-        num = Integer.parseInt(config.getProperty(lockName + ".maxDepth"));
-      } catch (NumberFormatException e) {
-        num = 100;
-      }
-      tmpLockInfo = new LockInfo(lockName, lockFunctions, unlockFunctions, resetFunctions, tmpString, num);
-      tmpInfo.add(tmpLockInfo);
-    }
-
-    if (annotated != null) annotatedfunctions = new HashMap<>();
-
-    for (String fName : annotated) {
-      tmpString = config.getProperty("annotate." + fName + ".free");
-      freeLocks = null;
-      if (tmpString != null) {
-        tmpStringSet = new HashSet<>(Arrays.asList(tmpString.split(", *")));
-        freeLocks = new HashMap<>();
-        for (String fullName : tmpStringSet) {
-          if (fullName.matches(".*\\(.*")) {
-            String[] stringArray = fullName.split("\\(");
-            assert stringArray.length == 2;
-            freeLocks.put(stringArray[0], stringArray[1]);
-          } else {
-            freeLocks.put(fullName, "");
-          }
-        }
-      }
-      tmpString = config.getProperty("annotate." + fName + ".restore");
-      restoreLocks = null;
-      if (tmpString != null) {
-        tmpStringSet = new HashSet<>(Arrays.asList(tmpString.split(", *")));
-        restoreLocks = new HashMap<>();
-        for (String fullName : tmpStringSet) {
-          if (fullName.matches(".*\\(.*")) {
-            String[] stringArray = fullName.split("\\(");
-            assert stringArray.length == 2;
-            restoreLocks.put(stringArray[0], stringArray[1]);
-          } else {
-            restoreLocks.put(fullName, "");
-          }
-        }
-      }
-      tmpString = config.getProperty("annotate." + fName + ".reset");
-      resetLocks = null;
-      if (tmpString != null) {
-        tmpStringSet = new HashSet<>(Arrays.asList(tmpString.split(", *")));
-        resetLocks = new HashMap<>();
-        for (String fullName : tmpStringSet) {
-          if (fullName.matches(".*\\(.*")) {
-            String[] stringArray = fullName.split("\\(");
-            assert stringArray.length == 2;
-            resetLocks.put(stringArray[0], stringArray[1]);
-          } else {
-            resetLocks.put(fullName, "");
-          }
-        }
-      }
-      if (restoreLocks == null && freeLocks == null && resetLocks == null)
-        //we don't specify the annotation. Restore all locks.
-        tmpAnnotationInfo = new AnnotationInfo(fName, null, new HashMap<String, String>(), null);
-      else
-        tmpAnnotationInfo = new AnnotationInfo(fName, freeLocks, restoreLocks, resetLocks);
-      annotatedfunctions.put(fName, tmpAnnotationInfo);
-    }
+    Set<LockInfo> tmpInfo = parser.parseLockInfo();
+    annotatedfunctions = parser.parseAnnotatedFunctions();
    /* if (HandleType.equals("LINUX")) {
       handler = new FunctionHandlerLinux(lock, unlock, exceptions);
     }
@@ -211,17 +90,20 @@ public class LockStatisticsTransferRelation implements TransferRelation
   }
 
   @Override
-  public Collection<LockStatisticsState> getAbstractSuccessors(AbstractState element, Precision pPrecision, CFAEdge cfaEdge)
+  public Collection<LockStatisticsState> getAbstractSuccessors(AbstractState element, Precision pPrecision
+      , CFAEdge cfaEdge)
     throws CPATransferException {
 
     LockStatisticsState lockStatisticsElement     = (LockStatisticsState)element;
 
     LockStatisticsState successor;
+    /*if (cfaEdge.getLineNumber() > 207759 && cfaEdge.getLineNumber() < 207792)
+      System.out.println("In CondWait()");*/
     switch (cfaEdge.getEdgeType()) {
 
       case FunctionCallEdge:
         String fCallName = ((CFunctionCallEdge)cfaEdge).getSuccessor().getFunctionName();
-      	if (annotated != null && annotated.contains(fCallName)) {
+      	if (annotatedfunctions != null && annotatedfunctions.containsKey(fCallName)) {
       		CFANode pred = ((CFunctionCallEdge)cfaEdge).getPredecessor();
       		logger.log(Level.FINER,"annotated name=" + fCallName + ", call"
                      + ", node=" + pred
@@ -271,15 +153,6 @@ public class LockStatisticsTransferRelation implements TransferRelation
         successor = lockStatisticsElement.clone();
         break;
 
-      case StatementEdge:
-        CStatement statement = ((CStatementEdge)cfaEdge).getStatement();
-        if (statement instanceof CFunctionCallStatement && lockreset != null &&
-          ((CFunctionCallStatement)statement).getFunctionCallExpression().getFunctionNameExpression().toASTString().equals(lockreset)) {
-          successor = new LockStatisticsState();
-          break;
-        }
-
-        //$FALL-THROUGH$
       default:
         successor = handleSimpleEdge(lockStatisticsElement, cfaEdge);
     }
@@ -295,27 +168,32 @@ public class LockStatisticsTransferRelation implements TransferRelation
         throws CPATransferException {
 
     switch(cfaEdge.getEdgeType()) {
-    case StatementEdge:
-      CStatementEdge statementEdge = (CStatementEdge) cfaEdge;
-      return handler.handleStatement(element, statementEdge.getStatement(), cfaEdge.getPredecessor().getFunctionName());
+      case StatementEdge:
+        CStatement statement = ((CStatementEdge)cfaEdge).getStatement();
+        if (statement instanceof CFunctionCallStatement && lockreset != null &&
+          ((CFunctionCallStatement)statement).getFunctionCallExpression().getFunctionNameExpression().toASTString().equals(lockreset)) {
+          return new LockStatisticsState();
+        } else {
+          return handler.handleStatement(element, statement, cfaEdge.getPredecessor().getFunctionName());
+        }
 
-    case BlankEdge:
-    case AssumeEdge:
-    case ReturnStatementEdge:
-    case DeclarationEdge:
-    case CallToReturnEdge:
-      return element.clone();
+      case BlankEdge:
+      case AssumeEdge:
+      case ReturnStatementEdge:
+      case DeclarationEdge:
+      case CallToReturnEdge:
+        return element.clone();
 
-    case MultiEdge:
-      LockStatisticsState tmpElement = element.clone();
+      case MultiEdge:
+        LockStatisticsState tmpElement = element.clone();
 
-      for (CFAEdge edge : (MultiEdge)cfaEdge) {
-        tmpElement = handleSimpleEdge(tmpElement, edge);
-      }
-      return tmpElement;
+        for (CFAEdge edge : (MultiEdge)cfaEdge) {
+          tmpElement = handleSimpleEdge(tmpElement, edge);
+        }
+        return tmpElement;
 
-    default:
-      throw new UnrecognizedCFAEdgeException(cfaEdge);
+      default:
+        throw new UnrecognizedCFAEdgeException(cfaEdge);
     }
   }
 
