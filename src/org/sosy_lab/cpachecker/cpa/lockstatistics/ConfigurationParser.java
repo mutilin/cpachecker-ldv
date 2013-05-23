@@ -75,14 +75,16 @@ public class ConfigurationParser {
       }
       unlockFunctions = new HashMap<>();
       tmpString = config.getProperty(lockName + ".unlock");
-      tmpStringSet = new HashSet<>(Arrays.asList(tmpString.split(", *")));
-      for (String funcName : tmpStringSet) {
-        try {
-          num = Integer.parseInt(config.getProperty(lockName + "." + funcName + ".parameters"));
-        } catch (NumberFormatException e) {
-          num = 0;
+      if (tmpString != null) {
+        tmpStringSet = new HashSet<>(Arrays.asList(tmpString.split(", *")));
+        for (String funcName : tmpStringSet) {
+          try {
+            num = Integer.parseInt(config.getProperty(lockName + "." + funcName + ".parameters"));
+          } catch (NumberFormatException e) {
+            num = 0;
+          }
+          unlockFunctions.put(funcName, num);
         }
-        unlockFunctions.put(funcName, num);
       }
       resetFunctions = new HashMap<>();
       tmpString = config.getProperty(lockName + ".reset");
