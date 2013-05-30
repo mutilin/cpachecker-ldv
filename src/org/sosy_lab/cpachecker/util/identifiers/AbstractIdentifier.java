@@ -39,4 +39,8 @@ public interface AbstractIdentifier {
   public AbstractIdentifier clone();
 
   public int getDereference();
+
+  public void setDereference(int d);
+
+  public boolean isPointer();
 }

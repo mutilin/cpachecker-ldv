@@ -69,9 +69,4 @@ public class GeneralLocalVariableIdentifier extends LocalVariableIdentifier impl
   public GeneralLocalVariableIdentifier clone() {
     return new GeneralLocalVariableIdentifier(name, type, function, dereference);
   }
-
-  @Override
-  public void setDereference(int pNewD) {
-    dereference = pNewD;
-  }
 }

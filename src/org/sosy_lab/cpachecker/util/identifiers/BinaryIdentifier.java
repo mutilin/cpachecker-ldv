@@ -110,4 +110,25 @@ public class BinaryIdentifier implements AbstractIdentifier {
     return dereference;
   }
 
+  @Override
+  public boolean isPointer() {
+    if (dereference != 0)
+      return true;
+    else
+      if ( id1.isPointer() && id2.isPointer()) {
+        return true;
+      } else if (!id1.isPointer() && !id2.isPointer()) {
+        return false;
+      } else {
+        //strange
+        System.err.println("One id is pointer, one isn't:" + this.toString());
+        return true;
+      }
+  }
+
+  @Override
+  public void setDereference(int pD) {
+    dereference = pD;
+  }
+
 }

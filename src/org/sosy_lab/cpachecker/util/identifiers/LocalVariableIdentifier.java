@@ -25,9 +25,6 @@ package org.sosy_lab.cpachecker.util.identifiers;
 
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
 
-
-
-
 public class LocalVariableIdentifier extends VariableIdentifier {
   protected String function;//function, where this variable was declarated
 
@@ -68,6 +65,12 @@ public class LocalVariableIdentifier extends VariableIdentifier {
 
   public String getFunction() {
     return function;
+  }
+
+  //it needs to set function after creation in lockStatistics.
+  //In shared analysis function isn't used because of reducing
+  public void setFunction(String func) {
+    function = func;
   }
 
   @Override

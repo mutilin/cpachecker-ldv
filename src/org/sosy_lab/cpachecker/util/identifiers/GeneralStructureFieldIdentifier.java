@@ -36,7 +36,7 @@ public class GeneralStructureFieldIdentifier extends StructureFieldIdentifier im
   public GeneralStructureFieldIdentifier(String pNm, String fType, CType type, int pDereference) {
     super(pNm, fType, type, pDereference);
     if (type == null)
-      System.out.println("Creating GeneralStructureFieldIdentifier with null field");
+      System.err.println("Creating GeneralStructureFieldIdentifier with null field");
   }
   @Override
   public int hashCode() {
@@ -69,10 +69,5 @@ public class GeneralStructureFieldIdentifier extends StructureFieldIdentifier im
   @Override
   public GeneralStructureFieldIdentifier clone() {
     return new GeneralStructureFieldIdentifier(name, fieldType, type, dereference);
-  }
-
-  @Override
-  public void setDereference(int pNewD) {
-    dereference = pNewD;
   }
 }

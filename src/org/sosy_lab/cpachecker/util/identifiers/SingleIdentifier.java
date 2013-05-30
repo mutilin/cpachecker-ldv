@@ -23,11 +23,8 @@
  */
 package org.sosy_lab.cpachecker.util.identifiers;
 
-import org.sosy_lab.cpachecker.cfa.ast.c.CDeclaration;
-import org.sosy_lab.cpachecker.cfa.ast.c.CParameterDeclaration;
-import org.sosy_lab.cpachecker.cfa.ast.c.CSimpleDeclaration;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
-import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
+import org.sosy_lab.cpachecker.cpa.local.LocalTransferRelation;
 
 
 public abstract class SingleIdentifier implements AbstractIdentifier{
@@ -61,6 +58,16 @@ public abstract class SingleIdentifier implements AbstractIdentifier{
       sb.append("*");
     }
     return sb.toString();
+  }
+
+  @Override
+  public boolean isPointer() {
+    if (dereference > 0)
+      return true;
+    else if (LocalTransferRelation.findDereference(type) > 0)
+      return true;
+    else
+      return false;
   }
 
   @Override
@@ -109,72 +116,9 @@ public abstract class SingleIdentifier implements AbstractIdentifier{
 
   public abstract GeneralIdentifier getGeneralId();
 
-  /*public static SingleIdentifier createIdentifier(CExpression expression, String function, int dereference) throws HandleCodeException {
-    if (expression instanceof CArraySubscriptExpression) {
-      return createIdentifier(((CArraySubscriptExpression)expression).getArrayExpression(), function, dereference);
-
-    } else if (expression instanceof CBinaryExpression) {
-      System.err.println("Try to create identifier for binary expression");
-      return null;
-
-    } else if (expression instanceof CFieldReference) {
-        return new StructureFieldIdentifier(((CFieldReference)expression).getFieldName(),
-          ((CFieldReference)expression).getExpressionType().toASTString(""),
-          ((CFieldReference)expression).getFieldOwner().getExpressionType(), dereference);
-
-    } else if (expression instanceof CIdExpression) {
-      return SingleIdentifier.createIdentifier((CIdExpression)expression, function, dereference);
-
-    } else if (expression instanceof CUnaryExpression) {
-      if (((CUnaryExpression)expression).getOperator() == CUnaryExpression.UnaryOperator.STAR) {
-        return createIdentifier(((CUnaryExpression)expression).getOperand(), function, ++dereference);
-      } else if (((CUnaryExpression)expression).getOperator() == CUnaryExpression.UnaryOperator.AMPER) {
-        return createIdentifier(((CUnaryExpression)expression).getOperand(), function, --dereference);
-      } else {
-        return createIdentifier(((CUnaryExpression)expression).getOperand(), function, dereference);
-      }
-
-    } else {
-      //CLiteralExpression, CCastExpression), CTypeIdExpression - do nothing
-      return null;
-    }
-  }
-
-  public static SingleIdentifier createIdentifier(CIdExpression expression, String function, int dereference) throws HandleCodeException {
-
-    CSimpleDeclaration decl = expression.getDeclaration();
-
-    if (decl == null) {
-        /*
-         * It means, that we have function, but parser couldn't understand this:
-         * int f();
-         * int (*a)() = &f;
-         * Skip it
-
-      return null;
-    }
-
-    return SingleIdentifier.createIdentifier(decl, function, dereference);
-  }*/
-
-  public static SingleIdentifier createIdentifier(CSimpleDeclaration decl, String function, int dereference) throws HandleCodeException
-  {
-    String name = decl.getName();
-    CType type = decl.getType();
-
-    if (decl instanceof CDeclaration){
-      if(((CDeclaration)decl).isGlobal())
-        return new GlobalVariableIdentifier(name, type, dereference);
-      else {
-        return new LocalVariableIdentifier(name, type, function, dereference);
-      }
-
-    } else if (decl instanceof CParameterDeclaration) {
-      return new LocalVariableIdentifier(name, type, function, dereference);
-
-    } else {
-      throw new HandleCodeException("Unrecognized declaration: " + decl.toASTString());
-    }
+  @Override
+  public void setDereference(int pD) {
+    dereference = pD;
   }
 
 }

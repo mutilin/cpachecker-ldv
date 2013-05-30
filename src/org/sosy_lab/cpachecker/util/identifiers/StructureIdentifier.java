@@ -126,11 +126,6 @@ public class StructureIdentifier extends SingleIdentifier{
   @Override
   public String toLog() {
     return "s;" + name + ";" + dereference;
-    /*if (owner instanceof SingleIdentifier){
-      return log + "\n" + ((SingleIdentifier)owner).toLog();
-    } else {
-      return log;
-    }*/
   }
 
   private CType getStructureType() {
@@ -144,6 +139,11 @@ public class StructureIdentifier extends SingleIdentifier{
       System.err.println("Can't create structureFieldId for " + this.toString());
       return null;
     }
+  }
+
+  @Override
+  public boolean isPointer() {
+    return owner.isPointer();
   }
 
   @Override

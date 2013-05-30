@@ -95,4 +95,14 @@ public class ConstantIdentifier implements AbstractIdentifier {
     return true;
   }
 
+  @Override
+  public boolean isPointer() {
+    return (dereference > 0);
+  }
+
+  @Override
+  public void setDereference(int pD) {
+    dereference = pD;
+  }
+
 }
