@@ -40,7 +40,6 @@ import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustment;
 import org.sosy_lab.cpachecker.core.interfaces.StopOperator;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
-import org.sosy_lab.cpachecker.cpa.abm.ABMLockCPA;
 
 @Options(prefix="cpa.boundedrecursion")
 public class BoundedRecursionCPA extends AbstractSingleWrapperCPA {
@@ -52,8 +51,8 @@ public class BoundedRecursionCPA extends AbstractSingleWrapperCPA {
 
   private BoundedRecursionCPA(ConfigurableProgramAnalysis pCpa, CFA pCfa, LogManager pLogger, Configuration pConfig) throws InvalidConfigurationException {
     super(pCpa);
-    if (pCpa instanceof ABMLockCPA)
-      ((ABMLockCPA)pCpa).getTransferRelation().changeAlgorithm(this, pConfig);
+    /*if (pCpa instanceof ABMLockCPA)
+      ((ABMLockCPA)pCpa).getTransferRelation().changeAlgorithm(this, pConfig);*/
     this.transferRelation = new BoundedRecursionTransferRelation(pCpa.getTransferRelation(), pConfig, pLogger);
   }
 
