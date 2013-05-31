@@ -118,25 +118,20 @@ public class FunctionHandlerOS {
 
   private void changeState(LockStatisticsState newElement, String functionName, int lineNumber, String currentFunction,
       List<CExpression> params) throws HandleCodeException {
-    CallstackState callstack =
+    CallstackState reducedCallstack =
         AbstractStates.extractStateByType(((UsageStatisticsTransferRelation)stateGetter.getTransferRelation()).getOldState(),
             CallstackState.class);
-    callstack = stateGetter.getStats().createStack(callstack);
+    CallstackState callstack = stateGetter.getStats().createStack(reducedCallstack);
 
     for (LockInfo lock : locks) {
       if (lock.LockFunctions.containsKey(functionName)) {
     	  logger.log(Level.FINER, "Lock at line " + lineNumber + ", Callstack: " + callstack);
-
     	  int p = lock.LockFunctions.get(functionName);
-        int d;
-        if (p == 0 )
-          d = newElement.getCounter(lock.lockName, "");
-        else
-          d = newElement.getCounter(lock.lockName, params.get(p - 1).toASTString());
-        if (p == 0 && d < lock.maxLock)
-          newElement.add(lock.lockName, lineNumber, callstack, "", logger);
-        else if (d < lock.maxLock)
-          newElement.add(lock.lockName, lineNumber, callstack, params.get(p - 1).toASTString(), logger);
+    	  String variable = (p == 0 ? "" : params.get(p - 1).toASTString());
+        int d = newElement.getCounter(lock.lockName, variable);
+
+        if (d < lock.maxLock)
+          newElement.add(lock.lockName, lineNumber, callstack, reducedCallstack, variable, logger);
         else {
           System.err.println("Try to lock " + lock.lockName + " more, than " + lock.maxLock + " in " + lineNumber + " line");
           //System.err.println("Lines: " + newElement.getAllLines(lock.lockName));
@@ -146,24 +141,20 @@ public class FunctionHandlerOS {
       } else if (lock.UnlockFunctions.containsKey(functionName)) {
     	  logger.log(Level.FINER, "Unlock at line " + lineNumber + ", Callstack: " + callstack);
         int p = lock.UnlockFunctions.get(functionName);
-        if (p == 0)
-          newElement.delete(lock.lockName, "", logger);
-        else
-          newElement.delete(lock.lockName, params.get(p - 1).toASTString(), logger);
+        String variable = (p == 0 ? "" : params.get(p - 1).toASTString());
+        newElement.free(lock.lockName, variable, logger);
         return;
 
       } else if (lock.ResetFunctions != null && lock.ResetFunctions.containsKey(functionName)) {
     	  logger.log(Level.FINER, "Reset at line " + lineNumber + ", Callstack: " + callstack);
         int p = lock.ResetFunctions.get(functionName);
-        if (p == 0)
-          newElement.reset(lock.lockName, "", logger);
-        else
-          newElement.reset(lock.lockName, params.get(p - 1).toASTString(), logger);
+        String variable = (p == 0 ? "" : params.get(p - 1).toASTString());
+        newElement.reset(lock.lockName, variable, logger);
         return;
 
       } else if (lock.setLevel != null && lock.setLevel.equals(functionName)) {
         int p = Integer.parseInt(params.get(0).toASTString()); //new level
-        newElement.set(lock.lockName, p - 1, lineNumber, callstack, ""); //they count from 1
+        newElement.set(lock.lockName, p - 1, lineNumber, callstack, reducedCallstack, ""); //they count from 1
         return;
       }
     }

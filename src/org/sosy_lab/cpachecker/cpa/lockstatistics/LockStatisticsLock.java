@@ -23,15 +23,34 @@
  */
 package org.sosy_lab.cpachecker.cpa.lockstatistics;
 
-import java.util.Set;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Stack;
 
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cpa.abm.ABMRestoreStack;
+import org.sosy_lab.cpachecker.cpa.callstack.CallstackReducer;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.LineInfo;
-import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 
 
 public class LockStatisticsLock {
+
+  public static class LockComparator implements Comparator<LockStatisticsLock> {
+
+    @Override
+    public int compare(LockStatisticsLock pO1, LockStatisticsLock pO2) {
+      int result = 0;
+      if (pO1.variable.equals(""))
+        result -= 50;
+      if (pO2.variable.equals(""))
+        result += 50;
+      String name1 = pO1.toString();
+      String name2 = pO2.toString();
+      return (result + name1.compareTo(name2));
+    }
+
+  }
 
   public static enum LockType {
     MUTEX,
@@ -50,10 +69,10 @@ public class LockStatisticsLock {
   private int recursiveCounter;
   private String variable;
 
-  LockStatisticsLock(String n, int l, LockType t, CallstackState s, String v) {
+  LockStatisticsLock(String n, int l, LockType t, CallstackState s, CallstackState reduced, String v) {
     name = n;
     accessPoints = new Stack<>();
-    accessPoints.add(new AccessPoint( new LineInfo(l), s));
+    accessPoints.add(new AccessPoint( new LineInfo(l), s, reduced));
     type = t;
     recursiveCounter = 0;
     variable = v;
@@ -99,8 +118,8 @@ public class LockStatisticsLock {
   }
 
   public LockStatisticsLock removeLastAccessPointer() {
-    LockStatisticsLock cloned = this.clone();
     if(recursiveCounter > 0) {
+      LockStatisticsLock cloned = this.clone();
       cloned.recursiveCounter--;
       cloned.accessPoints.pop();
       return cloned;
@@ -128,22 +147,7 @@ public class LockStatisticsLock {
 
   public void initReplaceLabel() {
     for (AccessPoint accessPoint : accessPoints) {
-      accessPoint.resetLabel();
-    }
-  }
-
-  public void replace(LockStatisticsLock rootLock) throws HandleCodeException {
-    AccessPoint tmpPoint;
-    for (int i = 0; i < this.accessPoints.size(); i++) {
-      tmpPoint = accessPoints.get(i);
-      if (!tmpPoint.getLabel())
-        return;
-      else {
-        if (rootLock.accessPoints.size() > i)
-          tmpPoint.replace(rootLock.accessPoints.get(i));
-        else
-          throw new HandleCodeException("Can't find labeled lock in root state");
-      }
+      accessPoint.setLabel();
     }
   }
 
@@ -186,36 +190,15 @@ public class LockStatisticsLock {
 
   @Override
   public String toString() {
-    StringBuilder sb = new StringBuilder();
 
-    sb.append(type.toASTString() + " " + name + ( variable != "" ? ("(" + variable + ")") : "" )  + "(" + recursiveCounter + ")");
-
-    /*CallstackState e = callstack;
-    sb.append("        ");
-    while (e != null) {
-      LineInfo lineN = null;
-      for (int i = 0; i < e.getCallNode().getNumLeavingEdges(); i++) {
-        CFAEdge edge = e.getCallNode().getLeavingEdge(i);
-        if (edge.getEdgeType() == CFAEdgeType.FunctionCallEdge) {
-          lineN = new LineInfo(edge.getLineNumber());
-          break;
-        }
-      }
-      sb.append(e.getCurrentFunction() + "(" + (lineN != null ? lineN.toString() : "-") + ")" + " <- ");
-      e = e.getPreviousState();
-    }
-    if (callstack != null)
-      sb.delete(sb.length() - 3, sb.length());
-    sb.append("\n");*/
-    //sb.append(" " + line.getLine() + " line");
-    return sb.toString();
+    return/*type.toASTString() + " " +*/ name + ( variable != "" ? ("(" + variable + ")") : "" )  + "[" + recursiveCounter + "]";
   }
 
-  public boolean existsIn(Set<LockStatisticsLock> locks) {
+  public boolean existsIn(List<LockStatisticsLock> locks) {
     for (LockStatisticsLock usedLock : locks) {
-        if (usedLock.hasEqualNameAndVariable(this)) {
-        	return true;
-        }
+      if (usedLock.hasEqualNameAndVariable(this)) {
+      	return true;
+      }
     }
 	  return false;
   }
@@ -226,5 +209,44 @@ public class LockStatisticsLock {
       tmpLock = tmpLock.addAccessPointer(pAccessPoint);
     }
     return tmpLock;
+  }
+
+  public LockStatisticsLock expandCallstack(LockStatisticsLock rootLock, ABMRestoreStack restorator) {
+    boolean changed = false;
+
+    LockStatisticsLock expandedLock = this.clone();
+    AccessPoint tmpPoint, newPoint;
+    for (int i = 0; i < this.accessPoints.size(); i++) {
+      tmpPoint = accessPoints.get(i);
+      if (!tmpPoint.isNew() || rootLock == null) {
+        newPoint = tmpPoint.expandCallstack(restorator);
+        if (newPoint != tmpPoint) {
+          changed = true;
+          expandedLock.accessPoints.setElementAt(newPoint, i);
+        }
+      } else if (rootLock.accessPoints.size() > i) {
+        changed = true;
+        expandedLock.accessPoints.setElementAt(rootLock.accessPoints.get(i), i);
+      }
+    }
+    if (changed)
+      return expandedLock;
+    else
+      return this;
+  }
+
+  public LockStatisticsLock reduceCallStack(CallstackReducer pReducer, CFANode pNode) {
+    LockStatisticsLock newLock = this.clone();
+    AccessPoint tmpPoint, newPoint;
+    for (int i = 0; i < this.accessPoints.size(); i++) {
+      tmpPoint = accessPoints.get(i);
+      newPoint = tmpPoint.reduceCallstack(pReducer, pNode);
+      if (newPoint != tmpPoint)
+        newLock.accessPoints.setElementAt(newPoint, i);
+    }
+    if (this.equals(newLock))
+      return this;
+    else
+      return newLock;
   }
 }

@@ -23,6 +23,9 @@
  */
 package org.sosy_lab.cpachecker.cpa.lockstatistics;
 
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cpa.abm.ABMRestoreStack;
+import org.sosy_lab.cpachecker.cpa.callstack.CallstackReducer;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.LineInfo;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
@@ -32,10 +35,12 @@ public class AccessPoint {
   public LineInfo line;
   private CallstackState callstack;
   private boolean replaceLabel;
+  private CallstackState reducedCallstack;
 
-  AccessPoint(LineInfo l, CallstackState stack) {
+  AccessPoint(LineInfo l, CallstackState stack, CallstackState reduced) {
     line = l;
     callstack = stack;
+    reducedCallstack = reduced;
     replaceLabel = false;
   }
 
@@ -43,15 +48,15 @@ public class AccessPoint {
     return callstack;
   }
 
+  public void setReducedCallstack(CallstackState reduced) {
+    reducedCallstack = reduced;
+  }
+
   public void setLabel() {
     replaceLabel = true;
   }
 
-  public void resetLabel() {
-    replaceLabel = false;
-  }
-
-  public boolean getLabel() {
+  public boolean isNew() {
     return replaceLabel;
   }
 
@@ -86,22 +91,37 @@ public class AccessPoint {
     return true;
   }
 
-  public void setCallstack(CallstackState state) {
-    callstack = state;
+  @Override
+  public AccessPoint clone() {
+    AccessPoint result =  new AccessPoint(line, callstack, reducedCallstack);
+    result.replaceLabel = this.replaceLabel;
+    return result;
   }
 
-  public void expandCallstack(AccessPoint rootAccessPoint) throws HandleCodeException {
-    if (this.line != rootAccessPoint.line) return;
-    if (this.callstack == null)
-      this.callstack = rootAccessPoint.callstack;
+  public AccessPoint expandCallstack(ABMRestoreStack pRestorator) {
+    AccessPoint result = this.clone();
+    try {
+      result.callstack = pRestorator.restoreCallstack(this.reducedCallstack);
+    }  catch (HandleCodeException e) {
+      System.err.println(e.getMessage());
+    }
+    if (this.equals(result))
+      return this;
     else
-      //strange: how we can have not null callstack, if we reduced it
-      throw new HandleCodeException("Not null reduced callstack");
+      return result;
   }
 
-  public void replace(AccessPoint pAccessPoint) {
-    line = pAccessPoint.line;
-    callstack = pAccessPoint.callstack;
-    replaceLabel = false;
+  public AccessPoint reduceCallstack(CallstackReducer pReducer, CFANode pNode) {
+    AccessPoint result = this.clone();
+    try {
+      CallstackState reducedState = (CallstackState)pReducer.getVariableReducedState(callstack, null, pNode);
+      result.setReducedCallstack(reducedState);
+    } catch (AssertionError e) {
+      //No error!
+      //It means, that we shouldn't reduce - we are in wrong branch
+      //We shouldn't do anything
+      //System.out.println("Null pointer");
+    }
+    return result;
   }
 }

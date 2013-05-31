@@ -31,15 +31,15 @@ import java.util.Set;
 import java.util.logging.Level;
 
 import org.sosy_lab.common.LogManager;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractQueryableState;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
+import org.sosy_lab.cpachecker.cpa.abm.ABMRestoreStack;
+import org.sosy_lab.cpachecker.cpa.callstack.CallstackReducer;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsLock.LockType;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.LineInfo;
-import org.sosy_lab.cpachecker.exceptions.InvalidQueryException;
 
-import com.google.common.base.Preconditions;
-
-public class LockStatisticsState implements AbstractQueryableState, Serializable {
+public class LockStatisticsState implements AbstractState, Serializable {
   private static final long serialVersionUID = -3152134511524554357L;
 
   private final Set<LockStatisticsLock> locks;
@@ -58,23 +58,7 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
   }
 
   public boolean contains(String lockName, String variableName) {
-    for (LockStatisticsLock lock : locks) {
-      if (lock.hasEqualNameAndVariable(lockName, variableName))
-        return true;
-    }
-    return false;
-  }
-
-  public boolean contains(String lockName) {
-    for (LockStatisticsLock lock : locks) {
-      if (lock.hasEqualNameAndVariable(lockName, null))
-        return true;
-    }
-    return false;
-  }
-
-  public boolean contains(LockStatisticsLock lock) {
-    return locks.contains(lock);
+    return (findLock(lockName, variableName) != null);
   }
 
   public int getSize() {
@@ -120,22 +104,22 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
     return sb.toString();
   }
 
-  void add(String lockName, int line, CallstackState state, String variable, LogManager logger) {
+  void add(String lockName, int line, CallstackState state, CallstackState reduced, String variable, LogManager logger) {
     boolean b;
     String locksBefore = locks.toString();
 
     LockStatisticsLock oldLock = findLock(lockName, variable);
     if(oldLock != null) {
-      LockStatisticsLock newLock = oldLock.addAccessPointer(new AccessPoint(new LineInfo(line), state));
+      LockStatisticsLock newLock = oldLock.addAccessPointer(new AccessPoint(new LineInfo(line), state, reduced));
       b = locks.remove(oldLock);
       assert b;
       b = locks.add(newLock);
       assert b;
     } else {
-      LockStatisticsLock tmpMutex = new LockStatisticsLock(lockName, line, LockType.GLOBAL_LOCK, state, variable);
-      b = locks.add(tmpMutex);
+      LockStatisticsLock tmpLock = new LockStatisticsLock(lockName, line, LockType.GLOBAL_LOCK, state, reduced, variable);
+      b = locks.add(tmpLock);
     }
-    if(b) {
+    if(b && logger != null) {
       logger.log(Level.FINER, "Locks before: " + locksBefore);
       logger.log(Level.FINER, "Locks after: " + locks);
     }
@@ -159,7 +143,7 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
 	  }
   }
 
-  private void delete(LockStatisticsLock oldLock, LogManager logger) {
+  private void free(LockStatisticsLock oldLock, LogManager logger) {
     String locksBefore = locks.toString();
     boolean b = locks.remove(oldLock);
     assert b;
@@ -173,12 +157,12 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
     }
   }
 
-  void delete(String lockName, String variable, LogManager logger) {
+  void free(String lockName, String variable, LogManager logger) {
 	  LockStatisticsLock oldLock = findLock(lockName, variable);
 	  if (oldLock == null)
 	    //TODO what should we do, if we've lost a lock?
 	    return;
-    delete(oldLock, logger);
+    free(oldLock, logger);
   }
 
   void reset(String lockName, String var, LogManager logger) {
@@ -203,7 +187,7 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
     return newState;
   }
 
-  void set(String lockName, int num, int line, CallstackState state, String variable) {
+  void set(String lockName, int num, int line, CallstackState state, CallstackState reduced, String variable) {
     //num can be equal -1, this means, that in origin file it is 0 and we should delete locks
     LockStatisticsLock oldLock = findLock(lockName, variable);
     LockStatisticsLock newLock;
@@ -212,7 +196,7 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
       newLock = oldLock;
       if (num > oldLock.getRecursiveCounter()) {
         newLock = oldLock.addRecursiveAccessPointer(num - oldLock.getRecursiveCounter(),
-            new AccessPoint(new LineInfo(line), state));
+            new AccessPoint(new LineInfo(line), state, reduced));
       } else if (num < oldLock.getRecursiveCounter()) {
         for (int i = 0; i < oldLock.getRecursiveCounter() - num; i++) {
           newLock = newLock.removeLastAccessPointer();
@@ -222,8 +206,8 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
       if (newLock != null)
         locks.add(newLock);
     } else if (num > -1) {
-      newLock = new LockStatisticsLock(lockName, line, LockType.GLOBAL_LOCK, state, variable);
-      newLock = newLock.addRecursiveAccessPointer(num, new AccessPoint(new LineInfo(line), state));
+      newLock = new LockStatisticsLock(lockName, line, LockType.GLOBAL_LOCK, state, reduced, variable);
+      newLock = newLock.addRecursiveAccessPointer(num, new AccessPoint(new LineInfo(line), state, reduced));
       if (newLock != null)
         locks.add(newLock);
     }
@@ -256,9 +240,12 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
 
   LockStatisticsState free(Map<String, String> freeLocks, LogManager logger) {
     LockStatisticsState newState = this.clone();
+    String variable;
+
     for (String lockName : freeLocks.keySet()) {
-      if (this.contains(lockName)) {
-        newState.delete(lockName, freeLocks.get(lockName), logger);
+      variable = freeLocks.get(lockName);
+      if (this.contains(lockName, variable)) {
+        newState.free(lockName, variable, logger);
       }
     }
     return newState;
@@ -315,15 +302,6 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
    */
   boolean isLessOrEqual(LockStatisticsState other) {
 
-    // also, this element is not less or equal than the other element, if it contains less elements
-    /*if (locks.size() < other.locks.size()) {
-      return false;
-    }*/
-
-    /*if (LocalLocks.size() < other.LocalLocks.size()) {
-      return false;
-    }*/
-
     if (toRestore != null && !toRestore.equals(other.toRestore))
       return false;
     else if (toRestore == null && other.toRestore != null)
@@ -335,15 +313,9 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
     // also, this element is not less or equal than the other element,
     // if any one constant's value of the other element differs from the constant's value in this element
     for (LockStatisticsLock Lock : locks) {
-      if (!Lock.existsIn(other.locks)) return false;
-    }
-
-    /*for (LockStatisticsLock Lock : LocalLocks) {
-      if (!other.LocalLocks.contains(Lock)) {
+      if (other.findLock(Lock.getName(), Lock.getVariable()) == null)
         return false;
-      }
-    }*/
-
+    }
     return true;
   }
 
@@ -389,69 +361,21 @@ public class LockStatisticsState implements AbstractQueryableState, Serializable
     return true;
   }
 
-  @Override
-  public Object evaluateProperty(String pProperty) throws InvalidQueryException {
-    /*pProperty = pProperty.trim();
-
-    if (pProperty.startsWith("contains(")) {
-      String varName = pProperty.substring("contains(".length(), pProperty.length() - 1);
-      return this.contains(varName);
-    } else {
-      return checkProperty(pProperty);
-    }*/
-    //Qu'est que c'est?
-    return true;
-  }
-
-  @Override
-  public boolean checkProperty(String pProperty) throws InvalidQueryException {
-    /*if (this.contains(pProperty))
-      return true;
-    else
-      return false;*/
-    return true;
-  }
-
-  @Override
-  public void modifyProperty(String pModification) throws InvalidQueryException {
-    Preconditions.checkNotNull(pModification);
-
-    // either "deletelock(lockname)" or "setlock(lockname)"
-    String[] statements = pModification.split(";");
-    for (int i = 0; i < statements.length; i++) {
-      String statement = statements[i].trim().toLowerCase();
-      if (statement.startsWith("deletelock(")) {
-        if (!statement.endsWith(")")) {
-          throw new InvalidQueryException(statement + " should end with \")\"");
-        }
-
-        String varName = statement.substring("deletelock(".length(), statement.length() - 1);
-
-        Object x = this.locks.remove(varName);
-
-        //if (x == null) x = this.LocalLocks.remove(varName);
-
-        if (x == null) {
-          // varname was not present in one of the maps
-          // i would like to log an error here, but no logger is available
-        }
-      }
-
-      else if (statement.startsWith("setlock(")) {
-        if (!statement.endsWith(")")) {
-          throw new InvalidQueryException(statement + " should end with \")\"");
-        }
-
-        //String assignment = statement.substring("setlock(".length(), statement.length() - 1);
-        //String varName = assignment.trim();
-        //TODO what line? mutex?
-        //this.addGlobal(varName, 0);
-      }
+  public void expandCallstack(LockStatisticsLock oldLock, LockStatisticsLock rootLock, ABMRestoreStack restorator) {
+    LockStatisticsLock newLock = oldLock.expandCallstack(rootLock, restorator);
+    if (oldLock != newLock) {
+      locks.remove(oldLock);
+      locks.add(newLock);
     }
   }
 
-  @Override
-  public String getCPAName() {
-    return "LockStatisticsAnalysis";
+  public void reduceCallstack(CallstackReducer pReducer, CFANode pNode) {
+    for (LockStatisticsLock lock : getLocks()) {
+      LockStatisticsLock newLock = lock.reduceCallStack(pReducer, pNode);
+      if (lock != newLock) {
+        locks.remove(lock);
+        locks.add(newLock);
+      }
+    }
   }
 }

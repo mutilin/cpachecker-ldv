@@ -142,7 +142,6 @@ public class LockStatisticsTransferRelation implements TransferRelation
           }
           if (annotatedfunctions.get(fName).freeLocks != null) {
             //free some locks
-
             successor = successor.free(annotatedfunctions.get(fName).freeLocks, logger);
           }
           if (annotatedfunctions.get(fName).resetLocks != null) {

@@ -28,11 +28,12 @@ import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
-import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
+import org.sosy_lab.cpachecker.cpa.abm.ABMRestoreStack;
 
 
 public class LockStatisticsReducer implements Reducer {
-
+  //this field should be initialized by ABM
+  private ABMRestoreStack restorator;
 
   @Override
   public AbstractState getVariableReducedState(AbstractState pExpandedElement, Block pContext, CFANode pCallNode) {
@@ -47,19 +48,21 @@ public class LockStatisticsReducer implements Reducer {
   public AbstractState getVariableExpandedState(AbstractState pRootElement, Block pReducedContext,
       AbstractState pReducedElement) {
 
-    LockStatisticsState expandedState = ((LockStatisticsState)pReducedElement).clone();
+    LockStatisticsState reducedState = (LockStatisticsState)pReducedElement;
+    LockStatisticsState expandedState = reducedState.clone();
     LockStatisticsState rootState = (LockStatisticsState) pRootElement;
-    for (LockStatisticsLock lock : expandedState.getLocks()) {
+
+    LockStatisticsLock oldLock;
+    for (LockStatisticsLock lock : reducedState.getLocks()) {
+      oldLock = null;
       for (LockStatisticsLock rootLock : rootState.getLocks()) {
         if (lock.hasEqualNameAndVariable(rootLock)) {
-          try {
-            lock.replace(rootLock);
-          } catch (HandleCodeException e) {
-            System.err.println(e.getMessage());
-          }
+          oldLock = rootLock;
           break;
         }
       }
+      //it's new lock
+      expandedState.expandCallstack(lock, oldLock, restorator);
     }
     expandedState.setRestoreState(rootState.getRestoreState());
     return expandedState;
@@ -100,4 +103,7 @@ public class LockStatisticsReducer implements Reducer {
     return getVariableExpandedState(pRootState, pReducedContext, pReducedState);
   }
 
+  public void setRestorator(ABMRestoreStack r) {
+    restorator = r;
+  }
 }
