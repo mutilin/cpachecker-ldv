@@ -58,7 +58,6 @@ public class UsageStatisticsReducer implements Reducer {
     //System.out.println("after:red " + funReducedState);
     //System.out.println("after:exp " + exp);
     return funRootState.clone(exp);
-    //return pReducedElement;
   }
 
   @Override
@@ -74,7 +73,6 @@ public class UsageStatisticsReducer implements Reducer {
     UsageStatisticsPrecision newPrecision = ((UsageStatisticsPrecision)pPrecision).clone(wrappedReducer.getVariableReducedPrecision(
         ((UsageStatisticsPrecision)pPrecision).wrappedPrecision, pContext));
     return newPrecision;
-    //return pPrecision;
   }
 
   @Override

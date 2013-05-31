@@ -24,7 +24,9 @@
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -53,11 +55,11 @@ public class PairwiseUnsafeDetector implements UnsafeDetector {
   }
 
   @Override
-  public Collection<SingleIdentifier> getUnsafes(Map<SingleIdentifier, Set<UsageInfo>> stat) {
+  public Collection<SingleIdentifier> getUnsafes(Map<SingleIdentifier, List<UsageInfo>> stat) {
     Collection<SingleIdentifier> unsafe = new HashSet<>();
 
     for (SingleIdentifier id : stat.keySet()) {
-      Set<UsageInfo> uset = stat.get(id);
+      List<UsageInfo> uset = stat.get(id);
       if (isUnsafeId(uset) && !unsafe.contains(id)) {
         unsafe.add(id);
       }
@@ -66,7 +68,9 @@ public class PairwiseUnsafeDetector implements UnsafeDetector {
   }
 
   @Override
-  public Pair<UsageInfo, UsageInfo> getSomeUnsafePair(Set<UsageInfo> uinfo) throws HandleCodeException {
+  public Pair<UsageInfo, UsageInfo> getUnsafePair(List<UsageInfo> uinfo) throws HandleCodeException {
+    Collections.sort(uinfo, new UsageInfo.UsageComparator());
+
     for (UsageInfo info1 : uinfo) {
       for (UsageInfo info2 : uinfo) {
         if ((info1.getAccess() == Access.WRITE || info2.getAccess() == Access.WRITE) && !info1.intersect(info2)) {
@@ -77,7 +81,7 @@ public class PairwiseUnsafeDetector implements UnsafeDetector {
     throw new HandleCodeException("Can't find example of unsafe cases");
   }
 
-  private boolean isUnsafeId(Set<UsageInfo> uset) {
+  private boolean isUnsafeId(List<UsageInfo> uset) {
     for (UsageInfo uinfo : uset) {
       for (UsageInfo uinfo2 : uset) {
         if (!uinfo.intersect(uinfo2) && (uinfo.getAccess() == Access.WRITE || uinfo2.getAccess() == Access.WRITE)) {

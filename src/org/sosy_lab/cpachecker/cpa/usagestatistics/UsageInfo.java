@@ -23,17 +23,51 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
+import java.util.Comparator;
 import java.util.Set;
 
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdgeType;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.AccessPoint;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsLock;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
 
 
 public class UsageInfo {
+
+  public static class UsageComparator implements Comparator<UsageInfo> {
+
+    @Override
+    public int compare(UsageInfo pO1, UsageInfo pO2) {
+      int result = 0;
+
+      if (pO1.locks.getSize() == 0)
+        result -= 50;
+      if (pO2.locks.getSize() == 0)
+        result += 50;
+
+      for (LockStatisticsLock lock : pO1.locks.getLocks()) {
+        if (lock.getName().equals("")) {
+          result -= 10;
+        }
+        for (AccessPoint point : lock.getAccessPoints()) {
+          result += point.getCallstack().getDepth();
+        }
+      }
+      for (LockStatisticsLock lock : pO2.locks.getLocks()) {
+        if (lock.getName().equals("")) {
+          result += 5;
+        }
+        for (AccessPoint point : lock.getAccessPoints()) {
+          result -= point.getCallstack().getDepth();
+        }
+      }
+      return result;
+    }
+  }
+
   public static enum Access {
     WRITE,
     READ;
@@ -88,6 +122,10 @@ public class UsageInfo {
   }
 
   public boolean intersect(UsageInfo other) {
+    if (other == null)
+      return false;
+    if (other.locks == null)
+      return false;
     Set<LockStatisticsLock> otherLocks = other.locks.getLocks();
     if (otherLocks.size() == 0 && this.locks.getLocks().size() == 0)
       return true;

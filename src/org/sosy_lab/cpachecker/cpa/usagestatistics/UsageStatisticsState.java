@@ -28,7 +28,7 @@ import java.util.Map;
 
 import org.sosy_lab.cpachecker.core.defaults.AbstractSingleWrapperState;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
-import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
+import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
 
 /**
  * Represents one abstract state of the UsageStatistics CPA.
@@ -38,32 +38,67 @@ class UsageStatisticsState extends AbstractSingleWrapperState  {
 
   private static final long serialVersionUID = -898577877284268426L;
 
-  private Map<SingleIdentifier, SingleIdentifier> variableBindingRelation;
+  private Map<AbstractIdentifier, AbstractIdentifier> variableBindingRelation;
 
   public UsageStatisticsState(AbstractState pWrappedElement) {
     super(pWrappedElement);
     variableBindingRelation = new HashMap<>();
   }
 
-  public UsageStatisticsState(AbstractState pWrappedElement, Map<SingleIdentifier, SingleIdentifier> map) {
+  public UsageStatisticsState(AbstractState pWrappedElement, Map<AbstractIdentifier, AbstractIdentifier> map) {
     super(pWrappedElement);
     variableBindingRelation = new HashMap<>(map);
   }
 
-  public boolean contains(SingleIdentifier id) {
+  public boolean containsLinks(AbstractIdentifier id) {
+    /* Special contains!
+    *  if we have *b, map contains also **b.
+    *  So, if we get **b, having (*b, c), we give *c
+    */
+    AbstractIdentifier tmpId = id.clone();
+    for (int d = id.getDereference(); d >= 0; d--) {
+      tmpId.setDereference(d);
+      if (variableBindingRelation.containsKey(tmpId)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  public boolean contains(AbstractIdentifier id) {
     return variableBindingRelation.containsKey(id);
   }
 
-  public void put(SingleIdentifier id1, SingleIdentifier id2) {
+  public void put(AbstractIdentifier id1, AbstractIdentifier id2) {
     if (!id1.equals(id2))
       variableBindingRelation.put(id1, id2);
   }
 
-  public SingleIdentifier get(SingleIdentifier id) {
+  public AbstractIdentifier get(AbstractIdentifier id) {
     return variableBindingRelation.get(id);
   }
 
-  public Map<SingleIdentifier, SingleIdentifier> getMap() {
+  public AbstractIdentifier getLinks(AbstractIdentifier id) {
+    /* Special get!
+     * If we get **b, having (*b, c), we give *c
+     */
+    AbstractIdentifier tmpId = id.clone();
+    for (int d = id.getDereference(); d >= 0; d--) {
+      tmpId.setDereference(d);
+      if (variableBindingRelation.containsKey(tmpId)) {
+        tmpId = variableBindingRelation.get(tmpId);
+        int currentD = tmpId.getDereference();
+        tmpId.setDereference(currentD + id.getDereference() - d);
+        if (this.containsLinks(tmpId)) {
+          tmpId = getLinks(tmpId);
+        }
+        return tmpId;
+      }
+    }
+    return null;
+  }
+
+  public Map<AbstractIdentifier, AbstractIdentifier> getMap() {
     return variableBindingRelation;
   }
 
@@ -104,8 +139,16 @@ class UsageStatisticsState extends AbstractSingleWrapperState  {
   @Override
   public String toString() {
     StringBuilder str = new StringBuilder();
+    str.append("[");
+    for (AbstractIdentifier id : variableBindingRelation.keySet()) {
+      str.append(id.toString());
+      str.append("->");
+      str.append(variableBindingRelation.get(id).toString());
+      str.append(", ");
+    }
+    str.append("]\n");
     str.append(getWrappedState());
-    return variableBindingRelation.size() + " : " + str.toString();
+    return str.toString();
   }
 
   boolean isLessOrEqual(UsageStatisticsState other) {
@@ -117,7 +160,7 @@ class UsageStatisticsState extends AbstractSingleWrapperState  {
 
     // also, this element is not less or equal than the other element,
     // if any one constant's value of the other element differs from the constant's value in this element
-    for (SingleIdentifier id : variableBindingRelation.keySet()) {
+    for (AbstractIdentifier id : variableBindingRelation.keySet()) {
       if (!other.variableBindingRelation.containsKey(id)) {
         return false;
       }

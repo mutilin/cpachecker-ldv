@@ -31,43 +31,39 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CArraySubscriptExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CCastExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CCharLiteralExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpressionVisitor;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFieldReference;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFloatLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CIntegerLiteralExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CParameterDeclaration;
-import org.sosy_lab.cpachecker.cfa.ast.c.CSimpleDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStringLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CTypeIdExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CTypeIdInitializerExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
-import org.sosy_lab.cpachecker.cfa.types.c.CEnumType.CEnumerator;
 import org.sosy_lab.cpachecker.cpa.local.IdentifierCreator;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
-import org.sosy_lab.cpachecker.util.identifiers.GlobalVariableIdentifier;
-import org.sosy_lab.cpachecker.util.identifiers.LocalVariableIdentifier;
-import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 public class ExpressionHandler implements CExpressionVisitor<Void, HandleCodeException> {
 
-  public List<Pair<SingleIdentifier, Access>> result;
+  public List<Pair<AbstractIdentifier, Access>> result;
   protected Access accessMode;
   protected String function;
-  protected int dereferenceCounter;
+  IdentifierCreator creator = new IdentifierCreator();
 
   public void setMode(String funcName, Access mode) {
     result = new LinkedList<>();
     function = funcName;
-    dereferenceCounter = 0;
     accessMode = mode;
+    creator.clear(function);
   }
 
   @Override
   public Void visit(CArraySubscriptExpression expression) throws HandleCodeException {
+    AbstractIdentifier id = expression.accept(creator);
+    result.add(Pair.of(id, accessMode));
+    accessMode = Access.READ;
     expression.getArrayExpression().accept(this);
     return null;
   }
@@ -78,9 +74,8 @@ public class ExpressionHandler implements CExpressionVisitor<Void, HandleCodeExc
       expression.getOperand1().accept(this);
       expression.getOperand2().accept(this);
     } else {
-      //TODO handle it
-      // *(a + b) = ... -> here
-      //throw new HandleCodeException(expression.toASTString() + " can't be in left side of statement");
+      //We can't be here. This is error: a + b = ...
+      throw new HandleCodeException("Writing to BinaryExpression: " + expression.toASTString());
     }
     return null;
   }
@@ -93,39 +88,19 @@ public class ExpressionHandler implements CExpressionVisitor<Void, HandleCodeExc
 
   @Override
   public Void visit(CFieldReference expression) throws HandleCodeException {
-    IdentifierCreator creator = new IdentifierCreator();
+    creator.clearDereference();
     AbstractIdentifier fieldId = expression.accept(creator);
-    Access oldAccessMode = accessMode;
-    accessMode = Access.READ;
-    dereferenceCounter = (expression.isPointerDereference() ? 1 : 0);
+    result.add(Pair.of(fieldId, accessMode));
+    if (expression.isPointerDereference())
+      accessMode = Access.READ;
     expression.getFieldOwner().accept(this);
-    //save, if there was any dereference
-    if (dereferenceCounter > 0 && !fieldId.isGlobal())
-      result.add(Pair.of((SingleIdentifier)fieldId, oldAccessMode));
     return null;
   }
 
   @Override
   public Void visit(CIdExpression expression) throws HandleCodeException {
-    SingleIdentifier id;
-    CSimpleDeclaration decl = expression.getDeclaration();
-
-    if (decl instanceof CDeclaration) {
-      if (((CDeclaration)decl).isGlobal())
-        id = new GlobalVariableIdentifier(expression.getName(), expression.getExpressionType(), dereferenceCounter);
-      else
-        id = new LocalVariableIdentifier(expression.getName(), expression.getExpressionType(), function, dereferenceCounter);
-    } else if (decl instanceof CParameterDeclaration) {
-      id = new LocalVariableIdentifier(expression.getName(), expression.getExpressionType(), function, dereferenceCounter);
-    } else if (decl instanceof CEnumerator) {
-      return null;
-    } else if (decl == null) {
-      //In our cil-file it means, that we have function pointer
-      id = new LocalVariableIdentifier(expression.getName(), expression.getExpressionType(), function, dereferenceCounter);
-    } else {
-      //Composite type
-      return null;
-    }
+    creator.clearDereference();
+    AbstractIdentifier id = expression.accept(creator);
     result.add(Pair.of(id, accessMode));
     return null;
   }
@@ -149,14 +124,15 @@ public class ExpressionHandler implements CExpressionVisitor<Void, HandleCodeExc
   public Void visit(CUnaryExpression expression) throws HandleCodeException {
     if (expression.getOperator() == CUnaryExpression.UnaryOperator.STAR) {
       //write: *s =
-      ++dereferenceCounter;
-      expression.getOperand().accept(this);
+      creator.clearDereference();
+      AbstractIdentifier id = expression.accept(creator);
+      result.add(Pair.of(id, accessMode));
       //read: s
-      dereferenceCounter = 0;
     } else if (expression.getOperator() == CUnaryExpression.UnaryOperator.AMPER) {
-      --dereferenceCounter;
-      expression.getOperand().accept(this);
-      dereferenceCounter = 0;
+      creator.clearDereference();
+      AbstractIdentifier id = expression.accept(creator);
+      result.add(Pair.of(id, accessMode));
+      return null;
     }
     //In all other unary operation we only read the operand
     accessMode = Access.READ;

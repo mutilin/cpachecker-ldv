@@ -28,8 +28,8 @@ import java.io.FileOutputStream;
 import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -40,12 +40,12 @@ import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.abm.ABMRestoreStack;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
-import org.sosy_lab.cpachecker.cpa.local.LocalTransferRelation;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.AccessPoint;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsLock;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
@@ -62,7 +62,7 @@ import org.sosy_lab.cpachecker.util.identifiers.StructureIdentifier;
 @Options(prefix="cpa.usagestatistics")
 public class UsageStatisticsCPAStatistics implements Statistics {
 
-  private Map<SingleIdentifier, Set<UsageInfo>> Stat;
+  private Map<SingleIdentifier, List<UsageInfo>> Stat;
   //ABM interface to restore original callstacks
   private ABMRestoreStack stackRestoration;
 
@@ -98,56 +98,54 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
   }
 
-  public void add(List<Pair<SingleIdentifier, Access>> result, UsageStatisticsState state, int line, EdgeType type) throws HandleCodeException {
-    Set<UsageInfo> uset;
-    SingleIdentifier id;
+  public void add(SingleIdentifier id, Access access, UsageStatisticsState state, EdgeType type) throws HandleCodeException {
+    if (state.containsLinks(id)) {
+      id = (SingleIdentifier) state.getLinks(id);
+    }
+    if (skippedvariables != null && skippedvariables.contains(id.getName())) {
+      return;
+    }
+    if (id instanceof LocalVariableIdentifier && id.getDereference() <= 0) {
+      //we don't save in statistics ordinary local variables
+      return;
+    }
+    if (id instanceof StructureIdentifier && !id.isGlobal() && !id.isPointer()) {
+      //skips such cases, as 'a.b'
+      return;
+    }
+    if (id instanceof StructureIdentifier)
+      id = ((StructureIdentifier)id).toStructureFieldIdentifier();
 
+    List<UsageInfo> uset;
     LockStatisticsState lockState = AbstractStates.extractStateByType(state, LockStatisticsState.class);
     CallstackState callstackState = AbstractStates.extractStateByType(state, CallstackState.class);
+    CFANode location = AbstractStates.extractLocation(state);
 
     callstackState = createStack(callstackState);
 
-    LineInfo lineInfo = new LineInfo(line);
+    LineInfo lineInfo = new LineInfo(location.getLineNumber());
     EdgeInfo info = new EdgeInfo(type);
 
-    for (Pair<SingleIdentifier, Access> tmpPair : result) {
-      id = tmpPair.getFirst();
-      if (id == null || (skippedvariables != null && skippedvariables.contains(id.getName()))) {
-        continue;
-      }
-      /*if (id.getName().equals("_r"))
-        System.out.println("Checker _r");*/
-      if (id instanceof LocalVariableIdentifier && id.getDereference() <= 0) {
-        //we don't save in statistics ordinary local variables
-        continue;
-      }
-      if (id instanceof StructureIdentifier && !id.isGlobal() && id.getType() != null
-          && LocalTransferRelation.findDereference(id.getType()) <= 0 && !((StructureIdentifier)id).isAnyPointer()) {
-        //skips such cases, as 'a.b'
-        //Now these cases aren't saved, but all can be in future...
-        continue;
-      }
-      if (id instanceof StructureIdentifier)
-        id = ((StructureIdentifier)id).toStructureFieldIdentifier();
-      UsageInfo usage = new UsageInfo(tmpPair.getSecond(), lineInfo, info, lockState, callstackState);
+    UsageInfo usage = new UsageInfo(access, lineInfo, info, lockState, callstackState);
 
-      if (!Stat.containsKey(id)) {
-        uset = new HashSet<>();
-        Stat.put(id, uset);
-      } else {
-        uset = Stat.get(id);
-      }
-      uset.add(usage);
+    if (!Stat.containsKey(id)) {
+      uset = new LinkedList<>();
+      Stat.put(id, uset);
+    } else {
+      uset = Stat.get(id);
     }
+    uset.add(usage);
   }
 
-  private Set<LockStatisticsLock> findAllLocks() {
-    Set<LockStatisticsLock> locks = new HashSet<>();
+  private List<LockStatisticsLock> findAllLocks() {
+    List<LockStatisticsLock> locks = new LinkedList<>();
 
     for (SingleIdentifier id : Stat.keySet()) {
-      Set<UsageInfo> uset = Stat.get(id);
+      List<UsageInfo> uset = Stat.get(id);
 
       for (UsageInfo uinfo : uset){
+        if (uinfo.getLockState() == null)
+          continue;
     	  for (LockStatisticsLock lock : uinfo.getLockState().getLocks()) {
     		  if( !lock.existsIn(locks)) {
     	      locks.add(lock);
@@ -162,50 +160,70 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   /*
    * looks through all unsafe cases of current identifier and find the example of two lines with different locks, one of them must be 'write'
    */
-  private void createVisualization(SingleIdentifier id, UsageInfo ui, PrintWriter writer) {
-    LinkedList<CallstackState> tmpList = new LinkedList<>();
+  private void createVisualization(SingleIdentifier id, UsageInfo usage, PrintWriter writer) {
     LinkedList<TreeLeaf> leafStack = new LinkedList<>();
-    TreeLeaf tmpLeaf, currentLeaf;
-    CallstackState tmpState;
+    TreeLeaf currentLeaf;
 
-    LockStatisticsState Locks = ui.getLockState();
-    currentLeaf = TreeLeaf.clearTrunkState();
-    for (LockStatisticsLock lock : Locks.getLocks()) {
-      for (AccessPoint accessPoint : lock.getAccessPoints()) {
-        currentLeaf = TreeLeaf.getTrunkState();
-        tmpState = accessPoint.getCallstack();
-        tmpList.clear();
-        //revert callstacks of locks
-        while (tmpState != null) {
-          tmpList.push(tmpState);
-          tmpState = tmpState.getPreviousState();
+    TreeLeaf.clearTrunkState();
+    LockStatisticsState Locks = usage.getLockState();
+    if (Locks != null) {
+      for (LockStatisticsLock lock : Locks.getLocks()) {
+        for (AccessPoint accessPoint : lock.getAccessPoints()) {
+          currentLeaf = createTree(accessPoint.getCallstack());
+          currentLeaf.add(lock.toString(), accessPoint.line.line);
         }
-        //create tree of calls for locks
-        tmpState = tmpList.getFirst();
-        if (!tmpState.getCallNode().getFunctionName().equals(tmpState.getCurrentFunction()))
-          currentLeaf = currentLeaf.add(tmpList.getFirst().getCallNode().getFunctionName(), 0);
-        for (CallstackState callstack : tmpList) {
-          currentLeaf = currentLeaf.add(callstack);
-        }
-        currentLeaf.add(lock.getName() + "()", accessPoint.line.line);
       }
     }
 
-    tmpState = ui.getCallStack();
-    tmpList.clear();
-    //revert call stack of error trace to variable
-    while (tmpState != null) {
-      tmpList.push(tmpState);
-      tmpState = tmpState.getPreviousState();
-    }
-    //add to tree of calls this path
+    currentLeaf = createTree(usage.getCallStack());
+    currentLeaf.addLast(createIdUsageView(id, usage), usage.getLine().line);
+
+    //print this tree with aide of dfs
     currentLeaf = TreeLeaf.getTrunkState();
-    tmpState = tmpList.getFirst();
-    if (!tmpState.getCallNode().getFunctionName().equals(tmpState.getCurrentFunction()))
-      currentLeaf = currentLeaf.add(tmpList.getFirst().getCallNode().getFunctionName(), 0);
-    for (CallstackState callstack : tmpList) {
-      currentLeaf = currentLeaf.addLast(callstack);
+    leafStack.clear();
+    if (currentLeaf.children.size() > 0) {
+      leafStack.push(currentLeaf);
+      currentLeaf = currentLeaf.children.getFirst();
+    } else {
+      System.err.println("Empty error path, can't proceed");
+      return;
     }
+    writer.println("Line 0:     N0 -{/*_____________________*/}-> N0");
+    writer.println("Line 0:     N0 -{/*" + (Locks == null ? "empty" : Locks.toString()) + "*/}-> N0");
+    while (currentLeaf != null) {
+      if (currentLeaf.children.size() > 0) {
+        writer.println("Line " + currentLeaf.line + ":     N0 -{" + currentLeaf.code + "();}-> N0");
+        writer.println("Line 0:     N0 -{Function start dummy edge}-> N0");
+        leafStack.push(currentLeaf);
+        currentLeaf = currentLeaf.children.getFirst();
+      } else {
+        writer.println("Line " + currentLeaf.line + ":     N0 -{" + currentLeaf.code + "}-> N0");
+        currentLeaf = findFork(writer, currentLeaf, leafStack);
+      }
+    }
+  }
+
+  private TreeLeaf findFork(PrintWriter writer, TreeLeaf pCurrentLeaf, LinkedList<TreeLeaf> leafStack) {
+    TreeLeaf tmpLeaf, currentLeaf = pCurrentLeaf;
+
+    while (true) {
+      tmpLeaf = leafStack.pop();
+      if (tmpLeaf.children.size() > 1  && !tmpLeaf.children.getLast().equals(currentLeaf)) {
+        leafStack.push(tmpLeaf);
+        currentLeaf = tmpLeaf.children.get(tmpLeaf.children.indexOf(currentLeaf) + 1);
+        break;
+      }
+      if (tmpLeaf.equals(TreeLeaf.getTrunkState())) {
+        currentLeaf = null;
+        break;
+      }
+      writer.println("Line 0:     N0 -{return;}-> N0");
+      currentLeaf = tmpLeaf;
+    }
+    return currentLeaf;
+  }
+
+  private String createIdUsageView(SingleIdentifier id, UsageInfo ui) {
     String name = id.toString();
     if (ui.getEdgeInfo().getEdgeType() == EdgeType.ASSIGNMENT) {
       if (ui.getAccess() == Access.READ) {
@@ -220,48 +238,37 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     } else if (ui.getEdgeInfo().getEdgeType() == EdgeType.DECLARATION) {
       name = id.getType().toASTString(name);
     }
-    currentLeaf.addLast(name, ui.getLine().line);
+    return name;
+  }
 
-    //print this tree with aide of dfs
+  private TreeLeaf createTree(CallstackState state) {
+    LinkedList<CallstackState> tmpList = revertCallstack(state);
+    TreeLeaf currentLeaf;
+    CallstackState tmpState;
+
+    //add to tree of calls this path
     currentLeaf = TreeLeaf.getTrunkState();
-    leafStack.clear();
-    if (currentLeaf.children.size() > 0) {
-      leafStack.push(currentLeaf);
-      currentLeaf = currentLeaf.children.getFirst();
-    } else {
-      System.err.println("Empty error path, can't proceed");
-      return;
+    tmpState = tmpList.getFirst();
+    if (!tmpState.getCallNode().getFunctionName().equals(tmpState.getCurrentFunction()))
+      currentLeaf = currentLeaf.add(tmpList.getFirst().getCallNode().getFunctionName(), 0);
+    for (CallstackState callstack : tmpList) {
+      currentLeaf = currentLeaf.addLast(callstack);
     }
-    writer.println("Line 0:     N0 -{/*_____________________*/}-> N0");
-    writer.println("Line 0:     N0 -{/*" + ui.getLockState().toString() + "*/}-> N0");
-    while (currentLeaf != null) {
-      if (currentLeaf.children.size() > 0) {
-        writer.println("Line " + currentLeaf.line + ":     N0 -{" + currentLeaf.code + "();}-> N0");
-        writer.println("Line 0:     N0 -{Function start dummy edge}-> N0");
-        leafStack.push(currentLeaf);
-        currentLeaf = currentLeaf.children.getFirst();
-      } else {
-        writer.println("Line " + currentLeaf.line + ":     N0 -{" + currentLeaf.code + "}-> N0");
-        while (true) {
-          tmpLeaf = leafStack.pop();
-          if (tmpLeaf.children.size() > 1  && !tmpLeaf.children.getLast().equals(currentLeaf)) {
-            leafStack.push(tmpLeaf);
-            currentLeaf = tmpLeaf.children.get(tmpLeaf.children.indexOf(currentLeaf) + 1);
-            break;
-          }
-          if (tmpLeaf.equals(TreeLeaf.getTrunkState())) {
-            currentLeaf = null;
-            break;
-          }
-          writer.println("Line 0:     N0 -{return;}-> N0");
-          currentLeaf = tmpLeaf;
-        }
-      }
+    return currentLeaf;
+  }
+
+  private LinkedList<CallstackState> revertCallstack(CallstackState tmpState) {
+    LinkedList<CallstackState> tmpList = new LinkedList<>();
+
+    while (tmpState != null) {
+      tmpList.push(tmpState);
+      tmpState = tmpState.getPreviousState();
     }
+    return tmpList;
   }
 
   private void createVisualization(SingleIdentifier id, PrintWriter writer) {
-    Set<UsageInfo> uinfo = Stat.get(id);
+    List<UsageInfo> uinfo = Stat.get(id);
 
     if (uinfo == null || uinfo.size() == 0)
       return;
@@ -274,15 +281,15 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     } else {
       System.err.println("What is it?" + id.toString());
     }
-    if (id.getDereference() < 0) {
+    /*if (id.getDereference() < 0) {
       System.out.println("Adress unsafe: " + id.getName());
-    }
+    }*/
     writer.println(id.getDereference());
     writer.println(id.getType().toASTString(id.getName()));
     writer.println("Line 0:     N0 -{/*Number of usages:" + uinfo.size() + "*/}-> N0");
     writer.println("Line 0:     N0 -{/*Two examples:*/}-> N0");
     try {
-      Pair<UsageInfo, UsageInfo> tmpPair = unsafeDetector.getSomeUnsafePair(uinfo);
+      Pair<UsageInfo, UsageInfo> tmpPair = unsafeDetector.getUnsafePair(uinfo);
       createVisualization(id, tmpPair.getFirst(), writer);
       createVisualization(id, tmpPair.getSecond(), writer);
       /*writer.println("Line 0:     N0 -{_____________________}-> N0");
@@ -301,57 +308,41 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 		PrintWriter writer = null;
 		FileOutputStream file = null;
 
-
-    /*Collection<GlobalIdentifier> global = new HashSet<GlobalIdentifier>();
-    Collection<LocalIdentifier> local = new HashSet<LocalIdentifier>();
-    Collection<StructureFieldIdentifier> fields = new HashSet<StructureFieldIdentifier>();*/
-    int global = 0, local = 0, fields = 0;
-    int globalPointer = 0, localPointer = 0, fieldPointer = 0;
-
     try {
       file = new FileOutputStream (outputStatFileName);
       writer = new PrintWriter(file);
     } catch(FileNotFoundException e) {
-      System.out.println("Cannot open file " + outputStatFileName);
+      System.err.println("Cannot open file " + outputStatFileName);
       return;
     }
 
-    for (SingleIdentifier id : Stat.keySet()) {
-      if (id instanceof GlobalVariableIdentifier) {
-        if (id.getDereference() == 0)
-          global++;
-        else
-          globalPointer++;
-      }
-      else if (id instanceof LocalVariableIdentifier) {
-        if (id.getDereference() == 0)
-          local++;
-        else
-          localPointer++;
-      }
-      else if (id instanceof StructureFieldIdentifier) {
-        if (id.getDereference() == 0)
-          fields++;
-        else
-          fieldPointer++;
-      }
+    printCountStatistics(writer, Stat.keySet());
+    Collection<SingleIdentifier> unsafeCases = unsafeDetector.getUnsafes(Stat);
+    printCountStatistics(writer, unsafeCases);
+    printLockStatistics(writer);
+
+    for (SingleIdentifier id : unsafeCases) {
+      createVisualization(id, writer);
     }
 
-    writer.println(global);
-    writer.println(globalPointer);
-    writer.println(local);
-    writer.println(localPointer);
-    //writer.println("--Structures:           " + structures);
-    writer.println(fields);
-    writer.println(fieldPointer);
+    writer.close();
+  }
 
-    writer.println(global + globalPointer + local + localPointer + fields + fieldPointer);
-    //writer.println(totalVarUsageCounter);
-    //writer.println(skippedUsageCounter);
+  private void printLockStatistics(PrintWriter writer) {
+    List<LockStatisticsLock> mutexes = findAllLocks();
 
-    Collection<SingleIdentifier> unsafeCases = unsafeDetector.getUnsafes(Stat);
-    global = globalPointer = local = localPointer = fields = fieldPointer= 0;
-    for (SingleIdentifier id : unsafeCases) {
+    Collections.sort(mutexes, new LockStatisticsLock.LockComparator());
+    writer.println(mutexes.size());
+    for (LockStatisticsLock lock : mutexes) {
+      writer.println(lock.toString());
+    }
+  }
+
+  private void printCountStatistics(PrintWriter writer, Collection<SingleIdentifier> idSet) {
+    int global = 0, local = 0, fields = 0;
+    int globalPointer = 0, localPointer = 0, fieldPointer = 0;
+
+    for (SingleIdentifier id : idSet) {
       if (id instanceof GlobalVariableIdentifier) {
         if (id.getDereference() == 0)
           global++;
@@ -380,21 +371,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     writer.println(fields);
     writer.println(fieldPointer);
     writer.println(global + globalPointer + local + localPointer + fields + fieldPointer);
-
-    Set<LockStatisticsLock> mutexes = findAllLocks();
-
-    writer.println(mutexes.size());
-
-    for (LockStatisticsLock lock : mutexes) {
-      writer.println(lock.toString());
-    }
-    //printCases(dataProcess.getDescription(), unsafeCases);
-
-    for (SingleIdentifier id : unsafeCases) {
-      createVisualization(id, writer);
-    }
-
-    writer.close();
   }
 
   @Override

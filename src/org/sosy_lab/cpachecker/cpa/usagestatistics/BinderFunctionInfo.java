@@ -37,14 +37,35 @@ import com.google.common.base.Preconditions;
  * Information about special functions like sdlFirst() and sdlNext();
  */
 public class BinderFunctionInfo {
+
+  public static class ParameterInfo {
+    public final Access access;
+    public final int dereference;
+
+    public ParameterInfo(Access a, int d) {
+      access = a;
+      dereference = d;
+    }
+  }
+
+  public static class LinkerInfo {
+    public final int num;
+    public final int dereference;
+
+    LinkerInfo(int p, int d) {
+      num = p;
+      dereference = d;
+    }
+  }
+
   String name;
   int parameters;
-  List<Access> pInfo;
+  List<ParameterInfo> pInfo;
   /*
    * 0 - before equal,
    * 1 - first parameter, etc..
    */
-  Pair<Integer, Integer> linkInfo;
+  Pair<LinkerInfo, LinkerInfo> linkInfo;
 
   BinderFunctionInfo(String nm, Configuration pConfig) throws InvalidConfigurationException {
     name = nm;
@@ -53,15 +74,28 @@ public class BinderFunctionInfo {
       String line = pConfig.getProperty(name + ".pInfo");
       Preconditions.checkNotNull(line);
       String[] options = line.split(", *");
+      String[] pOption;
       pInfo = new LinkedList<>();
       for (String option : options) {
-        pInfo.add(Access.getValue(option));
+        pOption = option.split(":");
+        if (pOption.length == 1)
+          pInfo.add(new ParameterInfo(Access.getValue(pOption[0]), 0));
+        else
+          pInfo.add(new ParameterInfo(Access.getValue(pOption[0]), Integer.parseInt(pOption[1])));
       }
       line = pConfig.getProperty(name + ".linkInfo");
       if (line != null) {
         options = line.split(", *");
         assert options.length == 2;
-        linkInfo = Pair.of(Integer.parseInt(options[0]), Integer.parseInt(options[1]));
+        LinkerInfo[] lInfo = new LinkerInfo[2];
+        for (int i = 0; i < 2; i++) {
+          pOption = options[i].split(":");
+          if (pOption.length == 1)
+            lInfo[i] = new LinkerInfo(Integer.parseInt(pOption[0]), 0);
+          else
+            lInfo[i] = new LinkerInfo(Integer.parseInt(pOption[0]), Integer.parseInt(pOption[1]));
+        }
+        linkInfo = Pair.of(lInfo[0], lInfo[1]);
       } else {
         linkInfo = null;
       }

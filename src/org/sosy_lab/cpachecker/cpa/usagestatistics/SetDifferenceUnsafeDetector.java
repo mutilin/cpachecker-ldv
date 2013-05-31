@@ -25,8 +25,8 @@ package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.Configuration;
@@ -41,7 +41,7 @@ public class SetDifferenceUnsafeDetector implements UnsafeDetector {
 	}
 
 @Override
-  public Collection<SingleIdentifier> getUnsafes(Map<SingleIdentifier, Set<UsageInfo>> variables) {
+  public Collection<SingleIdentifier> getUnsafes(Map<SingleIdentifier, List<UsageInfo>> variables) {
     Collection<SingleIdentifier> unsafe = new HashSet<>();
     //Map<Integer, Set<Set<LockStatisticsLock>>> Cases = new HashMap<Integer, Set<Set<LockStatisticsLock>>>();
 /*
@@ -108,7 +108,7 @@ public class SetDifferenceUnsafeDetector implements UnsafeDetector {
   }
 
   @Override
-  public Pair<UsageInfo, UsageInfo> getSomeUnsafePair(Set<UsageInfo> uinfo)
+  public Pair<UsageInfo, UsageInfo> getUnsafePair(List<UsageInfo> uinfo)
 		throws HandleCodeException {
 	// TODO Auto-generated method stub
 	return null;

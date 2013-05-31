@@ -24,8 +24,8 @@
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
@@ -43,7 +43,7 @@ public interface UnsafeDetector {
    * @param varStatistics - all collected variables
    * @return collection of unsafe variables
    */
-  public Collection<SingleIdentifier> getUnsafes(Map<SingleIdentifier, Set<UsageInfo>> varStatistics);
+  public Collection<SingleIdentifier> getUnsafes(Map<SingleIdentifier, List<UsageInfo>> varStatistics);
 
   /**
    * function to get simple description, its useful to write it in
@@ -53,6 +53,6 @@ public interface UnsafeDetector {
 
   public String getDescription();
 
-  public Pair<UsageInfo, UsageInfo> getSomeUnsafePair(Set<UsageInfo> uinfo)
+  public Pair<UsageInfo, UsageInfo> getUnsafePair(List<UsageInfo> uinfo)
 		throws HandleCodeException;
 }

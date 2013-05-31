@@ -28,8 +28,6 @@ import static org.sosy_lab.cpachecker.util.AbstractStates.extractLocation;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -58,13 +56,14 @@ import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
-import org.sosy_lab.cpachecker.cfa.types.c.CPointerType;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackTransferRelation;
+import org.sosy_lab.cpachecker.cpa.local.IdentifierCreator;
 import org.sosy_lab.cpachecker.cpa.local.LocalState.DataType;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.BinderFunctionInfo.LinkerInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.EdgeInfo.EdgeType;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
@@ -98,6 +97,10 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
   //TODO: strengthen (CallStackCPA, LockStatisticsCPA)
   //pass the state to LockStatisticsCPA to bind Callstack to lock
   private UsageStatisticsState oldState;
+
+  int globalAdress = 0;
+  int localAdress = 0;
+  int structAdress = 0;
 
   public UsageStatisticsTransferRelation(TransferRelation pWrappedTransfer,
       Configuration config, UsageStatisticsCPAStatistics s, CallstackTransferRelation transfer) throws InvalidConfigurationException {
@@ -188,7 +191,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
   private UsageStatisticsState handleEdge(UsageStatisticsPrecision precision, UsageStatisticsState newState
       , UsageStatisticsState oldState, CFAEdge pCfaEdge) throws CPATransferException {
 
-    /*if (pCfaEdge.getLineNumber() > 207759 && pCfaEdge.getLineNumber() < 207792)
+    /*if (pCfaEdge.getLineNumber() > 18079 && pCfaEdge.getLineNumber() < 18082)
       System.out.println("In CondWait()");*/
     switch(pCfaEdge.getEdgeType()) {
 
@@ -238,8 +241,8 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       pNewState = null;
       return;
     }
-    /*if (functionName.equals("ddlInit"))
-      System.out.println("In ddlInit");*/
+    /*if (functionName.equals("timerUsrFree"))
+      System.out.println("In timerUsrFree");*/
     if (statement instanceof CFunctionCallAssignmentStatement) {
       /*
        * a = f(b)
@@ -288,13 +291,10 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       CExpression initExpression = ((CInitializerExpression)init).getExpression();
       visitStatement(pNewState, pPrecision, initExpression, Access.READ, EdgeType.DECLARATION);
 
-      int line = initExpression.getFileLocation().getStartingLineNumber();
       String funcName = AbstractStates.extractStateByType(pNewState, CallstackState.class).getCurrentFunction();
 
-      SingleIdentifier id = SingleIdentifier.createIdentifier(decl, funcName, 0);
-      List<Pair<SingleIdentifier, Access>> result = new LinkedList<>();
-      result.add(Pair.of(id, Access.WRITE));
-      statistics.add(result, pNewState, line, EdgeType.DECLARATION);
+      AbstractIdentifier id = IdentifierCreator.createIdentifier(decl, funcName, 0);
+      visitId(pNewState, pPrecision, id, Access.WRITE, EdgeType.DECLARATION);
     }
   }
 
@@ -309,21 +309,19 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
       assert params.size() == currentInfo.parameters;
 
-      if (currentInfo.linkInfo != null) {
-        //Sometimes these functions are used not only for linkings.
-        //For example, sdlGetFirst also deletes element.
-        //So, if we can't link (no left side), we skip it
-        if (currentInfo.linkInfo.getFirst() == 0 && left != null) {
-          linkVariables(pNewState, left, params.get(currentInfo.linkInfo.getSecond() - 1));
-        } else if (currentInfo.linkInfo.getSecond() == 0 && left != null) {
-          linkVariables(pNewState, params.get(currentInfo.linkInfo.getFirst() - 1), left);
-        } else if (left != null)
-          linkVariables(pNewState, params.get(currentInfo.linkInfo.getFirst() - 1),
-              params.get(currentInfo.linkInfo.getSecond() - 1));
-      }
+      linkVariables(pNewState, left, params, currentInfo.linkInfo);
+
+      AbstractIdentifier id;
+      IdentifierCreator creator = new IdentifierCreator();
+      String functionName = AbstractStates.extractStateByType(pNewState, CallstackState.class).getCurrentFunction();
+      creator.clear(functionName);
+
       for (int i = 0; i < params.size(); i++) {
-        visitStatement(oldState, pPrecision, params.get(i), currentInfo.pInfo.get(i), EdgeType.FUNCTION_CALL);
+        creator.setDereference(currentInfo.pInfo.get(i).dereference);
+        id = params.get(i).accept(creator);
+        visitId(oldState, pPrecision, id, currentInfo.pInfo.get(i).access, EdgeType.FUNCTION_CALL);
       }
+
     } else {
       for (CExpression p : fcExpression.getParameterExpressions()) {
         visitStatement(oldState, pPrecision, p, Access.READ, EdgeType.FUNCTION_CALL);
@@ -363,47 +361,55 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     }
   }
 
-  private void linkVariables(UsageStatisticsState state, CExpression in, CExpression from) throws HandleCodeException {
-    String functionName = AbstractStates.extractStateByType(state, CallstackState.class).getCurrentFunction();
-    List<Pair<SingleIdentifier, Access>> list;
-    SingleIdentifier idIn, idFrom;
+  private void linkVariables(UsageStatisticsState state, CExpression left, List<CExpression> params
+      , Pair<LinkerInfo, LinkerInfo> linkInfo) throws HandleCodeException {
+    String function = AbstractStates.extractStateByType(state, CallstackState.class).getCurrentFunction();
+    AbstractIdentifier leftId, rightId;
+    IdentifierCreator creator = new IdentifierCreator();
+    creator.clear(function);
 
-    /*if (in.getClass() != CIdExpression.class || (from.getClass() != CCastExpression.class && from.getClass() != CIdExpression.class))
-      return;*/
-    FirstVariableFinder finder = new FirstVariableFinder();
-    finder.setMode(functionName, Access.READ);
-    in.accept(finder);
-    list = finder.result;
-    if (list.size() != 1)
-      return;
-    idIn = list.get(0).getFirst();
-    if (idIn == null)
-      return;
-    finder.setMode(functionName, Access.READ);
-    from.accept(finder);
-    list = finder.result;
-    if (list.size() != 1)
-      return;
-    idFrom = list.get(0).getFirst();
-    if (idFrom == null)
-      return;
+    if (linkInfo != null) {
+      //Sometimes these functions are used not only for linkings.
+      //For example, sdlGetFirst also deletes element.
+      //So, if we can't link (no left side), we skip it
+      LinkerInfo info1, info2;
+      info1 = linkInfo.getFirst();
+      info2 = linkInfo.getSecond();
+      if (info1.num == 0 && left != null) {
+        creator.setDereference(info1.dereference);
+        leftId = left.accept(creator);
+        creator.setDereference(info2.dereference);
+        rightId = params.get(info2.num - 1).accept(creator);
 
-    if (idIn.getDereference() == 0 && idIn.getType().getClass() == CPointerType.class) {
+      } else if (info2.num == 0 && left != null) {
+        creator.setDereference(info2.dereference);
+        rightId = left.accept(creator);
+        creator.setDereference(info1.dereference);
+        leftId = params.get(info1.num - 1).accept(creator);
 
-    } else if (idIn.getDereference() > 0 && state.contains(idIn)) {
-      idIn = state.get(idIn);
-    } else {
-      System.out.println(idIn.getName() + " and " + idFrom.getName() + " isn't linked");
-      return;
+      } else if (info1.num > 0 && info2.num > 0) {
+        creator.setDereference(info1.dereference);
+        leftId = params.get(info1.num - 1).accept(creator);
+        creator.setDereference(info2.dereference);
+        rightId = params.get(info2.num - 1).accept(creator);
+      } else {
+        /* f.e. sdlGetFirst(), which is used for deleting element
+         * we don't link, but it isn't an error
+         */
+        return;
+      }
+      linkId(state, leftId, rightId);
     }
 
-    if (idFrom.getDereference() < 0 ||
-        (idFrom.getDereference() == 0 && idIn.getDereference() == 0 && (idIn.getType().getClass() == CPointerType.class))) {
-       if (state.contains(idFrom)) {
-         idFrom = state.get(idFrom);
-       }
-       state.put(idIn, idFrom.clearDereference());
-     }
+  }
+
+  private void linkId(UsageStatisticsState state, AbstractIdentifier idIn, AbstractIdentifier idFrom) throws HandleCodeException {
+    if (idIn == null || idFrom == null)
+      return;
+    if (state.containsLinks(idFrom)) {
+      idFrom = state.getLinks(idFrom);
+    }
+    state.put(idIn, idFrom);
   }
 
   private void visitStatement(UsageStatisticsState state, UsageStatisticsPrecision pPrecision
@@ -412,41 +418,61 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     handler.setMode(functionName, access);
     expression.accept(handler);
 
+    for (Pair<AbstractIdentifier, Access> pair : handler.result) {
+      visitId(state, pPrecision, pair.getFirst(), pair.getSecond(), eType);
+    }
+
+  }
+
+  private void visitId(UsageStatisticsState state, UsageStatisticsPrecision pPrecision
+      , AbstractIdentifier aId, Access access, EdgeType eType) throws HandleCodeException {
+
     //Precise information, using results of shared analysis
+    if (! (aId instanceof SingleIdentifier))
+      //Not now, may be later
+      return;
+    SingleIdentifier id = (SingleIdentifier) aId;
     CFANode node = AbstractStates.extractLocation(state);
     Map<GeneralIdentifier, DataType> localInfo = pPrecision.get(node);
+
     if (localInfo != null) {
-      Set<Pair<SingleIdentifier, Access>> toDelete = new HashSet<>();
-      for (Pair<SingleIdentifier, Access> pair : handler.result) {
-        SingleIdentifier id = pair.getFirst();
-        /*if (id.getName().equals("len"))
-          System.out.println("Adding len");*/
-        GeneralIdentifier generalId = id.getGeneralId();
-        DataType dataType = null;
-        if ((dataType = localInfo.get(generalId)) == DataType.LOCAL) {
-          toDelete.add(pair);
-          continue;
-        }
-        //may be, we have information about all structure?
-        AbstractIdentifier tmpId = id;
-        while (tmpId instanceof StructureIdentifier && dataType != DataType.GLOBAL) {
-          tmpId = ((StructureIdentifier)tmpId).getOwner();
-          if (tmpId instanceof SingleIdentifier) {
-            generalId = ((SingleIdentifier)tmpId).getGeneralId();
-            if ((dataType = localInfo.get(generalId)) == DataType.LOCAL) {
-              toDelete.add(pair);
-              break;
-            }
-          }
-          //else we can't say anything
-        }
+      /*if (id instanceof SingleIdentifier && ((SingleIdentifier)id).getName().equals("s1")
+          //&& node.getLineNumber() > 18079 && node.getLineNumber() < 18082
+          )
+        System.out.println("Checker pc");*/
+      /*if (id.toString().contains("&")) {
+        if (id instanceof GlobalVariableIdentifier)
+          globalAdress++;
+        else if (id instanceof LocalVariableIdentifier)
+          localAdress++;
+        else if (id instanceof StructureIdentifier)
+          structAdress++;
+        else
+          System.out.println(id.toString());
+        System.out.println(globalAdress + " : " + localAdress + " : " + structAdress);
+      }*/
+      /*if (id.getName().equals("pc"))
+        System.out.println("Adding pc");*/
+      GeneralIdentifier generalId = id.getGeneralId();
+      DataType dataType = null;
+      if ((dataType = localInfo.get(generalId)) == DataType.LOCAL) {
+        return;
       }
-      if (!toDelete.isEmpty()) {
-        handler.result.removeAll(toDelete);
+      //may be, we have information about all structure?
+      AbstractIdentifier tmpId = id;
+      while (tmpId instanceof StructureIdentifier && dataType != DataType.GLOBAL) {
+        tmpId = ((StructureIdentifier)tmpId).getOwner();
+        if (tmpId instanceof SingleIdentifier) {
+          generalId = ((SingleIdentifier)tmpId).getGeneralId();
+          if ((dataType = localInfo.get(generalId)) == DataType.LOCAL) {
+            return;
+          }
+        }
+        //else we can't say anything
       }
     }
 
-    statistics.add(handler.result, state, expression.getFileLocation().getStartingLineNumber(), eType);
+    statistics.add(id, access, state, eType);
   }
 
   @Override
