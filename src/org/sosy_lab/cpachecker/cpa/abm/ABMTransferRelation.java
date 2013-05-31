@@ -67,10 +67,13 @@ import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
 import org.sosy_lab.cpachecker.cpa.arg.ARGReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
-import org.sosy_lab.cpachecker.cpa.boundedrecursion.BoundedRecursionCPA;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackCPA;
+import org.sosy_lab.cpachecker.cpa.callstack.CallstackReducer;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackTransferRelation;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsCPA;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsReducer;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
@@ -360,14 +363,14 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
   final Timer searchingTimer = new Timer();
 
 
-  public void changeAlgorithm(BoundedRecursionCPA brCpa, Configuration pConfig) throws InvalidConfigurationException {
+  /*public void changeAlgorithm(BoundedRecursionCPA brCpa, Configuration pConfig) throws InvalidConfigurationException {
     //evil hack
     String saveLocal = pConfig.getProperty("analysis.saveLocalResults");
     if (saveLocal != null && saveLocal.equals("true"))
       algorithm = new CPALocalSaveAlgorithm(brCpa, logger, pConfig);
     else
       algorithm = new CPAAlgorithm(brCpa, logger, pConfig);
-  }
+  }*/
 
   public ABMTransferRelation(Configuration pConfig, LogManager pLogger, ABMCPA abmCpa,
       ReachedSetFactory pReachedSetFactory) throws InvalidConfigurationException {
@@ -387,6 +390,10 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
     PCCInformation.instantiate(pConfig);
     abmCPA = abmCpa;
 
+    LockStatisticsCPA tmpCpa;
+    if ((tmpCpa = CPAs.retrieveCPA(abmCpa, LockStatisticsCPA.class)) != null) {
+      ((LockStatisticsReducer)tmpCpa.getReducer()).setRestorator(this);
+    }
     assert wrappedReducer != null;
 
     entryFunction = pConfig.getProperty("analysis.entryFunction");
@@ -431,9 +438,8 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
         }
         if (BlockStack.contains(nextBlock)) {
           logger.log(Level.FINER, "BlockStack contains nextBlock");
-          //TODO Always function calls here?
-          CallstackState callstack = AbstractStates.extractStateByType(pElement, CallstackState.class);
-          throw new StopAnalysisException("ABM detects recursion", callstack.getCallNode());
+          //We shouldn't be here
+          throw new HandleCodeException("ABM detects recursion");
         }
         if (isHeadOfMainFunction(node)) {
           //skip main function
@@ -594,6 +600,16 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
       } else {
         returnElements = AbstractStates.filterLocations(reached, currentBlock.getReturnNodes())
             .toList();
+
+        //If we have LockStatisticsCPA, we should change a bit returned states
+        if (AbstractStates.extractStateByType(initialState, LockStatisticsState.class) != null) {
+          LockStatisticsState currentState;
+          CallstackReducer reducer = (CallstackReducer)CPAs.retrieveCPA(abmCPA, CallstackCPA.class).getReducer();
+          for (AbstractState returnState : returnElements) {
+            currentState = AbstractStates.extractStateByType(returnState, LockStatisticsState.class);
+            currentState.reduceCallstack(reducer, node);
+          }
+        }
       }
 
       ARGState rootOfBlock = null;
@@ -1234,23 +1250,17 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
     return true;
   }
 
-  public LinkedList<Block> getBlockStack() {
-    return BlockStack;
-  }
-
   @Override
   public CallstackState restoreCallstack(CallstackState state) throws HandleCodeException {
     CallstackState fullState = null, tmpState;
     CFANode currentNode, previousNode, predecessor;
-    CFAEdge edge;
 
     previousNode = null;
     for (int i = 0; i < BlockStack.size(); i++) {
       currentNode = BlockStack.get(i).getCallNode();
       predecessor = currentNode;
       for (int j = 0; j < currentNode.getNumEnteringEdges(); j++) {
-        edge = currentNode.getEnteringEdge(j);
-        predecessor = edge.getPredecessor();
+        predecessor = currentNode.getEnteringEdge(j).getPredecessor();
         if (previousNode == null && predecessor.getFunctionName().equals(entryFunction))
           break;
         else if (previousNode != null && predecessor.getFunctionName().equals(previousNode.getFunctionName()))
@@ -1259,23 +1269,28 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
       fullState = new CallstackState(fullState, currentNode.getFunctionName(), predecessor);
       previousNode = currentNode;
     }
-    CallstackState newState = state.clone();
-    tmpState = newState;
+    tmpState = state.clone();
     if (fullState != null) {
-      if (tmpState.getCurrentFunction().equals(fullState.getCurrentFunction()) && tmpState.getPreviousState() == null)
+      if (tmpState.getCurrentFunction().equals(fullState.getCurrentFunction()))
         return fullState;
       else if (!tmpState.getCurrentFunction().equals(fullState.getCurrentFunction()) && tmpState.getPreviousState() != null) {
         while (!tmpState.getPreviousState().getCurrentFunction().equals(fullState.getCurrentFunction()))
           tmpState = tmpState.getPreviousState();
-        tmpState.setPreviousState(fullState);
-        return newState;
-      } else if (tmpState.getCurrentFunction().equals(fullState.getCurrentFunction()) && tmpState.getPreviousState() != null) {
-        return fullState;
-      } else /*if (!tmpState.getCurrentFunction().equals(fullState.getCurrentFunction()) && tmpState.getPreviousState() == null)*/ {
-        throw new HandleCodeException("Strange situation in creating call stack");
+        tmpState = new CallstackState(fullState, state.getCurrentFunction(), tmpState.getCallNode());
+        return tmpState;
+      } else/* if (!tmpState.getCurrentFunction().equals(fullState.getCurrentFunction()) && tmpState.getPreviousState() == null) */{
+        currentNode = currentBlock.getCallNode();
+        for (int i = 0; i < currentNode.getNumEnteringEdges(); i++) {
+          previousNode = currentNode.getEnteringEdge(i).getPredecessor();
+          if (previousNode.getFunctionName().equals(fullState.getCurrentFunction())) {
+            tmpState = new CallstackState(fullState, tmpState.getCurrentFunction(), previousNode);
+            return tmpState;
+          }
+        }
+        throw new HandleCodeException("Can't find called function");
       }
     } else {
-      return newState;
+      return tmpState;
     }
   }
 
