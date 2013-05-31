@@ -79,13 +79,6 @@ public class LocalState implements AbstractState {
     returnExpression = ret;
   }
 
-  /*public void save(SingleIdentifier name, DataType type) {
-    if (DataInfo.containsKey(name))
-      DataInfo.put(name, DataType.max(type, DataInfo.get(name)));
-    else if (type != null)
-      DataInfo.put(name, type);
-  }*/
-
   public LocalState getPreviousState() {
     return previousState;
   }
@@ -130,27 +123,39 @@ public class LocalState implements AbstractState {
       }
     }
   }
-  public DataType getType(AbstractIdentifier name) {
-    if (DataInfo.containsKey(name))
+  public DataType getType(AbstractIdentifier pName) {
+    AbstractIdentifier name;
+    if (pName instanceof GlobalVariableIdentifier || pName instanceof LocalVariableIdentifier)
+      name = ((SingleIdentifier)pName).getGeneralId();
+    else
+      name = pName;
+
+    if (DataInfo.containsKey(name)) {
       return DataInfo.get(name);
-    else {
-      if (name instanceof GlobalVariableIdentifier)
+    } else {
+      if (name instanceof GlobalVariableIdentifier) {
         return DataType.GLOBAL;
-      else if (name instanceof LocalVariableIdentifier) {
+      } else if (name instanceof LocalVariableIdentifier) {
         LocalVariableIdentifier localId = (LocalVariableIdentifier) name;
-        if (localId.getDereference() <= 0/* && !(localId.getType() instanceof CPointerType)*/) {
-          //TODO may be precised...
+        if (localId.getDereference() == 0/* && !(localId.getType() instanceof CPointerType)*/) {
+          //it is not value of variable, it is memory location
           return DataType.LOCAL;
+        } else if (localId.getDereference() < 0) {
+          //this is error. We can't get address here
+          System.err.println("Adress in getType()");
         }
         return null;
       }
       else if (name instanceof BinaryIdentifier) {
-        //in good case, this if we won't use... But let it be.
+        //in good case, we won't use this... But let it be.
         DataType type1 = getType(((BinaryIdentifier)name).getIdentifier1());
         DataType type2 = getType(((BinaryIdentifier)name).getIdentifier2());
         return DataType.max(type1, type2);
       } else if (name instanceof ConstantIdentifier) {
-        return DataType.LOCAL;
+        /*if (name.getDereference() > 0)
+          return DataType.GLOBAL;
+        else*/
+          return DataType.LOCAL;
       } else if (name instanceof StructureIdentifier){
         StructureIdentifier id = (StructureIdentifier) name;
         return this.getType(id.getOwner());
@@ -173,9 +178,10 @@ public class LocalState implements AbstractState {
     return new LocalState(this.DataInfo, null, null);
   }
 
-  public void expand(LocalState rootState) {
+  public LocalState expand(LocalState rootState) {
+    //LocalState newState = this.clone();
     this.previousState = rootState.previousState;
-    //this.returnExpression = rootState.returnExpression;
+    return this;
   }
 
   public LocalState join(LocalState pState2) {

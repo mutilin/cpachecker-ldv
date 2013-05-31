@@ -65,7 +65,9 @@ import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.BinaryIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.ConstantIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.GeneralLocalVariableIdentifier;
+import org.sosy_lab.cpachecker.util.identifiers.GlobalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.LocalVariableIdentifier;
+import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.VariableIdentifier;
 
 @Options(prefix="cpa.local")
@@ -86,7 +88,7 @@ public class LocalTransferRelation implements TransferRelation {
 
     LocalState LocalElement = (LocalState) pState;
     LocalState successor = LocalElement.clone();
-    /*if (pCfaEdge.getLineNumber() > 98702 && pCfaEdge.getLineNumber() < 98710)
+    /*if (pCfaEdge.getLineNumber() > 18078 && pCfaEdge.getLineNumber() < 18084)
       System.out.println("In mq_open()");*/
     switch(pCfaEdge.getEdgeType()) {
 
@@ -188,8 +190,8 @@ public class LocalTransferRelation implements TransferRelation {
     LocalState newState = new LocalState(pSuccessor);
 
     CFunctionEntryNode functionEntryNode = callEdge.getSuccessor();
-    /*if (functionEntryNode.getFunctionName().equals("drv2qDevIns"))
-      System.out.println("In drv2qDevIns");*/
+    /*if (functionEntryNode.getFunctionName().equals("ddlInit"))
+      System.out.println("In ddlInit");*/
     List<String> paramNames = functionEntryNode.getFunctionParameterNames();
     List<CExpression> arguments = callEdge.getArguments();
 
@@ -200,8 +202,14 @@ public class LocalTransferRelation implements TransferRelation {
         currentArgument = arguments.get(i);
         dereference = findDereference(currentArgument.getExpressionType());
         AbstractIdentifier previousId;
-        int previousDeref = 0;
-        while (dereference > 0) {
+
+        for (int j = 1, previousDeref = 1; j <= dereference; j++, previousDeref++) {
+          LocalVariableIdentifier id = new GeneralLocalVariableIdentifier(paramNames.get(i), j);
+          previousId = createId(currentArgument, previousDeref);
+          DataType type = pSuccessor.getType(previousId);
+          newState.set(id, type);
+        }
+        /*while (dereference > 0) {
           LocalVariableIdentifier id = new GeneralLocalVariableIdentifier(paramNames.get(i), dereference);
           previousId = createId(currentArgument, previousDeref);
           if (previousId.getDereference() < 0) {
@@ -216,7 +224,7 @@ public class LocalTransferRelation implements TransferRelation {
           }
           dereference--;
           previousDeref++;
-        }
+        }*/
       }
     }
     // else, something like 'f(..)'. Now we can't do anything
@@ -235,10 +243,11 @@ public class LocalTransferRelation implements TransferRelation {
           (type instanceof CTypedefType && ((CTypedefType)type).getRealType() instanceof CPointerType)
           ) {
         CRightHandSide right = assignment.getRightHandSide();
-        AbstractIdentifier leftId = createId(left, findDereference(left.getExpressionType()));
+        int dereference = findDereference(left.getExpressionType());
+        AbstractIdentifier leftId = createId(left, dereference);
 
         if (right instanceof CExpression) {
-          assume(pSuccessor, leftId, (CExpression)right);
+          assume(pSuccessor, leftId, createId((CExpression)right, dereference));
         } else if (right instanceof CFunctionCallExpression) {
           if (pSuccessor.getType(leftId) == DataType.LOCAL) {
             //reset it
@@ -266,10 +275,13 @@ public class LocalTransferRelation implements TransferRelation {
 
   private AbstractIdentifier createId(CExpression expression, int dereference) throws HandleCodeException {
     idCreator.setDereference(dereference);
-    return expression.accept(idCreator);
+    AbstractIdentifier id = expression.accept(idCreator);
+    if (id instanceof GlobalVariableIdentifier || id instanceof LocalVariableIdentifier)
+      id = ((SingleIdentifier)id).getGeneralId();
+    return id;
   }
 
-  private void assume(LocalState pSuccessor, AbstractIdentifier leftId, CExpression right) throws HandleCodeException {
+  private void assume(LocalState pSuccessor, AbstractIdentifier leftId, AbstractIdentifier rightId) throws HandleCodeException {
     if (leftId instanceof ConstantIdentifier)
       //Can't assume to constant, but this situation can occur, if we have *(a + b)...
       return;
@@ -282,7 +294,7 @@ public class LocalTransferRelation implements TransferRelation {
       return;
     }*/
     //AbstractIdentifier left = (AbstractIdentifier) leftId;
-    AbstractIdentifier rightId = createId(right, leftId.getDereference());
+    //AbstractIdentifier rightId = createId(right, leftId.getDereference());
     if (leftId.isGlobal()) {
       //Variable is global, not memory location!
       //So, we should set the type of 'right' to global

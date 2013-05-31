@@ -43,8 +43,7 @@ public class LocalReducer implements Reducer {
   public AbstractState getVariableExpandedState(AbstractState pRootState, Block pReducedContext,
       AbstractState pReducedState) {
     LocalState newState = (LocalState)pReducedState;
-    newState.expand((LocalState)pRootState);
-    return newState;
+    return newState.expand((LocalState)pRootState);
   }
 
   @Override
