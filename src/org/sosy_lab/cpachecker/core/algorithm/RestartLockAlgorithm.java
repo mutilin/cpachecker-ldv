@@ -156,6 +156,9 @@ public class RestartLockAlgorithm implements Algorithm, StatisticsProvider {
     this.logger = pLogger;
     this.cfa = pCfa;
     this.globalConfig = pConfig;
+    String tmpString = pConfig.getProperty("precision.path");
+    if (tmpString != null)
+      outputFileName = tmpString;
   }
 
   @Override
@@ -312,6 +315,7 @@ public class RestartLockAlgorithm implements Algorithm, StatisticsProvider {
     try {
       file = new FileOutputStream (outputFileName);
       writer = new PrintWriter(file);
+      logger.log(Level.FINE, "Write precision to " + outputFileName);
       for (CFANode node : reachedStatistics.keySet()) {
         writer.println(node.toString());
         writer.println(reachedStatistics.get(node).toLog());

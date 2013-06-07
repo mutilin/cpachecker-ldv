@@ -113,6 +113,9 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
       ((LockStatisticsTransferRelation)LockCpa.getTransferRelation()).getFunctionHandler().setUsCPA(this);
     }
 
+    String tmpString = pConfig.getProperty("precision.path");
+    if (tmpString != null)
+      outputFileName = tmpString;
     PresisionParser parser = new PresisionParser(outputFileName, pCfa);
     this.precision = parser.parse();
   }
@@ -188,6 +191,7 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
   @Override
   public void collectStatistics(Collection<Statistics> pStatsCollection) {
     pStatsCollection.add(statistics);
+    super.collectStatistics(pStatsCollection);
   }
 
   public UsageStatisticsCPAStatistics getStats() {
