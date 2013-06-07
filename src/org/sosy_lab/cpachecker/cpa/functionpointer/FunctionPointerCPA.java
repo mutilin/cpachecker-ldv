@@ -29,7 +29,6 @@ import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
 import org.sosy_lab.cpachecker.core.defaults.MergeSepOperator;
-import org.sosy_lab.cpachecker.core.defaults.NoOpReducer;
 import org.sosy_lab.cpachecker.core.defaults.SingletonPrecision;
 import org.sosy_lab.cpachecker.core.defaults.StaticPrecisionAdjustment;
 import org.sosy_lab.cpachecker.core.defaults.StopSepOperator;
@@ -65,7 +64,7 @@ public class FunctionPointerCPA implements ConfigurableProgramAnalysisWithABM {
     this.stopOperator = new StopSepOperator(abstractDomain);
     this.transferRelation = new FunctionPointerTransferRelation(pLogger, pConfig);
     this.precisionAdjustment = StaticPrecisionAdjustment.getInstance();
-    this.reducer = NoOpReducer.getInstance();
+    this.reducer = new FunctionPointerReducer();
   }
 
   @Override

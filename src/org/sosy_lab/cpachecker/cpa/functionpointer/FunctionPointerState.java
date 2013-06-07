@@ -162,6 +162,17 @@ class FunctionPointerState implements AbstractState {
       }
       return new FunctionPointerState(values);
     }
+
+    public void addGlobalVariables(FunctionPointerState pReducedState) {
+      for (String var : pReducedState.pointerVariableValues.keySet()) {
+        FunctionPointerTarget newTarget = pReducedState.getTarget(var);
+        FunctionPointerTarget oldTarget = oldState.getTarget(var);
+        if (!var.contains("::") && !newTarget.equals(oldTarget)) {
+          //Global variable
+          setTarget(var, pReducedState.pointerVariableValues.get(var));
+        }
+      }
+    }
   }
 
   // This map should never contain UnknownTargets.
