@@ -240,9 +240,11 @@ public class LockStatisticsLock {
     AccessPoint tmpPoint, newPoint;
     for (int i = 0; i < this.accessPoints.size(); i++) {
       tmpPoint = accessPoints.get(i);
-      newPoint = tmpPoint.reduceCallstack(pReducer, pNode);
-      if (newPoint != tmpPoint)
-        newLock.accessPoints.setElementAt(newPoint, i);
+      if (!tmpPoint.isNew()) {
+        newPoint = tmpPoint.reduceCallstack(pReducer, pNode);
+        if (newPoint != tmpPoint)
+          newLock.accessPoints.setElementAt(newPoint, i);
+      }
     }
     if (this.equals(newLock))
       return this;

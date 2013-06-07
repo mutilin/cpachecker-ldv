@@ -113,15 +113,8 @@ public class AccessPoint {
 
   public AccessPoint reduceCallstack(CallstackReducer pReducer, CFANode pNode) {
     AccessPoint result = this.clone();
-    try {
-      CallstackState reducedState = (CallstackState)pReducer.getVariableReducedState(callstack, null, pNode);
-      result.setReducedCallstack(reducedState);
-    } catch (AssertionError e) {
-      //No error!
-      //It means, that we shouldn't reduce - we are in wrong branch
-      //We shouldn't do anything
-      //System.out.println("Null pointer");
-    }
+    CallstackState reducedState = (CallstackState)pReducer.getVariableReducedState(callstack, null, pNode);
+    result.setReducedCallstack(reducedState);
     return result;
   }
 }
