@@ -214,6 +214,9 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       }
 
       case FunctionCallEdge: {
+
+        if (((FunctionCallEdge)pCfaEdge).getSuccessor().getFunctionName().equals("ddlGetFirstProtect"))
+          System.out.println("US in ddlGetFirstProtect()");
         handleFunctionCall(newState, precision, (CFunctionCallEdge)pCfaEdge);
         break;
       }

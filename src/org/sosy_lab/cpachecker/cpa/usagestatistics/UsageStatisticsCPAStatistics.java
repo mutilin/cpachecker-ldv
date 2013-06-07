@@ -112,10 +112,10 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         System.err.println("What is the type of usage: " + e);
         return;
     }
-    if (i == 2 && j == 2) {
+    /*if (i == 1 && j == 0) {
       System.out.println(line);
     }
-    counter[i][j]++;
+    counter[i][j]++;*/
   }
 
   public UsageStatisticsCPAStatistics(Configuration config) throws InvalidConfigurationException{
@@ -361,10 +361,10 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
     writer.close();
 
-    System.out.println(" \t \t Global Local \t Structure");
+    /*System.out.println(" \t \t Global Local \t Structure");
     System.out.println("Assignment: \t " + counter[0][0] + " \t " + counter[1][0] + " \t " + counter[2][0]);
     System.out.println("Assumption: \t " + counter[0][1] +" \t " + counter[1][1] +" \t " + counter[2][1] );
-    System.out.println("Function call: \t " + counter[0][2] +" \t " + counter[1][2] +" \t " + counter[2][2]);
+    System.out.println("Function call: \t " + counter[0][2] +" \t " + counter[1][2] +" \t " + counter[2][2]);*/
   }
 
   private void printLockStatistics(PrintWriter writer) {
