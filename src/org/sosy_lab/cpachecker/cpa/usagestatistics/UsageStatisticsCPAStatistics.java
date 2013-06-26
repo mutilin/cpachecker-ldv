@@ -81,42 +81,8 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       description="which data process we should use")
   private String unsafeDetectorType = "PAIR";
 
-  private int[][] counter = new int[3][3];
-
   //@Option(description="if we need to print all variables, not only unsafe cases")
   //private boolean fullstatistics = true;
-
-  public void addTmp(SingleIdentifier id, EdgeInfo.EdgeType e, int line) {
-    int i, j;
-    if (id instanceof GlobalVariableIdentifier) {
-      i = 0;
-    } else if (id instanceof LocalVariableIdentifier) {
-      i = 1;
-    } else if (id instanceof StructureIdentifier) {
-      i = 2;
-    } else {
-      System.err.println("What is the type of identifier: " + id.toString());
-      return;
-    }
-    switch (e) {
-      case ASSIGNMENT:
-        j = 0;
-        break;
-      case ASSUMPTION:
-        j = 1;
-        break;
-      case FUNCTION_CALL:
-        j = 2;
-        break;
-      default:
-        System.err.println("What is the type of usage: " + e);
-        return;
-    }
-    if (i == 2 && j == 2) {
-      System.out.println(line);
-    }
-    counter[i][j]++;
-  }
 
   public UsageStatisticsCPAStatistics(Configuration config) throws InvalidConfigurationException{
     Stat = new HashMap<>();
@@ -360,11 +326,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
 
     writer.close();
-
-    System.out.println(" \t \t Global Local \t Structure");
-    System.out.println("Assignment: \t " + counter[0][0] + " \t " + counter[1][0] + " \t " + counter[2][0]);
-    System.out.println("Assumption: \t " + counter[0][1] +" \t " + counter[1][1] +" \t " + counter[2][1] );
-    System.out.println("Function call: \t " + counter[0][2] +" \t " + counter[1][2] +" \t " + counter[2][2]);
   }
 
   private void printLockStatistics(PrintWriter writer) {

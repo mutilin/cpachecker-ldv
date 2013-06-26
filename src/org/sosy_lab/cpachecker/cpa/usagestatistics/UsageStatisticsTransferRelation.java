@@ -440,8 +440,8 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
           //&& node.getLineNumber() > 18079 && node.getLineNumber() < 18082
           )
         System.out.println("Checker pc");*/
-      if (id.toString().contains("&")) {
-      /*  if (id instanceof GlobalVariableIdentifier)
+      /*if (id.toString().contains("&")) {
+        if (id instanceof GlobalVariableIdentifier)
           globalAdress++;
         else if (id instanceof LocalVariableIdentifier)
           localAdress++;
@@ -449,10 +449,8 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
           structAdress++;
         else
           System.out.println(id.toString());
-        System.out.println(globalAdress + " : " + localAdress + " : " + structAdress);*/
-        CFANode location = AbstractStates.extractLocation(state);
-        statistics.addTmp(id, eType, location.getLineNumber());
-      }
+        System.out.println(globalAdress + " : " + localAdress + " : " + structAdress);
+      }*/
       /*if (id.getName().equals("pc"))
         System.out.println("Adding pc");*/
       GeneralIdentifier generalId = id.getGeneralId();
