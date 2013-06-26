@@ -188,6 +188,7 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
   @Override
   public void collectStatistics(Collection<Statistics> pStatsCollection) {
     pStatsCollection.add(statistics);
+    super.collectStatistics(pStatsCollection);
   }
 
   public UsageStatisticsCPAStatistics getStats() {
