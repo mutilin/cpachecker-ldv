@@ -58,7 +58,7 @@ public class UsageInfo {
       }
       for (LockStatisticsLock lock : pO2.locks.getLocks()) {
         if (lock.getName().equals("")) {
-          result += 10;
+          result += 5;
         }
         for (AccessPoint point : lock.getAccessPoints()) {
           result -= point.getCallstack().getDepth();

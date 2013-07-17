@@ -81,8 +81,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       description="which data process we should use")
   private String unsafeDetectorType = "PAIR";
 
-  private int[][] counter = new int[3][3];
-
   //@Option(description="if we need to print all variables, not only unsafe cases")
   //private boolean fullstatistics = true;
 
@@ -117,7 +115,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
     counter[i][j]++;*/
   }
-
+  
   public UsageStatisticsCPAStatistics(Configuration config) throws InvalidConfigurationException{
     Stat = new HashMap<>();
     config.inject(this);
