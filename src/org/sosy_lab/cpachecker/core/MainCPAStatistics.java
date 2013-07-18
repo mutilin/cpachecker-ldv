@@ -52,6 +52,7 @@ import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.CFACreator;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
@@ -59,6 +60,8 @@ import org.sosy_lab.cpachecker.core.reachedset.ForwardingReachedSet;
 import org.sosy_lab.cpachecker.core.reachedset.LocationMappedReachedSet;
 import org.sosy_lab.cpachecker.core.reachedset.PartitionedReachedSet;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
+import org.sosy_lab.cpachecker.coverage.CoveragePrinter;
+import org.sosy_lab.cpachecker.coverage.CoveragePrinterGcov;
 import org.sosy_lab.cpachecker.util.CFAUtils;
 import org.sosy_lab.cpachecker.util.MemoryStatistics;
 import org.sosy_lab.cpachecker.util.ProgramCpuTime;
@@ -81,6 +84,16 @@ class MainCPAStatistics implements Statistics {
         description="print reached set to text file")
     @FileOption(FileOption.Type.OUTPUT_FILE)
     private Path outputFile = Paths.get("reached.txt");
+
+    @Option(name="coverage.export",
+        description="print coverage info to file")
+    private boolean exportCoverage = false;
+
+    @Option(name="coverage.file",
+        description="print coverage info to file")
+    @FileOption(FileOption.Type.OUTPUT_FILE)
+    private Path outputCoverageFile = Paths.get("coverage.info");
+    private String originFile;
 
     @Option(name="statistics.memory",
       description="track memory usage of JVM during runtime")
@@ -123,6 +136,7 @@ class MainCPAStatistics implements Statistics {
           logger.log(Level.WARNING, "Your Java VM does not support measuring the cpu time, some statistics will be missing.");
           programCpuTime = -1;
         }
+        originFile = config.getProperty("analysis.programNames");
     }
 
     public Collection<Statistics> getSubStatistics() {
@@ -209,6 +223,53 @@ class MainCPAStatistics implements Statistics {
         out.println();
 
         printMemoryStatistics(out);
+
+        if (exportCoverage) {
+          printCoverageInfo(reached);
+        }
+    }
+
+    private void printCoverageInfo(ReachedSet reached) {
+      if (reached instanceof ForwardingReachedSet) {
+        reached = ((ForwardingReachedSet)reached).getDelegate();
+      }
+
+      CoveragePrinter printer = new CoveragePrinterGcov();
+      Collection<CFANode> locations;
+
+
+      if (reached instanceof LocationMappedReachedSet) {
+        locations = ((LocationMappedReachedSet)reached).getLocations();
+
+      } else {
+        HashMultiset<CFANode> allLocations = HashMultiset.create(from(reached)
+                                                                      .transform(EXTRACT_LOCATION)
+                                                                      .filter(notNull()));
+
+        locations = allLocations.elementSet();
+      }
+
+      //Add information about visited locations
+      for (CFANode node : locations) {
+        printer.addVisitedLine(node.getLineNumber());
+      }
+
+      locations = cfa.getAllNodes();
+      //Add information about all existed locations
+      for (CFANode node : locations) {
+        printer.addExistedLine(node.getLineNumber());
+        if (node instanceof FunctionEntryNode) {
+          printer.addVisitedFunction(node.getFunctionName());
+        }
+      }
+
+      //Now collect information about all functions
+      for (FunctionEntryNode entryNode : cfa.getAllFunctionHeads()) {
+        printer.addExistedFunction(entryNode.getFunctionName(), entryNode.getLineNumber()
+            , entryNode.getExitNode().getLineNumber());
+      }
+
+      printer.print(outputCoverageFile.toString(), originFile);
     }
 
     private void dumpReachedSet(ReachedSet reached) {
