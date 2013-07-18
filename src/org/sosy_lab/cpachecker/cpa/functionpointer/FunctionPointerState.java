@@ -173,6 +173,15 @@ class FunctionPointerState implements AbstractState {
         }
       }
     }
+
+    public void clearVariablesExceptPrefix(String pFunctionName) {
+      for (String var : values.keySet()) {
+        if (!var.startsWith(pFunctionName) && var.contains("::")) {
+          //It needs to reduce states: we delete all information about other functions, except pFunctionName and global variables (without "::")
+          values = values.removeAndCopy(var);
+        }
+      }
+    }
   }
 
   // This map should never contain UnknownTargets.

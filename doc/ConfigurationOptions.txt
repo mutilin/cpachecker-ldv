@@ -908,6 +908,9 @@ cpa.uninitvars.printWarnings = "true"
 cpa.uninitvars.stop = "sep"
   allowed values: [sep, join]
 
+# functions, which stops analysis
+cpa.usagestatistics.abortfunctions = no default value
+
 # functions, which are used to bind variables (like list elements are binded
 # to list variable)
 cpa.usagestatistics.binderFunctions = no default value
