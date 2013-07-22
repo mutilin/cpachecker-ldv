@@ -51,8 +51,10 @@ import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.CFACreator;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
+import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
@@ -235,31 +237,50 @@ class MainCPAStatistics implements Statistics {
       }
 
       CoveragePrinter printer = new CoveragePrinterGcov();
-      Collection<CFANode> locations;
+      Collection<CFANode> visitedLocations, allLocations;
 
 
       if (reached instanceof LocationMappedReachedSet) {
-        locations = ((LocationMappedReachedSet)reached).getLocations();
+        visitedLocations = ((LocationMappedReachedSet)reached).getLocations();
 
       } else {
-        HashMultiset<CFANode> allLocations = HashMultiset.create(from(reached)
+        HashMultiset<CFANode> locations = HashMultiset.create(from(reached)
                                                                       .transform(EXTRACT_LOCATION)
                                                                       .filter(notNull()));
 
-        locations = allLocations.elementSet();
+        visitedLocations = locations.elementSet();
       }
 
       //Add information about visited locations
-      for (CFANode node : locations) {
+      for (CFANode node : visitedLocations) {
         printer.addVisitedLine(node.getLineNumber());
       }
 
-      locations = cfa.getAllNodes();
+      //Add visited functions
+      Set<String> functions = from(visitedLocations).transform(CFAUtils.GET_FUNCTION).toSet();
+      for (String name : functions) {
+        printer.addVisitedFunction(name);
+      }
+
+      allLocations = cfa.getAllNodes();
       //Add information about all existed locations
-      for (CFANode node : locations) {
-        printer.addExistedLine(node.getLineNumber());
-        if (node instanceof FunctionEntryNode) {
-          printer.addVisitedFunction(node.getFunctionName());
+      for (CFANode node : allLocations) {
+        int line = node.getLineNumber();
+        if (line > 0) {
+          printer.addExistedLine(line);
+        }
+        //'return' lines are missed, so add line number of entering edges
+        if (node instanceof FunctionExitNode && ((FunctionExitNode)node).getNumEnteringEdges() > 0) {
+          FunctionExitNode exit = (FunctionExitNode)node;
+          CFANode predessor;
+          for (int i = 0; i < exit.getNumEnteringEdges(); i++) {
+            CFAEdge tmpEdge = exit.getEnteringEdge(i);
+            printer.addExistedLine(tmpEdge.getLineNumber());
+            predessor = tmpEdge.getPredecessor();
+            if (visitedLocations.contains(predessor)) {
+              printer.addVisitedLine(tmpEdge.getLineNumber());
+            }
+          }
         }
       }
 
