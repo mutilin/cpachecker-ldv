@@ -75,6 +75,7 @@ class CFABuilder extends ASTVisitor {
   private final List<IASTFunctionDefinition> functionDeclarations = new ArrayList<>();
   private final Map<String, FunctionEntryNode> cfas = new HashMap<>();
   private final SortedSetMultimap<String, CFANode> cfaNodes = TreeMultimap.create();
+  private final SortedSetMultimap<String, CFANode> unreachableNodes = TreeMultimap.create();
 
   // Data structure for storing global declarations
   private final List<Pair<org.sosy_lab.cpachecker.cfa.ast.IADeclaration, String>> globalDeclarations = Lists.newArrayList();
@@ -274,6 +275,7 @@ class CFABuilder extends ASTVisitor {
       }
       cfas.put(functionName, startNode);
       cfaNodes.putAll(functionName, functionBuilder.getCfaNodes());
+      unreachableNodes.putAll(functionName, functionBuilder.getUnreachableNodes());
 
       encounteredAsm |= functionBuilder.didEncounterAsm();
       functionBuilder.finish();
@@ -284,5 +286,9 @@ class CFABuilder extends ASTVisitor {
     }
 
     return PROCESS_CONTINUE;
+  }
+
+  public SortedSetMultimap<String, CFANode> getUnreachableNodes() {
+    return unreachableNodes;
   }
 }

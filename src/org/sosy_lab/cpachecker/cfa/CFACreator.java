@@ -275,7 +275,7 @@ public class CFACreator {
 
 
 
-      MutableCFA cfa = new MutableCFA(machineModel, c.getFunctions(), c.getCFANodes(), mainFunction, language);
+      MutableCFA cfa = new MutableCFA(machineModel, c.getFunctions(), c.getCFANodes(), c.getUnreachableNodes(), mainFunction, language);
 
       stats.checkTime.start();
 

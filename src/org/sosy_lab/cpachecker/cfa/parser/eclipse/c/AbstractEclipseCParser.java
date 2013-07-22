@@ -180,7 +180,7 @@ abstract class AbstractEclipseCParser<T> implements CParser {
         throw new CParserException(e);
       }
 
-      return new ParseResult(builder.getCFAs(), builder.getCFANodes(), builder.getGlobalDeclarations(), Language.C);
+      return new ParseResult(builder.getCFAs(), builder.getCFANodes(), builder.getUnreachableNodes(), builder.getGlobalDeclarations(), Language.C);
     } finally {
       cfaTimer.stop();
     }

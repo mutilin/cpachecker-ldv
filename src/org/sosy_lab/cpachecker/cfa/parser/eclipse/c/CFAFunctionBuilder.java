@@ -149,6 +149,7 @@ class CFAFunctionBuilder extends ASTVisitor {
   // Data structures for handling function declarations
   private FunctionEntryNode cfa = null;
   private final List<CFANode> cfaNodes = new ArrayList<>();
+  private final List<CFANode> deadCode = new ArrayList<>();
 
   private final FunctionScope scope;
   private final ASTConverter astCreator;
@@ -410,6 +411,11 @@ class CFAFunctionBuilder extends ASTVisitor {
       }
 
       // remove node which were created but aren't part of CFA (e.g. because of dead code)
+      for (CFANode node : cfaNodes) {
+        if (!reachableNodes.contains(node)) {
+          deadCode.add(node);
+        }
+      }
       cfaNodes.retainAll(reachableNodes);
       assert cfaNodes.size() == reachableNodes.size(); // they should be equal now
     }
@@ -1763,5 +1769,9 @@ class CFAFunctionBuilder extends ASTVisitor {
         throw new AssertionError();
       }
     }
+  }
+
+  public Iterable<? extends CFANode> getUnreachableNodes() {
+    return deadCode;
   }
 }

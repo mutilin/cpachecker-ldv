@@ -55,6 +55,8 @@ public interface CFA {
 
   Collection<CFANode> getAllNodes();
 
+  Collection<CFANode> getUnreachableNodes();
+
   FunctionEntryNode getMainFunction();
 
   Optional<ImmutableMultimap<String, Loop>> getLoopStructure();

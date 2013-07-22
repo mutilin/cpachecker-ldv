@@ -264,4 +264,10 @@ class CFABuilder extends ASTVisitor {
       throw new CFAGenerationRuntimeException("Syntaxerror in " + problem.toString() +"\n", problem);
     }
   }
+
+  public SortedSetMultimap<String, CFANode> getUnreachableNodes() {
+    // TODO Auto-generated method stub
+    //TODO it is create in C parser, here I should think smth before commiting
+    return null;
+  }
 }

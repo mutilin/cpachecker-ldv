@@ -284,6 +284,11 @@ class MainCPAStatistics implements Statistics {
         }
       }
 
+      //Add unreachable locations, as existed
+      for (CFANode node : cfa.getUnreachableNodes()) {
+        printer.addExistedLine(node.getLineNumber());
+      }
+
       //Now collect information about all functions
       for (FunctionEntryNode entryNode : cfa.getAllFunctionHeads()) {
         printer.addExistedFunction(entryNode.getFunctionName(), entryNode.getLineNumber()
