@@ -45,10 +45,11 @@ public class CoveragePrinterGcov implements CoveragePrinter {
     }
   }
 
-  Set<Integer> VisitedLines;
-  Set<Integer> AllLines;
-  Set<String> VisitedFunctions;
-  Set<FunctionInfo> AllFunctions;
+  Set<Integer> visitedLines;
+  Set<Integer> allLines;
+  Set<String> visitedFunctions;
+  Set<FunctionInfo> allFunctions;
+  Set<Integer> functionBeginnings;
 
   private final static String TEXTNAME = "TN";
   private final static String SOURCEFILE = "SF";
@@ -57,30 +58,32 @@ public class CoveragePrinterGcov implements CoveragePrinter {
   private final static String LINEDATA = "DA";
 
   public CoveragePrinterGcov() {
-    VisitedLines = new HashSet<>();
-    AllLines = new HashSet<>();
-    VisitedFunctions = new HashSet<>();
-    AllFunctions = new HashSet<>();
+    visitedLines = new HashSet<>();
+    allLines = new HashSet<>();
+    visitedFunctions = new HashSet<>();
+    allFunctions = new HashSet<>();
+    functionBeginnings = new HashSet<>();
   }
 
   @Override
   public void addVisitedFunction(String pName) {
-    VisitedFunctions.add(pName);
+    visitedFunctions.add(pName);
   }
 
   @Override
   public void addExistedFunction(String pName, int pFirstLine, int pLastLine) {
-    AllFunctions.add(new FunctionInfo(pName, pFirstLine, pLastLine));
+    allFunctions.add(new FunctionInfo(pName, pFirstLine, pLastLine));
+    functionBeginnings.add(pFirstLine);
   }
 
   @Override
   public void addVisitedLine(int pLine) {
-    VisitedLines.add(pLine);
+    visitedLines.add(pLine);
   }
 
   @Override
   public void addExistedLine(int pLine) {
-    AllLines.add(pLine);
+    allLines.add(pLine);
   }
 
   @Override
@@ -91,14 +94,14 @@ public class CoveragePrinterGcov implements CoveragePrinter {
       out.println(TEXTNAME + ":");
       out.println(SOURCEFILE + ":" + originFile);
 
-      for (FunctionInfo info : AllFunctions) {
+      for (FunctionInfo info : allFunctions) {
         out.println(FUNCTION + ":" + info.firstLine + "," + info.name);
         //Information about function end isn't used by lcov, but it is useful for some postprocessing
         //But lcov ignores all unknown lines, so, this additional information can't affect on its work
         out.println("#" + FUNCTION + ":" + info.lastLine);
       }
 
-      for (String name : VisitedFunctions) {
+      for (String name : visitedFunctions) {
         out.println(FUNCTIONDATA + ":" + "1," + name);
       }
 
@@ -144,8 +147,22 @@ public class CoveragePrinterGcov implements CoveragePrinter {
 
       /* Now save information about lines
        */
-      for (Integer line : AllLines) {
-        out.println(LINEDATA + ":" + line + "," + (VisitedLines.contains(line) ? 1 : 0));
+      for (Integer line : allLines) {
+        /* Some difficulties: all function beginnings are visited at the beginning of analysis
+         * without entering function.
+         * So, we should mark these lines, as visited, if the function is really visited later.
+         */
+        if (functionBeginnings.contains(line)) {
+          //We should mark it, as visited, if the function is analyzed
+          //TODO make it better
+          for (FunctionInfo info : allFunctions) {
+            if (info.firstLine == line) {
+              out.println(LINEDATA + ":" + line + "," + (visitedFunctions.contains(info.name) ? 1 : 0));
+            }
+          }
+        } else {
+          out.println(LINEDATA + ":" + line + "," + (visitedLines.contains(line) ? 1 : 0));
+        }
       }
       out.println("end_of_record");
       out.close();
