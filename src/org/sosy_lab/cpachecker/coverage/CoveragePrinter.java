@@ -31,11 +31,11 @@ public interface CoveragePrinter {
 
   public void addVisitedFunction(String name);
 
-  public void addExistedFunction(String name, int firstLine, int lastLine);
+  public void addExistingFunction(String name, int firstLine, int lastLine);
 
   public void addVisitedLine(int line);
 
-  public void addExistedLine(int line);
+  public void addExistingLine(int line);
 
   public void print(String file, String origin);
 }

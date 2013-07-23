@@ -229,6 +229,19 @@ class MainCPAStatistics implements Statistics {
         }
     }
 
+    /*private void visitEdge(CoveragePrinter printer, CFAEdge pEdge, Collection<CFANode> visitedLocations) {
+      int line = pEdge.getLineNumber();
+      printer.addExistingLine(line);
+      if (visitedLocations.contains(pEdge.getPredecessor())) {
+        printer.addVisitedLine(line);
+      }
+      if (pEdge instanceof MultiEdge) {
+        for (CFAEdge singleEdge : ((MultiEdge)pEdge).getEdges()) {
+          visitEdge(printer, singleEdge, visitedLocations);
+        }
+      }
+    }*/
+
     private void printCoverageInfo(ReachedSet reached) {
       if (reached instanceof ForwardingReachedSet) {
         reached = ((ForwardingReachedSet)reached).getDelegate();
@@ -254,18 +267,28 @@ class MainCPAStatistics implements Statistics {
         printer.addVisitedLine(node.getLineNumber());
       }
 
-      locations = cfa.getAllNodes();
-      //Add information about all existed locations
-      for (CFANode node : locations) {
-        printer.addExistedLine(node.getLineNumber());
-        if (node instanceof FunctionEntryNode) {
-          printer.addVisitedFunction(node.getFunctionName());
-        }
+      //Add visited functions
+      Set<String> functions = from(locations).transform(CFAUtils.GET_FUNCTION).toSet();
+      for (String name : functions) {
+        printer.addVisitedFunction(name);
       }
+
+      for (CFANode node : cfa.getAllNodes()) {
+        printer.addExistingLine(node.getLineNumber());
+        /*for (int i = 0; i < node.getNumLeavingEdges(); i++) {
+          CFAEdge pEdge = node.getLeavingEdge(i);
+          visitEdge(printer, pEdge, locations);
+        }*/
+      }
+
+      //Add unreachable locations, as existing
+      /*for (CFANode node : cfa.getUnreachableNodes()) {
+        printer.addExistingLine(node.getLineNumber());
+      }*/
 
       //Now collect information about all functions
       for (FunctionEntryNode entryNode : cfa.getAllFunctionHeads()) {
-        printer.addExistedFunction(entryNode.getFunctionName(), entryNode.getLineNumber()
+        printer.addExistingFunction(entryNode.getFunctionName(), entryNode.getLineNumber()
             , entryNode.getExitNode().getLineNumber());
       }
 

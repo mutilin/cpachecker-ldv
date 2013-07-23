@@ -280,6 +280,10 @@ public class ABMTransferRelation implements TransferRelation {
         preciseReachedCache.put(getHashCode(predicateKey, newPrecisionKey, context), reachedSet);
       }
     }
+
+    public Collection<ReachedSet> getAllCachedReachedStates() {
+      return preciseReachedCache.values();
+    }
   }
 
   @Options
@@ -1280,5 +1284,9 @@ public class ABMTransferRelation implements TransferRelation {
       return Pair.of(false, returnNodes);
     }
     return Pair.of(true, returnNodes);
+  }
+
+  public Collection<ReachedSet> getCachedReachedSet() {
+    return argCache.getAllCachedReachedStates();
   }
 }
