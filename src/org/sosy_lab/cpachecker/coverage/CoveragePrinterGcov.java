@@ -25,7 +25,9 @@ package org.sosy_lab.cpachecker.coverage;
 
 import java.io.FileNotFoundException;
 import java.io.PrintWriter;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -33,12 +35,12 @@ import java.util.Set;
  */
 public class CoveragePrinterGcov implements CoveragePrinter {
 
-  public class FunctionInfo {
+  class FunctionInfo {
     final String name;
     final int firstLine;
     final int lastLine;
 
-    public FunctionInfo(String pName, int pFirstLine, int pLastLine) {
+    FunctionInfo(String pName, int pFirstLine, int pLastLine) {
       name = pName;
       firstLine = pFirstLine;
       lastLine = pLastLine;
@@ -49,20 +51,21 @@ public class CoveragePrinterGcov implements CoveragePrinter {
   Set<Integer> allLines;
   Set<String> visitedFunctions;
   Set<FunctionInfo> allFunctions;
-  Set<Integer> functionBeginnings;
+  Map<Integer, String> functionBeginnings;
 
-  private final static String TEXTNAME = "TN";
-  private final static String SOURCEFILE = "SF";
-  private final static String FUNCTION = "FN";
-  private final static String FUNCTIONDATA = "FNDA";
-  private final static String LINEDATA = "DA";
+  //String constants from gcov format
+  private final static String TEXTNAME = "TN:";
+  private final static String SOURCEFILE = "SF:";
+  private final static String FUNCTION = "FN:";
+  private final static String FUNCTIONDATA = "FNDA:";
+  private final static String LINEDATA = "DA:";
 
   public CoveragePrinterGcov() {
     visitedLines = new HashSet<>();
     allLines = new HashSet<>();
     visitedFunctions = new HashSet<>();
     allFunctions = new HashSet<>();
-    functionBeginnings = new HashSet<>();
+    functionBeginnings = new HashMap<>();
   }
 
   @Override
@@ -71,9 +74,9 @@ public class CoveragePrinterGcov implements CoveragePrinter {
   }
 
   @Override
-  public void addExistedFunction(String pName, int pFirstLine, int pLastLine) {
+  public void addExistingFunction(String pName, int pFirstLine, int pLastLine) {
     allFunctions.add(new FunctionInfo(pName, pFirstLine, pLastLine));
-    functionBeginnings.add(pFirstLine);
+    functionBeginnings.put(pFirstLine, pName);
   }
 
   @Override
@@ -82,7 +85,7 @@ public class CoveragePrinterGcov implements CoveragePrinter {
   }
 
   @Override
-  public void addExistedLine(int pLine) {
+  public void addExistingLine(int pLine) {
     allLines.add(pLine);
   }
 
@@ -91,59 +94,19 @@ public class CoveragePrinterGcov implements CoveragePrinter {
     try {
       PrintWriter out = new PrintWriter(outputFile);
 
-      out.println(TEXTNAME + ":");
-      out.println(SOURCEFILE + ":" + originFile);
+      out.println(TEXTNAME);
+      out.println(SOURCEFILE + originFile);
 
       for (FunctionInfo info : allFunctions) {
-        out.println(FUNCTION + ":" + info.firstLine + "," + info.name);
+        out.println(FUNCTION + info.firstLine + "," + info.name);
         //Information about function end isn't used by lcov, but it is useful for some postprocessing
         //But lcov ignores all unknown lines, so, this additional information can't affect on its work
-        out.println("#" + FUNCTION + ":" + info.lastLine);
+        out.println("#" + FUNCTION + info.lastLine);
       }
 
       for (String name : visitedFunctions) {
-        out.println(FUNCTIONDATA + ":" + "1," + name);
+        out.println(FUNCTIONDATA + "1," + name);
       }
-
-      /* Now, get all lines, which are used in cfa (except comments, empty lines and so on)
-       *
-       * Here we could add to lineUsage only 'node.getLineNumber()',
-       * but after experiments we made this part of code more complicated,
-       * because some interesting lines (such as 'return 0') wasn't included.
-       *
-       * Also, it is important, that all nodes from MultiEdge are deleted from cfa!
-       * We should add them to our statistics, because they are visited by CPA.
-       */
-      /*for (CFANode node : cfa.getAllNodes()) {
-        //we shouldn't consider declarations
-        if (isDeclarationNode(node)) {
-          continue;
-        }
-
-        //All locations, which are in MultiEdge are thrown away, so, we should return them by ourselves
-        for (int i = 0; i < node.getNumLeavingEdges(); i++) {
-          CFAEdge tmpEdge = node.getLeavingEdge(i);
-          if (tmpEdge instanceof MultiEdge) {
-            ImmutableList<CFAEdge> edges = ((MultiEdge)tmpEdge).getEdges();
-            for (CFAEdge singleEdge : edges) {
-              if (!(singleEdge instanceof CDeclarationEdge)) {
-                lineUsage.add(singleEdge.getLineNumber());
-              }
-            }
-          }
-        }
-        //We add line number, if it isn't ExitNode
-        if (node instanceof FunctionExitNode && ((FunctionExitNode)node).getNumEnteringEdges() > 0) {
-          //'return' lines are missed, so add line number of entering edges
-          FunctionExitNode exit = (FunctionExitNode)node;
-          for (int i = 0; i < exit.getNumEnteringEdges(); i++) {
-            CFAEdge tmpEdge = exit.getEnteringEdge(i);
-            lineUsage.add(tmpEdge.getLineNumber());
-          }
-        } else {
-          lineUsage.add(node.getLineNumber());
-        }
-      }*/
 
       /* Now save information about lines
        */
@@ -152,16 +115,12 @@ public class CoveragePrinterGcov implements CoveragePrinter {
          * without entering function.
          * So, we should mark these lines, as visited, if the function is really visited later.
          */
-        if (functionBeginnings.contains(line)) {
+        String functionName;
+        if ((functionName = functionBeginnings.get(line)) != null) {
           //We should mark it, as visited, if the function is analyzed
-          //TODO make it better
-          for (FunctionInfo info : allFunctions) {
-            if (info.firstLine == line) {
-              out.println(LINEDATA + ":" + line + "," + (visitedFunctions.contains(info.name) ? 1 : 0));
-            }
-          }
+          out.println(LINEDATA + line + "," + (visitedFunctions.contains(functionName) ? 1 : 0));
         } else {
-          out.println(LINEDATA + ":" + line + "," + (visitedLines.contains(line) ? 1 : 0));
+          out.println(LINEDATA + line + "," + (visitedLines.contains(line) ? 1 : 0));
         }
       }
       out.println("end_of_record");
