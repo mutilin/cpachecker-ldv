@@ -26,6 +26,9 @@ package org.sosy_lab.cpachecker.cpa.cpalien;
 import static org.mockito.Matchers.anyObject;
 import static org.mockito.Mockito.*;
 
+import java.util.HashSet;
+import java.util.Set;
+
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -108,6 +111,58 @@ public class SMGEdgeHasValueTest {
     Assert.assertTrue(at4.overlapsWith(whole, MachineModel.LINUX64));
   }
 
+  @Test
+  public void testIsCompatibleField() {
+    SMGObject object1 = new SMGObject(12, "object-1");
+    SMGObject object2 = new SMGObject(12, "object-2");
+    Integer value = Integer.valueOf(666);
+
+    SMGEdgeHasValue obj1_at0 = new SMGEdgeHasValue(mockType, 0, object1, value);
+    SMGEdgeHasValue obj1_at2 = new SMGEdgeHasValue(mockType, 2, object1, value);
+    SMGEdgeHasValue obj1_at4 = new SMGEdgeHasValue(mockType, 4, object1, value);
+    SMGEdgeHasValue obj1_12at0 = new SMGEdgeHasValue(mockType12b, 0, object1, value);
+
+    SMGEdgeHasValue obj2_at0 = new SMGEdgeHasValue(mockType, 0, object2, value);
+    SMGEdgeHasValue obj2_at2 = new SMGEdgeHasValue(mockType, 2, object2, value);
+    SMGEdgeHasValue obj2_at4 = new SMGEdgeHasValue(mockType, 4, object2, value);
+    SMGEdgeHasValue obj2_12at0 = new SMGEdgeHasValue(mockType12b, 0, object2, value);
+
+    Assert.assertTrue(obj1_at0.isCompatibleField(obj1_at0, MachineModel.LINUX64));
+    Assert.assertFalse(obj1_at0.isCompatibleField(obj1_at2, MachineModel.LINUX64));
+    Assert.assertFalse(obj1_at0.isCompatibleField(obj1_at4, MachineModel.LINUX64));
+    Assert.assertFalse(obj1_at0.isCompatibleField(obj1_12at0, MachineModel.LINUX64));
+    Assert.assertTrue(obj1_at0.isCompatibleField(obj2_at0, MachineModel.LINUX64));
+    Assert.assertFalse(obj1_at0.isCompatibleField(obj2_at2, MachineModel.LINUX64));
+    Assert.assertFalse(obj1_at0.isCompatibleField(obj2_at4, MachineModel.LINUX64));
+    Assert.assertFalse(obj1_at0.isCompatibleField(obj2_12at0, MachineModel.LINUX64));
+  }
+
+  @Test
+  public void testIsCompatibleFieldOnSameObject() {
+    SMGObject object1 = new SMGObject(12, "object-1");
+    SMGObject object2 = new SMGObject(12, "object-2");
+    Integer value = Integer.valueOf(666);
+
+    SMGEdgeHasValue obj1_at0 = new SMGEdgeHasValue(mockType, 0, object1, value);
+    SMGEdgeHasValue obj1_at2 = new SMGEdgeHasValue(mockType, 2, object1, value);
+    SMGEdgeHasValue obj1_at4 = new SMGEdgeHasValue(mockType, 4, object1, value);
+    SMGEdgeHasValue obj1_12at0 = new SMGEdgeHasValue(mockType12b, 0, object1, value);
+
+    SMGEdgeHasValue obj2_at0 = new SMGEdgeHasValue(mockType, 0, object2, value);
+    SMGEdgeHasValue obj2_at2 = new SMGEdgeHasValue(mockType, 2, object2, value);
+    SMGEdgeHasValue obj2_at4 = new SMGEdgeHasValue(mockType, 4, object2, value);
+    SMGEdgeHasValue obj2_12at0 = new SMGEdgeHasValue(mockType12b, 0, object2, value);
+
+    Assert.assertTrue(obj1_at0.isCompatibleFieldOnSameObject(obj1_at0, MachineModel.LINUX64));
+    Assert.assertFalse(obj1_at0.isCompatibleFieldOnSameObject(obj1_at2, MachineModel.LINUX64));
+    Assert.assertFalse(obj1_at0.isCompatibleFieldOnSameObject(obj1_at4, MachineModel.LINUX64));
+    Assert.assertFalse(obj1_at0.isCompatibleFieldOnSameObject(obj1_12at0, MachineModel.LINUX64));
+    Assert.assertFalse(obj1_at0.isCompatibleFieldOnSameObject(obj2_at0, MachineModel.LINUX64));
+    Assert.assertFalse(obj1_at0.isCompatibleFieldOnSameObject(obj2_at2, MachineModel.LINUX64));
+    Assert.assertFalse(obj1_at0.isCompatibleFieldOnSameObject(obj2_at4, MachineModel.LINUX64));
+    Assert.assertFalse(obj1_at0.isCompatibleFieldOnSameObject(obj2_12at0, MachineModel.LINUX64));
+  }
+
   @Test(expected=IllegalArgumentException.class)
   public void testIllegalOverlapsWith() {
     SMGObject object1 = new SMGObject(12, "object1");
@@ -118,5 +173,125 @@ public class SMGEdgeHasValueTest {
     SMGEdgeHasValue hv2 = new SMGEdgeHasValue(mockType, 2, object2, value);
 
     hv1.overlapsWith(hv2, MachineModel.LINUX64);
+  }
+
+  @Test
+  public void testFilterOnObject() {
+    SMGObject object1 = new SMGObject(8, "object1");
+    SMGObject object2 = new SMGObject(8, "Object2");
+
+    Integer value1 = Integer.valueOf(1);
+    Integer value2 = Integer.valueOf(2);
+
+    SMGEdgeHasValue hv11at0 = new SMGEdgeHasValue(mockType, 0, object1, value1);
+    SMGEdgeHasValue hv12at0 = new SMGEdgeHasValue(mockType, 0, object1, value2);
+    SMGEdgeHasValue hv21at0 = new SMGEdgeHasValue(mockType, 0, object2, value1);
+    SMGEdgeHasValue hv22at0 = new SMGEdgeHasValue(mockType, 0, object2, value2);
+    Set<SMGEdgeHasValue> allEdges = new HashSet<>();
+    allEdges.add(hv11at0);
+    allEdges.add(hv12at0);
+    allEdges.add(hv21at0);
+    allEdges.add(hv22at0);
+
+    SMGEdgeHasValueFilter filter = new SMGEdgeHasValueFilter();
+
+    Assert.assertTrue(filter.holdsFor(hv11at0));
+    Assert.assertTrue(filter.holdsFor(hv12at0));
+    Assert.assertTrue(filter.holdsFor(hv21at0));
+    Assert.assertTrue(filter.holdsFor(hv22at0));
+
+    filter.filterByObject(object1);
+
+    Assert.assertTrue(filter.holdsFor(hv11at0));
+    Assert.assertTrue(filter.holdsFor(hv12at0));
+    Assert.assertFalse(filter.holdsFor(hv21at0));
+    Assert.assertFalse(filter.holdsFor(hv22at0));
+
+    Set<SMGEdgeHasValue> filteredSet = filter.filterSet(allEdges);
+
+    Assert.assertEquals(2, filteredSet.size());
+    Assert.assertTrue(filteredSet.contains(hv11at0));
+    Assert.assertTrue(filteredSet.contains(hv12at0));
+  }
+
+  @Test
+  public void testFilterAtOffset() {
+    SMGObject object1 = new SMGObject(8, "object1");
+    SMGObject object2 = new SMGObject(8, "Object2");
+
+    Integer value1 = Integer.valueOf(1);
+    Integer value2 = Integer.valueOf(2);
+
+    SMGEdgeHasValue hv11at0 = new SMGEdgeHasValue(mockType, 0, object1, value1);
+    SMGEdgeHasValue hv12at0 = new SMGEdgeHasValue(mockType, 4, object1, value2);
+    SMGEdgeHasValue hv21at0 = new SMGEdgeHasValue(mockType, 0, object2, value1);
+    SMGEdgeHasValue hv22at0 = new SMGEdgeHasValue(mockType, 4, object2, value2);
+    Set<SMGEdgeHasValue> allEdges = new HashSet<>();
+    allEdges.add(hv11at0);
+    allEdges.add(hv12at0);
+    allEdges.add(hv21at0);
+    allEdges.add(hv22at0);
+
+    SMGEdgeHasValueFilter filter = new SMGEdgeHasValueFilter();
+
+    filter.filterAtOffset(0);
+
+    Assert.assertTrue(filter.holdsFor(hv11at0));
+    Assert.assertFalse(filter.holdsFor(hv12at0));
+    Assert.assertTrue(filter.holdsFor(hv21at0));
+    Assert.assertFalse(filter.holdsFor(hv22at0));
+
+    Set<SMGEdgeHasValue> filteredSet = filter.filterSet(allEdges);
+
+    Assert.assertEquals(2, filteredSet.size());
+    Assert.assertTrue(filteredSet.contains(hv11at0));
+    Assert.assertTrue(filteredSet.contains(hv21at0));
+  }
+
+  @Test
+  public void testFilterOnValue() {
+    SMGObject object1 = new SMGObject(8, "object1");
+    SMGObject object2 = new SMGObject(8, "Object2");
+
+    Integer value1 = Integer.valueOf(1);
+    Integer value2 = Integer.valueOf(2);
+
+    SMGEdgeHasValue hv11at0 = new SMGEdgeHasValue(mockType, 0, object1, value1);
+    SMGEdgeHasValue hv12at0 = new SMGEdgeHasValue(mockType, 4, object1, value2);
+    SMGEdgeHasValue hv21at0 = new SMGEdgeHasValue(mockType, 0, object2, value1);
+    SMGEdgeHasValue hv22at0 = new SMGEdgeHasValue(mockType, 4, object2, value2);
+    Set<SMGEdgeHasValue> allEdges = new HashSet<>();
+    allEdges.add(hv11at0);
+    allEdges.add(hv12at0);
+    allEdges.add(hv21at0);
+    allEdges.add(hv22at0);
+
+    SMGEdgeHasValueFilter filter = new SMGEdgeHasValueFilter();
+
+    filter.filterHavingValue(value1);
+
+    Assert.assertTrue(filter.holdsFor(hv11at0));
+    Assert.assertFalse(filter.holdsFor(hv12at0));
+    Assert.assertTrue(filter.holdsFor(hv21at0));
+    Assert.assertFalse(filter.holdsFor(hv22at0));
+
+    Set<SMGEdgeHasValue> filteredSet = filter.filterSet(allEdges);
+
+    Assert.assertEquals(2, filteredSet.size());
+    Assert.assertTrue(filteredSet.contains(hv11at0));
+    Assert.assertTrue(filteredSet.contains(hv21at0));
+
+    filter.filterNotHavingValue(value1);
+
+    Assert.assertFalse(filter.holdsFor(hv11at0));
+    Assert.assertTrue(filter.holdsFor(hv12at0));
+    Assert.assertFalse(filter.holdsFor(hv21at0));
+    Assert.assertTrue(filter.holdsFor(hv22at0));
+
+    filteredSet = filter.filterSet(allEdges);
+
+    Assert.assertEquals(2, filteredSet.size());
+    Assert.assertTrue(filteredSet.contains(hv22at0));
+    Assert.assertTrue(filteredSet.contains(hv12at0));
   }
 }

@@ -53,9 +53,7 @@ import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.ast.AVariableDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.IADeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CDeclaration;
-import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CInitializer;
-import org.sosy_lab.cpachecker.cfa.ast.c.CInitializerExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CVariableDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.java.JDeclaration;
 import org.sosy_lab.cpachecker.cfa.model.BlankEdge;
@@ -194,7 +192,7 @@ public class CFACreator {
       parser = EclipseParsers.getJavaParser(logger, config);
       break;
     case C:
-      parser = CParser.Factory.getParser(logger, CParser.Factory.getOptions(config), machineModel);
+      parser = CParser.Factory.getParser(config, logger, CParser.Factory.getOptions(config), machineModel);
       break;
     default:
       throw new AssertionError();
@@ -287,18 +285,20 @@ public class CFACreator {
 
       stats.processingTime.start();
 
-      // annotate CFA nodes with reverse postorder information for later use
-      for (FunctionEntryNode function : cfa.getAllFunctionHeads()) {
-        CFAReversePostorder sorter = new CFAReversePostorder();
-        sorter.assignSorting(function);
-      }
-
       // get loop information
       Optional<ImmutableMultimap<String, Loop>> loopStructure = getLoopStructure(cfa);
 
       if (language == Language.C && fptrCallEdges) {
         CFunctionPointerResolver fptrResolver = new CFunctionPointerResolver(cfa, config, logger);
         fptrResolver.resolveFunctionPointers();
+      }
+
+      // Annotate CFA nodes with reverse postorder information for later use.
+      // This needs to come after function pointer resolving because the latter
+      // adds nodes to the CFA.
+      for (FunctionEntryNode function : cfa.getAllFunctionHeads()) {
+        CFAReversePostorder sorter = new CFAReversePostorder();
+        sorter.assignSorting(function);
       }
 
       // Insert call and return edges and build the supergraph
@@ -565,23 +565,19 @@ public class CFACreator {
 
           // Add default variable initializer, because the storage class is AUTO
           // and there is no initializer later in the file.
-          CExpression init = CDefaults.forType(v.getType(), v.getFileLocation());
-          // may still be null, because we currently don't handle initializers for complex types
-          if (init != null) {
-            CInitializer initializer = new CInitializerExpression(v.getFileLocation(), init);
-            v = new CVariableDeclaration(v.getFileLocation(),
-                                         v.isGlobal(),
-                                         v.getCStorageClass(),
-                                         v.getType(),
-                                         v.getName(),
-                                         v.getOrigName(),
-                                         v.getQualifiedName(),
-                                         initializer);
+          CInitializer initializer = CDefaults.forType(v.getType(), v.getFileLocation());
+          v = new CVariableDeclaration(v.getFileLocation(),
+                                       v.isGlobal(),
+                                       v.getCStorageClass(),
+                                       v.getType(),
+                                       v.getName(),
+                                       v.getOrigName(),
+                                       v.getQualifiedName(),
+                                       initializer);
 
-            previouslyInitializedVariables.add(name);
-            p = Pair.<IADeclaration, String>of(v, p.getSecond());
-            iterator.set(p); // replace declaration
-          }
+          previouslyInitializedVariables.add(name);
+          p = Pair.<IADeclaration, String>of(v, p.getSecond());
+          iterator.set(p); // replace declaration
         }
       }
     }

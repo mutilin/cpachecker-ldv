@@ -291,6 +291,10 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
         preciseReachedCache.put(getHashCode(predicateKey, newPrecisionKey, context), reachedSet);
       }
     }
+
+    public Collection<ReachedSet> getAllCachedReachedStates() {
+      return preciseReachedCache.values();
+    }
   }
 
   @Options
@@ -378,10 +382,11 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
     logger = pLogger;
     //TODO make it better
     String saveLocal = pConfig.getProperty("analysis.saveLocalResults");
-    if (saveLocal != null && saveLocal.equals("true"))
+    if (saveLocal != null && saveLocal.equals("true")) {
       algorithm = new CPALocalSaveAlgorithm(abmCpa, logger, pConfig);
-    else
+    } else {
       algorithm = new CPAAlgorithm(abmCpa, logger, pConfig);
+    }
     reachedSetFactory = pReachedSetFactory;
     wrappedTransfer = abmCpa.getWrappedCpa().getTransferRelation();
     wrappedReducer = abmCpa.getReducer();
@@ -476,6 +481,12 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
         for (Pair<AbstractState, Precision> reducedPair : reducedResult) {
           AbstractState reducedState = reducedPair.getFirst();
           Precision reducedPrecision = reducedPair.getSecond();
+
+          if (reducedState == ABMARGBlockStartState.getDummy()) {
+            ((ABMARGBlockStartState)reducedState).addParent((ARGState) pElement);
+            expandedResult.add(reducedState);
+            return expandedResult;
+          }
 
           ARGState expandedState =
               (ARGState) wrappedReducer.getVariableExpandedState(pElement, currentBlock, reducedState);
@@ -596,7 +607,9 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
         //no target state, but waiting elements
         //analysis failed -> also break this analysis
         prec.breakAnalysis();
-        return Collections.singletonList(Pair.of(reducedInitialState, reducedInitialPrecision)); //dummy element
+        return Collections.singletonList(Pair.of(
+            (AbstractState) ABMARGBlockStartState.createDummy(reducedInitialState),
+            reducedInitialPrecision)); //dummy element
       } else {
         returnElements = AbstractStates.filterLocations(reached, currentBlock.getReturnNodes())
             .toList();
@@ -710,7 +723,9 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
     return reached;
   }
 
-  void removeSubtree(ARGReachedSet mainReachedSet, ARGPath pPath, ARGState element, Precision newPrecision,
+  void removeSubtree(ARGReachedSet mainReachedSet, ARGPath pPath,
+      ARGState element, Precision newPrecision,
+      Class<? extends Precision> pPrecisionType,
       Map<ARGState, ARGState> pPathElementToReachedState) {
     removeSubtreeTimer.start();
 
@@ -752,13 +767,13 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
     }
 
     for (Pair<ARGState, ARGState> removeCachedSubtreeArguments : neededRemoveCachedSubtreeCalls) {
-      removeCachedSubtree(removeCachedSubtreeArguments.getFirst(), removeCachedSubtreeArguments.getSecond(), null);
+      removeCachedSubtree(removeCachedSubtreeArguments.getFirst(), removeCachedSubtreeArguments.getSecond(), null, pPrecisionType);
     }
 
     if (lastElement == null) {
-      removeSubtree(mainReachedSet, pPathElementToReachedState.get(element), newPrecision);
+      removeSubtree(mainReachedSet, pPathElementToReachedState.get(element), newPrecision, pPrecisionType);
     } else {
-      removeCachedSubtree(lastElement, pPathElementToReachedState.get(element), newPrecision);
+      removeCachedSubtree(lastElement, pPathElementToReachedState.get(element), newPrecision, pPrecisionType);
     }
 
     removeSubtreeTimer.stop();
@@ -862,7 +877,8 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
   }
 
 
-  private void removeCachedSubtree(ARGState rootState, ARGState removeElement, Precision newPrecision) {
+  private void removeCachedSubtree(ARGState rootState, ARGState removeElement,
+      Precision newPrecision, Class<? extends Precision> pPrecisionType) {
     removeCachedSubtreeTimer.start();
 
     try {
@@ -884,7 +900,8 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
       if (newPrecision != null) {
         newReducedRemovePrecision =
             wrappedReducer.getVariableReducedPrecision(
-                Precisions.replaceByType(removePrecision, newPrecision, newPrecision.getClass()), rootSubtree);
+                Precisions.replaceByType(removePrecision, newPrecision, pPrecisionType), rootSubtree);
+        pPrecisionType = newReducedRemovePrecision.getClass();
       }
 
       assert !removeElement.getParents().isEmpty();
@@ -895,7 +912,7 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
 
       logger.log(Level.FINEST, "Removing subtree, adding a new cached entry, and removing the former cached entries");
 
-      if (removeSubtree(reachedSet, removeElement, newReducedRemovePrecision)) {
+      if (removeSubtree(reachedSet, removeElement, newReducedRemovePrecision, pPrecisionType)) {
         argCache
             .updatePrecisionForEntry(reducedRootState, reducedRootPrecision, rootSubtree, newReducedRemovePrecision);
       }
@@ -912,10 +929,11 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
    * @param newPrecision
    * @return <code>true</code>, if the precision of the first element of the given reachedSet changed by this operation; <code>false</code>, otherwise.
    */
-  private static boolean removeSubtree(ReachedSet reachedSet, ARGState argElement, Precision newPrecision) {
+  private static boolean removeSubtree(ReachedSet reachedSet, ARGState argElement,
+      Precision newPrecision, Class<? extends Precision> pPrecisionType) {
     ARGReachedSet argReachSet = new ARGReachedSet(reachedSet);
     boolean updateCacheNeeded = argElement.getParents().contains(reachedSet.getFirstState());
-    removeSubtree(argReachSet, argElement, newPrecision);
+    removeSubtree(argReachSet, argElement, newPrecision, pPrecisionType);
     return updateCacheNeeded;
   }
 
@@ -923,11 +941,12 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
     reachedSet.removeSubtree(argElement);
   }
 
-  private static void removeSubtree(ARGReachedSet reachedSet, ARGState argElement, Precision newPrecision) {
+  private static void removeSubtree(ARGReachedSet reachedSet, ARGState argElement,
+      Precision newPrecision, Class<? extends Precision> pPrecisionType) {
     if (newPrecision == null) {
       removeSubtree(reachedSet, argElement);
     } else {
-      reachedSet.removeSubtree(argElement, newPrecision);
+      reachedSet.removeSubtree(argElement, newPrecision, pPrecisionType);
     }
   }
 
@@ -1125,10 +1144,11 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
 
     ReachedSet reachSet = abstractStateToReachedSet.get(root);
     //assert reachSet != null;  now 'null' means, that we found a recursion
-    if (reachSet != null)
+    if (reachSet != null) {
       return Pair.of(rootSubtree, reachSet);
-    else
+    } else {
       return null;
+    }
   }
 
   @Override
@@ -1261,21 +1281,23 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
       predecessor = currentNode;
       for (int j = 0; j < currentNode.getNumEnteringEdges(); j++) {
         predecessor = currentNode.getEnteringEdge(j).getPredecessor();
-        if (previousNode == null && predecessor.getFunctionName().equals(entryFunction))
+        if (previousNode == null && predecessor.getFunctionName().equals(entryFunction)) {
           break;
-        else if (previousNode != null && predecessor.getFunctionName().equals(previousNode.getFunctionName()))
+        } else if (previousNode != null && predecessor.getFunctionName().equals(previousNode.getFunctionName())) {
           break;
+        }
       }
       fullState = new CallstackState(fullState, currentNode.getFunctionName(), predecessor);
       previousNode = currentNode;
     }
     tmpState = state.clone();
     if (fullState != null) {
-      if (tmpState.getCurrentFunction().equals(fullState.getCurrentFunction()))
+      if (tmpState.getCurrentFunction().equals(fullState.getCurrentFunction())) {
         return fullState;
-      else if (!tmpState.getCurrentFunction().equals(fullState.getCurrentFunction()) && tmpState.getPreviousState() != null) {
-        while (!tmpState.getPreviousState().getCurrentFunction().equals(fullState.getCurrentFunction()))
+      } else if (!tmpState.getCurrentFunction().equals(fullState.getCurrentFunction()) && tmpState.getPreviousState() != null) {
+        while (!tmpState.getPreviousState().getCurrentFunction().equals(fullState.getCurrentFunction())) {
           tmpState = tmpState.getPreviousState();
+        }
         tmpState = new CallstackState(fullState, state.getCurrentFunction(), tmpState.getCallNode());
         return tmpState;
       } else/* if (!tmpState.getCurrentFunction().equals(fullState.getCurrentFunction()) && tmpState.getPreviousState() == null) */{
@@ -1385,5 +1407,9 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
       return Pair.of(false, returnNodes);
     }
     return Pair.of(true, returnNodes);
+  }
+
+  public Collection<ReachedSet> getCachedReachedSet() {
+    return argCache.getAllCachedReachedStates();
   }
 }

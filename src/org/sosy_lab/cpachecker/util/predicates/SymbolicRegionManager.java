@@ -23,16 +23,20 @@
  */
 package org.sosy_lab.cpachecker.util.predicates;
 
-import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.*;
+import static com.google.common.collect.FluentIterable.from;
 
 import java.io.PrintStream;
+import java.util.Set;
 
 import org.sosy_lab.common.Triple;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormulaManager;
-import org.sosy_lab.cpachecker.util.predicates.interfaces.FormulaManager;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.Region;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.RegionManager;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.view.FormulaManagerView;
+
+import com.google.common.base.Function;
 
 /**
  * Adaptor from FormulaManager/Solver to RegionManager in order to use Formulas
@@ -78,6 +82,7 @@ public class SymbolicRegionManager implements RegionManager {
     }
   }
 
+  private final FormulaManagerView fmgr;
   private final BooleanFormulaManager bfmgr;
   private final Solver solver;
 
@@ -86,14 +91,18 @@ public class SymbolicRegionManager implements RegionManager {
 
   private int predicateCount = 0;
 
-  public SymbolicRegionManager(FormulaManager fmgr, Solver pSolver) {
+  public SymbolicRegionManager(FormulaManagerView pFmgr, Solver pSolver) {
     solver = pSolver;
+    fmgr = pFmgr;
     bfmgr = fmgr.getBooleanFormulaManager();
     trueRegion = new SymbolicRegion(bfmgr,  bfmgr.makeBoolean(true));
     falseRegion = new SymbolicRegion(bfmgr,  bfmgr.makeBoolean(false));
   }
 
-  Region fromFormula(BooleanFormula f) {
+  @Override
+  public Region fromFormula(BooleanFormula f, FormulaManagerView pFmgr,
+      Function<BooleanFormula, Region> pAtomToRegion) {
+    checkArgument(pFmgr.getBooleanFormulaManager() == bfmgr);
     return new SymbolicRegion(bfmgr, f);
   }
 
@@ -172,6 +181,17 @@ public class SymbolicRegionManager implements RegionManager {
   @Override
   public Triple<Region, Region, Region> getIfThenElse(Region pF) {
     throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public Set<Region> extractPredicates(Region f) {
+    return from(fmgr.extractAtoms(toFormula(f), false, false))
+        .transform(new Function<BooleanFormula, Region>() {
+          @Override
+          public Region apply(BooleanFormula input) {
+            return new SymbolicRegion(bfmgr, input);
+          }
+        }).toSet();
   }
 
   @Override

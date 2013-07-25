@@ -24,8 +24,12 @@
 package org.sosy_lab.cpachecker.util.predicates.interfaces;
 
 import java.io.PrintStream;
+import java.util.Set;
 
 import org.sosy_lab.common.Triple;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.view.FormulaManagerView;
+
+import com.google.common.base.Function;
 
 /**
  * An AbstractFormulaManager is an object that knows how to create/manipulate
@@ -114,6 +118,22 @@ public interface RegionManager {
    * @return a new predicate
    */
   public Region createPredicate();
+
+  /**
+   * Returns the set of all predicates that occur in the representation of this region.
+   * @return a set of regions where each region represents one predicate
+   */
+  public Set<Region> extractPredicates(Region f);
+
+  /**
+   * Convert a formula into a region.
+   * @param pF The formula to convert.
+   * @param fmgr The formula manager that belongs to pF.
+   * @param atomToRegion A function that returns a region for each atom in the formula.
+   * @return a region representing pF
+   */
+  public Region fromFormula(BooleanFormula pF, FormulaManagerView fmgr,
+      Function<BooleanFormula, Region> atomToRegion);
 
   /**
    * A region consists of the form

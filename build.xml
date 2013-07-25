@@ -118,6 +118,7 @@
 
     <target depends="build-dependencies" name="build-project">
         <depend srcdir="${source.dir}" destdir="${class.dir}"/>
+        <echo message="Compiling CPAchecker"/>
         <javac debug="true"
                debuglevel="${debuglevel}"
                includeAntRuntime="false"
@@ -185,7 +186,7 @@
                 excludes="lib/ivy*"
                 prefix="${namet}/"/>
             <tarfileset dir="scripts"
-                includes="*.* tempita/** benchmark/* benchmark/tools/cpachecker.py benchmark/tools/__init__.py"
+                includes="*.* tempita/** benchmark/* benchmark/tools/cpachecker.py benchmark/tools/template.py benchmark/tools/__init__.py"
                 excludes="*.bat *.sh *.py"
                 prefix="${namet}/scripts/"/>
             <tarfileset dir="." filemode="755"

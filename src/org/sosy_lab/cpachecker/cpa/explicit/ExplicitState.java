@@ -41,9 +41,9 @@ import org.sosy_lab.cpachecker.core.interfaces.FormulaReportingState;
 import org.sosy_lab.cpachecker.exceptions.InvalidQueryException;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormulaManager;
-import org.sosy_lab.cpachecker.util.predicates.interfaces.FormulaManager;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.RationalFormula;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.RationalFormulaManager;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.view.FormulaManagerView;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
@@ -97,7 +97,7 @@ public class ExplicitState implements AbstractQueryableState, FormulaReportingSt
    * @param variableNames the names of the variables to be removed
    */
   void removeAll(Collection<String> variableNames) {
-    for(String variableName : variableNames) {
+    for (String variableName : variableNames) {
       constantsMap = constantsMap.removeAndCopy(variableName);
     }
   }
@@ -383,7 +383,7 @@ public class ExplicitState implements AbstractQueryableState, FormulaReportingSt
   }
 
   @Override
-  public BooleanFormula getFormulaApproximation(FormulaManager manager) {
+  public BooleanFormula getFormulaApproximation(FormulaManagerView manager) {
     BooleanFormulaManager bfmgr = manager.getBooleanFormulaManager();
     RationalFormulaManager nfmgr = manager.getRationalFormulaManager();
     BooleanFormula formula = bfmgr.makeBoolean(true);
@@ -434,8 +434,11 @@ public class ExplicitState implements AbstractQueryableState, FormulaReportingSt
    *
    * @param other the state to which to compute the delta
    */
-  void setDelta(ExplicitState other) {
+  void addToDelta(ExplicitState other) {
     delta = other.getDifference(this);
+    if (other.delta != null) {
+      delta.addAll(other.delta);
+    }
   }
 
   /**
@@ -464,7 +467,7 @@ public class ExplicitState implements AbstractQueryableState, FormulaReportingSt
    *
    * @return the set of tracked variables by this state
    */
-  ImmutableCollection<String> getTrackedVariableNames() {
+  public ImmutableCollection<String> getTrackedVariableNames() {
     return ImmutableSet.copyOf(constantsMap.keySet());
   }
 
