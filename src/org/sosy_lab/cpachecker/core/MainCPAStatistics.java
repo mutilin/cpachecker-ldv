@@ -51,8 +51,12 @@ import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.CFACreator;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
+import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
+import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
@@ -229,7 +233,7 @@ class MainCPAStatistics implements Statistics {
         }
     }
 
-    /*private void visitEdge(CoveragePrinter printer, CFAEdge pEdge, Collection<CFANode> visitedLocations) {
+    private void visitEdge(CoveragePrinter printer, CFAEdge pEdge, Collection<CFANode> visitedLocations) {
       int line = pEdge.getLineNumber();
       printer.addExistingLine(line);
       if (visitedLocations.contains(pEdge.getPredecessor())) {
@@ -240,7 +244,7 @@ class MainCPAStatistics implements Statistics {
           visitEdge(printer, singleEdge, visitedLocations);
         }
       }
-    }*/
+    }
 
     private void printCoverageInfo(ReachedSet reached) {
       if (reached instanceof ForwardingReachedSet) {
@@ -274,17 +278,27 @@ class MainCPAStatistics implements Statistics {
       }
 
       for (CFANode node : cfa.getAllNodes()) {
+        if (node.getNumLeavingEdges() == 1 && node.getLeavingEdge(0) instanceof CDeclarationEdge) {
+          //We don't mark all global definitions
+          CDeclarationEdge declEdge = (CDeclarationEdge) node.getLeavingEdge(0);
+          if (declEdge.getDeclaration().isGlobal()) {
+            continue;
+          }
+        }
+
+        //We don't mark last line - "}"
+        if (node instanceof FunctionExitNode) {
+          continue;
+        }
+
         printer.addExistingLine(node.getLineNumber());
-        /*for (int i = 0; i < node.getNumLeavingEdges(); i++) {
+
+        //This part adds lines, which are only on edges, such as "return" or "goto"
+        for (int i = 0; i < node.getNumLeavingEdges(); i++) {
           CFAEdge pEdge = node.getLeavingEdge(i);
           visitEdge(printer, pEdge, locations);
-        }*/
+        }
       }
-
-      //Add unreachable locations, as existing
-      /*for (CFANode node : cfa.getUnreachableNodes()) {
-        printer.addExistingLine(node.getLineNumber());
-      }*/
 
       //Now collect information about all functions
       for (FunctionEntryNode entryNode : cfa.getAllFunctionHeads()) {
