@@ -21,9 +21,30 @@
  *  CPAchecker web page:
  *    http://cpachecker.sosy-lab.org
  */
-package org.sosy_lab.cpachecker.util.predicates;
+package org.sosy_lab.cpachecker.cpa.abm;
+
+import java.util.Collection;
+
+import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
+import org.sosy_lab.cpachecker.core.interfaces.Precision;
+import org.sosy_lab.cpachecker.core.interfaces.StopOperator;
+import org.sosy_lab.cpachecker.exceptions.CPAException;
 
 
-public enum FormulaOperator {
-      NOT, AND, OR, EQUIV, ITE, ATOM
+public class ABMStopOperator implements StopOperator {
+
+  private StopOperator wrappedStop;
+
+  public ABMStopOperator(StopOperator pWrappedStopOperator) {
+    wrappedStop = pWrappedStopOperator;
+  }
+
+  @Override
+  public boolean stop(AbstractState pState, Collection<AbstractState> pReached, Precision pPrecision)
+      throws CPAException {
+    if (pState == ABMARGBlockStartState.getDummy()) { return false; }
+    return wrappedStop.stop(pState, pReached, pPrecision);
+  }
+
+
 }

@@ -76,12 +76,15 @@ import org.eclipse.cdt.core.dom.ast.IASTWhileStatement;
 import org.eclipse.cdt.core.dom.ast.gnu.IGNUASTCompoundStatementExpression;
 import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.Pair;
+import org.sosy_lab.common.configuration.Configuration;
+import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.cpachecker.cfa.CFACreationUtils;
 import org.sosy_lab.cpachecker.cfa.ast.FileLocation;
 import org.sosy_lab.cpachecker.cfa.ast.c.CAssignment;
 import org.sosy_lab.cpachecker.cfa.ast.c.CAstNode;
 import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression.BinaryOperator;
+import org.sosy_lab.cpachecker.cfa.ast.c.CComplexTypeDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpressionAssignmentStatement;
@@ -146,6 +149,7 @@ class CFAFunctionBuilder extends ASTVisitor {
   // Data structures for handling function declarations
   private FunctionEntryNode cfa = null;
   private final List<CFANode> cfaNodes = new ArrayList<>();
+  private final List<CFANode> deadCode = new ArrayList<>();
 
   private final FunctionScope scope;
   private final ASTConverter astCreator;
@@ -155,11 +159,11 @@ class CFAFunctionBuilder extends ASTVisitor {
 
   private boolean encounteredAsm = false;
 
-  public CFAFunctionBuilder(LogManager pLogger, FunctionScope pScope, MachineModel pMachine) {
+  public CFAFunctionBuilder(Configuration config, LogManager pLogger, FunctionScope pScope, MachineModel pMachine) throws InvalidConfigurationException {
 
     logger = pLogger;
     scope = pScope;
-    astCreator = new ASTConverter(pScope, pLogger, pMachine);
+    astCreator = new ASTConverter(config, pScope, pLogger, pMachine);
     checkBinding = new CheckBindingVisitor(pLogger);
 
     shouldVisitDeclarations = true;
@@ -281,6 +285,8 @@ class CFAFunctionBuilder extends ASTVisitor {
           init.accept(checkBinding);
         }
 
+      } else if (newD instanceof CComplexTypeDeclaration) {
+        scope.registerTypeDeclaration((CComplexTypeDeclaration)newD);
       } else {
         assert !(newD instanceof CFunctionDeclaration) : "Function declaration inside function";
       }
@@ -405,6 +411,11 @@ class CFAFunctionBuilder extends ASTVisitor {
       }
 
       // remove node which were created but aren't part of CFA (e.g. because of dead code)
+      for (CFANode node : cfaNodes) {
+        if (!reachableNodes.contains(node)) {
+          deadCode.add(node);
+        }
+      }
       cfaNodes.retainAll(reachableNodes);
       assert cfaNodes.size() == reachableNodes.size(); // they should be equal now
     }
@@ -1321,13 +1332,16 @@ class CFAFunctionBuilder extends ASTVisitor {
     // leave switch
     final CFANode lastNodeInSwitch = locStack.pop();
     final CFANode lastNotCaseNode = switchCaseStack.pop();
-    switchExprStack.pop(); // switchExpr is not needed after this point
+    final CFANode defaultCaseNode = switchDefaultStack.pop();
 
-    assert postSwitchNode == loopNextStack.pop();
+    switchExprStack.pop();
+
+    assert postSwitchNode == loopNextStack.peek();
     assert postSwitchNode == locStack.peek();
     assert switchExprStack.size() == switchCaseStack.size();
 
-    final CFANode defaultCaseNode = switchDefaultStack.pop();
+    loopNextStack.pop();
+
     if (defaultCaseNode == null) {
       // no default case
       final BlankEdge blankEdge = new BlankEdge("", lastNotCaseNode.getLineNumber(),
@@ -1631,7 +1645,7 @@ class CFAFunctionBuilder extends ASTVisitor {
 
     // as a gnu c extension allows omitting the second operand and the implicitly adds the first operand
     // as the second also, this is checked here
-    if(condExp.getPositiveResultExpression() == null) {
+    if (condExp.getPositiveResultExpression() == null) {
       createEdgesForTernaryOperatorBranch(condExp.getLogicalConditionExpression(), lastNode, filelocStart, thenNode, tempVar);
     } else {
       createEdgesForTernaryOperatorBranch(condExp.getPositiveResultExpression(), lastNode, filelocStart, thenNode, tempVar);
@@ -1755,5 +1769,9 @@ class CFAFunctionBuilder extends ASTVisitor {
         throw new AssertionError();
       }
     }
+  }
+
+  public Iterable<? extends CFANode> getUnreachableNodes() {
+    return deadCode;
   }
 }

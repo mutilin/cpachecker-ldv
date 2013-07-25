@@ -64,30 +64,37 @@ public class AccessPoint {
   public int hashCode() {
     final int prime = 31;
     int result = 1;
-    result = prime * result + ((callstack == null) ? 0 : callstack.hashCode());
+    result = prime * result + ((callstack == null) ? 0 : callstack.hashCodeWithoutNode());
     result = prime * result + ((line == null) ? 0 : line.hashCode());
     return result;
   }
 
   @Override
   public boolean equals(Object obj) {
-    if (this == obj)
+    if (this == obj) {
       return true;
-    if (obj == null)
+    }
+    if (obj == null) {
       return false;
-    if (getClass() != obj.getClass())
+    }
+    if (getClass() != obj.getClass()) {
       return false;
+    }
     AccessPoint other = (AccessPoint) obj;
     if (callstack == null) {
-      if (other.callstack != null)
+      if (other.callstack != null) {
         return false;
-    } else if (!callstack.equals(other.callstack))
+      }
+    } else if (!callstack.equalsWithoutNode(other.callstack)) {
       return false;
+    }
     if (line == null) {
-      if (other.line != null)
+      if (other.line != null) {
         return false;
-    } else if (!line.equals(other.line))
+      }
+    } else if (!line.equals(other.line)) {
       return false;
+    }
     return true;
   }
 
@@ -105,10 +112,11 @@ public class AccessPoint {
     }  catch (HandleCodeException e) {
       System.err.println(e.getMessage());
     }
-    if (this.equals(result))
+    if (this.equals(result)) {
       return this;
-    else
+    } else {
       return result;
+    }
   }
 
   public AccessPoint reduceCallstack(CallstackReducer pReducer, CFANode pNode) {

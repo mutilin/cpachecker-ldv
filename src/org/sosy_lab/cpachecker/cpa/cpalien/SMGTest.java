@@ -150,6 +150,54 @@ public class SMGTest {
   }
 
   @Test
+  public void removeObjectTest() {
+    SMG smg = getNewSMG64();
+    Integer newValue = SMGValueFactory.getNewValue();
+
+    SMGObject object = new SMGObject(8, "object");
+    SMGEdgeHasValue hv0 = new SMGEdgeHasValue(mockType, 0, object, 0);
+    SMGEdgeHasValue hv4 = new SMGEdgeHasValue(mockType, 4, object, 0);
+    SMGEdgePointsTo pt = new SMGEdgePointsTo(newValue, object, 0);
+
+    smg.addValue(newValue);
+    smg.addObject(object);
+    smg.addPointsToEdge(pt);
+    smg.addHasValueEdge(hv0);
+    smg.addHasValueEdge(hv4);
+
+    Assert.assertTrue(smg.getObjects().contains(object));
+    smg.removeObject(object);
+    Assert.assertFalse(smg.getObjects().contains(object));
+    Assert.assertTrue(smg.getHVEdges().contains(hv0));
+    Assert.assertTrue(smg.getHVEdges().contains(hv4));
+    Assert.assertTrue(smg.getPTEdges().contains(pt));
+  }
+
+  @Test
+  public void removeObjectAndEdgesTest() {
+    SMG smg = getNewSMG64();
+    Integer newValue = SMGValueFactory.getNewValue();
+
+    SMGObject object = new SMGObject(8, "object");
+    SMGEdgeHasValue hv0 = new SMGEdgeHasValue(mockType, 0, object, 0);
+    SMGEdgeHasValue hv4 = new SMGEdgeHasValue(mockType, 4, object, 0);
+    SMGEdgePointsTo pt = new SMGEdgePointsTo(newValue, object, 0);
+
+    smg.addValue(newValue);
+    smg.addObject(object);
+    smg.addPointsToEdge(pt);
+    smg.addHasValueEdge(hv0);
+    smg.addHasValueEdge(hv4);
+
+    Assert.assertTrue(smg.getObjects().contains(object));
+    smg.removeObjectAndEdges(object);
+    Assert.assertFalse(smg.getObjects().contains(object));
+    Assert.assertFalse(smg.getHVEdges().contains(hv0));
+    Assert.assertFalse(smg.getHVEdges().contains(hv4));
+    Assert.assertFalse(smg.getPTEdges().contains(pt));
+  }
+
+  @Test
   public void validityTest() {
     Assert.assertFalse(smg.isObjectValid(smg.getNullObject()));
     Assert.assertTrue(smg.isObjectValid(obj1));
@@ -344,7 +392,7 @@ public class SMGTest {
   @Test
   public void getHVEdgesTest() {
     HashSet<SMGEdgeHasValue> set = new HashSet<>();
-    set.add(hv2has1at4);
+    set.add(hv2has2at0);
     set.add(hv2has1at4);
 
     Assert.assertTrue(smg.getHVEdges().containsAll(set));
@@ -362,19 +410,5 @@ public class SMGTest {
   public void getObjectPointedByTest() {
     Assert.assertEquals(obj1, smg.getObjectPointedBy(val1));
     Assert.assertNull(smg.getObjectPointedBy(val2));
-  }
-
-  @Test
-  public void getValuesForObjectTest() {
-    Assert.assertEquals(smg.getValuesForObject(obj1).size(), 0);
-    Assert.assertEquals(smg.getValuesForObject(obj2).size(), 2);
-
-    Assert.assertEquals(smg.getValuesForObject(obj2, 0).size(), 1);
-    Assert.assertTrue(smg.getValuesForObject(obj2, 0).contains(hv2has2at0));
-    Assert.assertEquals(smg.getValuesForObject(obj2, 3).size(), 0);
-    Assert.assertEquals(smg.getValuesForObject(obj2, 4).size(), 1);
-    Assert.assertTrue(smg.getValuesForObject(obj2, 4).contains(hv2has1at4));
-
-    //TODO: Filter by types
   }
 }

@@ -21,26 +21,27 @@
  *  CPAchecker web page:
  *    http://cpachecker.sosy-lab.org
  */
-package org.sosy_lab.cpachecker.cfa.types.java;
+package org.sosy_lab.cpachecker.cpa.invariants.formula;
+
+import java.util.Map;
+
+import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 
 
-public class JDummyType implements JType {
+public interface ToFormulaVisitor<ConstantType, FormulaType> extends ParameterizedInvariantsFormulaVisitor<ConstantType, Map<? extends String, ? extends InvariantsFormula<ConstantType>>, FormulaType> {
 
-  private final String typeName;
+  FormulaType getZero();
 
-  public JDummyType(String pTypeName) {
-    typeName = pTypeName;
-  }
+  FormulaType getOne();
 
+  BooleanFormula lessThan(FormulaType op1, FormulaType op2);
 
-  @Override
-  public String toASTString(String pDeclarator) {
-    return  typeName + pDeclarator;
-  }
+  BooleanFormula equal(FormulaType op1, FormulaType op2);
 
-  @Override
-  public String toString() {
-    return typeName;
-  }
+  BooleanFormula greaterThan(FormulaType op1, FormulaType op2);
+
+  BooleanFormula lessOrEqual(FormulaType op1, FormulaType op2);
+
+  BooleanFormula greaterOrEqual(FormulaType op1, FormulaType op2);
 
 }

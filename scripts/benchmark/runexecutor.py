@@ -22,6 +22,9 @@ CPAchecker web page:
   http://cpachecker.sosy-lab.org
 """
 
+# prepare for Python 3
+from __future__ import absolute_import, print_function, unicode_literals
+
 import logging
 import multiprocessing
 import os
@@ -81,7 +84,7 @@ def init():
                 _cpus.append(int(cpu[0]))
             elif len(cpu) == 2:
                 start, end = cpu
-                _cpus.extend(xrange(int(start), int(end)+1))
+                _cpus.extend(range(int(start), int(end)+1))
             else:
                 logging.warning("Could not read available CPU cores from kernel, failed to parse {0}.".format(cpuStr))
 
@@ -108,7 +111,7 @@ def executeRun(args, rlimits, outputFileName, myCpuIndex=None):
 
         # put us into the cgroup(s)
         pid = os.getpid()
-        for cgroup in cgroups.itervalues():
+        for cgroup in cgroups.values():
             _addTaskToCgroup(cgroup, pid)
 
     # Setup cgroups, need a single call to _createCgroup() for all subsystems
@@ -138,7 +141,7 @@ def executeRun(args, rlimits, outputFileName, myCpuIndex=None):
         totalCpuCount = len(_cpus)
         myCpusStart = (myCpuIndex * myCpuCount) % totalCpuCount
         myCpusEnd   = (myCpusStart + myCpuCount-1) % totalCpuCount
-        myCpus = ','.join(map(str, xrange(myCpusStart, myCpusEnd+1)))
+        myCpus = ','.join(map(str, range(myCpusStart, myCpusEnd+1)))
         _writeFile(myCpus, cgroupCpuset, 'cpuset.cpus')
 
         myCpus = _readFile(cgroupCpuset, 'cpuset.cpus')
@@ -151,7 +154,12 @@ def executeRun(args, rlimits, outputFileName, myCpuIndex=None):
         cgroupMemory = cgroups[MEMORY]
         memlimit = str(rlimits[MEMLIMIT] * _BYTE_FACTOR * _BYTE_FACTOR) # MB to Byte
         _writeFile(memlimit, cgroupMemory, 'memory.limit_in_bytes')
-        _writeFile(memlimit, cgroupMemory, 'memory.memsw.limit_in_bytes')
+        try:
+            _writeFile(memlimit, cgroupMemory, 'memory.memsw.limit_in_bytes')
+        except IOError as e:
+            if e.errno == 95: # kernel responds with error 95 (operation unsupported) if this is disabled
+                sys.exit("Memory limit specified, but kernel does not allow limiting swap memory. Please set swapaccount=1 on your kernel command line.")
+            raise e
 
         memlimit = _readFile(cgroupMemory, 'memory.memsw.limit_in_bytes')
         logging.debug('Executing {0} with memory limit {1} bytes.'.format(args, memlimit))
@@ -204,7 +212,7 @@ def executeRun(args, rlimits, outputFileName, myCpuIndex=None):
         outputFile.close() # normally subprocess closes file, we do this again
 
         # kill all remaining processes if some managed to survive
-        for cgroup in cgroups.itervalues():
+        for cgroup in cgroups.values():
             _killAllTasksInCgroup(cgroup)
 
     assert pid == p.pid
@@ -235,10 +243,16 @@ def executeRun(args, rlimits, outputFileName, myCpuIndex=None):
         # This measurement reads the maximum number of bytes of RAM+Swap the process used.
         # For more details, c.f. the kernel documentation:
         # https://www.kernel.org/doc/Documentation/cgroups/memory.txt
-        memUsage = _readFile(cgroups[MEMORY], 'memory.memsw.max_usage_in_bytes')
-    memUsage = int(memUsage)
+        try:
+            memUsage = _readFile(cgroups[MEMORY], 'memory.memsw.max_usage_in_bytes')
+            memUsage = int(memUsage)
+        except IOError as e:
+            if e.errno == 95: # kernel responds with error 95 (operation unsupported) if this is disabled
+                print("Kernel does not track swap memory usage, cannot measure memory usage. Please set swapaccount=1 on your kernel command line.")
+            else:
+                raise e
 
-    for cgroup in set(cgroups.itervalues()):
+    for cgroup in set(cgroups.values()):
         # Need the set here to delete each cgroup only once.
         _removeCgroup(cgroup)
 
@@ -249,13 +263,13 @@ def executeRun(args, rlimits, outputFileName, myCpuIndex=None):
     # therefore we expect cpuTime2 to be always greater (and more correct).
     # However, sometimes cpuTime is a little bit bigger than cpuTime2.
     if cpuTime2 is not None:
-        if (cpuTime*0.999) > cpuTime2:
+        if (cpuTime*0.9975) > cpuTime2:
             logging.warning('Cputime measured by wait was {0}, cputime measured by cgroup was only {1}, perhaps measurement is flawed.'.format(cpuTime, cpuTime2))
         else:
             cpuTime = cpuTime2
 
-    outputFile = open(outputFileName, 'r') # re-open file for reading output
-    output = map(Util.decodeToString, outputFile.readlines()[6:]) # first 6 lines are for logging, rest is output of subprocess
+    outputFile = open(outputFileName, 'rt') # re-open file for reading output
+    output = list(map(Util.decodeToString, outputFile.readlines()[6:])) # first 6 lines are for logging, rest is output of subprocess
     outputFile.close()
 
     # Segmentation faults and some memory failures reference a file with more information.
@@ -335,7 +349,7 @@ def _killSubprocess(process):
         pass
 
 def _findCgroupMount(subsystem=None):
-    with open('/proc/mounts') as mounts:
+    with open('/proc/mounts', 'rt') as mounts:
         for mount in mounts:
             mount = mount.split(' ')
             if mount[2] == 'cgroup':
@@ -395,12 +409,13 @@ def _findOwnCgroup(subsystem):
     (Each process is in exactly cgroup in each hierarchy.)
     @return the path to the cgroup inside the hierarchy
     """
-    with open('/proc/self/cgroup') as ownCgroups:
+    with open('/proc/self/cgroup', 'rt') as ownCgroups:
         for ownCgroup in ownCgroups:
             #each line is "id:subsystem,subsystem:path"
             ownCgroup = ownCgroup.strip().split(':')
             if subsystem in ownCgroup[1].split(','):
                 return ownCgroup[2]
+        logging.warning('Could not identify my cgroup for subsystem {0} although it should be there'.format(subsystem))
         return None
 
 def _addTaskToCgroup(cgroup, pid):
@@ -412,7 +427,7 @@ def _killAllTasksInCgroup(cgroup):
     if cgroup:
         tasksFile = os.path.join(cgroup, 'tasks')
         while os.path.getsize(tasksFile) > 0:
-            with open(tasksFile) as tasks:
+            with open(tasksFile, 'rt') as tasks:
                 for task in tasks:
                     logging.warning('Run has left-over process with pid {0}'.format(task))
                     try:
@@ -442,10 +457,13 @@ Please enable it with "sudo mount -t cgroup none /sys/fs/cgroup".'''
                 )
             _cgroups[subsystem] = None
             return
+        else:
+            logging.debug('Subsystem {0} is mounted at {1}'.format(subsystem, cgroup))
 
         # find our own cgroup, we want to put processes in a child group of it
         cgroup = os.path.join(cgroup, _findOwnCgroup(subsystem)[1:])
         _cgroups[subsystem] = cgroup
+        logging.debug('My cgroup for subsystem {0} is {1}'.format(subsystem, cgroup))
 
         try:
             testCgroup = _createCgroup(subsystem)[subsystem]

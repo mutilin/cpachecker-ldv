@@ -21,7 +21,7 @@
  *  CPAchecker web page:
  *    http://cpachecker.sosy-lab.org
  */
-package org.sosy_lab.cpachecker.cpa.reachdef;
+package org.sosy_lab.cpachecker.util.reachingdef;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -31,22 +31,38 @@ import java.util.Stack;
 import java.util.Vector;
 
 import org.sosy_lab.common.Pair;
+import org.sosy_lab.cpachecker.cfa.ast.c.CArraySubscriptExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CCastExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CFieldReference;
+import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression.UnaryOperator;
 import org.sosy_lab.cpachecker.cfa.ast.c.CVariableDeclaration;
+import org.sosy_lab.cpachecker.cfa.ast.c.DefaultCExpressionVisitor;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionCallEdge;
 import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionReturnEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
+import org.sosy_lab.cpachecker.exceptions.UnsupportedCCodeException;
 
 import com.google.common.collect.ImmutableSet;
 
 
 public class ReachingDefUtils {
 
+  private static CFANode[] cfaNodes;
+
+  public static CFANode[] getAllNodesFromCFA() {
+    return cfaNodes;
+  }
+
   public static Pair<Set<String>, Map<FunctionEntryNode, Set<String>>> getAllVariables(CFANode pMainNode) {
     CFAEdge out;
     Vector<String> globalVariables = new Vector<>();
+    Vector<CFANode> nodes = new Vector<>();
 
     while (!(pMainNode instanceof FunctionEntryNode)) {
       out = pMainNode.getLeavingEdge(0);
@@ -54,6 +70,7 @@ public class ReachingDefUtils {
           && ((CDeclarationEdge) out).getDeclaration() instanceof CVariableDeclaration) {
         globalVariables.add(((CVariableDeclaration) ((CDeclarationEdge) out).getDeclaration()).getName());
       }
+      nodes.add(pMainNode);
       pMainNode = pMainNode.getLeavingEdge(0).getSuccessor();
     }
 
@@ -81,11 +98,12 @@ public class ReachingDefUtils {
 
       while (!currentWaitlist.isEmpty()) {
         currentElement = currentWaitlist.pop();
+        nodes.add(currentElement);
 
         for (int i = 0; i < currentElement.getNumLeavingEdges(); i++) {
           out = currentElement.getLeavingEdge(i);
 
-          if(out instanceof FunctionReturnEdge){
+          if (out instanceof FunctionReturnEdge) {
             continue;
           }
 
@@ -116,8 +134,70 @@ public class ReachingDefUtils {
 
       result.put(currentFunction, ImmutableSet.copyOf(localVariables));
     }
-
+    cfaNodes = new CFANode[nodes.size()];
+    nodes.toArray(cfaNodes);
     return Pair.of((Set<String>) ImmutableSet.copyOf(globalVariables), result);
+  }
+
+  public static class VariableExtractor extends DefaultCExpressionVisitor<String, UnsupportedCCodeException> {
+
+    private CFAEdge edgeForExpression;
+    private String warning;
+
+    public void resetWarning() {
+      warning = null;
+    }
+
+    public String getWarning() {
+      return warning;
+    }
+
+    public VariableExtractor(CFAEdge pEdgeForExpression) {
+      edgeForExpression = pEdgeForExpression;
+    }
+
+    @Override
+    protected String visitDefault(CExpression pExp) {
+      return null;
+    }
+
+    @Override
+    public String visit(CArraySubscriptExpression pIastArraySubscriptExpression) throws UnsupportedCCodeException {
+      warning = "Analysis may be unsound in case of aliasing.";
+      return pIastArraySubscriptExpression.getArrayExpression().accept(this);
+    }
+
+    @Override
+    public String visit(CCastExpression pIastCastExpression) throws UnsupportedCCodeException {
+      return pIastCastExpression.getOperand().accept(this);
+    }
+
+    @Override
+    public String visit(CFieldReference pIastFieldReference) throws UnsupportedCCodeException {
+      if (pIastFieldReference.isPointerDereference()) {
+        throw new UnsupportedCCodeException(
+            "Does not support assignment to dereferenced variable due to missing aliasing support", edgeForExpression,
+            pIastFieldReference);
+      }
+      warning = "Analysis may be unsound in case of aliasing.";
+      return pIastFieldReference.getFieldOwner().accept(this);
+    }
+
+    @Override
+    public String visit(CIdExpression pIastIdExpression) {
+      return pIastIdExpression.getName();
+    }
+
+    @Override
+    public String visit(CUnaryExpression pIastUnaryExpression) throws UnsupportedCCodeException {
+      if (pIastUnaryExpression.getOperator() == UnaryOperator.STAR) {
+        throw new UnsupportedCCodeException(
+            "Does not support assignment to dereferenced variable due to missing aliasing support", edgeForExpression,
+            pIastUnaryExpression);
+      }
+      return pIastUnaryExpression.getOperand().accept(this);
+    }
+
   }
 
 }

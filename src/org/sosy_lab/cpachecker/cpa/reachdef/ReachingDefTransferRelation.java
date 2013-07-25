@@ -28,22 +28,17 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Vector;
 import java.util.logging.Level;
 
 import org.sosy_lab.common.LogManager;
-import org.sosy_lab.cpachecker.cfa.ast.c.CArraySubscriptExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CCastExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpressionAssignmentStatement;
-import org.sosy_lab.cpachecker.cfa.ast.c.CFieldReference;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallAssignmentStatement;
-import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
-import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression.UnaryOperator;
 import org.sosy_lab.cpachecker.cfa.ast.c.CVariableDeclaration;
-import org.sosy_lab.cpachecker.cfa.ast.c.DefaultCExpressionVisitor;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdgeType;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
 import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
@@ -55,7 +50,8 @@ import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
-import org.sosy_lab.cpachecker.exceptions.UnsupportedCCodeException;
+import org.sosy_lab.cpachecker.util.reachingdef.ReachingDefUtils;
+import org.sosy_lab.cpachecker.util.reachingdef.ReachingDefUtils.VariableExtractor;
 
 import com.google.common.collect.ImmutableSet;
 
@@ -76,12 +72,42 @@ public class ReachingDefTransferRelation implements TransferRelation {
     localVariablesPerFunction = localVars;
   }
 
-  public void setMainFunctionNode(CFANode pMain){
+  public void setMainFunctionNode(CFANode pMain) {
     main = pMain;
   }
 
   @Override
   public Collection<? extends AbstractState> getAbstractSuccessors(AbstractState pState, Precision pPrecision,
+      CFAEdge pCfaEdge) throws CPATransferException, InterruptedException {
+    if (pCfaEdge != null) {
+      return getAbstractSuccessors0(pState, pPrecision, pCfaEdge);
+    }
+    CFANode[] nodes = ReachingDefUtils.getAllNodesFromCFA();
+    if (nodes == null) {
+      throw new CPATransferException("CPA not properly initialized.");
+    }
+    Vector<AbstractState> successors = new Vector<>();
+    Vector<CFAEdge> definitions = new Vector<>();
+    CFAEdge cfaedge;
+    for (CFANode node : nodes) {
+      for (int i = 0; i < node.getNumLeavingEdges(); i++) {
+        cfaedge = node.getLeavingEdge(i);
+        if (!(cfaedge.getEdgeType() == CFAEdgeType.FunctionReturnEdge)) {
+          if (cfaedge.getEdgeType() == CFAEdgeType.StatementEdge || cfaedge.getEdgeType() == CFAEdgeType.DeclarationEdge) {
+            definitions.add(node.getLeavingEdge(i));
+          } else {
+            successors.addAll(getAbstractSuccessors0(pState, pPrecision, node.getLeavingEdge(i)));
+          }
+        }
+      }
+    }
+    for (CFAEdge edge: definitions) {
+      successors.addAll(getAbstractSuccessors0(pState, pPrecision, edge));
+    }
+    return successors;
+  }
+
+  private Collection<? extends AbstractState> getAbstractSuccessors0(AbstractState pState, Precision pPrecision,
       CFAEdge pCfaEdge) throws CPATransferException, InterruptedException {
 
     logger.log(Level.INFO, "Compute succesor for ", pState, "along edge", pCfaEdge);
@@ -95,8 +121,9 @@ public class ReachingDefTransferRelation implements TransferRelation {
     if (pCfaEdge == null) { throw new CPATransferException(
         "Expected an edge along which the successors should be computed"); }
 
-    if (pState == ReachingDefState.topElement)
+    if (pState == ReachingDefState.topElement) {
       return Collections.singleton(pState);
+    }
 
     ReachingDefState result;
 
@@ -176,11 +203,13 @@ public class ReachingDefTransferRelation implements TransferRelation {
     VariableExtractor varExtractor = new VariableExtractor(edge);
     varExtractor.resetWarning();
     String var = left.accept(varExtractor);
-    if (varExtractor.getWarning() != null)
+    if (varExtractor.getWarning() != null) {
       logger.log(Level.WARNING, varExtractor.getWarning());
+    }
 
-    if (var == null)
+    if (var == null) {
       return pState;
+    }
 
     logger.log(Level.FINE, "Edge provided a new definition of variable ", var, ". Update reaching definition.");
     if (pState.getGlobalReachingDefinitions().containsKey(var)) {
@@ -239,65 +268,6 @@ public class ReachingDefTransferRelation implements TransferRelation {
       }
     }
     return pState;
-  }
-
-  private static class VariableExtractor extends DefaultCExpressionVisitor<String, UnsupportedCCodeException> {
-
-    private CFAEdge edgeForExpression;
-    private String warning;
-
-    public void resetWarning() {
-      warning = null;
-    }
-
-    public String getWarning() {
-      return warning;
-    }
-
-    public VariableExtractor(CFAEdge pEdgeForExpression) {
-      edgeForExpression = pEdgeForExpression;
-    }
-
-    @Override
-    protected String visitDefault(CExpression pExp) {
-      return null;
-    }
-
-    @Override
-    public String visit(CArraySubscriptExpression pIastArraySubscriptExpression) throws UnsupportedCCodeException {
-      warning = "Analysis may be unsound in case of aliasing.";
-      return pIastArraySubscriptExpression.getArrayExpression().accept(this);
-    }
-
-    @Override
-    public String visit(CCastExpression pIastCastExpression) throws UnsupportedCCodeException {
-      return pIastCastExpression.getOperand().accept(this);
-    }
-
-    @Override
-    public String visit(CFieldReference pIastFieldReference) throws UnsupportedCCodeException {
-      if (pIastFieldReference.isPointerDereference())
-        throw new UnsupportedCCodeException(
-            "Does not support assignment to dereferenced variable due to missing aliasing support", edgeForExpression,
-            pIastFieldReference);
-      warning = "Analysis may be unsound in case of aliasing.";
-      return pIastFieldReference.getFieldOwner().accept(this);
-    }
-
-    @Override
-    public String visit(CIdExpression pIastIdExpression) {
-      return pIastIdExpression.getName();
-    }
-
-    @Override
-    public String visit(CUnaryExpression pIastUnaryExpression) throws UnsupportedCCodeException {
-      if (pIastUnaryExpression.getOperator() == UnaryOperator.STAR)
-        throw new UnsupportedCCodeException(
-            "Does not support assignment to dereferenced variable due to missing aliasing support", edgeForExpression,
-            pIastUnaryExpression);
-      return pIastUnaryExpression.getOperand().accept(this);
-    }
-
   }
 
   @Override

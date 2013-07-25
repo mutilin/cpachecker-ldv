@@ -50,16 +50,20 @@ public class ParseResult {
 
   private final SortedSetMultimap<String, CFANode> cfaNodes;
 
+  private final SortedSetMultimap<String, CFANode> unreachableNodes;
+
   private final List<Pair<IADeclaration, String>> globalDeclarations;
 
   private final Language language;
 
   public ParseResult(Map<String, FunctionEntryNode> pFunctions,
       SortedSetMultimap<String, CFANode> pCfaNodes,
+      SortedSetMultimap<String, CFANode> pUnreachableNodes,
       List<Pair<IADeclaration, String>> pGlobalDeclarations,
       Language pLanguage) {
     functions = pFunctions;
     cfaNodes = pCfaNodes;
+    unreachableNodes = pUnreachableNodes;
     globalDeclarations = pGlobalDeclarations;
     language = pLanguage;
 
@@ -75,6 +79,10 @@ public class ParseResult {
 
   public SortedSetMultimap<String, CFANode> getCFANodes() {
     return cfaNodes;
+  }
+
+  public SortedSetMultimap<String, CFANode> getUnreachableNodes() {
+    return unreachableNodes;
   }
 
   public List<Pair<IADeclaration, String>> getGlobalDeclarations() {

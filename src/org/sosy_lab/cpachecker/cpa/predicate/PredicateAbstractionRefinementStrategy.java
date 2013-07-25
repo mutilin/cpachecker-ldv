@@ -68,6 +68,7 @@ import org.sosy_lab.cpachecker.util.predicates.Solver;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.view.BooleanFormulaManagerView;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.view.FormulaManagerView;
+import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormula;
 
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
@@ -118,6 +119,9 @@ public class PredicateAbstractionRefinementStrategy extends RefinementStrategy {
                       "of all abstract states in the reached set.")
   private boolean sharePredicates = false;
 
+  @Option(description="Use BDDs to simplify interpolants (removing irrelevant predicates)")
+  private boolean useBddInterpolantSimplification = false;
+
   @Option(description="After each refinement, dump the newly found predicates.")
   private boolean dumpPredicates = false;
 
@@ -141,22 +145,30 @@ public class PredicateAbstractionRefinementStrategy extends RefinementStrategy {
     @Override
     public void printStatistics(PrintStream out, Result pResult, ReachedSet pReached) {
       out.println("  Predicate creation:                 " + predicateCreation);
+      if (itpSimplification.getNumberOfIntervals() > 0) {
+        out.println("    Itp simplification with BDDs:     " + itpSimplification);
+      }
       out.println("  Precision update:                   " + precisionUpdate);
       out.println("  ARG update:                         " + argUpdate);
       out.println();
       PredicateAbstractionRefinementStrategy.this.printStatistics(out);
       out.println("Number of refs with location-based cutoff:  " + numberOfRefinementsWithStrategy2);
+      if (itpSimplification.getNumberOfIntervals() > 0) {
+        out.println("Number of irrelevant preds in interpolants: " + irrelevantPredsInItp);
+      }
     }
   }
 
   // statistics
   private int numberOfRefinementsWithStrategy2 = 0;
+  private int irrelevantPredsInItp = 0;
 
   private final Timer predicateCreation = new Timer();
   private final Timer precisionUpdate = new Timer();
   private final Timer argUpdate = new Timer();
+  private final Timer itpSimplification = new Timer();
 
-  protected PredicateAbstractionRefinementStrategy(final Configuration config,
+  public PredicateAbstractionRefinementStrategy(final Configuration config,
       final LogManager pLogger, final FormulaManagerView pFormulaManager,
       final PredicateAbstractionManager pPredAbsMgr, final Solver pSolver)
           throws CPAException, InvalidConfigurationException {
@@ -187,10 +199,12 @@ public class PredicateAbstractionRefinementStrategy extends RefinementStrategy {
     checkArgument(!bfmgr.isTrue(pInterpolant));
 
     predicateCreation.start();
-    Collection<AbstractionPredicate> localPreds = convertInterpolant(pInterpolant);
+    PredicateAbstractState predicateState = getPredicateState(interpolationPoint);
+    PathFormula blockFormula = predicateState.getAbstractionFormula().getBlockFormula();
+
+    Collection<AbstractionPredicate> localPreds = convertInterpolant(pInterpolant, blockFormula);
     CFANode loc = AbstractStates.extractLocation(interpolationPoint);
-    int locInstance = getPredicateState(interpolationPoint)
-                                    .getAbstractionLocationsOnPath().get(loc);
+    int locInstance = predicateState.getAbstractionLocationsOnPath().get(loc);
 
     newPredicates.putAll(Pair.of(loc, locInstance), localPreds);
     predicateCreation.stop();
@@ -203,19 +217,36 @@ public class PredicateAbstractionRefinementStrategy extends RefinementStrategy {
    * @param interpolant The interpolant formula.
    * @return A set of predicates.
    */
-  protected final Collection<AbstractionPredicate> convertInterpolant(BooleanFormula interpolant) {
+  protected final Collection<AbstractionPredicate> convertInterpolant(
+      final BooleanFormula pInterpolant, PathFormula blockFormula) {
+
+    BooleanFormula interpolant = pInterpolant;
     if (bfmgr.isTrue(interpolant)) {
       return Collections.<AbstractionPredicate>emptySet();
     }
 
     Collection<AbstractionPredicate> preds;
 
+    int allPredsCount = 0;
+    if (useBddInterpolantSimplification) {
+      itpSimplification.start();
+      // need to call extractPredicates() for registering all predicates
+      allPredsCount = predAbsMgr.extractPredicates(interpolant).size();
+      interpolant = predAbsMgr.buildAbstraction(fmgr.uninstantiate(interpolant), blockFormula).asInstantiatedFormula();
+      itpSimplification.stop();
+    }
+
     if (atomicPredicates) {
       preds = predAbsMgr.extractPredicates(interpolant);
+
+      if (useBddInterpolantSimplification) {
+        irrelevantPredsInItp += (allPredsCount-preds.size());
+      }
+
     } else {
       preds = ImmutableList.of(predAbsMgr.createPredicateFor(fmgr.uninstantiate(interpolant)));
     }
-    assert !preds.isEmpty();
+    assert !preds.isEmpty() : "Interpolant without relevant predicates: " + pInterpolant + "; simplified to " + interpolant;
 
     logger.log(Level.FINEST, "Got predicates", preds);
 
@@ -326,12 +357,12 @@ public class PredicateAbstractionRefinementStrategy extends RefinementStrategy {
 
     argUpdate.start();
 
-    pReached.removeSubtree(refinementRoot, newPrecision);
+    pReached.removeSubtree(refinementRoot, newPrecision, PredicatePrecision.class);
 
     assert (refinementCount > 0) || reached.size() == 1;
 
     if (sharePredicates) {
-      pReached.updatePrecisionGlobally(newPrecision);
+      pReached.updatePrecisionGlobally(newPrecision, PredicatePrecision.class);
     }
 
     argUpdate.stop();

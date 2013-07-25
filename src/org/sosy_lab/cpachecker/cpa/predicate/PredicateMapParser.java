@@ -47,6 +47,7 @@ import org.sosy_lab.cpachecker.util.predicates.AbstractionManager;
 import org.sosy_lab.cpachecker.util.predicates.AbstractionPredicate;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.FormulaManager;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.view.FormulaManagerView;
 
 import com.google.common.base.Charsets;
 import com.google.common.collect.HashMultimap;
@@ -109,14 +110,14 @@ public class PredicateMapParser {
   private final CFA cfa;
 
   private final LogManager logger;
-  private final FormulaManager fmgr;
+  private final FormulaManagerView fmgr;
   private final AbstractionManager amgr;
 
   private final Map<Integer, CFANode> idToNodeMap = Maps.newHashMap();
 
   public PredicateMapParser(Configuration config, CFA pCfa,
       LogManager pLogger,
-      FormulaManager pFmgr, AbstractionManager pAmgr) throws InvalidConfigurationException {
+      FormulaManagerView pFmgr, AbstractionManager pAmgr) throws InvalidConfigurationException {
     config.inject(this);
 
     cfa = pCfa;
@@ -134,14 +135,13 @@ public class PredicateMapParser {
    * @throws IOException If the file cannot be read.
    * @throws PredicateMapParsingFailedException If there is a syntax error in the file.
    */
-  public PredicatePrecision parsePredicates(File file,
-      Collection<AbstractionPredicate> initialGlobalPredicates)
+  public PredicatePrecision parsePredicates(File file)
           throws IOException, PredicateMapParsingFailedException {
 
     Files.checkReadableFile(file);
 
     try (BufferedReader reader = java.nio.file.Files.newBufferedReader(file.toPath(), Charsets.US_ASCII)) {
-      return parsePredicates(reader, file.getName(), initialGlobalPredicates);
+      return parsePredicates(reader, file.getName());
     }
   }
 
@@ -150,8 +150,7 @@ public class PredicateMapParser {
    * Instead of reading from a file, this method reads from a BufferedReader
    * (available primarily for testing).
    */
-  PredicatePrecision parsePredicates(BufferedReader reader, String source,
-      Collection<AbstractionPredicate> initialGlobalPredicates)
+  PredicatePrecision parsePredicates(BufferedReader reader, String source)
           throws IOException, PredicateMapParsingFailedException {
 
     // first, read first section with initial set of function definitions
@@ -183,7 +182,7 @@ public class PredicateMapParser {
     String functionDefinitions = functionDefinitionsBuffer.toString();
 
     // second, read map of predicates
-    Set<AbstractionPredicate> globalPredicates = Sets.newHashSet(initialGlobalPredicates);
+    Set<AbstractionPredicate> globalPredicates = Sets.newHashSet();
     SetMultimap<String, AbstractionPredicate> functionPredicates = HashMultimap.create();
     SetMultimap<CFANode, AbstractionPredicate> localPredicates = HashMultimap.create();
 

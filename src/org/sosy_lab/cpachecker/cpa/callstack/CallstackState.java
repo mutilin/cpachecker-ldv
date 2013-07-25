@@ -116,46 +116,53 @@ public final class CallstackState implements AbstractState, Partitionable, Abstr
         .getCanonicalName()));
   }
 
-  @Override
-  public int hashCode() {
+  public int hashCodeWithoutNode() {
     final int prime = 31;
     int result = 1;
     result = prime * result + ((currentFunction == null) ? 0 : currentFunction.hashCode());
     result = prime * result + depth;
-    result = prime * result + ((previousState == null) ? 0 : previousState.hashCode());
+    result = prime * result + ((previousState == null) ? 0 : previousState.hashCodeWithoutNode());
     return result;
   }
 
-  @Override
-  public boolean equals(Object obj) {
-    if (this == obj)
+  public boolean equalsWithoutNode(Object obj) {
+    if (this == obj) {
       return true;
-    if (obj == null)
+    }
+    if (obj == null) {
       return false;
-    if (getClass() != obj.getClass())
+    }
+    if (getClass() != obj.getClass()) {
       return false;
+    }
     CallstackState other = (CallstackState) obj;
     if (currentFunction == null) {
-      if (other.currentFunction != null)
+      if (other.currentFunction != null) {
         return false;
-    } else if (!currentFunction.equals(other.currentFunction))
+      }
+    } else if (!currentFunction.equals(other.currentFunction)) {
       return false;
-    if (depth != other.depth)
+    }
+    if (depth != other.depth) {
       return false;
+    }
     if (previousState == null) {
-      if (other.previousState != null)
+      if (other.previousState != null) {
         return false;
-    } else if (!previousState.equals(other.previousState))
+      }
+    } else if (!previousState.equalsWithoutNode(other.previousState)) {
       return false;
+    }
     return true;
   }
 
   @Override
   public CallstackState clone() {
-    if (this.previousState != null)
+    if (this.previousState != null) {
       return new CallstackState(this.previousState.clone(), this.currentFunction, this.callerNode);
-    else
+    } else {
       return new CallstackState(null, this.currentFunction, this.callerNode);
+    }
   }
 
   @Override

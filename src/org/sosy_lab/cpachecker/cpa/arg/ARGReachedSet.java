@@ -27,10 +27,11 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.logging.Level;
 
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
@@ -100,11 +101,9 @@ public class ARGReachedSet {
    * @param e The root of the removed subtree, may not be the initial element.
    * @param p The new precision.
    */
-  public void removeSubtree(ARGState e, Precision p) {
-    Set<ARGState> toWaitlist = removeSubtree0(e);
-
-    for (ARGState ae : toWaitlist) {
-      mReached.updatePrecision(ae, adaptPrecision(mReached.getPrecision(ae), p));
+  public void removeSubtree(ARGState e, Precision p, Class<? extends Precision> pPrecisionType) {
+    for (ARGState ae : removeSubtree0(e)) {
+      mReached.updatePrecision(ae, adaptPrecision(mReached.getPrecision(ae), p, pPrecisionType));
       mReached.reAddToWaitlist(ae);
     }
   }
@@ -133,7 +132,8 @@ public class ARGReachedSet {
    * Set a new precision for each single state in the reached set.
    * @param p The new precision, may be for a single CPA (c.f. {@link #adaptPrecision(ARGState, Precision)}).
    */
-  public void updatePrecisionGlobally(Precision pNewPrecision) {
+  public void updatePrecisionGlobally(Precision pNewPrecision,
+      Class<? extends Precision> pPrecisionType) {
     Map<Precision, Precision> precisionUpdateCache = Maps.newIdentityHashMap();
 
     for (AbstractState s : mReached) {
@@ -141,7 +141,7 @@ public class ARGReachedSet {
 
       Precision newPrecision = precisionUpdateCache.get(oldPrecision);
       if (newPrecision == null) {
-        newPrecision = adaptPrecision(oldPrecision, pNewPrecision);
+        newPrecision = adaptPrecision(oldPrecision, pNewPrecision, pPrecisionType);
         precisionUpdateCache.put(oldPrecision, newPrecision);
       }
 
@@ -158,8 +158,9 @@ public class ARGReachedSet {
    * @param pNewPrecision New precision.
    * @return The adapted precision.
    */
-  private Precision adaptPrecision(Precision pOldPrecision, Precision pNewPrecision) {
-    return Precisions.replaceByType(pOldPrecision, pNewPrecision, pNewPrecision.getClass());
+  private Precision adaptPrecision(Precision pOldPrecision, Precision pNewPrecision,
+      Class<? extends Precision> pPrecisionType) {
+    return Precisions.replaceByType(pOldPrecision, pNewPrecision, pPrecisionType);
   }
 
   private Set<ARGState> removeSubtree0(ARGState e) {
@@ -226,17 +227,17 @@ public class ARGReachedSet {
    *
    * The result will be a set of elements that need to be added to the waitlist
    * to re-discover the removed elements. These are the parents of the removed
-   * elements which are not removed themselves.
+   * elements which are not removed themselves. The set is sorted based on the
+   * relation defined by {@link ARGState#compareTo(ARGState)}), i.e., oldest-first.
    *
    * @param elements the elements to remove
    * @return the elements to re-add to the waitlist
    */
-  private Set<ARGState> removeSet(Set<ARGState> elements) {
+  private SortedSet<ARGState> removeSet(Set<ARGState> elements) {
     mReached.removeAll(elements);
 
-    Set<ARGState> toWaitlist = new LinkedHashSet<>();
+    SortedSet<ARGState> toWaitlist = new TreeSet<>();
     for (ARGState ae : elements) {
-
       for (ARGState parent : ae.getParents()) {
         if (!elements.contains(parent)) {
           toWaitlist.add(parent);
@@ -357,8 +358,9 @@ public class ARGReachedSet {
     }
 
     @Override
-    public void removeSubtree(ARGState pE, Precision pP) {
-      delegate.removeSubtree(pE, pP);
+    public void removeSubtree(ARGState pE, Precision pP,
+        Class<? extends Precision> pPrecisionType) {
+      delegate.removeSubtree(pE, pP, pPrecisionType);
     }
   }
 }

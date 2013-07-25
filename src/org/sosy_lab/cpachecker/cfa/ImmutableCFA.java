@@ -24,7 +24,9 @@
 package org.sosy_lab.cpachecker.cfa;
 
 import static com.google.common.base.Preconditions.*;
+import static com.google.common.collect.FluentIterable.from;
 
+import java.util.Collection;
 import java.util.Map;
 
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
@@ -33,6 +35,7 @@ import org.sosy_lab.cpachecker.cfa.types.MachineModel;
 import org.sosy_lab.cpachecker.util.CFAUtils.Loop;
 import org.sosy_lab.cpachecker.util.VariableClassification;
 
+import com.google.common.base.Function;
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableMap;
@@ -50,15 +53,19 @@ class ImmutableCFA implements CFA {
   private final MachineModel machineModel;
   private final ImmutableMap<String, FunctionEntryNode> functions;
   private final ImmutableSortedSet<CFANode> allNodes;
+  private final ImmutableSortedSet<CFANode> unreachableNodes;
   private final FunctionEntryNode mainFunction;
   private final Optional<ImmutableMultimap<String, Loop>> loopStructure;
   private final Optional<VariableClassification> varClassification;
   private final Language language;
 
+  private ImmutableSet<CFANode> loopHeads = null;
+
   ImmutableCFA(
       MachineModel pMachineModel,
       Map<String, FunctionEntryNode> pFunctions,
       SetMultimap<String, CFANode> pAllNodes,
+      SetMultimap<String, CFANode> pUnreachableNodes,
       FunctionEntryNode pMainFunction,
       Optional<ImmutableMultimap<String, Loop>> pLoopStructure,
       Optional<VariableClassification> pVarClassification,
@@ -67,6 +74,7 @@ class ImmutableCFA implements CFA {
     machineModel = pMachineModel;
     functions = ImmutableMap.copyOf(pFunctions);
     allNodes = ImmutableSortedSet.copyOf(pAllNodes.values());
+    unreachableNodes = ImmutableSortedSet.copyOf(pUnreachableNodes.values());
     mainFunction = checkNotNull(pMainFunction);
     loopStructure = pLoopStructure;
     varClassification = pVarClassification;
@@ -79,6 +87,7 @@ class ImmutableCFA implements CFA {
     machineModel = pMachineModel;
     functions = ImmutableMap.of();
     allNodes = ImmutableSortedSet.of();
+    unreachableNodes = ImmutableSortedSet.of();
     mainFunction = null;
     loopStructure = Optional.absent();
     varClassification = Optional.absent();
@@ -140,6 +149,23 @@ class ImmutableCFA implements CFA {
   }
 
   @Override
+  public Optional<ImmutableSet<CFANode>> getAllLoopHeads() {
+    if (loopStructure.isPresent()) {
+      if (loopHeads == null) {
+        loopHeads = from(loopStructure.get().values())
+            .transformAndConcat(new Function<Loop, Iterable<CFANode>>() {
+              @Override
+              public Iterable<CFANode> apply(Loop loop) {
+                return loop.getLoopHeads();
+              }
+            }).toSet();
+      }
+      return Optional.of(loopHeads);
+    }
+    return Optional.absent();
+  }
+
+  @Override
   public Optional<VariableClassification> getVarClassification() {
     return varClassification;
   }
@@ -147,5 +173,10 @@ class ImmutableCFA implements CFA {
   @Override
   public Language getLanguage() {
     return language;
+  }
+
+  @Override
+  public Collection<CFANode> getUnreachableNodes() {
+    return unreachableNodes;
   }
 }

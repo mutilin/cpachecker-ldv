@@ -194,7 +194,7 @@ public class CFACreator {
       parser = EclipseParsers.getJavaParser(logger, config);
       break;
     case C:
-      parser = CParser.Factory.getParser(logger, CParser.Factory.getOptions(config), machineModel);
+      parser = CParser.Factory.getParser(config, logger, CParser.Factory.getOptions(config), machineModel);
       break;
     default:
       throw new AssertionError();
@@ -275,7 +275,7 @@ public class CFACreator {
 
 
 
-      MutableCFA cfa = new MutableCFA(machineModel, c.getFunctions(), c.getCFANodes(), mainFunction, language);
+      MutableCFA cfa = new MutableCFA(machineModel, c.getFunctions(), c.getCFANodes(), c.getUnreachableNodes(), mainFunction, language);
 
       stats.checkTime.start();
 
@@ -287,18 +287,20 @@ public class CFACreator {
 
       stats.processingTime.start();
 
-      // annotate CFA nodes with reverse postorder information for later use
-      for (FunctionEntryNode function : cfa.getAllFunctionHeads()) {
-        CFAReversePostorder sorter = new CFAReversePostorder();
-        sorter.assignSorting(function);
-      }
-
       // get loop information
       Optional<ImmutableMultimap<String, Loop>> loopStructure = getLoopStructure(cfa);
 
       if (language == Language.C && fptrCallEdges) {
         CFunctionPointerResolver fptrResolver = new CFunctionPointerResolver(cfa, config, logger);
         fptrResolver.resolveFunctionPointers();
+      }
+
+      // Annotate CFA nodes with reverse postorder information for later use.
+      // This needs to come after function pointer resolving because the latter
+      // adds nodes to the CFA.
+      for (FunctionEntryNode function : cfa.getAllFunctionHeads()) {
+        CFAReversePostorder sorter = new CFAReversePostorder();
+        sorter.assignSorting(function);
       }
 
       // Insert call and return edges and build the supergraph

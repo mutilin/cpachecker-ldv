@@ -24,11 +24,11 @@
 package org.sosy_lab.cpachecker.util.predicates;
 
 import java.util.ArrayDeque;
-import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.logging.Level;
 
 import org.sosy_lab.common.AbstractMBean;
@@ -39,13 +39,13 @@ import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
-import org.sosy_lab.cpachecker.util.predicates.interfaces.FormulaType;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.Region;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.RegionManager;
-import org.sosy_lab.cpachecker.util.predicates.interfaces.UnsafeFormulaManager;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.view.BooleanFormulaManagerView;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.view.FormulaManagerView;
 
+import com.google.common.base.Function;
+import com.google.common.base.Functions;
 import com.google.common.base.Joiner;
 import com.google.common.collect.Maps;
 
@@ -224,8 +224,34 @@ public final class AbstractionManager {
         assert pred != null;
         BooleanFormula atom = pred.getSymbolicAtom();
 
-        BooleanFormula ite = bfmgr.ifThenElse(atom, m1, m2);
-        cache.put(n, ite);
+        if (bfmgr.isTrue(m1)) {
+          if (bfmgr.isFalse(m2)) {
+            // ITE(atom, true, false) <==> atom
+            cache.put(n, atom);
+          } else {
+            // ITE(atom, true, m2) <==> (atom || m2)
+            cache.put(n, bfmgr.or(atom, m2));
+          }
+        } else if (bfmgr.isFalse(m1)) {
+          if (bfmgr.isTrue(m2)) {
+            // ITE(atom, false, true) <==> !atom
+            cache.put(n, bfmgr.not(atom));
+          } else {
+            // ITE(atom, false, m2) <==> (!atom && m2)
+            cache.put(n, bfmgr.and(bfmgr.not(atom), m2));
+          }
+        } else {
+          if (bfmgr.isTrue(m2)) {
+            // ITE(atom, m1, true) <==> (!atom || m1)
+            cache.put(n, bfmgr.or(bfmgr.not(atom), m1));
+          } else if (bfmgr.isFalse(m2)) {
+            // ITE(atom, m1, false) <==> (atom && m1)
+            cache.put(n, bfmgr.and(atom, m1));
+          } else {
+            // ITE(atom, m1, m2)
+            cache.put(n, bfmgr.ifThenElse(atom, m1, m2));
+          }
+        }
       }
     }
 
@@ -246,8 +272,13 @@ public final class AbstractionManager {
     return rmgr.entails(f1, f2);
   }
 
-  public Collection<AbstractionPredicate> extractPredicates(Region af) {
-    Collection<AbstractionPredicate> vars = new HashSet<>();
+  /**
+   * Return the set of predicates that occur in a a region.
+   * In some cases, this method also returns the predicate 'false'
+   * in the set.
+   */
+  public Set<AbstractionPredicate> extractPredicates(Region af) {
+    Set<AbstractionPredicate> vars = new HashSet<>();
 
     Deque<Region> toProcess = new ArrayDeque<>();
     toProcess.push(af);
@@ -268,78 +299,24 @@ public final class AbstractionManager {
         pred = absVarToPredicate.get(var);
         assert pred != null;
 
-        Region c1 = parts.getSecond();
-        if (c1 != null) {
-          toProcess.push(c1);
-        }
-
-        Region c2 = parts.getThird();
-        if (c2 != null) {
-          toProcess.push(c2);
-        }
+        toProcess.push(parts.getSecond());
+        toProcess.push(parts.getThird());
       }
 
       vars.add(pred);
     }
+
     return vars;
   }
 
   public Region buildRegionFromFormula(BooleanFormula pF) {
-    if (rmgr instanceof SymbolicRegionManager) {
-      // optimization shortcut
-      return ((SymbolicRegionManager)rmgr).fromFormula(pF);
-    }
-
-    // expect that pF is uninstantiated
-    if (bfmgr.isFalse(pF)) {
-      return getRegionCreator().makeFalse();
-    }
-
-    if (bfmgr.isTrue(pF)) {
-      return getRegionCreator().makeTrue();
-    }
-
-    FormulaOperator op = bfmgr.getOperator(pF);
-    //TODO: see if this can be done without unsafe-manager
-    UnsafeFormulaManager unsafe = fmgr.getUnsafeFormulaManager();
-    if (op == null) { return null; }
-    switch (op) {
-    case ATOM: {
-      return atomToPredicate.get(pF).getAbstractVariable();
-    }
-    case NOT: {
-      return getRegionCreator()
-          .makeNot(
-            buildRegionFromFormula(unsafe.typeFormula(FormulaType.BooleanType, unsafe.getArg(pF, 0))));
-    }
-    case AND: {
-      return getRegionCreator()
-          .makeAnd(
-            buildRegionFromFormula(unsafe.typeFormula(FormulaType.BooleanType, unsafe.getArg(pF, 0))),
-            buildRegionFromFormula(unsafe.typeFormula(FormulaType.BooleanType, unsafe.getArg(pF, 1))));
-    }
-    case OR: {
-      return getRegionCreator()
-          .makeOr(
-            buildRegionFromFormula(unsafe.typeFormula(FormulaType.BooleanType, unsafe.getArg(pF, 0))),
-            buildRegionFromFormula(unsafe.typeFormula(FormulaType.BooleanType, unsafe.getArg(pF, 1))));
-    }
-    case EQUIV: {
-      return getRegionCreator()
-          .makeEqual(
-            buildRegionFromFormula(unsafe.typeFormula(FormulaType.BooleanType, unsafe.getArg(pF, 0))),
-            buildRegionFromFormula(unsafe.typeFormula(FormulaType.BooleanType, unsafe.getArg(pF, 1))));
-    }
-    case ITE: {
-      return getRegionCreator()
-          .makeIte(
-            buildRegionFromFormula(unsafe.typeFormula(FormulaType.BooleanType, unsafe.getArg(pF, 0))),
-            buildRegionFromFormula(unsafe.typeFormula(FormulaType.BooleanType, unsafe.getArg(pF, 1))),
-            buildRegionFromFormula(unsafe.typeFormula(FormulaType.BooleanType, unsafe.getArg(pF, 2))));
-    }
-    default:
-      return null;
-    }
+    return rmgr.fromFormula(pF, fmgr,
+        Functions.compose(new Function<AbstractionPredicate, Region>() {
+          @Override
+          public Region apply(AbstractionPredicate pInput) {
+            return pInput.getAbstractVariable();
+          }
+        }, Functions.forMap(atomToPredicate)));
   }
 
   public RegionCreator getRegionCreator() {

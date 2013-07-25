@@ -31,9 +31,12 @@ import java.util.Map;
 import java.util.Set;
 
 import org.sosy_lab.common.Triple;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.Region;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.RegionManager;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.view.FormulaManagerView;
 
+import com.google.common.base.Function;
 import com.google.common.collect.BiMap;
 import com.google.common.collect.HashBiMap;
 
@@ -234,8 +237,18 @@ public class NamedRegionManager implements RegionManager {
   }
 
   @Override
+  public Region fromFormula(BooleanFormula pF, FormulaManagerView pFmgr, Function<BooleanFormula, Region> pAtomToRegion) {
+    return delegate.fromFormula(pF, pFmgr, pAtomToRegion);
+  }
+
+  @Override
   public Triple<Region, Region, Region> getIfThenElse(Region pF) {
     return delegate.getIfThenElse(pF);
+  }
+
+  @Override
+  public Set<Region> extractPredicates(Region pF) {
+    return delegate.extractPredicates(pF);
   }
 
   @Override
