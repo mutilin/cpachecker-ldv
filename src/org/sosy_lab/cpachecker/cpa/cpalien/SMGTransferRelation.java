@@ -70,7 +70,6 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSideVisitor;
 import org.sosy_lab.cpachecker.cfa.ast.c.CSimpleDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
-import org.sosy_lab.cpachecker.cfa.ast.c.CStringLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CTypeIdExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CTypeIdExpression.TypeIdOperator;
 import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
@@ -193,6 +192,7 @@ public class SMGTransferRelation implements TransferRelation {
             name = String.format("%03d-%03d", currentState.getPredecessor().getId(), currentState.getId());
           }
         }
+        name = name.replace("\"", "");
         File outputFile = new File(String.format(exportSMGFilePattern.getAbsolutePath(), name));
         try {
           Files.writeFile(outputFile, currentState.toDot(name, location));
@@ -203,7 +203,7 @@ public class SMGTransferRelation implements TransferRelation {
     }
 
     public void evaluateVBPlot(CFunctionCallExpression functionCall, SMGState currentState) {
-      String name = ((CStringLiteralExpression) functionCall.getParameterExpressions().get(0)).getContentString();
+      String name = functionCall.getParameterExpressions().get(0).toASTString();
       this.dumpSMGPlot(name, currentState, functionCall.toString());
     }
 
@@ -1062,7 +1062,7 @@ public class SMGTransferRelation implements TransferRelation {
       return;
     }
 
-    pNewState.writeValue(pMemoryOfField, pFieldOffset, pRValueType, pValue.getAsInt());
+    pNewState.writeValue(pMemoryOfField, pFieldOffset, pRValueType, pValue);
   }
 
   private void copy(SMGState pNewState, SMGObject pMemoryOfField, SMGObject pObject) {

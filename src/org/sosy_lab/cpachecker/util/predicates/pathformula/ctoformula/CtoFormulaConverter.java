@@ -53,8 +53,8 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CInitializer;
-import org.sosy_lab.cpachecker.cfa.ast.c.CInitializerExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CInitializerList;
+import org.sosy_lab.cpachecker.cfa.ast.c.CInitializers;
 import org.sosy_lab.cpachecker.cfa.ast.c.CParameterDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
@@ -73,11 +73,11 @@ import org.sosy_lab.cpachecker.cfa.model.c.CFunctionSummaryEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CReturnStatementEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
 import org.sosy_lab.cpachecker.cfa.types.MachineModel;
+import org.sosy_lab.cpachecker.cfa.types.c.CArrayType;
 import org.sosy_lab.cpachecker.cfa.types.c.CBasicType;
 import org.sosy_lab.cpachecker.cfa.types.c.CComplexType.ComplexTypeKind;
 import org.sosy_lab.cpachecker.cfa.types.c.CCompositeType;
 import org.sosy_lab.cpachecker.cfa.types.c.CCompositeType.CCompositeTypeMemberDeclaration;
-import org.sosy_lab.cpachecker.cfa.types.c.CDefaults;
 import org.sosy_lab.cpachecker.cfa.types.c.CElaboratedType;
 import org.sosy_lab.cpachecker.cfa.types.c.CEnumType;
 import org.sosy_lab.cpachecker.cfa.types.c.CFunctionType;
@@ -140,9 +140,6 @@ public class CtoFormulaConverter {
       return new CtoFormulaConverter(config, pFmgr, pMachineModel, pLogger);
     }
   }
-
-  @Option(description="initialize all variables to 0 when they are declared")
-  private boolean initAllVars = false;
 
   // if true, handle lvalues as *x, &x, s.x, etc. using UIFs. If false, just
   // use variables
@@ -440,7 +437,7 @@ public class CtoFormulaConverter {
 //      || CTypeUtils.equals(t, type)
 //      : "Saving variables with mutliple types is not possible!";
     CType t = ssa.getType(name);
-    if (t != null && !areEqual(t, type)) {
+    if (t != null && !areEqualWithMatchingPointerArray(t, type)) {
 
       if (getFormulaTypeFromCType(t) != getFormulaTypeFromCType(type)) {
         throw new UnsupportedOperationException(
@@ -666,8 +663,8 @@ public class CtoFormulaConverter {
       return formula; // No cast required;
     }
 
-    fromType = simplifyType(fromType);
-    toType = simplifyType(toType);
+    fromType = fromType.getCanonicalType();
+    toType = toType.getCanonicalType();
 
     if (fromType instanceof CFunctionType) {
       // references to functions can be seen as function pointers
@@ -727,6 +724,26 @@ public class CtoFormulaConverter {
     CType after = e.getExpressionType();
     CType before = e.getOperand().getExpressionType();
     return makeCast(before, after, inner);
+  }
+
+  CExpression makeCastFromArrayToPointerIfNecessary(CExpression exp, CType targetType) {
+    if (exp.getExpressionType().getCanonicalType() instanceof CArrayType) {
+      targetType = targetType.getCanonicalType();
+      if (targetType instanceof CPointerType || targetType instanceof CSimpleType) {
+        return makeCastFromArrayToPointer(exp);
+      }
+    }
+    return exp;
+  }
+
+  private static CExpression makeCastFromArrayToPointer(CExpression arrayExpression) {
+    // array-to-pointer conversion
+    CArrayType arrayType = (CArrayType)arrayExpression.getExpressionType().getCanonicalType();
+    CPointerType pointerType = new CPointerType(arrayType.isConst(),
+        arrayType.isVolatile(), arrayType.getType());
+
+    return new CUnaryExpression(arrayExpression.getFileLocation(), pointerType,
+        arrayExpression, UnaryOperator.AMPER);
   }
 
   /**
@@ -828,8 +845,8 @@ public class CtoFormulaConverter {
    * @return
    */
   CType getImplicitCType(CType pT1, CType pT2) {
-    pT1 = simplifyType(pT1);
-    pT2 = simplifyType(pT2);
+    pT1 = pT1.getCanonicalType();
+    pT2 = pT2.getCanonicalType();
 
     // UNDEFINED: What should happen when we have two pointer?
     // For example when two pointers get multiplied or added
@@ -931,7 +948,7 @@ public class CtoFormulaConverter {
   }
 
   CType getPromotedCType(CType t) {
-    t = simplifyType(t);
+    t = t.getCanonicalType();
     if (t instanceof CSimpleType) {
       // Integer types smaller than int are promoted when an operation is performed on them.
       // If all values of the original type can be represented as an int, the value of the smaller type is converted to an int;
@@ -1159,38 +1176,29 @@ public class CtoFormulaConverter {
 
     // if there is an initializer associated to this variable,
     // take it into account
-    CInitializer initializer = decl.getInitializer();
-    CExpression init = null;
+    BooleanFormula result = bfmgr.makeBoolean(true);
 
-    if (initializer == null) {
-      if (initAllVars) {
-        // auto-initialize variables to zero
-        logDebug("AUTO-INITIALIZING VAR: ", edge);
-        init = CDefaults.forType(decl.getType(), null);
+    if (decl.getInitializer() instanceof CInitializerList) {
+      // If there is an initializer, all fields/elements not mentioned
+      // in the initializer are set to 0 (C standard § 6.7.9 (21)
+
+      int size = machineModel.getSizeof(decl.getType());
+      if (size > 0) {
+        Variable v = Variable.create(varName, decl.getType());
+        Formula var = makeVariable(v, ssa);
+        Formula zero = fmgr.makeNumber(getFormulaTypeFromCType(decl.getType()), 0L);
+        result = bfmgr.and(result, fmgr.assignment(var, zero));
       }
-
-    } else if (initializer instanceof CInitializerExpression) {
-      init = ((CInitializerExpression)initializer).getExpression();
-
-    } else {
-      logDebug("Ignoring unsupported initializer", initializer);
     }
 
-    if (init == null) {
-      return bfmgr.makeBoolean(true);
-    }
-
-    // initializer value present
-    // Do a regular assignment
-    CExpressionAssignmentStatement assign =
-        new CExpressionAssignmentStatement(
-            decl.getFileLocation(),
-            new CIdExpression(decl.getFileLocation(), decl.getType(), decl.getName(), decl),
-            init);
     StatementToFormulaVisitor v = getStatementVisitor(edge, function, ssa, constraints);
-    return assign.accept(v);
-  }
 
+    for (CExpressionAssignmentStatement assignment : CInitializers.convertToAssignments(decl, edge)) {
+      result = bfmgr.and(result, assignment.accept(v));
+    }
+
+    return result;
+  }
 
   protected BooleanFormula makeExitFunction(CFunctionSummaryEdge ce, String function,
       SSAMapBuilder ssa, Constraints constraints) throws CPATransferException {
@@ -1229,7 +1237,7 @@ public class CtoFormulaConverter {
     if (funcDecl == null) {
       // Check if we have a function pointer here.
       CExpression functionNameExpression = funcCallExp.getFunctionNameExpression();
-      CType expressionType = simplifyType(functionNameExpression.getExpressionType());
+      CType expressionType = functionNameExpression.getExpressionType().getCanonicalType();
       if (expressionType instanceof CFunctionType) {
         CFunctionType funcPtrType = (CFunctionType)expressionType;
         retType = funcPtrType.getReturnType();
@@ -1280,17 +1288,19 @@ public class CtoFormulaConverter {
     int i = 0;
     BooleanFormula result = bfmgr.makeBoolean(true);
     for (CParameterDeclaration formalParam : formalParams) {
-      if (formalParam.getType() instanceof CPointerType) {
+      final String varName = formalParam.getQualifiedName();
+      final CType paramType = formalParam.getType();
+      if (paramType.getCanonicalType() instanceof CPointerType) {
         log(Level.WARNING, "Program contains pointer parameter; analysis is imprecise in case of aliasing.");
         logDebug("Ignoring the semantics of pointer for parameter "
             + formalParam.getName(), fn.getFunctionDefinition());
       }
       CExpression paramExpression = actualParams.get(i++);
+      paramExpression = makeCastFromArrayToPointerIfNecessary(paramExpression, paramType);
+
       // get value of actual parameter
       Formula actualParam = buildTerm(paramExpression, edge, callerFunction, ssa, constraints);
 
-      final String varName = formalParam.getQualifiedName();
-      CType paramType = formalParam.getType();
       BooleanFormula eq =
           makeAssignment(
               varName, paramType,
@@ -1510,7 +1520,7 @@ public class CtoFormulaConverter {
    */
   private Pair<Integer, Integer> getFieldOffsetMsbLsb(CFieldReference fExp) {
     CExpression fieldRef = getRealFieldOwner(fExp);
-    CCompositeType structType = (CCompositeType)simplifyType(fieldRef.getExpressionType());
+    CCompositeType structType = (CCompositeType)fieldRef.getExpressionType().getCanonicalType();
 
     // f is now the structure, access it:
     int bitsPerByte = machineModel.getSizeofCharInBits();

@@ -47,7 +47,7 @@ public final class SMGPlotter {
 
     sb.append("digraph gr_" + name.replace('-', '_') + "{\n");
     offset += 2;
-    sb.append(newLineWithOffset("label = \"Location: " + location + "\";"));
+    sb.append(newLineWithOffset("label = \"Location: " + location.replace("\"", "\\\"") + "\";"));
 
     addStackSubgraph(smg, sb);
 
@@ -70,7 +70,7 @@ public final class SMGPlotter {
       sb.append(newLineWithOffset(smgHVEdgeAsDot(edge)));
     }
 
-    for (SMGEdgePointsTo edge: smg.getPTEdges()) {
+    for (SMGEdgePointsTo edge: smg.getPTEdges().values()) {
       if (edge.getValue() != smg.getNullValue()) {
         sb.append(newLineWithOffset(smgPTEdgeAsDot(edge)));
       }
