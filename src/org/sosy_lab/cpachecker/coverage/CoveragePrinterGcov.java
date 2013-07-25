@@ -81,12 +81,16 @@ public class CoveragePrinterGcov implements CoveragePrinter {
 
   @Override
   public void addVisitedLine(int pLine) {
-    visitedLines.add(pLine);
+    if (pLine > 0) {
+      visitedLines.add(pLine);
+    }
   }
 
   @Override
   public void addExistingLine(int pLine) {
-    allLines.add(pLine);
+    if (pLine > 0) {
+      allLines.add(pLine);
+    }
   }
 
   @Override
