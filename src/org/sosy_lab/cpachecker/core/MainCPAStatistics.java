@@ -233,20 +233,11 @@ class MainCPAStatistics implements Statistics {
         }
     }
 
-    private void visitEdge(CoveragePrinter printer, CFAEdge pEdge, Collection<CFANode> visitedLocations) {
-      int line = pEdge.getLineNumber();
-      printer.addExistingLine(line);
-      if (visitedLocations.contains(pEdge.getPredecessor())) {
-        printer.addVisitedLine(line);
-      }
-      if (pEdge instanceof MultiEdge) {
-        for (CFAEdge singleEdge : ((MultiEdge)pEdge).getEdges()) {
-          visitEdge(printer, singleEdge, visitedLocations);
-        }
-      }
-    }
-
     private void printCoverageInfo(ReachedSet reached) {
+      if (cfa == null) {
+        return;
+      }
+
       if (reached instanceof ForwardingReachedSet) {
         reached = ((ForwardingReachedSet)reached).getDelegate();
       }
@@ -296,7 +287,28 @@ class MainCPAStatistics implements Statistics {
         //This part adds lines, which are only on edges, such as "return" or "goto"
         for (int i = 0; i < node.getNumLeavingEdges(); i++) {
           CFAEdge pEdge = node.getLeavingEdge(i);
-          visitEdge(printer, pEdge, locations);
+          if (pEdge instanceof CDeclarationEdge) {
+            continue;
+          }
+          int line = pEdge.getLineNumber();
+
+          printer.addExistingLine(line);
+          CFANode predessor = pEdge.getPredecessor();
+          if (locations.contains(predessor)) {
+            printer.addVisitedLine(line);
+          }
+          if (pEdge instanceof MultiEdge) {
+            for (CFAEdge singleEdge : ((MultiEdge)pEdge).getEdges()) {
+              if (singleEdge instanceof CDeclarationEdge) {
+                continue;
+              }
+              line = singleEdge.getLineNumber();
+              printer.addExistingLine(line);
+              if (locations.contains(predessor)) {
+                printer.addVisitedLine(line);
+              }
+            }
+          }
         }
       }
 
