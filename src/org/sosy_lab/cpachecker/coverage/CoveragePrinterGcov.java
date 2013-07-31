@@ -23,7 +23,9 @@
  */
 package org.sosy_lab.cpachecker.coverage;
 
+import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -81,21 +83,44 @@ public class CoveragePrinterGcov implements CoveragePrinter {
 
   @Override
   public void addVisitedLine(int pLine) {
-    visitedLines.add(pLine);
+    if (pLine > 0) {
+      visitedLines.add(pLine);
+    }
   }
 
   @Override
   public void addExistingLine(int pLine) {
-    allLines.add(pLine);
+    if (pLine > 0) {
+      allLines.add(pLine);
+    }
+  }
+
+  private void createDir(File file) throws IOException {
+    File previousDir = file.getParentFile();
+    if (!previousDir.exists()) {
+      createDir(previousDir);
+    }
+    file.mkdir();
   }
 
   @Override
   public void print(String outputFile, String originFile) {
     try {
+      File file = new File(outputFile);
+      if (!file.exists()) {
+        File previousDir = file.getParentFile();
+        if (!previousDir.exists()) {
+          createDir(previousDir);
+        }
+        file.createNewFile();
+      }
+
       PrintWriter out = new PrintWriter(outputFile);
 
+      //Convert ./test.c -> /full/path/test.c
+      file = new File(originFile);
       out.println(TEXTNAME);
-      out.println(SOURCEFILE + originFile);
+      out.println(SOURCEFILE + file.getAbsolutePath());
 
       for (FunctionInfo info : allFunctions) {
         out.println(FUNCTION + info.firstLine + "," + info.name);
@@ -127,6 +152,8 @@ public class CoveragePrinterGcov implements CoveragePrinter {
       out.close();
     } catch(FileNotFoundException e) {
       System.err.println("Cannot open output file " + outputFile);
+    } catch(IOException e) {
+      System.err.println("Cannot create file " + outputFile + ": " + e.getMessage());
     }
   }
 
