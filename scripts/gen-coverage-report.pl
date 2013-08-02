@@ -230,12 +230,26 @@ foreach my $file (keys(%info_fn))
   }
   
   my $info_da_for_file = $info_da{$file};
+  # We should remember, which lines we've printed,
+  # because there may be several lines transfered into one original line
+  my %existed_lines;
   foreach my $info_da (@{$info_da_for_file})
   {
     my $used = $info_da->{'used'};
     my $line = $info_da->{'line'};
     
-    print ($new_lcov_info_fh "DA:$line,$used\n");
+    # +1 is used because 0 is returned if there aren't element
+    if (exists($existed_lines{$line}))
+    {
+      $existed_lines{$line} = $used + $existed_lines{$line};
+    } else {
+	  $existed_lines{$line} = $used;
+	}
+  }
+  
+  foreach my $key (keys %existed_lines)
+  {
+    print ($new_lcov_info_fh "DA:$key,$existed_lines{$key}\n");
   }
   
   print ($new_lcov_info_fh "end_of_record\n");
