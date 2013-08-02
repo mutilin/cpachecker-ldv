@@ -53,7 +53,6 @@ import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.CFACreator;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
-import org.sosy_lab.cpachecker.cfa.model.CLabelNode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
 import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
@@ -260,9 +259,6 @@ class MainCPAStatistics implements Statistics {
 
       //Add information about visited locations
       for (CFANode node : locations) {
-        if (node instanceof CLabelNode) {
-          continue;
-        }
         printer.addVisitedLine(node.getLineNumber());
       }
 
@@ -298,7 +294,8 @@ class MainCPAStatistics implements Statistics {
 
           printer.addExistingLine(line);
           CFANode predessor = pEdge.getPredecessor();
-          if (locations.contains(predessor)) {
+          CFANode successor = pEdge.getSuccessor();
+          if (locations.contains(predessor) && locations.contains(successor)) {
             printer.addVisitedLine(line);
           }
           if (pEdge instanceof MultiEdge) {
@@ -308,7 +305,7 @@ class MainCPAStatistics implements Statistics {
               }
               line = singleEdge.getLineNumber();
               printer.addExistingLine(line);
-              if (locations.contains(predessor)) {
+              if (locations.contains(predessor) && locations.contains(successor)) {
                 printer.addVisitedLine(line);
               }
             }
