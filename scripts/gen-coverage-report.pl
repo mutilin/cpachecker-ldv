@@ -238,11 +238,8 @@ foreach my $file (keys(%info_fn))
     my $used = $info_da->{'used'};
     my $line = $info_da->{'line'};
     
-    # +1 is used because 0 is returned if there aren't element
-    if (exists($existed_lines{$line}))
+    unless (exists($existed_lines{$line}) && $existed_lines{$line} > $used)
     {
-      $existed_lines{$line} = $used + $existed_lines{$line};
-    } else {
 	  $existed_lines{$line} = $used;
 	}
   }
