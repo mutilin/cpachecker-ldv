@@ -115,6 +115,9 @@ sub process_cil_file ($)
     {
       $src_line_cur = $1;
       $src_cur = $2;
+      if ($src_cur =~ /(.*)\/([^\/]+)\/\.\.\/([^\/]+)/) {
+		  $src_cur = $1."\/".$3;
+	  }
     }
     elsif ($str =~ /^#line (\d+)$/)
     {
