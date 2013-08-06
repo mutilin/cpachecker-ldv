@@ -1032,12 +1032,12 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
   //returns root of a subtree leading from the root element of the given reachedSet to the target state
   //subtree is represented using children and parents of ARGElements, where newTreeTarget is the ARGState
   //in the constructed subtree that represents target
-  ARGState computeCounterexampleSubgraph(ARGState target, ARGReachedSet reachedSet, ARGState newTreeTarget,
+  ARGState computeCounterexampleSubgraph(ARGState target, ARGReachedSet reachedSet, BackwardARGState newTreeTarget,
       Map<ARGState, ARGState> pPathElementToReachedState) throws InterruptedException, RecursiveAnalysisFailedException {
     assert reachedSet.asReachedSet().contains(target);
 
     //start by creating ARGElements for each node needed in the tree
-    Map<ARGState, ARGState> elementsMap = new HashMap<>();
+    Map<ARGState, BackwardARGState> elementsMap = new HashMap<>();
     Stack<ARGState> openElements = new Stack<>();
     ARGState root = null;
 
@@ -1052,7 +1052,7 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
       for (ARGState parent : currentElement.getParents()) {
         if (!elementsMap.containsKey(parent)) {
           //create node for parent in the new subtree
-          elementsMap.put(parent, new ARGState(parent.getWrappedState(), null));
+          elementsMap.put(parent, new BackwardARGState(parent.getWrappedState(), null));
           pPathElementToReachedState.put(elementsMap.get(parent), parent);
           //and remember to explore the parent later
           openElements.push(parent);
@@ -1073,6 +1073,7 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
             child.addParent(elementsMap.get(parent));
           }
           innerTree.removeFromARG();
+          elementsMap.get(parent).updateDecreaseId();
         } else {
           //normal edge
           //create an edge from parent to current
@@ -1093,7 +1094,7 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
    * (recursively, if needed).
    * @throws RecursiveAnalysisFailedException
    */
-  private ARGState computeCounterexampleSubgraph(ARGState root, Precision rootPrecision, ARGState newTreeTarget,
+  private ARGState computeCounterexampleSubgraph(ARGState root, Precision rootPrecision, BackwardARGState newTreeTarget,
       Map<ARGState, ARGState> pPathElementToReachedState) throws InterruptedException, RecursiveAnalysisFailedException {
     CFANode rootNode = extractLocation(root);
     Block rootSubtree = partitioning.getBlockForCallNode(rootNode);
@@ -1151,22 +1152,22 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
       Collection<? extends AbstractState> pSuccessors, ProofChecker pWrappedProofChecker) throws CPATransferException,
       InterruptedException {
     if (pCfaEdge != null) { return pWrappedProofChecker.areAbstractSuccessors(pState, pCfaEdge, pSuccessors); }
-    return areAbstractSuccessors0(pState, pCfaEdge, pSuccessors, pWrappedProofChecker);
+    return areAbstractSuccessors0(pState, pCfaEdge, pSuccessors, pWrappedProofChecker, partitioning.getMainBlock());
   }
 
   private boolean areAbstractSuccessors0(AbstractState pState, CFAEdge pCfaEdge,
-      Collection<? extends AbstractState> pSuccessors, ProofChecker pWrappedProofChecker) throws CPATransferException,
+      Collection<? extends AbstractState> pSuccessors, ProofChecker pWrappedProofChecker, final Block currentBlock)
+      throws CPATransferException,
       InterruptedException {
     // currently cannot deal with blocks for which the set of call nodes and return nodes of that block is not disjunct
     boolean successorExists;
 
-    Block analyzedBlock = currentBlock;
     CFANode node = extractLocation(pState);
 
     if (partitioning.isCallNode(node) && !isHeadOfMainFunction(node)
         && !partitioning.getBlockForCallNode(node).equals(currentBlock)) {
       // do not support nodes which are call nodes of multiple blocks
-      currentBlock = partitioning.getBlockForCallNode(node);
+      Block analyzedBlock = partitioning.getBlockForCallNode(node);
       try {
         PredicateAbstractState pred = extractStateByType(pState, PredicateAbstractState.class);
         if (!(pState instanceof ABMARGBlockStartState)
@@ -1174,7 +1175,7 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
             || (pred != null
             && (!pred.isAbstractionState() || !extractStateByType(((ABMARGBlockStartState) pState).getAnalyzedBlock(),
                 PredicateAbstractState.class).isAbstractionState()))
-            || !abmCPA.isCoveredBy(wrappedReducer.getVariableReducedStateForProofChecking(pState, currentBlock, node),
+            || !abmCPA.isCoveredBy(wrappedReducer.getVariableReducedStateForProofChecking(pState, analyzedBlock, node),
                 ((ABMARGBlockStartState) pState).getAnalyzedBlock())) { return false; }
       } catch (CPAException e) {
         throw new CPATransferException("Missing information about block whose analysis is expected to be started at "
@@ -1182,12 +1183,12 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
       }
       try {
         Collection<ARGState> endOfBlock;
-        Pair<ARGState, Block> key = Pair.of(((ABMARGBlockStartState) pState).getAnalyzedBlock(), currentBlock);
+        Pair<ARGState, Block> key = Pair.of(((ABMARGBlockStartState) pState).getAnalyzedBlock(), analyzedBlock);
         if (correctARGsForBlocks != null && correctARGsForBlocks.containsKey(key)) {
           endOfBlock = correctARGsForBlocks.get(key);
         } else {
           Pair<Boolean, Collection<ARGState>> result =
-              checkARGBlock(((ABMARGBlockStartState) pState).getAnalyzedBlock(), pWrappedProofChecker);
+              checkARGBlock(((ABMARGBlockStartState) pState).getAnalyzedBlock(), pWrappedProofChecker, analyzedBlock);
           if (!result.getFirst()) { return false; }
           endOfBlock = result.getSecond();
           if (correctARGsForBlocks == null) {
@@ -1213,7 +1214,7 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
           successorExists = false;
           pred = extractStateByType(leaveB, PredicateAbstractState.class);
           if (pred != null && !pred.isAbstractionState()) { return false; }
-          expandedState = wrappedReducer.getVariableExpandedStateForProofChecking(pState, currentBlock, leaveB);
+          expandedState = wrappedReducer.getVariableExpandedStateForProofChecking(pState, analyzedBlock, leaveB);
           for (AbstractState next : blockSuccessors.get(extractLocation(leaveB))) {
             if (abmCPA.isCoveredBy(expandedState, next)) {
               successorExists = true;
@@ -1225,7 +1226,6 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
 
         if (!notFoundSuccessors.isEmpty()) { return false; }
 
-        currentBlock = analyzedBlock;
       } catch (CPAException e) {
         throw new CPATransferException("Checking ARG with root " + ((ABMARGBlockStartState) pState).getAnalyzedBlock()
             + " for block " + currentBlock + "failed.");
@@ -1252,7 +1252,10 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
           if (usedEdges.contains(node.getLeavingEdge(i))) { return false; }
           continue;
         }
-        if (!pWrappedProofChecker.areAbstractSuccessors(pState, node.getLeavingEdge(i), pSuccessors)) { return false; }
+        if (!pWrappedProofChecker.areAbstractSuccessors(pState, node.getLeavingEdge(i), pSuccessors)) {
+          pWrappedProofChecker.areAbstractSuccessors(pState, node.getLeavingEdge(i), pSuccessors);
+          return false;
+        }
       }
     }
     return true;
@@ -1304,7 +1307,8 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
     }
   }
 
-  private Pair<Boolean, Collection<ARGState>> checkARGBlock(ARGState rootNode, ProofChecker pWrappedProofChecker)
+  private Pair<Boolean, Collection<ARGState>> checkARGBlock(ARGState rootNode, ProofChecker pWrappedProofChecker,
+      final Block currentBlock)
       throws CPAException, InterruptedException {
     Collection<ARGState> returnNodes = new ArrayList<>();
     Set<ARGState> waitingForUnexploredParents = new HashSet<>();
@@ -1362,7 +1366,7 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
         returnNodes.add(current);
       }
 
-      if (!areAbstractSuccessors0(current, null, current.getChildren(), pWrappedProofChecker)) {
+      if (!areAbstractSuccessors0(current, null, current.getChildren(), pWrappedProofChecker, currentBlock)) {
         returnNodes = Collections.emptyList();
         return Pair.of(false, returnNodes);
       }
@@ -1397,7 +1401,30 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
     return Pair.of(true, returnNodes);
   }
 
+
   public Collection<ReachedSet> getCachedReachedSet() {
     return argCache.getAllCachedReachedStates();
+  }
+
+  static class BackwardARGState extends ARGState {
+
+    private static final long serialVersionUID = -3279533907385516993L;
+    private int decreasingStateID;
+    private static int nextDecreaseID = Integer.MAX_VALUE;
+
+    public BackwardARGState(AbstractState pWrappedState, ARGState pParentElement) {
+      super(pWrappedState, pParentElement);
+      decreasingStateID = nextDecreaseID--;
+    }
+
+    @Override
+    public boolean isOlderThan(ARGState other) {
+      if (other instanceof BackwardARGState) { return decreasingStateID < ((BackwardARGState) other).decreasingStateID; }
+      return super.isOlderThan(other);
+    }
+
+    void updateDecreaseId() {
+      decreasingStateID = nextDecreaseID--;
+    }
   }
 }

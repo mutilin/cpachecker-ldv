@@ -66,6 +66,7 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CInitializerExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CIntegerLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CParameterDeclaration;
+import org.sosy_lab.cpachecker.cfa.ast.c.CPointerExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSideVisitor;
 import org.sosy_lab.cpachecker.cfa.ast.c.CSimpleDeclaration;
@@ -749,15 +750,12 @@ public class SMGTransferRelation implements TransferRelation {
     @Override
     public SMGAddress visit(CUnaryExpression lValue) throws CPATransferException {
 
-      if (lValue.getOperator() == CUnaryExpression.UnaryOperator.STAR) {
-        // *a = ...
-        return handlePointerAssignment(lValue);
-      }
-
       throw new UnrecognizedCCodeException(lValue.toASTString() + " is not an lValue", cfaEdge, lValue);
     }
 
-    private SMGAddress handlePointerAssignment(CUnaryExpression lValue) throws CPATransferException {
+    @Override
+    public SMGAddress visit(CPointerExpression lValue) throws CPATransferException {
+      // handle Pointer assignment
       logger.log(Level.FINEST, ">>> Handling statement: assignment to dereferenced pointer");
 
       CExpression addressExpression = lValue.getOperand();
@@ -769,7 +767,7 @@ public class SMGTransferRelation implements TransferRelation {
       }
 
       return addressValue.getAddress();
-    }
+      }
 
     @Override
     public SMGAddress visit(CFieldReference lValue) throws CPATransferException {
@@ -922,10 +920,9 @@ public class SMGTransferRelation implements TransferRelation {
         fieldAddress = new SMGAddress(fieldObject, fieldOffset);
       }
 
-    } else if (fieldOwner instanceof CUnaryExpression
-        && ((CUnaryExpression) fieldOwner).getOperator() == UnaryOperator.STAR) {
+    } else if (fieldOwner instanceof CPointerExpression) {
       // (*a).b
-      SMGAddressValue address = evaluateAddress(smgState, cfaEdge, ((CUnaryExpression) fieldOwner).getOperand());
+      SMGAddressValue address = evaluateAddress(smgState, cfaEdge, ((CPointerExpression) fieldOwner).getOperand());
 
       SMGAddress fieldOwnerAddress = address.getAddress();
 
@@ -1374,30 +1371,12 @@ public class SMGTransferRelation implements TransferRelation {
 
       UnaryOperator unaryOperator = unaryExpression.getOperator();
       CExpression unaryOperand = unaryExpression.getOperand();
-      CType unaryOperandType = getRealExpressionType(unaryOperand);
-      CType expType = getRealExpressionType(unaryExpression);
 
       switch (unaryOperator) {
 
       case AMPER:
         return handleAmper(unaryOperand);
 
-      case STAR:
-        if (unaryOperandType instanceof CPointerType) {
-
-          SMGSymbolicValue address = dereferencePointer(unaryOperand, expType);
-          return getAddressFromSymbolicValue(smgState, address);
-
-        } else if (unaryOperandType instanceof CArrayType) {
-
-          SMGSymbolicValue address = dereferenceArray(unaryOperand, expType);
-          return getAddressFromSymbolicValue(smgState, address);
-
-        } else {
-          throw new UnrecognizedCCodeException("Misinterpreted the expression type of "
-              + unaryOperand.toASTString()
-              + " as pointer type", cfaEdge, unaryExpression);
-        }
       case SIZEOF:
         throw new UnrecognizedCCodeException("Misinterpreted the expression type of "
             + unaryOperand.toASTString()
@@ -1416,12 +1395,11 @@ public class SMGTransferRelation implements TransferRelation {
       if (lValue instanceof CIdExpression) {
         // &a
         return createAddressOfVariable((CIdExpression) lValue);
-      } else if (lValue instanceof CUnaryExpression
-          && ((CUnaryExpression) lValue).getOperator() == UnaryOperator.STAR) {
+      } else if (lValue instanceof CPointerExpression) {
         // &(*(a))
 
         return  getAddressFromSymbolicValue( smgState ,
-            ((CUnaryExpression) lValue).getOperand().accept(this));
+            ((CPointerExpression) lValue).getOperand().accept(this));
 
       } else if (lValue instanceof CFieldReference) {
         // &(a.b)
@@ -1486,6 +1464,30 @@ public class SMGTransferRelation implements TransferRelation {
         return SMGUnknownValue.getInstance();
       } else {
         return createAddress(smgState, variableObject, SMGKnownExpValue.ZERO);
+      }
+    }
+
+    @Override
+    public SMGAddressValue visit(CPointerExpression pointerExpression) throws  CPATransferException {
+
+      CExpression operand = pointerExpression.getOperand();
+      CType operandType = getRealExpressionType(operand);
+      CType expType = getRealExpressionType(pointerExpression);
+
+      if (operandType instanceof CPointerType) {
+
+        SMGSymbolicValue address = dereferencePointer(operand, expType);
+        return getAddressFromSymbolicValue(smgState, address);
+
+      } else if (operandType instanceof CArrayType) {
+
+        SMGSymbolicValue address = dereferenceArray(operand, expType);
+        return getAddressFromSymbolicValue(smgState, address);
+
+      } else {
+        throw new UnrecognizedCCodeException("Misinterpreted the expression type of "
+            + operand.toASTString()
+            + " as pointer type", cfaEdge, pointerExpression);
       }
     }
 
@@ -1697,28 +1699,9 @@ public class SMGTransferRelation implements TransferRelation {
     public SMGAddress visit(CUnaryExpression unaryExpression) throws CPATransferException {
 
       UnaryOperator unaryOperator = unaryExpression.getOperator();
-      CExpression unaryOperand = unaryExpression.getOperand();
-      CType unaryOperandType = getRealExpressionType(unaryOperand);
-
-      boolean unaryOperandIsPointer = unaryOperandType instanceof CPointerType;
 
       switch (unaryOperator) {
 
-      case STAR:
-        if (unaryOperandIsPointer) {
-
-          SMGAddressValue addressValue = evaluateAddress(smgState, cfaEdge, unaryOperand);
-
-          if (addressValue.isUnknown()) {
-            return SMGAddress.UNKNOWN;
-          }
-
-          return addressValue.getAddress();
-
-        } else {
-          throw new UnrecognizedCCodeException("Misinterpreted the expression type of " + unaryExpression
-              + " as array type", cfaEdge, unaryExpression);
-        }
       case SIZEOF:
         throw new UnrecognizedCCodeException("Misinterpreted the expression type of " + unaryExpression
             + " as array type", cfaEdge, unaryExpression);
@@ -1729,6 +1712,31 @@ public class SMGTransferRelation implements TransferRelation {
       default:
         // Can't evaluate these ArrayExpressions
         return SMGAddress.UNKNOWN;
+      }
+    }
+
+    @Override
+    public SMGAddress visit(CPointerExpression pointerExpression) throws CPATransferException {
+
+      CExpression operand = pointerExpression.getOperand();
+      CType operandType = getRealExpressionType(operand);
+
+      boolean operandIsPointer = operandType instanceof CPointerType;
+
+
+      if (operandIsPointer) {
+
+        SMGAddressValue addressValue = evaluateAddress(smgState, cfaEdge, operand);
+
+        if (addressValue.isUnknown()) {
+          return SMGAddress.UNKNOWN;
+        }
+
+        return addressValue.getAddress();
+
+      } else {
+        throw new UnrecognizedCCodeException("Misinterpreted the expression type of " + pointerExpression
+            + " as array type", cfaEdge, pointerExpression);
       }
     }
 
@@ -2089,23 +2097,12 @@ public class SMGTransferRelation implements TransferRelation {
 
       UnaryOperator unaryOperator = unaryExpression.getOperator();
       CExpression unaryOperand = unaryExpression.getOperand();
-      CType unaryOperandType = getRealExpressionType(unaryOperand);
-      CType expType = getRealExpressionType(unaryExpression);
 
       switch (unaryOperator) {
 
       case AMPER:
         throw new UnrecognizedCCodeException("Can't use & of expression " + unaryOperand.toASTString(), cfaEdge,
             unaryExpression);
-
-      case STAR:
-        if (unaryOperandType instanceof CPointerType) {
-          return dereferencePointer(unaryOperand, expType);
-        } else if (unaryOperandType instanceof CArrayType) {
-          return dereferenceArray(unaryOperand, expType);
-        } else {
-          throw new UnrecognizedCCodeException(cfaEdge, unaryExpression);
-        }
 
       case MINUS:
         SMGSymbolicValue value = unaryOperand.accept(this);
@@ -2122,6 +2119,23 @@ public class SMGTransferRelation implements TransferRelation {
 
       default:
         return SMGUnknownValue.getInstance();
+      }
+    }
+
+    @Override
+    public SMGSymbolicValue visit(CPointerExpression pointerExpression) throws CPATransferException {
+
+      CExpression operand = pointerExpression.getOperand();
+      CType operandType = getRealExpressionType(operand);
+      CType expType = getRealExpressionType(pointerExpression);
+
+
+      if (operandType instanceof CPointerType) {
+        return dereferencePointer(operand, expType);
+      } else if (operandType instanceof CArrayType) {
+        return dereferenceArray(operand, expType);
+      } else {
+        throw new UnrecognizedCCodeException(cfaEdge, pointerExpression);
       }
     }
 
@@ -2529,9 +2543,6 @@ public class SMGTransferRelation implements TransferRelation {
         // valid expression, but we don't have explicit values for addresses.
         return SMGUnknownValue.getInstance();
 
-      case STAR:
-        return SMGUnknownValue.getInstance();
-
       case SIZEOF:
 
         int size = getSizeof(cfaEdge, getRealExpressionType(unaryOperand));
@@ -2541,6 +2552,11 @@ public class SMGTransferRelation implements TransferRelation {
         // TODO handle unimplemented operators
         return SMGUnknownValue.getInstance();
       }
+    }
+
+    @Override
+    public SMGExplicitValue visit(CPointerExpression pointerExpression) throws CPATransferException {
+      return SMGUnknownValue.getInstance();
     }
 
     @Override

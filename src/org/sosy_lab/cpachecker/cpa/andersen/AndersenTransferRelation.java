@@ -44,7 +44,6 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression.UnaryOperator;
-import org.sosy_lab.cpachecker.cfa.ast.c.CVariableDeclaration;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
@@ -144,12 +143,12 @@ public class AndersenTransferRelation implements TransferRelation {
 
       return handleAssignmentTo(op1.toASTString(), op2, element, cfaEdge);
 
-    } else if (op1 instanceof CUnaryExpression && ((CUnaryExpression) op1).getOperator() == UnaryOperator.STAR
+    } else if (op1 instanceof CPointerExpression
         && op2 instanceof CIdExpression) {
 
       // *a = b; complex constraint
 
-      op1 = ((CUnaryExpression) op1).getOperand();
+      op1 = ((CPointerExpression) op1).getOperand();
 
       if (op1 instanceof CIdExpression) {
 
@@ -213,11 +212,11 @@ public class AndersenTransferRelation implements TransferRelation {
         throw new UnrecognizedCCodeException("not supported", cfaEdge, op2);
       }
 
-    } else if (op2 instanceof CUnaryExpression && ((CUnaryExpression) op2).getOperator() == UnaryOperator.STAR) {
+    } else if (op2 instanceof CPointerExpression) {
 
       // a = *b; complex constraint
 
-      op2 = ((CUnaryExpression) op2).getOperand();
+      op2 = ((CPointerExpression) op2).getOperand();
 
       if (op2 instanceof CIdExpression) {
 

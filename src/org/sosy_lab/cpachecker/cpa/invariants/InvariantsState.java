@@ -23,6 +23,7 @@
  */
 package org.sosy_lab.cpachecker.cpa.invariants;
 
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -41,13 +42,13 @@ import org.sosy_lab.cpachecker.cpa.invariants.formula.ContainsVarVisitor;
 import org.sosy_lab.cpachecker.cpa.invariants.formula.FormulaAbstractionVisitor;
 import org.sosy_lab.cpachecker.cpa.invariants.formula.FormulaCompoundStateEvaluationVisitor;
 import org.sosy_lab.cpachecker.cpa.invariants.formula.FormulaEvaluationVisitor;
-import org.sosy_lab.cpachecker.cpa.invariants.formula.GuessAssumptionVisitor;
 import org.sosy_lab.cpachecker.cpa.invariants.formula.InvariantsFormula;
 import org.sosy_lab.cpachecker.cpa.invariants.formula.InvariantsFormulaManager;
 import org.sosy_lab.cpachecker.cpa.invariants.formula.PartialEvaluator;
 import org.sosy_lab.cpachecker.cpa.invariants.formula.PushAssumptionToEnvironmentVisitor;
 import org.sosy_lab.cpachecker.cpa.invariants.formula.ReplaceVisitor;
 import org.sosy_lab.cpachecker.cpa.invariants.formula.SplitConjunctionsVisitor;
+import org.sosy_lab.cpachecker.cpa.invariants.formula.StateEqualsVisitor;
 import org.sosy_lab.cpachecker.cpa.invariants.formula.ToBooleanFormulaVisitor;
 import org.sosy_lab.cpachecker.cpa.invariants.formula.ToFormulaVisitor;
 import org.sosy_lab.cpachecker.cpa.invariants.formula.Variable;
@@ -56,6 +57,7 @@ import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormulaManager;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.view.FormulaManagerView;
 
 import com.google.common.base.Joiner;
+import com.google.common.base.Preconditions;
 
 /**
  * Instances of this class represent states in the light-weight invariants analysis.
@@ -71,13 +73,13 @@ public class InvariantsState implements AbstractState, FormulaReportingState {
   /**
    * A visitor used to evaluate formulas as exactly as possible.
    */
-  private static final FormulaEvaluationVisitor<CompoundState> EVALUATION_VISITOR =
+  public static final FormulaEvaluationVisitor<CompoundState> EVALUATION_VISITOR =
       new FormulaCompoundStateEvaluationVisitor();
 
   /**
    * A visitor that, like the formula evaluation visitor, is used to evaluate formulas, but far less exact to allow for convergence.
    */
-  private static final FormulaEvaluationVisitor<CompoundState> ABSTRACTION_VISITOR = new FormulaAbstractionVisitor();
+  public static final FormulaEvaluationVisitor<CompoundState> ABSTRACTION_VISITOR = new FormulaAbstractionVisitor();
 
   /**
    * The constant formula representing TOP
@@ -197,23 +199,80 @@ public class InvariantsState implements AbstractState, FormulaReportingState {
   /**
    * Creates a new state representing the given assignment applied to the current state.
    *
+   * @param pArray the array being assigned.
+   * @param pSubscript the array subscript expression.
+   * @param pValue the new value of the variable.
+   * @param pEdge the edge containing the assignment.
+   * @return a new state representing the given assignment applied to the current state.
+   */
+  public InvariantsState assignArray(String pArray, InvariantsFormula<CompoundState> pSubscript, InvariantsFormula<CompoundState> pValue, String pEdge) {
+    FormulaEvaluationVisitor<CompoundState> fev = getFormulaResolver(pEdge);
+    // Edge is already counted by formula resolver access
+    boolean ignoreEdge = getRemainingEvaluations(pEdge) > 0;
+    CompoundState value = pSubscript.accept(fev, this.environment);
+    if (value.isSingleton()) { // Exact subscript value is known
+      return assign(pArray + "[" + value.getValue() + "]", pValue, pEdge, ignoreEdge);
+    } else { // Multiple subscript values are possible: All possible subscript targets are now unknown
+      InvariantsState result = this;
+      for (String varName : this.environment.keySet()) {
+        String prefix = pArray + "[";
+        if (varName.startsWith(prefix)) {
+          String subscriptValueStr = varName.replace(prefix, "").replace("]", "");
+          BigInteger subscriptValue = new BigInteger(subscriptValueStr);
+          if (value.contains(subscriptValue)) {
+            result = result.assign(varName, TOP, pEdge, ignoreEdge);
+          }
+        }
+      }
+      return result;
+    }
+  }
+
+  /**
+   * Creates a new state representing the given assignment applied to the current state.
+   *
    * @param pVarName the name of the variable being assigned.
    * @param pValue the new value of the variable.
    * @param pEdge the edge containing the assignment.
    * @return a new state representing the given assignment applied to the current state.
    */
   public InvariantsState assign(String pVarName, InvariantsFormula<CompoundState> pValue, String pEdge) {
+    return assign(pVarName, pValue, pEdge, false);
+  }
+
+  /**
+   * Creates a new state representing the given assignment applied to the current state.
+   *
+   * @param pVarName the name of the variable being assigned.
+   * @param pValue the new value of the variable.
+   * @param pEdge the edge containing the assignment.
+   * @param pIgnoreEdge flag indicating whether or not to evaluate without checking the remaining evaluations for the edge
+   * @return a new state representing the given assignment applied to the current state.
+   */
+  private InvariantsState assign(String pVarName, InvariantsFormula<CompoundState> pValue, String pEdge, boolean pIgnoreEdge) {
+    Preconditions.checkNotNull(pValue);
 
     InvariantsFormulaManager ifm = InvariantsFormulaManager.INSTANCE;
-    final InvariantsState result;
-    if (!mayEvaluate(pEdge)) {
-      FormulaEvaluationVisitor<CompoundState> evaluationVisitor = getFormulaResolver(pEdge);
-      result = new InvariantsState(evaluationThreshold, useBitvectors);
-      Variable<CompoundState> variable = ifm.asVariable(pVarName);
+    Variable<CompoundState> variable = ifm.asVariable(pVarName);
+
+    // Optimization: If the value being assigned is equivalent to the value already stored, do nothing
+    if (getEnvironmentValue(pVarName).equals(pValue) || variable.accept(new StateEqualsVisitor(getFormulaResolver(), this.environment), pValue)) {
+      return this;
+    }
+
+    final InvariantsState result = new InvariantsState(evaluationThreshold, useBitvectors);
+    if (!pIgnoreEdge && !mayEvaluate(pEdge)) {
+      /*
+       * No more evaluations allowed!
+       *
+       * Create a completely new state with the old assumptions and variables, but
+       * rename the assigned variable.
+       */
+      FormulaEvaluationVisitor<CompoundState> evaluationVisitor = pIgnoreEdge ? EVALUATION_VISITOR : getFormulaResolver(pEdge);
       String renamedVariableName = renameVariable(pVarName);
       Variable<CompoundState> renamedVariable = ifm.asVariable(renamedVariableName);
       ReplaceVisitor<CompoundState> renamer = new ReplaceVisitor<>(variable, renamedVariable);
-      InvariantsFormula<CompoundState> renamedValue = ifm.asConstant(getEnvironmentValue(renamedVariableName).accept(evaluationVisitor, this.environment));
+      InvariantsFormula<CompoundState> renamedValue = getEnvironmentValue(renamedVariableName);
       ReplaceVisitor<CompoundState> renamedEvaluater = new ReplaceVisitor<>(renamedVariable, renamedValue);
       InvariantsFormula<CompoundState> oldValue = getEnvironmentValue(pVarName);
       for (Map.Entry<String, InvariantsFormula<CompoundState>> entry : this.environment.entrySet()) {
@@ -222,7 +281,7 @@ public class InvariantsState implements AbstractState, FormulaReportingState {
           InvariantsFormula<CompoundState> envVarValue = entry.getValue();
           // Evaluate the old renamed variable and rename the (as yet unrenamed) actual variable
           envVarValue = envVarValue.accept(renamedEvaluater).accept(renamer).accept(PartialEvaluator.INSTANCE, evaluationVisitor);
-          result.putEnvironmentValueInternal(pVarName, envVarValue);
+          result.putEnvironmentValueInternal(envVarName, envVarValue);
         }
       }
       if (oldValue != null) {
@@ -230,7 +289,10 @@ public class InvariantsState implements AbstractState, FormulaReportingState {
       }
 
       for (InvariantsFormula<CompoundState> assumption : this.assumptions) {
-        assert result.assumeInternal(assumption.accept(renamedEvaluater).accept(renamer).accept(PartialEvaluator.INSTANCE, evaluationVisitor), evaluationVisitor);
+        InvariantsFormula<CompoundState> modifiedAssumption = assumption.accept(renamedEvaluater).accept(renamer).accept(PartialEvaluator.INSTANCE, evaluationVisitor);
+        if (!result.assumeInternal(modifiedAssumption, evaluationVisitor)) {
+          return null;
+        }
       }
 
       result.putEnvironmentValueInternal(pVarName, pValue.accept(renamedEvaluater).accept(renamer));
@@ -250,96 +312,14 @@ public class InvariantsState implements AbstractState, FormulaReportingState {
 
       // Forbid further exact evaluations of this edge
       result.remainingEvaluations.put(pEdge, 0);
-      /*
-       * No more evaluations allowed!
-       *
-       * Create a completely new state with the old assumptions, but rename all
-       * normal variables and initialize the environment with a mapping of the
-       * variable names to the renamed variables.
-       *
-       * This deliberately omits almost all previous environment information but
-       * allows for recording exactly how a loop modifies the environment.
-       *//*
-      result = new InvariantsState(evaluationThreshold, useBitvectors);
-      // Transfer environment and record detailed values in a shadow environment
-      Map<String, InvariantsFormula<CompoundState>> shadowEnvironment = new HashMap<>();
-      for (Map.Entry<String, InvariantsFormula<CompoundState>> entry : this.environment.entrySet()) {
-        String varName = entry.getKey();
-        // Transfer only original variables, not remained ones
-        if (!isPrevVarName(varName)) {
-          InvariantsFormula<CompoundState> oldValue = entry.getValue();
-          // Expose all renamed variables
-          oldValue = exposeRenamed(oldValue);
-          // Resolve all occurrences of renamed variables in the value
-          oldValue = resolveRenamed(oldValue);
-          // Rename all original variables in the value
-          oldValue = renameVariables(oldValue);
-          // Put the resolved value as the value of the renamed variable into the environment
-          String renamedVariableName = renameVariable(varName);
-          final FormulaEvaluationVisitor<CompoundState> evaluator = getFormulaResolver();
-          oldValue = oldValue.accept(PartialEvaluator.INSTANCE, evaluator);
-          result.environment.put(renamedVariableName, TOP);
-          shadowEnvironment.put(renamedVariableName, oldValue);
-          // Add a reference of the new value to the old value
-          InvariantsFormula<CompoundState> renamedVariable = ifm.asVariable(renamedVariableName);
-          result.environment.put(varName, renamedVariable);
-        }
-      }
-      // Handle the actual assignment
-      InvariantsFormula<CompoundState> newValue = pValue;
-      // Resolve all occurrences of renamed variables in the value
-      newValue = resolveRenamed(newValue);
-      // Rename all original variables in the value
-      newValue = renameVariables(newValue);*/
-      /*
-       * Put the assignment value (that now refers to only renamed variables of
-       * the new environment) as the value of the original variable it is
-       * assigned to.
-       */
-      /*newValue = newValue.accept(PartialEvaluator.INSTANCE, getFormulaResolver(pEdge));
-      result.environment.put(pVarName, newValue);
-
-      // Refine the shadow environment by the current result environment
-      for (Map.Entry<String, InvariantsFormula<CompoundState>> entry : result.environment.entrySet()) {
-        String key = entry.getKey();
-        InvariantsFormula<CompoundState> value = entry.getValue();
-        if (!shadowEnvironment.containsKey(key)) {
-          shadowEnvironment.put(key, value);
-        }
-      }
-
-      // Transfer assumptions
-      for (InvariantsFormula<CompoundState> assumption : this.assumptions) {
-        // Any previously renamed variables have to be resolved, so the others can be renamed
-        InvariantsFormula<CompoundState> modifiedAssumption = resolveRenamed(assumption);
-        // Rename the remaining variables
-        modifiedAssumption = renameVariables(modifiedAssumption);
-        // Simplify the assumption by evaluating constant or trivial parts
-        modifiedAssumption = modifiedAssumption.accept(PartialEvaluator.INSTANCE, getFormulaResolver());
-        // The assumption can now safely be made for the new state, because it only uses renamed
-        // variables representing the previous state (this current state), in which it was made
-        assert result.assumeInternal(modifiedAssumption, getFormulaResolver());
-        for (InvariantsFormula<CompoundState> guessedAssumption : modifiedAssumption
-            .accept(new GuessAssumptionVisitor())) {
-          CompoundState evaluated = guessedAssumption.accept(getFormulaResolver(), shadowEnvironment);
-          if (evaluated.isDefinitelyTrue()) {
-            assert result.assumeInternal(guessedAssumption, getFormulaResolver());
-          }
-        }
-      }
-
-      // Forbid further exact evaluations of this edge
-      result.remainingEvaluations.put(pEdge, 0);*/
     } else {
       /*
        * A variable is newly assigned, so the appearances of this variable
        * in any previously collected invariants (including its new new value)
        * have to be resolved with the variable's previous value.
        */
-      InvariantsFormula<CompoundState> variable = ifm.asVariable(pVarName);
       ReplaceVisitor<CompoundState> replaceVisitor;
       InvariantsFormula<CompoundState> previousValue = getEnvironmentValue(pVarName);
-      result = new InvariantsState(evaluationThreshold, useBitvectors);
       replaceVisitor = new ReplaceVisitor<>(variable, previousValue);
       InvariantsFormula<CompoundState> newSubstitutedValue =
           pValue.accept(replaceVisitor).accept(PartialEvaluator.INSTANCE, getFormulaResolver(pEdge));
@@ -360,6 +340,10 @@ public class InvariantsState implements AbstractState, FormulaReportingState {
 
     result.remainingEvaluations.putAll(this.remainingEvaluations);
     result.removeUnusedRenamedVariables();
+
+    if (equals(result)) {
+      return this;
+    }
     return result;
   }
 
@@ -546,10 +530,7 @@ public class InvariantsState implements AbstractState, FormulaReportingState {
    */
   private void assumeCandidate(InvariantsFormula<CompoundState> pAssumption) {
     InvariantsFormula<CompoundState> assumption = pAssumption.accept(PartialEvaluator.INSTANCE, getFormulaResolver());
-    if (!this.candidateAssumptions.contains(assumption)
-        && (assumption.accept(new CollectVarsVisitor<CompoundState>()).size() > 0)) {
-      this.candidateAssumptions.addAll(assumption.accept(new GuessAssumptionVisitor()));
-    }
+    this.candidateAssumptions.add(assumption);
   }
 
   /**
@@ -586,10 +567,7 @@ public class InvariantsState implements AbstractState, FormulaReportingState {
 
     // If the assumption is an obvious contradiction, it cannot be validly
     // assumed
-    if (assumption.equals(BOTTOM)
-        || this.assumptions.contains(
-            InvariantsFormulaManager.INSTANCE.logicalNot(assumption).accept(
-                PartialEvaluator.INSTANCE, pEvaluationVisitor))) { return false; }
+    if (assumption.equals(BOTTOM)) { return false; }
 
     CompoundState invariantEvaluation = assumption.accept(pEvaluationVisitor, getEnvironment());
     // If the invariant evaluates to false or is bottom, it represents an invalid state
@@ -635,17 +613,23 @@ public class InvariantsState implements AbstractState, FormulaReportingState {
    */
   public InvariantsState assume(InvariantsFormula<CompoundState> pAssumption, String pEdge) {
     FormulaEvaluationVisitor<CompoundState> evaluator = getFormulaResolver(pEdge);
-    InvariantsFormula<CompoundState> invariant = pAssumption.accept(PartialEvaluator.INSTANCE, evaluator);
-    if (invariant instanceof Constant<?>) {
-      CompoundState value = ((Constant<CompoundState>) invariant).getValue();
-      // An invariant evaluating to false represents an unreachable state; it can never be fulfilled
+    InvariantsFormula<CompoundState> assumption = pAssumption.accept(PartialEvaluator.INSTANCE, evaluator);
+    if (assumption instanceof Constant<?>) {
+      CompoundState value = ((Constant<CompoundState>) assumption).getValue();
+      // An assumption evaluating to false represents an unreachable state; it can never be fulfilled
       if (value.isDefinitelyFalse()) { return null; }
-      // An invariant representing nothing more than "true" or "maybe true" adds no information
+      // An assumption representing nothing more than "true" or "maybe true" adds no information
+      return this;
+    }
+    if (getAssumptions().contains(assumption)) {
       return this;
     }
     InvariantsState result = copy(this);
     if (result != null) {
-      if (!result.assumeInternal(invariant, evaluator)) { return null; }
+      if (!result.assumeInternal(assumption, evaluator)) { return null; }
+      if (equals(result)) {
+        return this;
+      }
       result.removeUnusedRenamedVariables();
     }
     return result;
@@ -678,10 +662,10 @@ public class InvariantsState implements AbstractState, FormulaReportingState {
         }
       }
     }
-    for (InvariantsFormula<CompoundState> invariant : this.assumptions) {
-      BooleanFormula invariantFormula = invariant.accept(toBooleanFormulaVisitor, getEnvironment());
-      if (invariantFormula != null) {
-        result = bfmgr.and(result, invariantFormula);
+    for (InvariantsFormula<CompoundState> assumption : this.assumptions) {
+      BooleanFormula assumptionFormula = assumption.accept(toBooleanFormulaVisitor, getEnvironment());
+      if (assumptionFormula != null) {
+        result = bfmgr.and(result, assumptionFormula);
       }
     }
     return result;
@@ -703,7 +687,7 @@ public class InvariantsState implements AbstractState, FormulaReportingState {
 
   @Override
   public String toString() {
-    return String.format("Environment: %s; Invariants: %s",
+    return String.format("Environment: %s; Assumptions: %s",
         Joiner.on(", ").withKeyValueSeparator("=").join(environment),
         Joiner.on(", ").join(assumptions));
   }
