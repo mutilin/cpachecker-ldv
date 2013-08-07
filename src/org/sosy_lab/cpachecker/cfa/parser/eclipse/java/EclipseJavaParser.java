@@ -382,7 +382,7 @@ public class EclipseJavaParser implements Parser {
       DynamicBindingCreator tracker = new DynamicBindingCreator(builder);
       tracker.trackAndCreateDynamicBindings();
 
-      return new ParseResult(builder.getCFAs(), builder.getCFANodes(), builder.getUnreachableNodes(), builder.getStaticFieldDeclarations(), Language.JAVA);
+      return new ParseResult(builder.getCFAs(), builder.getCFANodes(), builder.getStaticFieldDeclarations(), Language.JAVA);
     } catch (CFAGenerationRuntimeException e) {
       throw new JParserException(e);
     } finally {

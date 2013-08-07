@@ -45,7 +45,6 @@ public class MutableCFA implements CFA {
   private final MachineModel machineModel;
   private final Map<String, FunctionEntryNode> functions;
   private final SortedSetMultimap<String, CFANode> allNodes;
-  private final SortedSetMultimap<String, CFANode> unreachableNodes;
   private final FunctionEntryNode mainFunction;
   private final Language language;
 
@@ -53,14 +52,12 @@ public class MutableCFA implements CFA {
       MachineModel pMachineModel,
       Map<String, FunctionEntryNode> pFunctions,
       SortedSetMultimap<String, CFANode> pAllNodes,
-      SortedSetMultimap<String, CFANode> pUnreachableNodes,
       FunctionEntryNode pMainFunction,
       Language pLanguage) {
 
     machineModel = pMachineModel;
     functions = pFunctions;
     allNodes = pAllNodes;
-    unreachableNodes = pUnreachableNodes;
     mainFunction = pMainFunction;
     language = pLanguage;
 
@@ -149,7 +146,7 @@ public class MutableCFA implements CFA {
 
   public ImmutableCFA makeImmutableCFA(Optional<ImmutableMultimap<String,
       Loop>> pLoopStructure, Optional<VariableClassification> pVarClassification) {
-    return new ImmutableCFA(machineModel, functions, allNodes, unreachableNodes, mainFunction, pLoopStructure, pVarClassification, language);
+    return new ImmutableCFA(machineModel, functions, allNodes, mainFunction, pLoopStructure, pVarClassification, language);
   }
 
   @Override
@@ -160,10 +157,5 @@ public class MutableCFA implements CFA {
   @Override
   public Language getLanguage() {
       return language;
-  }
-
-  @Override
-  public Collection<CFANode> getUnreachableNodes() {
-    return unreachableNodes.values();
   }
 }
