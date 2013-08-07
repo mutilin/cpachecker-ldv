@@ -54,6 +54,7 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CInitializer;
 import org.sosy_lab.cpachecker.cfa.ast.c.CInitializerExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CIntegerLiteralExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CPointerExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSideVisitor;
 import org.sosy_lab.cpachecker.cfa.ast.c.CSimpleDeclaration;
@@ -289,15 +290,9 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
 
     // functions may be called either as f() or as (*f)(),
     // so remove the star operator if its there
-    if (nameExp instanceof CUnaryExpression) {
-      CUnaryExpression unaryExp = (CUnaryExpression)nameExp;
-      if (unaryExp.getOperator() == UnaryOperator.STAR) {
-        // a = (*f)(b)
-        nameExp = unaryExp.getOperand();
-
-      } else {
-        throw new UnrecognizedCCodeException("unknown function call expression", pCfaEdge, nameExp);
-      }
+    if (nameExp instanceof CPointerExpression) {
+      CPointerExpression unaryExp = (CPointerExpression)nameExp;
+      nameExp = unaryExp.getOperand();
     }
 
     if (nameExp instanceof CIdExpression) {
@@ -311,10 +306,10 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
       CExpression array = ((CArraySubscriptExpression)nameExp).getArrayExpression();
       if (array instanceof CIdExpression) {
         return scopedIfNecessary((CIdExpression)array, currentFunction);
-      }
-      else
+      } else {
         //TODO sure?
         return null;
+      }
     } else if (nameExp instanceof CUnaryExpression) {
       //smth like a = (*(*(f)))(b)
       return null;
@@ -519,8 +514,7 @@ class FunctionPointerCreateTransferRelation implements TransferRelation {
       // a = ...
       return scopedIfNecessary((CIdExpression)lhsExpression, functionName);
 
-    } else if (lhsExpression instanceof CUnaryExpression
-        && ((CUnaryExpression)lhsExpression).getOperator() == UnaryOperator.STAR) {
+    } else if (lhsExpression instanceof CPointerExpression) {
       // *a = ...
       // TODO: Support this statement.
 

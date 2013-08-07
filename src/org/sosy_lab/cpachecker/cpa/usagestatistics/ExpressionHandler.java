@@ -36,6 +36,7 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CFieldReference;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFloatLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CIntegerLiteralExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CPointerExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStringLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CTypeIdExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CTypeIdInitializerExpression;
@@ -91,8 +92,9 @@ public class ExpressionHandler implements CExpressionVisitor<Void, HandleCodeExc
     creator.clearDereference();
     AbstractIdentifier fieldId = expression.accept(creator);
     result.add(Pair.of(fieldId, accessMode));
-    if (expression.isPointerDereference())
+    if (expression.isPointerDereference()) {
       accessMode = Access.READ;
+    }
     expression.getFieldOwner().accept(this);
     return null;
   }
@@ -122,13 +124,7 @@ public class ExpressionHandler implements CExpressionVisitor<Void, HandleCodeExc
 
   @Override
   public Void visit(CUnaryExpression expression) throws HandleCodeException {
-    if (expression.getOperator() == CUnaryExpression.UnaryOperator.STAR) {
-      //write: *s =
-      creator.clearDereference();
-      AbstractIdentifier id = expression.accept(creator);
-      result.add(Pair.of(id, accessMode));
-      //read: s
-    } else if (expression.getOperator() == CUnaryExpression.UnaryOperator.AMPER) {
+    if (expression.getOperator() == CUnaryExpression.UnaryOperator.AMPER) {
       creator.clearDereference();
       AbstractIdentifier id = expression.accept(creator);
       result.add(Pair.of(id, accessMode));
@@ -142,6 +138,17 @@ public class ExpressionHandler implements CExpressionVisitor<Void, HandleCodeExc
 
   @Override
   public Void visit(CTypeIdInitializerExpression pCTypeIdInitializerExpression) throws HandleCodeException {
+    return null;
+  }
+
+  @Override
+  public Void visit(CPointerExpression pPointerExpression) throws HandleCodeException {
+    //write: *s =
+    creator.clearDereference();
+    AbstractIdentifier id = pPointerExpression.accept(creator);
+    result.add(Pair.of(id, accessMode));
+    accessMode = Access.READ;
+    pPointerExpression.getOperand().accept(this);
     return null;
   }
 

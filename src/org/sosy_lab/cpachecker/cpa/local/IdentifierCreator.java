@@ -35,6 +35,7 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CFloatLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CIntegerLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CParameterDeclaration;
+import org.sosy_lab.cpachecker.cfa.ast.c.CPointerExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CSimpleDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStringLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CTypeIdExpression;
@@ -108,30 +109,13 @@ public class IdentifierCreator implements CExpressionVisitor<AbstractIdentifier,
   public AbstractIdentifier visit(CIdExpression expression) throws HandleCodeException {
     CSimpleDeclaration decl = expression.getDeclaration();
 
-    if (decl == null)
-      //In our cil-file it means, that we have function pointer
-      //This data can't be shared (we wouldn't write)
-      return new LocalVariableIdentifier(expression.getName(), expression.getExpressionType(), function, dereference);
-    else
-      return createIdentifier(decl, function, dereference);
-
-    /*if (decl instanceof CDeclaration) {
-      if (((CDeclaration)decl).isGlobal())
-        return new GlobalVariableIdentifier(expression.getName(), expression.getExpressionType(), dereference);
-      else
-        return new LocalVariableIdentifier(expression.getName(), expression.getExpressionType(), function, dereference);
-    } else if (decl instanceof CParameterDeclaration) {
-      return new LocalVariableIdentifier(expression.getName(), expression.getExpressionType(), function, dereference);
-    } else if (decl instanceof CEnumerator) {
-      return new ConstantIdentifier(decl.getName(), dereference);
-    } else if (decl == null) {
+    if (decl == null) {
       //In our cil-file it means, that we have function pointer
       //This data can't be shared (we wouldn't write)
       return new LocalVariableIdentifier(expression.getName(), expression.getExpressionType(), function, dereference);
     } else {
-      //Composite type
-      return null;
-    }*/
+      return createIdentifier(decl, function, dereference);
+    }
   }
 
   @Override
@@ -161,44 +145,14 @@ public class IdentifierCreator implements CExpressionVisitor<AbstractIdentifier,
 
   @Override
   public AbstractIdentifier visit(CUnaryExpression expression) throws HandleCodeException {
-    if (expression.getOperator() == CUnaryExpression.UnaryOperator.STAR) {
-      ++dereference;
-    } else if (expression.getOperator() == CUnaryExpression.UnaryOperator.AMPER) {
+    if (expression.getOperator() == CUnaryExpression.UnaryOperator.AMPER) {
       --dereference;
     }
     AbstractIdentifier result = expression.getOperand().accept(this);
     if (result instanceof BinaryIdentifier) {
-      /* It is very strange, but CIL sometimes replace 'a[i]' to '*(a + i)'
-       * So, if we see it, create other identifier: '*a'
-       */
-      AbstractIdentifier id1 = ((BinaryIdentifier)result).getIdentifier1();
-      AbstractIdentifier id2 = ((BinaryIdentifier)result).getIdentifier2();
-      AbstractIdentifier main = null;
-      if (id1 instanceof SingleIdentifier && id2 instanceof ConstantIdentifier) {
-        main = id1;
-      } else if (id2 instanceof SingleIdentifier && id1 instanceof ConstantIdentifier) {
-        main = id2;
-      } else if (id1 instanceof SingleIdentifier && id2 instanceof SingleIdentifier) {
-        SingleIdentifier s1 = (SingleIdentifier) id1;
-        SingleIdentifier s2 = (SingleIdentifier) id2;
-        if (s1.isPointer() && !s2.isPointer()) {
-          main = s1;
-        } else if (s1.isPointer() && !s2.isPointer()) {
-          main = s2;
-        } else if (s1.getType().getClass() == CSimpleType.class && s2.getType().getClass() != CSimpleType.class) {
-          main = s2;
-        } else if (s2.getType().getClass() == CSimpleType.class && s1.getType().getClass() != CSimpleType.class) {
-          main = s1;
-        }
-      }
-      if (main != null) {
-        main.setDereference(main.getDereference() + result.getDereference());
-        return main;
-      } else {
-        return result;
-      }
+      return getMainPart((BinaryIdentifier)result);
     }
-    return expression.getOperand().accept(this);
+    return result;
   }
 
   public void setDereference(int pDereference) {
@@ -214,32 +168,16 @@ public class IdentifierCreator implements CExpressionVisitor<AbstractIdentifier,
 
   public static AbstractIdentifier createIdentifier(CSimpleDeclaration decl, String function, int dereference) throws HandleCodeException
   {
-    /*String name = decl.getName();
-    CType type = decl.getType();
-
-    if (decl instanceof CDeclaration){
-      if(((CDeclaration)decl).isGlobal())
-        return new GlobalVariableIdentifier(name, type, dereference);
-      else {
-        return new LocalVariableIdentifier(name, type, function, dereference);
-      }
-
-    } else if (decl instanceof CParameterDeclaration) {
-      return new LocalVariableIdentifier(name, type, function, dereference);
-
-    } else {
-      throw new HandleCodeException("Unrecognized declaration: " + decl.toASTString());
-    }*/
-
     Preconditions.checkNotNull(decl);
     String name = decl.getName();
     CType type = decl.getType();
 
     if (decl instanceof CDeclaration) {
-      if (((CDeclaration)decl).isGlobal())
+      if (((CDeclaration)decl).isGlobal()) {
         return new GlobalVariableIdentifier(name, type, dereference);
-      else
+      } else {
         return new LocalVariableIdentifier(name, type, function, dereference);
+      }
     } else if (decl instanceof CParameterDeclaration) {
       return new LocalVariableIdentifier(name, type, function, dereference);
     } else if (decl instanceof CEnumerator) {
@@ -247,6 +185,48 @@ public class IdentifierCreator implements CExpressionVisitor<AbstractIdentifier,
     } else {
       //Composite type
       return null;
+    }
+  }
+
+  @Override
+  public AbstractIdentifier visit(CPointerExpression pPointerExpression) throws HandleCodeException {
+    ++dereference;
+    AbstractIdentifier result = pPointerExpression.getOperand().accept(this);
+    if (result instanceof BinaryIdentifier) {
+      return getMainPart((BinaryIdentifier)result);
+    }
+    return result;
+  }
+
+  private AbstractIdentifier getMainPart(BinaryIdentifier id) {
+    /* It is very strange, but CIL sometimes replace 'a[i]' to '*(a + i)'
+     * So, if we see it, create other identifier: '*a'
+     */
+    AbstractIdentifier id1 = id.getIdentifier1();
+    AbstractIdentifier id2 = id.getIdentifier2();
+    AbstractIdentifier main = null;
+    if (id1 instanceof SingleIdentifier && id2 instanceof ConstantIdentifier) {
+      main = id1;
+    } else if (id2 instanceof SingleIdentifier && id1 instanceof ConstantIdentifier) {
+      main = id2;
+    } else if (id1 instanceof SingleIdentifier && id2 instanceof SingleIdentifier) {
+      SingleIdentifier s1 = (SingleIdentifier) id1;
+      SingleIdentifier s2 = (SingleIdentifier) id2;
+      if (s1.isPointer() && !s2.isPointer()) {
+        main = s1;
+      } else if (s1.isPointer() && !s2.isPointer()) {
+        main = s2;
+      } else if (s1.getType().getClass() == CSimpleType.class && s2.getType().getClass() != CSimpleType.class) {
+        main = s2;
+      } else if (s2.getType().getClass() == CSimpleType.class && s1.getType().getClass() != CSimpleType.class) {
+        main = s1;
+      }
+    }
+    if (main != null) {
+      main.setDereference(main.getDereference() + id.getDereference());
+      return main;
+    } else {
+      return id;
     }
   }
 }
