@@ -23,10 +23,14 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
+import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.PrintStream;
 import java.io.PrintWriter;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -37,6 +41,7 @@ import java.util.Set;
 
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.Configuration;
+import org.sosy_lab.common.configuration.FileOption;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
@@ -72,7 +77,8 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   private boolean localAnalysis = false;
 
   @Option(name="output", description="path to write results")
-  private String outputStatFileName = "test/rawstat";
+  @FileOption(FileOption.Type.OUTPUT_FILE)
+  private Path outputStatFileName = Paths.get("unsafe_rawdata");
 
   @Option(description = "variables, which will not be saved in statistics")
   private Set<String> skippedvariables = null;
@@ -115,16 +121,16 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
     counter[i][j]++;*/
   }
-  
+
   public UsageStatisticsCPAStatistics(Configuration config) throws InvalidConfigurationException{
     Stat = new HashMap<>();
     config.inject(this);
 
-    if (unsafeDetectorType.equals("PAIR"))
+    if (unsafeDetectorType.equals("PAIR")) {
       unsafeDetector = new PairwiseUnsafeDetector(config);
-    else if (unsafeDetectorType.equals("SETDIFF"))
+    } else if (unsafeDetectorType.equals("SETDIFF")) {
       unsafeDetector = new SetDifferenceUnsafeDetector(config);
-    else {
+    } else {
       System.out.println("Unknown data procession " + unsafeDetectorType);
       System.exit(0);
     }
@@ -145,8 +151,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       //skips such cases, as 'a.b'
       return;
     }
-    if (id instanceof StructureIdentifier)
+    if (id instanceof StructureIdentifier) {
       id = ((StructureIdentifier)id).toStructureFieldIdentifier();
+    }
 
     List<UsageInfo> uset;
     LockStatisticsState lockState = AbstractStates.extractStateByType(state, LockStatisticsState.class);
@@ -176,8 +183,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       List<UsageInfo> uset = Stat.get(id);
 
       for (UsageInfo uinfo : uset){
-        if (uinfo.getLockState() == null)
+        if (uinfo.getLockState() == null) {
           continue;
+        }
     	  for (LockStatisticsLock lock : uinfo.getLockState().getLocks()) {
     		  if( !lock.existsIn(locks)) {
     	      locks.add(lock);
@@ -281,8 +289,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     //add to tree of calls this path
     currentLeaf = TreeLeaf.getTrunkState();
     tmpState = tmpList.getFirst();
-    if (!tmpState.getCallNode().getFunctionName().equals(tmpState.getCurrentFunction()))
+    if (!tmpState.getCallNode().getFunctionName().equals(tmpState.getCurrentFunction())) {
       currentLeaf = currentLeaf.add(tmpList.getFirst().getCallNode().getFunctionName(), 0);
+    }
     for (CallstackState callstack : tmpList) {
       currentLeaf = currentLeaf.addLast(callstack);
     }
@@ -302,8 +311,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   private void createVisualization(SingleIdentifier id, PrintWriter writer) {
     List<UsageInfo> uinfo = Stat.get(id);
 
-    if (uinfo == null || uinfo.size() == 0)
+    if (uinfo == null || uinfo.size() == 0) {
       return;
+    }
     if (id instanceof StructureFieldIdentifier) {
       writer.println("###");
     } else if (id instanceof GlobalVariableIdentifier) {
@@ -335,16 +345,35 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
   }
 
+  private void createDir(File file) throws IOException {
+    File previousDir = file.getParentFile();
+    if (!previousDir.exists()) {
+      createDir(previousDir);
+    }
+    file.mkdir();
+  }
+
   @Override
   public void printStatistics(PrintStream out, Result result, ReachedSet reached) {
 		PrintWriter writer = null;
 		FileOutputStream file = null;
 
     try {
-      file = new FileOutputStream (outputStatFileName);
+      File outputFile = outputStatFileName.toFile();
+      if (!outputFile.exists()) {
+        File previousDir = outputFile.getParentFile();
+        if (!previousDir.exists()) {
+          createDir(previousDir);
+        }
+        outputFile.createNewFile();
+      }
+      file = new FileOutputStream (outputFile.getPath());
       writer = new PrintWriter(file);
     } catch(FileNotFoundException e) {
-      System.err.println("Cannot open file " + outputStatFileName);
+      System.err.println("File " + outputStatFileName + " not found");
+      return;
+    } catch (IOException e) {
+      System.err.println(e.getMessage());
       return;
     }
 
@@ -381,22 +410,25 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
     for (SingleIdentifier id : idSet) {
       if (id instanceof GlobalVariableIdentifier) {
-        if (id.getDereference() == 0)
+        if (id.getDereference() == 0) {
           global++;
-        else
+        } else {
           globalPointer++;
+        }
       }
       else if (id instanceof LocalVariableIdentifier) {
-        if (id.getDereference() == 0)
+        if (id.getDereference() == 0) {
           local++;
-        else
+        } else {
           localPointer++;
+        }
       }
       else if (id instanceof StructureFieldIdentifier) {
-        if (id.getDereference() == 0)
+        if (id.getDereference() == 0) {
           fields++;
-        else
+        } else {
           fieldPointer++;
+        }
       }
     }
     //writer.println(counter);
