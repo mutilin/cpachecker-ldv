@@ -41,10 +41,12 @@ public class LockStatisticsLock {
     @Override
     public int compare(LockStatisticsLock pO1, LockStatisticsLock pO2) {
       int result = 0;
-      if (pO1.variable.equals(""))
+      if (pO1.variable.equals("")) {
         result -= 50;
-      if (pO2.variable.equals(""))
+      }
+      if (pO2.variable.equals("")) {
         result += 50;
+      }
       String name1 = pO1.toString();
       String name2 = pO2.toString();
       return (result + name1.compareTo(name2));
@@ -139,6 +141,9 @@ public class LockStatisticsLock {
       myVariableName = myVariableName.replaceAll("\\)", "");
       String otherVariable = variableName.replaceAll("\\(", "");
       otherVariable = otherVariable.replaceAll("\\)", "");
+      //this is only for cil: it likes change i -> i___0
+      myVariableName = myVariableName.replaceAll("___\\d*", "");
+      otherVariable = otherVariable.replaceAll("___\\d*", "");
       return (this.name.equals(lockName) && myVariableName.equals(otherVariable));
     } else {
       return this.name.equals(lockName);
@@ -164,27 +169,36 @@ public class LockStatisticsLock {
 
   @Override
   public boolean equals(Object obj) {
-    if (this == obj)
+    if (this == obj) {
       return true;
-    if (obj == null)
+    }
+    if (obj == null) {
       return false;
-    if (getClass() != obj.getClass())
+    }
+    if (getClass() != obj.getClass()) {
       return false;
+    }
     LockStatisticsLock other = (LockStatisticsLock) obj;
     if (variable == null) {
-      if (other.variable != null)
+      if (other.variable != null) {
         return false;
-    } else if (!variable.equals(other.variable))
+      }
+    } else if (!variable.equals(other.variable)) {
       return false;
+    }
     if (name == null) {
-      if (other.name != null)
+      if (other.name != null) {
         return false;
-    } else if (!name.equals(other.name))
+      }
+    } else if (!name.equals(other.name)) {
       return false;
-    if (recursiveCounter != other.recursiveCounter)
+    }
+    if (recursiveCounter != other.recursiveCounter) {
       return false;
-    if (type != other.type)
+    }
+    if (type != other.type) {
       return false;
+    }
     return true;
   }
 
@@ -229,10 +243,11 @@ public class LockStatisticsLock {
         expandedLock.accessPoints.setElementAt(rootLock.accessPoints.get(i), i);
       }
     }
-    if (changed)
+    if (changed) {
       return expandedLock;
-    else
+    } else {
       return this;
+    }
   }
 
   public LockStatisticsLock reduceCallStack(CallstackReducer pReducer, CFANode pNode) {
@@ -242,13 +257,15 @@ public class LockStatisticsLock {
       tmpPoint = accessPoints.get(i);
       if (!tmpPoint.isNew()) {
         newPoint = tmpPoint.reduceCallstack(pReducer, pNode);
-        if (newPoint != tmpPoint)
+        if (newPoint != tmpPoint) {
           newLock.accessPoints.setElementAt(newPoint, i);
+        }
       }
     }
-    if (this.equals(newLock))
+    if (this.equals(newLock)) {
       return this;
-    else
+    } else {
       return newLock;
+    }
   }
 }

@@ -88,8 +88,9 @@ public class LockStatisticsState implements AbstractState, Serializable {
         locksToString.put(lock.getName() + lock.getVariable(), lock);
       } else {
         tmpLock = locksToString.get(lock.getName() + lock.getVariable());
-        if (tmpLock.getRecursiveCounter() < lock.getRecursiveCounter())
+        if (tmpLock.getRecursiveCounter() < lock.getRecursiveCounter()) {
           locksToString.put(lock.getName() + lock.getVariable(), lock);
+        }
       }
     }
 
@@ -159,9 +160,10 @@ public class LockStatisticsState implements AbstractState, Serializable {
 
   void free(String lockName, String variable, LogManager logger) {
 	  LockStatisticsLock oldLock = findLock(lockName, variable);
-	  if (oldLock == null)
-	    //TODO what should we do, if we've lost a lock?
+	  if (oldLock == null) {
+      //TODO what should we do, if we've lost a lock?
 	    return;
+    }
     free(oldLock, logger);
   }
 
@@ -203,13 +205,15 @@ public class LockStatisticsState implements AbstractState, Serializable {
         }
       }
       locks.remove(oldLock);
-      if (newLock != null)
+      if (newLock != null) {
         locks.add(newLock);
+      }
     } else if (num > -1) {
       newLock = new LockStatisticsLock(lockName, line, LockType.GLOBAL_LOCK, state, reduced, variable);
       newLock = newLock.addRecursiveAccessPointer(num, new AccessPoint(new LineInfo(line), state, reduced));
-      if (newLock != null)
+      if (newLock != null) {
         locks.add(newLock);
+      }
     }
   }
 
@@ -218,9 +222,10 @@ public class LockStatisticsState implements AbstractState, Serializable {
       //we didn't specify, which locks we would like to restore, so, restore all;
       return restoredState;
     }
-    if (this.locks.equals(restoredState.locks))
+    if (this.locks.equals(restoredState.locks)) {
       //only for optimization. We don't compare restoreState, because in this it can be only more complex.
       return this;
+    }
 
     LockStatisticsState newState = this.clone();
     for (String lockName : lockNames.keySet()) {
@@ -244,8 +249,10 @@ public class LockStatisticsState implements AbstractState, Serializable {
 
     for (String lockName : freeLocks.keySet()) {
       variable = freeLocks.get(lockName);
-      if (this.contains(lockName, variable)) {
-        newState.free(lockName, variable, logger);
+      for (LockStatisticsLock currentLock : this.locks) {
+        if (currentLock.hasEqualNameAndVariable(lockName, freeLocks.get(lockName))) {
+          newState.free(lockName, variable, logger);
+        }
       }
     }
     return newState;
@@ -253,8 +260,9 @@ public class LockStatisticsState implements AbstractState, Serializable {
 
   public int getCounter(String lockName, String varName) {
     for (LockStatisticsLock lock : locks) {
-      if (lock.hasEqualNameAndVariable(lockName, varName))
+      if (lock.hasEqualNameAndVariable(lockName, varName)) {
         return lock.getRecursiveCounter();
+      }
     }
     return 0;
   }
@@ -264,13 +272,15 @@ public class LockStatisticsState implements AbstractState, Serializable {
     StringBuilder sb = new StringBuilder();
     for (LockStatisticsLock lock : locks) {
       if (lock.hasEqualNameAndVariable(lockName, null)) {
-        for (AccessPoint point : lock.getAccessPoints())
-        sb.append(point.line.getLine() + ", ");
+        for (AccessPoint point : lock.getAccessPoints()) {
+          sb.append(point.line.getLine() + ", ");
+        }
       }
     }
 
-    if (sb.length() > 2)
+    if (sb.length() > 2) {
       sb.delete(sb.length() - 2, sb.length());
+    }
 
     return sb.toString();
   }
@@ -302,19 +312,22 @@ public class LockStatisticsState implements AbstractState, Serializable {
    */
   boolean isLessOrEqual(LockStatisticsState other) {
 
-    if (toRestore != null && !toRestore.equals(other.toRestore))
+    if (toRestore != null && !toRestore.equals(other.toRestore)) {
       return false;
-    else if (toRestore == null && other.toRestore != null)
+    } else if (toRestore == null && other.toRestore != null) {
       return false;
+    }
 
-    if (locks.size() == 0 && other.locks.size() > 0)
+    if (locks.size() == 0 && other.locks.size() > 0) {
       return false;
+    }
 
     // also, this element is not less or equal than the other element,
     // if any one constant's value of the other element differs from the constant's value in this element
     for (LockStatisticsLock Lock : locks) {
-      if (other.findLock(Lock.getName(), Lock.getVariable()) == null)
+      if (other.findLock(Lock.getName(), Lock.getVariable()) == null) {
         return false;
+      }
     }
     return true;
   }
@@ -341,23 +354,30 @@ public class LockStatisticsState implements AbstractState, Serializable {
 
   @Override
   public boolean equals(Object obj) {
-    if (this == obj)
+    if (this == obj) {
       return true;
-    if (obj == null)
+    }
+    if (obj == null) {
       return false;
-    if (getClass() != obj.getClass())
+    }
+    if (getClass() != obj.getClass()) {
       return false;
+    }
     LockStatisticsState other = (LockStatisticsState) obj;
     if (locks == null) {
-      if (other.locks != null)
+      if (other.locks != null) {
         return false;
-    } else if (!locks.equals(other.locks))
+      }
+    } else if (!locks.equals(other.locks)) {
       return false;
+    }
     if (toRestore == null) {
-      if (other.toRestore != null)
+      if (other.toRestore != null) {
         return false;
-    } else if (!toRestore.equals(other.toRestore))
+      }
+    } else if (!toRestore.equals(other.toRestore)) {
       return false;
+    }
     return true;
   }
 
