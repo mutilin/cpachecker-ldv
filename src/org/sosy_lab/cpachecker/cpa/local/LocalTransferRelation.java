@@ -88,8 +88,9 @@ public class LocalTransferRelation implements TransferRelation {
 
     LocalState LocalElement = (LocalState) pState;
     LocalState successor = LocalElement.clone();
-    /*if (pCfaEdge.getLineNumber() > 18078 && pCfaEdge.getLineNumber() < 18084)
-      System.out.println("In mq_open()");*/
+    /*if (pCfaEdge.getPredecessor().getFunctionName().equals("acpi_battery_add")) {
+      System.out.println("In acpi_battery_add()");
+    }*/
     switch(pCfaEdge.getEdgeType()) {
 
       case DeclarationEdge: {
@@ -276,15 +277,17 @@ public class LocalTransferRelation implements TransferRelation {
   private AbstractIdentifier createId(CExpression expression, int dereference) throws HandleCodeException {
     idCreator.setDereference(dereference);
     AbstractIdentifier id = expression.accept(idCreator);
-    if (id instanceof GlobalVariableIdentifier || id instanceof LocalVariableIdentifier)
+    if (id instanceof GlobalVariableIdentifier || id instanceof LocalVariableIdentifier) {
       id = ((SingleIdentifier)id).getGeneralId();
+    }
     return id;
   }
 
   private void assume(LocalState pSuccessor, AbstractIdentifier leftId, AbstractIdentifier rightId) throws HandleCodeException {
-    if (leftId instanceof ConstantIdentifier)
+    if (leftId instanceof ConstantIdentifier) {
       //Can't assume to constant, but this situation can occur, if we have *(a + b)...
       return;
+    }
     /*else if (leftId instanceof BinaryIdentifier) {
       //TODO may be, it should be changed...
       //assume(pSuccessor, ((BinaryIdentifier)leftId).getIdentifier1(), right);
@@ -311,13 +314,16 @@ public class LocalTransferRelation implements TransferRelation {
 
         //We shouldn't save such identifiers, as &t.
         //But we save all structures
-        if (rightId instanceof VariableIdentifier && rightId.getDereference() <= 0)
+        if (rightId instanceof VariableIdentifier && rightId.getDereference() <= 0) {
           return;
+        }
 
         //Only for debug! <Delete>
         if (rightId instanceof BinaryIdentifier)
+         {
           return;
         //</Delete>
+        }
 
         pSuccessor.set(rightId, type);
       }
@@ -325,8 +331,9 @@ public class LocalTransferRelation implements TransferRelation {
   }
 
   private void handleDeclaration(LocalState pSuccessor, CDeclarationEdge declEdge) throws HandleCodeException {
-    if (declEdge.getDeclaration().getClass() != CVariableDeclaration.class)
+    if (declEdge.getDeclaration().getClass() != CVariableDeclaration.class) {
       return;
+    }
 
     CDeclaration decl = declEdge.getDeclaration();
     if ((decl.getType() instanceof CPointerType || decl.getType() instanceof CArrayType) && !decl.isGlobal()) {

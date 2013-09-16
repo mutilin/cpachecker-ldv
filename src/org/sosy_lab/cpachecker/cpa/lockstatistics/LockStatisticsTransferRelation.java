@@ -97,8 +97,9 @@ public class LockStatisticsTransferRelation implements TransferRelation
     LockStatisticsState lockStatisticsElement     = (LockStatisticsState)element;
 
     LockStatisticsState successor;
-    /*if (cfaEdge.getLineNumber() > 207759 && cfaEdge.getLineNumber() < 207792)
-      System.out.println("In CondWait()");*/
+    /*if (cfaEdge.getLineNumber() == 8081) {
+      System.out.println("In CondWait()");
+    }*/
     switch (cfaEdge.getEdgeType()) {
 
       case FunctionCallEdge:

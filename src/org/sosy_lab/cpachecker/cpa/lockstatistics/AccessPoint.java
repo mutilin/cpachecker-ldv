@@ -33,9 +33,20 @@ import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 
 public class AccessPoint {
   public LineInfo line;
+  /**
+   * callstack is responsible for information in report.
+   * So, in every moment in time this field should be correct to state of analysis
+   */
   private CallstackState callstack;
-  private boolean replaceLabel;
+  /**
+   * reducedCallstack is responsible for storing in ABMcache.
+   * So, it is corrected only at the end of its analysis, before saving in cache.
+   */
   private CallstackState reducedCallstack;
+  /**
+   * This field shows, if this access point is new or not
+   */
+  private boolean replaceLabel;
 
   AccessPoint(LineInfo l, CallstackState stack, CallstackState reduced) {
     line = l;
@@ -57,7 +68,7 @@ public class AccessPoint {
   }
 
   public boolean isNew() {
-    return replaceLabel;
+    return !replaceLabel;
   }
 
   @Override
@@ -109,7 +120,7 @@ public class AccessPoint {
     AccessPoint result = this.clone();
     try {
       result.callstack = pRestorator.restoreCallstack(this.reducedCallstack);
-    }  catch (HandleCodeException e) {
+    } catch (HandleCodeException e) {
       System.err.println(e.getMessage());
     }
     if (this.equals(result)) {

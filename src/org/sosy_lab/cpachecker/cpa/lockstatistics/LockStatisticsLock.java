@@ -232,7 +232,7 @@ public class LockStatisticsLock {
     AccessPoint tmpPoint, newPoint;
     for (int i = 0; i < this.accessPoints.size(); i++) {
       tmpPoint = accessPoints.get(i);
-      if (!tmpPoint.isNew() || rootLock == null) {
+      if (tmpPoint.isNew() || rootLock == null) {
         newPoint = tmpPoint.expandCallstack(restorator);
         if (newPoint != tmpPoint) {
           changed = true;
@@ -255,7 +255,7 @@ public class LockStatisticsLock {
     AccessPoint tmpPoint, newPoint;
     for (int i = 0; i < this.accessPoints.size(); i++) {
       tmpPoint = accessPoints.get(i);
-      if (!tmpPoint.isNew()) {
+      if (tmpPoint.isNew()) {
         newPoint = tmpPoint.reduceCallstack(pReducer, pNode);
         if (newPoint != tmpPoint) {
           newLock.accessPoints.setElementAt(newPoint, i);

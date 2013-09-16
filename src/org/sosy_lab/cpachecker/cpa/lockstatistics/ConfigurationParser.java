@@ -120,58 +120,61 @@ public class ConfigurationParser {
     AnnotationInfo tmpAnnotationInfo;
     Map<String, AnnotationInfo> annotatedfunctions = new HashMap<>();
 
-    for (String fName : annotated) {
-      tmpString = config.getProperty("annotate." + fName + ".free");
-      freeLocks = null;
-      if (tmpString != null) {
-        tmpStringSet = new HashSet<>(Arrays.asList(tmpString.split(", *")));
-        freeLocks = new HashMap<>();
-        for (String fullName : tmpStringSet) {
-          if (fullName.matches(".*\\(.*")) {
-            String[] stringArray = fullName.split("\\(");
-            assert stringArray.length == 2;
-            freeLocks.put(stringArray[0], stringArray[1]);
-          } else {
-            freeLocks.put(fullName, "");
+    if (annotated != null) {
+      for (String fName : annotated) {
+        tmpString = config.getProperty("annotate." + fName + ".free");
+        freeLocks = null;
+        if (tmpString != null) {
+          tmpStringSet = new HashSet<>(Arrays.asList(tmpString.split(", *")));
+          freeLocks = new HashMap<>();
+          for (String fullName : tmpStringSet) {
+            if (fullName.matches(".*\\(.*")) {
+              String[] stringArray = fullName.split("\\(");
+              assert stringArray.length == 2;
+              freeLocks.put(stringArray[0], stringArray[1]);
+            } else {
+              freeLocks.put(fullName, "");
+            }
           }
         }
-      }
-      tmpString = config.getProperty("annotate." + fName + ".restore");
-      restoreLocks = null;
-      if (tmpString != null) {
-        tmpStringSet = new HashSet<>(Arrays.asList(tmpString.split(", *")));
-        restoreLocks = new HashMap<>();
-        for (String fullName : tmpStringSet) {
-          if (fullName.matches(".*\\(.*")) {
-            String[] stringArray = fullName.split("\\(");
-            assert stringArray.length == 2;
-            restoreLocks.put(stringArray[0], stringArray[1]);
-          } else {
-            restoreLocks.put(fullName, "");
+        tmpString = config.getProperty("annotate." + fName + ".restore");
+        restoreLocks = null;
+        if (tmpString != null) {
+          tmpStringSet = new HashSet<>(Arrays.asList(tmpString.split(", *")));
+          restoreLocks = new HashMap<>();
+          for (String fullName : tmpStringSet) {
+            if (fullName.matches(".*\\(.*")) {
+              String[] stringArray = fullName.split("\\(");
+              assert stringArray.length == 2;
+              restoreLocks.put(stringArray[0], stringArray[1]);
+            } else {
+              restoreLocks.put(fullName, "");
+            }
           }
         }
-      }
-      tmpString = config.getProperty("annotate." + fName + ".reset");
-      resetLocks = null;
-      if (tmpString != null) {
-        tmpStringSet = new HashSet<>(Arrays.asList(tmpString.split(", *")));
-        resetLocks = new HashMap<>();
-        for (String fullName : tmpStringSet) {
-          if (fullName.matches(".*\\(.*")) {
-            String[] stringArray = fullName.split("\\(");
-            assert stringArray.length == 2;
-            resetLocks.put(stringArray[0], stringArray[1]);
-          } else {
-            resetLocks.put(fullName, "");
+        tmpString = config.getProperty("annotate." + fName + ".reset");
+        resetLocks = null;
+        if (tmpString != null) {
+          tmpStringSet = new HashSet<>(Arrays.asList(tmpString.split(", *")));
+          resetLocks = new HashMap<>();
+          for (String fullName : tmpStringSet) {
+            if (fullName.matches(".*\\(.*")) {
+              String[] stringArray = fullName.split("\\(");
+              assert stringArray.length == 2;
+              resetLocks.put(stringArray[0], stringArray[1]);
+            } else {
+              resetLocks.put(fullName, "");
+            }
           }
         }
+        if (restoreLocks == null && freeLocks == null && resetLocks == null) {
+          //we don't specify the annotation. Restore all locks.
+          tmpAnnotationInfo = new AnnotationInfo(fName, null, new HashMap<String, String>(), null);
+        } else {
+          tmpAnnotationInfo = new AnnotationInfo(fName, freeLocks, restoreLocks, resetLocks);
+        }
+        annotatedfunctions.put(fName, tmpAnnotationInfo);
       }
-      if (restoreLocks == null && freeLocks == null && resetLocks == null)
-        //we don't specify the annotation. Restore all locks.
-        tmpAnnotationInfo = new AnnotationInfo(fName, null, new HashMap<String, String>(), null);
-      else
-        tmpAnnotationInfo = new AnnotationInfo(fName, freeLocks, restoreLocks, resetLocks);
-      annotatedfunctions.put(fName, tmpAnnotationInfo);
     }
     return annotatedfunctions;
   }
