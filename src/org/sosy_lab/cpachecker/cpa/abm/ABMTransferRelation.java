@@ -428,6 +428,9 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
           //we are already in same context
           //thus we already did the recursive call or we a recursion in the cachedSubtrees
           //the latter isn't supported yet, but in the the former case we can classically do the post operation
+          if (BlockStack.size() == 0) {
+            BlockStack.add(currentBlock);
+          }
           logger.log(Level.FINER, "\nnextBlock = currentBlock, get successors");
           return attachAdditionalInfoToCallNodes(wrappedTransfer.getAbstractSuccessors(pElement, pPrecision, edge));
         }
