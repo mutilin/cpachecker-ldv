@@ -63,6 +63,9 @@ public class ConfigurationParser {
 
     for (String lockName : lockinfo) {
       tmpString = config.getProperty(lockName + ".lock");
+      if (tmpString == null) {
+        continue;
+      }
       tmpStringSet = new HashSet<>(Arrays.asList(tmpString.split(", *")));
       lockFunctions = new HashMap<>();
       for (String funcName : tmpStringSet) {
