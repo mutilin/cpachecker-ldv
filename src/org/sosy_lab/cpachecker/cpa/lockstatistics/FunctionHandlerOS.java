@@ -25,6 +25,7 @@ package org.sosy_lab.cpachecker.cpa.lockstatistics;
 
 import java.util.List;
 import java.util.Set;
+import java.util.Stack;
 import java.util.logging.Level;
 
 import org.sosy_lab.common.LogManager;
@@ -130,11 +131,17 @@ public class FunctionHandlerOS {
     	  String variable = (p == 0 ? "" : params.get(p - 1).toASTString());
         int d = newElement.getCounter(lock.lockName, variable);
 
-        if (d < lock.maxLock)
+        if (d < lock.maxLock) {
           newElement.add(lock.lockName, lineNumber, callstack, reducedCallstack, variable, logger);
-        else {
-          System.err.println("Try to lock " + lock.lockName + " more, than " + lock.maxLock + " in " + lineNumber + " line");
-          //System.err.println("Lines: " + newElement.getAllLines(lock.lockName));
+        } else {
+          Stack<AccessPoint> access = newElement.findLock(lock.lockName, variable).getAccessPoints();
+          StringBuilder message = new StringBuilder();
+          message.append("Try to lock " + lock.lockName + " more, than " + lock.maxLock + " in " + lineNumber + " line. Previous were in ");
+          for (AccessPoint point : access) {
+            message.append(point.line.getLine() + ", ");
+          }
+          message.delete(message.length() - 2, message.length());
+          System.err.println(message.toString());
         }
         return;
 
