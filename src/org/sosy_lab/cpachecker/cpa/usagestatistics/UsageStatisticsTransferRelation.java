@@ -151,8 +151,9 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
     CFAEdge currentEdge = pCfaEdge;
 
-    if (checkAbortFunciton(currentEdge))
+    if (checkAbortFunciton(currentEdge)) {
       return;
+    }
 
     if (checkSkippedFunciton(pCfaEdge)) {
       callstackTransfer.setFlag();
@@ -173,8 +174,9 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
   private boolean checkAbortFunciton(CFAEdge pCfaEdge) {
     if (pCfaEdge.getEdgeType() == CFAEdgeType.FunctionCallEdge) {
       String FunctionName = ((FunctionCallEdge)pCfaEdge).getSuccessor().getFunctionName();
-      if (abortfunctions != null && abortfunctions.contains(FunctionName))
+      if (abortfunctions != null && abortfunctions.contains(FunctionName)) {
         return true;
+      }
     }
     return false;
   }
@@ -182,8 +184,9 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
   private boolean checkSkippedFunciton(CFAEdge pCfaEdge) {
     if (pCfaEdge.getEdgeType() == CFAEdgeType.FunctionCallEdge) {
       String FunctionName = ((FunctionCallEdge)pCfaEdge).getSuccessor().getFunctionName();
-      if (skippedfunctions != null && skippedfunctions.contains(FunctionName))
+      if (skippedfunctions != null && skippedfunctions.contains(FunctionName)) {
         return true;
+      }
     }
     return false;
   }
@@ -191,8 +194,9 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
   private UsageStatisticsState handleEdge(UsageStatisticsPrecision precision, UsageStatisticsState newState
       , UsageStatisticsState oldState, CFAEdge pCfaEdge) throws CPATransferException {
 
-    /*if (pCfaEdge.getLineNumber() > 18079 && pCfaEdge.getLineNumber() < 18082)
-      System.out.println("In CondWait()");*/
+    /*if (pCfaEdge.getLineNumber() > 184649 && pCfaEdge.getLineNumber() < 184652) {
+      System.out.println("In CondWait()");
+    }*/
     switch(pCfaEdge.getEdgeType()) {
 
       case DeclarationEdge: {
@@ -214,9 +218,6 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       }
 
       case FunctionCallEdge: {
-
-        if (((FunctionCallEdge)pCfaEdge).getSuccessor().getFunctionName().equals("ddlGetFirstProtect"))
-          System.out.println("US in ddlGetFirstProtect()");
         handleFunctionCall(newState, precision, (CFunctionCallEdge)pCfaEdge);
         break;
       }
@@ -244,8 +245,6 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       pNewState = null;
       return;
     }
-    /*if (functionName.equals("timerUsrFree"))
-      System.out.println("In timerUsrFree");*/
     if (statement instanceof CFunctionCallAssignmentStatement) {
       /*
        * a = f(b)
@@ -407,8 +406,9 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
   }
 
   private void linkId(UsageStatisticsState state, AbstractIdentifier idIn, AbstractIdentifier idFrom) throws HandleCodeException {
-    if (idIn == null || idFrom == null)
+    if (idIn == null || idFrom == null) {
       return;
+    }
     if (state.containsLinks(idFrom)) {
       idFrom = state.getLinks(idFrom);
     }
@@ -431,9 +431,10 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       , AbstractIdentifier aId, Access access, EdgeType eType) throws HandleCodeException {
 
     //Precise information, using results of shared analysis
-    if (! (aId instanceof SingleIdentifier))
+    if (! (aId instanceof SingleIdentifier)) {
       //Not now, may be later
       return;
+    }
     SingleIdentifier id = (SingleIdentifier) aId;
     CFANode node = AbstractStates.extractLocation(state);
     Map<GeneralIdentifier, DataType> localInfo = pPrecision.get(node);
