@@ -334,12 +334,17 @@ public class LockStatisticsState implements AbstractState, Serializable {
 
   @Override
   public LockStatisticsState clone() {
-    return new LockStatisticsState(new HashSet<>(locks), this.toRestore);
+    LockStatisticsState result = new LockStatisticsState();
+    result.toRestore = this.toRestore;
+    for (LockStatisticsLock lock : this.locks) {
+      result.locks.add(lock.clone());
+    }
+    return result;
   }
 
-  public void initReplaceLabels() {
+  public void markOldLocks() {
     for (LockStatisticsLock lock : locks) {
-      lock.initReplaceLabel();
+      lock.markOldPoints();
     }
   }
 
@@ -348,7 +353,6 @@ public class LockStatisticsState implements AbstractState, Serializable {
     final int prime = 31;
     int result = 1;
     result = prime * result + ((locks == null) ? 0 : locks.hashCode());
-    //result = prime * result + ((LocalLocks == null) ? 0 : LocalLocks.hashCode());
     return result;
   }
 
