@@ -39,7 +39,7 @@ public class LockStatisticsReducer implements Reducer {
   public AbstractState getVariableReducedState(AbstractState pExpandedElement, Block pContext, CFANode pCallNode) {
     LockStatisticsState lockState = (LockStatisticsState) pExpandedElement;
     LockStatisticsState reducedState = lockState.clone();
-    reducedState.initReplaceLabels();
+    reducedState.markOldLocks();
     reducedState.setRestoreState(null);
     return reducedState;
   }
@@ -61,7 +61,7 @@ public class LockStatisticsReducer implements Reducer {
           break;
         }
       }
-      //it's new lock
+      //Expand callstacks to new locks
       expandedState.expandCallstack(lock, oldLock, restorator);
     }
     expandedState.setRestoreState(rootState.getRestoreState());
