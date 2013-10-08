@@ -185,7 +185,7 @@ top:while (<$lcov_info_fh>)
     foreach my $skip (@skipped_lines)
     {
       #this line should be deleted from report. Skip it.
-      next top if ($skip->{'start'} < $location && $skip->{'end'} > $location)
+      next top if ($skip->{'start'} <= $location && $skip->{'end'} >= $location)
     }			
      
     foreach my $info (@{$info_da{$orig_location->{'file'}}})
