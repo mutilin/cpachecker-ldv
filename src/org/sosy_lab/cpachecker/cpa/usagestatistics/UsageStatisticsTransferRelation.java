@@ -71,7 +71,10 @@ import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCFAEdgeException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
+import org.sosy_lab.cpachecker.util.identifiers.BinaryIdentifier;
+import org.sosy_lab.cpachecker.util.identifiers.ConstantIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.GeneralIdentifier;
+import org.sosy_lab.cpachecker.util.identifiers.LocalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.StructureIdentifier;
 
@@ -194,8 +197,8 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
   private UsageStatisticsState handleEdge(UsageStatisticsPrecision precision, UsageStatisticsState newState
       , UsageStatisticsState oldState, CFAEdge pCfaEdge) throws CPATransferException {
 
-    /*if (pCfaEdge.getLineNumber() > 184649 && pCfaEdge.getLineNumber() < 184652) {
-      System.out.println("In CondWait()");
+    /*if (pCfaEdge.getPredecessor().getFunctionName().equals("vcDevInit") && pCfaEdge.getSuccessor().getFunctionName().equals("vcDevInit")) {
+      System.out.println("In vcDevInit()");
     }*/
     switch(pCfaEdge.getEdgeType()) {
 
@@ -428,22 +431,19 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
   }
 
   private void visitId(UsageStatisticsState state, UsageStatisticsPrecision pPrecision
-      , AbstractIdentifier aId, Access access, EdgeType eType) throws HandleCodeException {
+      , AbstractIdentifier id, Access access, EdgeType eType) throws HandleCodeException {
 
     //Precise information, using results of shared analysis
-    if (! (aId instanceof SingleIdentifier)) {
-      //Not now, may be later
+    if (! (id instanceof SingleIdentifier)) {
       return;
     }
-    SingleIdentifier id = (SingleIdentifier) aId;
+
+    SingleIdentifier singleId = (SingleIdentifier) id;
+
     CFANode node = AbstractStates.extractLocation(state);
     Map<GeneralIdentifier, DataType> localInfo = pPrecision.get(node);
 
-    if (localInfo != null) {
-      /*if (id instanceof SingleIdentifier && ((SingleIdentifier)id).getName().equals("s1")
-          //&& node.getLineNumber() > 18079 && node.getLineNumber() < 18082
-          )
-        System.out.println("Checker pc");*/
+    if (localInfo != null && getDataType(localInfo, singleId) == DataType.LOCAL) {
       /*if (id.toString().contains("&")) {
         if (id instanceof GlobalVariableIdentifier)
           globalAdress++;
@@ -455,29 +455,52 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
           System.out.println(id.toString());
         System.out.println(globalAdress + " : " + localAdress + " : " + structAdress);
       }*/
-      /*if (id.getName().equals("pc"))
-        System.out.println("Adding pc");*/
-      GeneralIdentifier generalId = id.getGeneralId();
-      DataType dataType = null;
-      if ((dataType = localInfo.get(generalId)) == DataType.LOCAL) {
-        return;
-      }
-      //may be, we have information about all structure?
-      AbstractIdentifier tmpId = id;
-      while (tmpId instanceof StructureIdentifier && dataType != DataType.GLOBAL) {
-        tmpId = ((StructureIdentifier)tmpId).getOwner();
-        if (tmpId instanceof SingleIdentifier) {
-          generalId = ((SingleIdentifier)tmpId).getGeneralId();
-          if ((dataType = localInfo.get(generalId)) == DataType.LOCAL) {
-            return;
-          }
-        }
-        //else we can't say anything
-      }
+
+      return;
     }
 
-    statistics.add(id, access, state, eType);
+    statistics.add(singleId, access, state, eType);
   }
+
+  private DataType getDataType(Map<GeneralIdentifier, DataType> localInfo, AbstractIdentifier aId) {
+    if (aId instanceof BinaryIdentifier) {
+      AbstractIdentifier id1 = ((BinaryIdentifier) aId).getIdentifier1();
+      AbstractIdentifier id2 = ((BinaryIdentifier) aId).getIdentifier2();
+
+      if (id1.isGlobal() || id2.isGlobal()) {
+        return DataType.GLOBAL;
+      } else if (id1.getDereference() == 0) {
+        return getDataType(localInfo, id2);
+      } else if (id2.getDereference() == 0) {
+        return getDataType(localInfo, id1);
+      } else {
+        return DataType.max(getDataType(localInfo, id1), getDataType(localInfo, id2));
+      }
+    } else if (aId instanceof ConstantIdentifier) {
+      if (aId.getDereference() > 0) {
+        return DataType.GLOBAL;
+      } else {
+        return DataType.LOCAL;
+      }
+    } else if (aId instanceof SingleIdentifier) {
+      GeneralIdentifier generalId = ((SingleIdentifier) aId).getGeneralId();
+      if (localInfo.containsKey(generalId)) {
+        return localInfo.get(generalId);
+      }
+      if (aId instanceof StructureIdentifier) {
+        AbstractIdentifier tmpId = ((StructureIdentifier)aId).getOwner();
+        return getDataType(localInfo, tmpId);
+      } else if (aId instanceof LocalVariableIdentifier && !aId.isPointer()) {
+        return DataType.LOCAL;
+      } else {
+        return null;//may be null...
+      }
+    } else {
+      System.err.println("Unknown identifier type: " + aId.toString());
+      return null;
+    }
+  }
+
 
   @Override
   public Collection<? extends AbstractState> strengthen(
