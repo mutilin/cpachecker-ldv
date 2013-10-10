@@ -109,7 +109,12 @@ public class LockStatisticsLock {
 
   @Override
   public LockStatisticsLock clone() {
-    return new LockStatisticsLock(this.name, this.type, this.accessPoints, this.variable, this.recursiveCounter);
+    LockStatisticsLock result =
+        new LockStatisticsLock(this.name, this.type, new Stack<AccessPoint>(), this.variable, this.recursiveCounter);
+    for (AccessPoint point : this.accessPoints) {
+      result.accessPoints.add(point.clone());
+    }
+    return result;
   }
 
   public LockStatisticsLock addAccessPointer(AccessPoint accessPoint) {
@@ -150,9 +155,9 @@ public class LockStatisticsLock {
     }
   }
 
-  public void initReplaceLabel() {
+  public void markOldPoints() {
     for (AccessPoint accessPoint : accessPoints) {
-      accessPoint.setLabel();
+      accessPoint.markAsOld();
     }
   }
 
@@ -164,6 +169,7 @@ public class LockStatisticsLock {
     result = prime * result + ((name == null) ? 0 : name.hashCode());
     result = prime * result + recursiveCounter;
     result = prime * result + ((type == null) ? 0 : type.hashCode());
+    //result = prime * result + ((accessPoints == null) ? 0 : accessPoints.hashCode());
     return result;
   }
 
@@ -239,8 +245,12 @@ public class LockStatisticsLock {
           expandedLock.accessPoints.setElementAt(newPoint, i);
         }
       } else if (rootLock.accessPoints.size() > i) {
+        //restore marks, which were new before function call
         changed = true;
-        expandedLock.accessPoints.setElementAt(rootLock.accessPoints.get(i), i);
+        expandedLock.accessPoints.setElementAt(rootLock.accessPoints.get(i).clone(), i);
+      } else {
+        //Also strange situation...
+        System.out.println("size < i");
       }
     }
     if (changed) {
@@ -252,20 +262,22 @@ public class LockStatisticsLock {
 
   public LockStatisticsLock reduceCallStack(CallstackReducer pReducer, CFANode pNode) {
     LockStatisticsLock newLock = this.clone();
+    boolean isChanged = false;
     AccessPoint tmpPoint, newPoint;
     for (int i = 0; i < this.accessPoints.size(); i++) {
       tmpPoint = accessPoints.get(i);
       if (tmpPoint.isNew()) {
         newPoint = tmpPoint.reduceCallstack(pReducer, pNode);
         if (newPoint != tmpPoint) {
+          isChanged = true;
           newLock.accessPoints.setElementAt(newPoint, i);
         }
       }
     }
-    if (this.equals(newLock)) {
-      return this;
-    } else {
+    if (isChanged) {
       return newLock;
+    } else {
+      return this;
     }
   }
 }
