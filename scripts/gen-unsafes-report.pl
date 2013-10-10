@@ -155,7 +155,7 @@ while (<$visualize_fh>) {
 	}
 }
 
-my $HEADER = "<html><head><link href='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/css/etv.css' rel='stylesheet' type='text/css' /><link href='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/css/etv-analytics-center.css' rel='stylesheet' type='text/css' /><script type='text/javascript' src='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/jslib/jquery-1.4.2.min.js'></script><script type='text/javascript' src='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/jslib/etv.js'></script><script type='text/javascript' src='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/jslib/etv-analytics-center.js'></script></head>";
+my $HEADER = "<html><head><link href='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/css/global.css' media='screen' rel='stylesheet' type='text/css' /><link href='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/css/etv.css' rel='stylesheet' type='text/css' /><link href='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/css/etv-analytics-center.css' rel='stylesheet' type='text/css' /><script type='text/javascript' src='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/jslib/jquery-1.4.2.min.js'></script><script type='text/javascript' src='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/jslib/etv.js'></script><script type='text/javascript' src='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/jslib/etv-analytics-center.js'></script></head>";
 
 my $current_fname_new;
 # Create only list of unsafes
@@ -195,7 +195,7 @@ foreach my $current_fname(sort keys %unsafe_list)
 	`etv -c $current_fname_new --src-files srcs -o $1.html.tmp`;
 	die ("etv failed") if( $? == -1 ) ;
 	open(my $html_tmp, ">", "$1.html") or die("Can't open html-file for write");
-	print($html_tmp "$HEADER <body> <h1>@{$unsafe_list{$current_fname}}</h1>");
+	print($html_tmp "$HEADER <body> <div id='SSHeader'><div id='SSHeaderLogo'>@{$unsafe_list{$current_fname}}</div></div>");
 	`cat $1.html.tmp >> $1.html && echo "</body></html>" >> $1.html`;
 	die ("Can't cat $1.html") if ($? == -1);
 	unlink "$1.html.tmp" or die;
