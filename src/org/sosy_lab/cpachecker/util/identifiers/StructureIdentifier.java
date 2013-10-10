@@ -76,18 +76,23 @@ public class StructureIdentifier extends SingleIdentifier{
 
   @Override
   public boolean equals(Object obj) {
-    if (this == obj)
+    if (this == obj) {
       return true;
-    if (!super.equals(obj))
+    }
+    if (!super.equals(obj)) {
       return false;
-    if (getClass() != obj.getClass())
+    }
+    if (getClass() != obj.getClass()) {
       return false;
+    }
     StructureIdentifier other = (StructureIdentifier) obj;
     if (owner == null) {
-      if (other.owner != null)
+      if (other.owner != null) {
         return false;
-    } else if (!owner.equals(other.owner))
+      }
+    } else if (!owner.equals(other.owner)) {
       return false;
+    }
     return true;
   }
 
@@ -101,25 +106,14 @@ public class StructureIdentifier extends SingleIdentifier{
     return owner.isGlobal();
   }
 
-  public boolean isAnyPointer() {
-    if (LocalTransferRelation.findDereference(type) > 0)
+  @Override
+  public boolean isPointer() {
+    if (LocalTransferRelation.findDereference(type) > 0) {
       return true;
-    else if (dereference > 0)
+    } else if (dereference > 0) {
       return true;
-    else {
-      if (owner instanceof GlobalVariableIdentifier || owner instanceof LocalVariableIdentifier
-          || owner instanceof StructureFieldIdentifier || owner instanceof ConstantIdentifier) {
-        return (owner.getDereference() > 0);
-      } else if ( owner instanceof BinaryIdentifier) {
-        return (((BinaryIdentifier)owner).id1.getDereference() > 0
-            && ((BinaryIdentifier)owner).id2.getDereference() > 0);
-      } else if (owner instanceof StructureIdentifier) {
-        return ((StructureIdentifier)owner).isAnyPointer();
-      } else {
-        //Strange situation
-        System.err.println("Unknown identifier: " + this.toString());
-        return true;//Conservatively
-      }
+    } else {
+      return owner.isPointer();
     }
   }
 
@@ -129,9 +123,9 @@ public class StructureIdentifier extends SingleIdentifier{
   }
 
   private CType getStructureType() {
-    if (owner instanceof SingleIdentifier)
+    if (owner instanceof SingleIdentifier) {
       return ((SingleIdentifier)owner).type;
-    else if (owner instanceof ConstantIdentifier) {
+    } else if (owner instanceof ConstantIdentifier) {
       return new CSimpleType(false, false, CBasicType.INT, false, false, false, false, false, false, false);
     } else if (owner instanceof BinaryIdentifier) {
       return new CProblemType("Complex_type");
@@ -139,11 +133,6 @@ public class StructureIdentifier extends SingleIdentifier{
       System.err.println("Can't create structureFieldId for " + this.toString());
       return null;
     }
-  }
-
-  @Override
-  public boolean isPointer() {
-    return owner.isPointer();
   }
 
   @Override
