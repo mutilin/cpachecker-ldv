@@ -46,11 +46,9 @@ import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionEntryNode;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionReturnEdge;
-import org.sosy_lab.cpachecker.cfa.model.c.CFunctionSummaryEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CReturnStatementEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
 import org.sosy_lab.cpachecker.cfa.types.c.CArrayType;
-import org.sosy_lab.cpachecker.cfa.types.c.CComplexType;
 import org.sosy_lab.cpachecker.cfa.types.c.CPointerType;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
 import org.sosy_lab.cpachecker.cfa.types.c.CTypedefType;
@@ -62,11 +60,11 @@ import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCFAEdgeException;
 import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
-import org.sosy_lab.cpachecker.util.identifiers.BinaryIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.ConstantIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.GeneralLocalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.GlobalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.LocalVariableIdentifier;
+import org.sosy_lab.cpachecker.util.identifiers.ReturnIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.VariableIdentifier;
 
@@ -88,8 +86,8 @@ public class LocalTransferRelation implements TransferRelation {
 
     LocalState LocalElement = (LocalState) pState;
     LocalState successor = LocalElement.clone();
-    /*if (pCfaEdge.getPredecessor().getFunctionName().equals("acpi_battery_add")) {
-      System.out.println("In acpi_battery_add()");
+    /*if (pCfaEdge.getSuccessor().getFunctionName().equals("io_flush")) {
+      System.out.println("In io_flush()");
     }*/
     switch(pCfaEdge.getEdgeType()) {
 
@@ -137,37 +135,41 @@ public class LocalTransferRelation implements TransferRelation {
     }
   }
 
-  private void handleReturnStatementEdge(LocalState pSuccessor, CReturnStatementEdge pCfaEdge) {
-    pSuccessor.setReturnExpression(pCfaEdge.getExpression());
-    //may be, this function will be bigger later...
+  private void handleReturnStatementEdge(LocalState pSuccessor, CReturnStatementEdge pCfaEdge) throws HandleCodeException {
+    CExpression returnExpression = pCfaEdge.getExpression();
+    if (returnExpression != null) {
+      int dereference = findDereference(returnExpression.getExpressionType());
+      if (dereference > 0) {
+        AbstractIdentifier returnId = createId(returnExpression, 0);
+        DataType type = pSuccessor.getType(returnId);
+        pSuccessor.set(ReturnIdentifier.getInstance(), type);
+      }
+    }
+    //pSuccessor.setReturnExpression(pCfaEdge.getExpression());
   }
 
   private LocalState handleReturnEdge(LocalState pSuccessor, CFunctionReturnEdge pCfaEdge) throws HandleCodeException {
-    CFunctionSummaryEdge summaryEdge  = pCfaEdge.getSummaryEdge();
-    CFunctionCall exprOnSummary       = summaryEdge.getExpression();
-    CExpression returnExpression = pSuccessor.getReturnExpression();
-    LocalState newElement  = pSuccessor.getPreviousState();
+    CFunctionCall exprOnSummary     = pCfaEdge.getSummaryEdge().getExpression();
+    DataType returnType             = pSuccessor.getType(ReturnIdentifier.getInstance());
+    LocalState newElement           = pSuccessor.getPreviousState();
 
     if (exprOnSummary instanceof CFunctionCallAssignmentStatement) {
-      if (returnExpression != null) {
+      if (returnType != null) {
 
         CFunctionCallAssignmentStatement assignExp = ((CFunctionCallAssignmentStatement)exprOnSummary);
         CExpression op1 = assignExp.getLeftHandSide();
         CType type = op1.getExpressionType();
         //find type in old state...
-        if (type instanceof CComplexType) {
-          //sometimes, it's easy to look at returned expression
-          type = returnExpression.getExpressionType();
-        }
         int dereference = findDereference(type);
-        AbstractIdentifier returnId = createId(returnExpression, dereference);
-        DataType returnType = pSuccessor.getType(returnId);
-        returnId = createId(op1, dereference);
-        //check, if it
-        newElement.set(returnId, returnType);
-        handleFunctionCallExpression(newElement, returnId, assignExp.getRightHandSide());
-        //... and save it in new
-        pSuccessor.setReturnExpression(null);
+        if (dereference > 0) {
+          //We don't store simple types, like 'int'
+          AbstractIdentifier returnId = createId(op1, dereference);
+          //check, if it
+          newElement.set(returnId, returnType);
+          handleFunctionCallExpression(newElement, returnId, assignExp.getRightHandSide());
+          //... and save it in new
+          //pSuccessor.setReturnExpression(null);
+        }
       } else {
         //we don't know type
         //set(newElement, op1, returnType, dereference);
@@ -191,8 +193,6 @@ public class LocalTransferRelation implements TransferRelation {
     LocalState newState = new LocalState(pSuccessor);
 
     CFunctionEntryNode functionEntryNode = callEdge.getSuccessor();
-    /*if (functionEntryNode.getFunctionName().equals("ddlInit"))
-      System.out.println("In ddlInit");*/
     List<String> paramNames = functionEntryNode.getFunctionParameterNames();
     List<CExpression> arguments = callEdge.getArguments();
 
@@ -210,22 +210,6 @@ public class LocalTransferRelation implements TransferRelation {
           DataType type = pSuccessor.getType(previousId);
           newState.set(id, type);
         }
-        /*while (dereference > 0) {
-          LocalVariableIdentifier id = new GeneralLocalVariableIdentifier(paramNames.get(i), dereference);
-          previousId = createId(currentArgument, previousDeref);
-          if (previousId.getDereference() < 0) {
-            if (previousId.isGlobal()) {
-              newState.set(id, DataType.GLOBAL);
-            } else {
-              newState.set(id, DataType.LOCAL);
-            }
-          } else if (previousId.getDereference() >= 0) {
-            previousId = createId(currentArgument, dereference - previousId.getDereference());
-            newState.set(id, pSuccessor.getType(previousId));
-          }
-          dereference--;
-          previousDeref++;
-        }*/
       }
     }
     // else, something like 'f(..)'. Now we can't do anything
@@ -316,13 +300,6 @@ public class LocalTransferRelation implements TransferRelation {
         //But we save all structures
         if (rightId instanceof VariableIdentifier && rightId.getDereference() <= 0) {
           return;
-        }
-
-        //Only for debug! <Delete>
-        if (rightId instanceof BinaryIdentifier)
-         {
-          return;
-        //</Delete>
         }
 
         pSuccessor.set(rightId, type);
