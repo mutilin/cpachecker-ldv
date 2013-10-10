@@ -65,8 +65,9 @@ public class PresisionParser {
         if (line.startsWith("N")) {
           //N1 - it's node identifier
           if (node != null && info != null) {
-            if (!precision.add(node, info))
+            if (!precision.add(node, info)) {
               throw new CPAException("Node " + node + " is already in presision");
+            }
           }
           node = getNode(Integer.parseInt(line.substring(1)));
           info = new HashMap<>();
@@ -83,6 +84,9 @@ public class PresisionParser {
           } else if (localSet[0].equalsIgnoreCase("s") || localSet[0].equalsIgnoreCase("f")) {
             //Structure (field) identifier
             id = new GeneralStructureFieldIdentifier(localSet[1], Integer.parseInt(localSet[2]));
+          } else if (localSet[0].equalsIgnoreCase("r")) {
+            //Return identifier, it's not interesting for us
+            continue;
           } else {
             System.err.println("Can't resolve such line: " + line);
             continue;
@@ -99,8 +103,9 @@ public class PresisionParser {
         }
       }
       if (node != null && info != null) {
-        if (!precision.add(node, info))
+        if (!precision.add(node, info)) {
           throw new CPAException("Node " + node + " is already in presision");
+        }
       }
     } catch(FileNotFoundException e) {
       System.err.println("Cannot open file " + file);
