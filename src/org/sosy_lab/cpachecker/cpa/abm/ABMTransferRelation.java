@@ -462,7 +462,6 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
         currentBlock = partitioning.getBlockForCallNode(node);
         BlockStack.add(currentBlock);
         Collection<Pair<AbstractState, Precision>> reducedResult = performCompositeAnalysis(pElement, pPrecision, node);
-        BlockStack.removeLast();
 
         logger.log(Level.FINER, "Current stack size = " + BlockStack.size());
         logger.log(Level.FINER, "Recursive analysis of depth", depth--, "finished");
@@ -493,7 +492,7 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
 
           forwardPrecisionToExpandedPrecision.put(expandedState, expandedPrecision);
         }
-
+        BlockStack.removeLast();
         logger.log(Level.ALL, "Expanded results:", expandedResult);
 
         currentBlock = outerSubtree;
@@ -1284,15 +1283,25 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
       fullState = new CallstackState(fullState, currentNode.getFunctionName(), predecessor);
       previousNode = currentNode;
     }
-    tmpState = state.clone();
+    tmpState = state;
     if (fullState != null) {
       if (tmpState.getCurrentFunction().equals(fullState.getCurrentFunction())) {
         return fullState;
       } else if (!tmpState.getCurrentFunction().equals(fullState.getCurrentFunction()) && tmpState.getPreviousState() != null) {
-        while (!tmpState.getPreviousState().getCurrentFunction().equals(fullState.getCurrentFunction())) {
+        Stack<CallstackState> callstack = new Stack<>();
+        while (!tmpState.getCurrentFunction().equals(fullState.getCurrentFunction())) {
+          callstack.push(tmpState);
           tmpState = tmpState.getPreviousState();
+          if (tmpState == null) {
+            throw new HandleCodeException("Can't restore callstack");
+          }
         }
-        tmpState = new CallstackState(fullState, state.getCurrentFunction(), tmpState.getCallNode());
+        tmpState = fullState;
+        CallstackState savedState;
+        while (!callstack.empty()) {
+          savedState = callstack.pop();
+          tmpState = new CallstackState(tmpState, savedState.getCurrentFunction(), savedState.getCallNode());
+        }
         return tmpState;
       } else/* if (!tmpState.getCurrentFunction().equals(fullState.getCurrentFunction()) && tmpState.getPreviousState() == null) */{
         currentNode = currentBlock.getCallNode();
