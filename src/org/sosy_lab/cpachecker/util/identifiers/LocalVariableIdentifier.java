@@ -43,18 +43,23 @@ public class LocalVariableIdentifier extends VariableIdentifier {
 
   @Override
   public boolean equals(Object obj) {
-    if (this == obj)
+    if (this == obj) {
       return true;
-    if (!super.equals(obj))
+    }
+    if (!super.equals(obj)) {
       return false;
-    if (getClass() != obj.getClass())
+    }
+    if (getClass() != obj.getClass()) {
       return false;
+    }
     LocalVariableIdentifier other = (LocalVariableIdentifier) obj;
     if (function == null) {
-      if (other.function != null)
+      if (other.function != null) {
         return false;
-    } else if (!function.equals(other.function))
+      }
+    } else if (!function.equals(other.function)) {
       return false;
+    }
     return true;
   }
 
