@@ -118,6 +118,7 @@ public class ConfigurationParser {
     Map<String, String> freeLocks;
     Map<String, String> restoreLocks;
     Map<String, String> resetLocks;
+    Map<String, String> captureLocks;
     Set<String> tmpStringSet;
     String tmpString;
     AnnotationInfo tmpAnnotationInfo;
@@ -170,11 +171,26 @@ public class ConfigurationParser {
             }
           }
         }
-        if (restoreLocks == null && freeLocks == null && resetLocks == null) {
+        tmpString = config.getProperty("annotate." + fName + ".capture");
+        captureLocks = null;
+        if (tmpString != null) {
+          tmpStringSet = new HashSet<>(Arrays.asList(tmpString.split(", *")));
+          captureLocks = new HashMap<>();
+          for (String fullName : tmpStringSet) {
+            if (fullName.matches(".*\\(.*")) {
+              String[] stringArray = fullName.split("\\(");
+              assert stringArray.length == 2;
+              resetLocks.put(stringArray[0], stringArray[1]);
+            } else {
+              resetLocks.put(fullName, "");
+            }
+          }
+        }
+        if (restoreLocks == null && freeLocks == null && resetLocks == null && captureLocks == null) {
           //we don't specify the annotation. Restore all locks.
-          tmpAnnotationInfo = new AnnotationInfo(fName, null, new HashMap<String, String>(), null);
+          tmpAnnotationInfo = new AnnotationInfo(fName, null, new HashMap<String, String>(), null, null);
         } else {
-          tmpAnnotationInfo = new AnnotationInfo(fName, freeLocks, restoreLocks, resetLocks);
+          tmpAnnotationInfo = new AnnotationInfo(fName, freeLocks, restoreLocks, resetLocks, captureLocks);
         }
         annotatedfunctions.put(fName, tmpAnnotationInfo);
       }

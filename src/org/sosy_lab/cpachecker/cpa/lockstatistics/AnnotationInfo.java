@@ -31,12 +31,15 @@ public class AnnotationInfo {
   public final Map<String, String> freeLocks;
   public final Map<String, String> restoreLocks;
   public final Map<String, String> resetLocks;
+  public final Map<String, String> captureLocks;
 
-  public AnnotationInfo(String name, Map<String, String> free, Map<String, String> restore, Map<String, String> reset) {
+  public AnnotationInfo(String name, Map<String, String> free, Map<String, String> restore, Map<String, String> reset
+      , Map<String, String> capture) {
     funcName = name;
     freeLocks = free;
     restoreLocks = restore;
     resetLocks = reset;
+    captureLocks = capture;
   }
 
 }
