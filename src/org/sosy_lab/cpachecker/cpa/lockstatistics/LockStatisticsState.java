@@ -31,6 +31,7 @@ import java.util.Set;
 import java.util.logging.Level;
 
 import org.sosy_lab.common.LogManager;
+import org.sosy_lab.common.Pair;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.abm.ABMRestoreStack;
@@ -182,7 +183,7 @@ public class LockStatisticsState implements AbstractState, Serializable {
   }
 
   LockStatisticsState reset(Map<String, String> pResetLocks, LogManager pLogger) {
-    LockStatisticsState newState = this.clone();
+    LockStatisticsState newState = this.restore(pResetLocks, pLogger);
     for (String lockName : pResetLocks.keySet()) {
       newState.reset(lockName, pResetLocks.get(lockName), pLogger);
     }
@@ -217,34 +218,40 @@ public class LockStatisticsState implements AbstractState, Serializable {
     }
   }
 
-  LockStatisticsState restore(LockStatisticsState restoredState, Map<String, String> lockNames, LogManager logger) {
+  LockStatisticsState restore(Map<String, String> lockNames, LogManager logger) {
+    LockStatisticsState restoredState = this.toRestore;
+    if (restoredState == null) {
+      return this.clone();
+    }
+    LockStatisticsState newState;
     if (lockNames.size() == 0) {
       //we didn't specify, which locks we would like to restore, so, restore all;
-      return restoredState;
-    }
-    if (this.locks.equals(restoredState.locks)) {
+      newState = restoredState.clone();
+    } else if (this.locks.equals(restoredState.locks)) {
       //only for optimization. We don't compare restoreState, because in this it can be only more complex.
-      return this;
-    }
+      newState = this.clone();
+    } else {
 
-    LockStatisticsState newState = this.clone();
-    for (String lockName : lockNames.keySet()) {
-      LockStatisticsLock oldLock = this.findLock(lockName, lockNames.get(lockName));
-      LockStatisticsLock newLock = restoredState.findLock(lockName, lockNames.get(lockName));
-      if (oldLock != null) {
-        newState.reset(oldLock, logger);
-        if (newLock != null) {
+      newState = this.clone();
+      for (String lockName : lockNames.keySet()) {
+        LockStatisticsLock oldLock = this.findLock(lockName, lockNames.get(lockName));
+        LockStatisticsLock newLock = restoredState.findLock(lockName, lockNames.get(lockName));
+        if (oldLock != null) {
+          newState.reset(oldLock, logger);
+          if (newLock != null) {
+            newState.add(newLock, logger);
+          }
+        } else if (newLock != null){
           newState.add(newLock, logger);
         }
-      } else if (newLock != null){
-        newState.add(newLock, logger);
       }
     }
+    newState.setRestoreState(restoredState.getRestoreState());
     return newState;
   }
 
   LockStatisticsState free(Map<String, String> freeLocks, LogManager logger) {
-    LockStatisticsState newState = this.clone();
+    LockStatisticsState newState = this.restore(freeLocks, logger); //it also clones
     String variable;
 
     for (String lockName : freeLocks.keySet()) {
@@ -394,12 +401,16 @@ public class LockStatisticsState implements AbstractState, Serializable {
   }
 
   public void reduceCallstack(CallstackReducer pReducer, CFANode pNode) {
+    Set<Pair<LockStatisticsLock, LockStatisticsLock>> toChange = new HashSet<>();
     for (LockStatisticsLock lock : getLocks()) {
       LockStatisticsLock newLock = lock.reduceCallStack(pReducer, pNode);
       if (lock != newLock) {
-        locks.remove(lock);
-        locks.add(newLock);
+        toChange.add(Pair.of(lock, newLock));
       }
+    }
+    for (Pair<LockStatisticsLock, LockStatisticsLock> pair : toChange) {
+      locks.remove(pair.getFirst());
+      locks.add(pair.getSecond());
     }
   }
 }
