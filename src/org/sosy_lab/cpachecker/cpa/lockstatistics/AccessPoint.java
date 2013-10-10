@@ -46,13 +46,13 @@ public class AccessPoint {
   /**
    * This field shows, if this access point is new or not
    */
-  private boolean replaceLabel;
+  private boolean isNewPoint;
 
   AccessPoint(LineInfo l, CallstackState stack, CallstackState reduced) {
     line = l;
     callstack = stack;
     reducedCallstack = reduced;
-    replaceLabel = false;
+    isNewPoint = true;
   }
 
   public CallstackState getCallstack() {
@@ -63,12 +63,16 @@ public class AccessPoint {
     reducedCallstack = reduced;
   }
 
-  public void setLabel() {
-    replaceLabel = true;
+  public void markAsOld() {
+    isNewPoint = false;
+  }
+
+  public void markAsNew() {
+    isNewPoint = true;
   }
 
   public boolean isNew() {
-    return !replaceLabel;
+    return isNewPoint;
   }
 
   @Override
@@ -112,7 +116,7 @@ public class AccessPoint {
   @Override
   public AccessPoint clone() {
     AccessPoint result =  new AccessPoint(line, callstack, reducedCallstack);
-    result.replaceLabel = this.replaceLabel;
+    result.isNewPoint = this.isNewPoint;
     return result;
   }
 
