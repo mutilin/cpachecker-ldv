@@ -110,12 +110,13 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
 
     LockStatisticsCPA LockCpa = ((WrapperCPA) getWrappedCpa()).retrieveWrappedCpa(LockStatisticsCPA.class);
     if (LockCpa != null) {
-      ((LockStatisticsTransferRelation)LockCpa.getTransferRelation()).getFunctionHandler().setUsCPA(this);
+      ((LockStatisticsTransferRelation)LockCpa.getTransferRelation()).setUsCPA(this);
     }
 
     String tmpString = pConfig.getProperty("precision.path");
-    if (tmpString != null)
+    if (tmpString != null) {
       outputFileName = tmpString;
+    }
     PresisionParser parser = new PresisionParser(outputFileName, pCfa);
     this.precision = parser.parse();
   }
