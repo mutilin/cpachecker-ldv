@@ -24,6 +24,7 @@
 package org.sosy_lab.cpachecker.cpa.lockstatistics;
 
 import java.util.Map;
+import java.util.Set;
 
 
 public class LockInfo {
@@ -31,15 +32,17 @@ public class LockInfo {
   public final Map<String, Integer> LockFunctions;  /* integer: 0 - if we don't use parameter as identifier */
   public final Map<String, Integer> UnlockFunctions;/*          i - we use parameter number i as identifier */
   public final Map<String, Integer> ResetFunctions;
+  public final Set<String> Variables;
   public final String setLevel;
   public final int maxLock;
 
   public LockInfo(String name, Map<String, Integer> lock, Map<String, Integer> unlock, Map<String, Integer> reset
-      , String level, int max) {
+      , Set<String> vars, String level, int max) {
     lockName = name;
     LockFunctions = lock;
     UnlockFunctions = unlock;
     ResetFunctions = reset;
+    Variables = vars;
     setLevel = level;
     maxLock = max;
   }

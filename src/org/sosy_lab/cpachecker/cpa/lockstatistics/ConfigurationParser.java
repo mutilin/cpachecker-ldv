@@ -56,6 +56,7 @@ public class ConfigurationParser {
     Map<String, Integer> lockFunctions;
     Map<String, Integer> unlockFunctions;
     Map<String, Integer> resetFunctions;
+    Set<String> variables;
     LockInfo tmpLockInfo;
     Set<String> tmpStringSet;
     String tmpString;
@@ -63,18 +64,17 @@ public class ConfigurationParser {
 
     for (String lockName : lockinfo) {
       tmpString = config.getProperty(lockName + ".lock");
-      if (tmpString == null) {
-        continue;
-      }
-      tmpStringSet = new HashSet<>(Arrays.asList(tmpString.split(", *")));
       lockFunctions = new HashMap<>();
-      for (String funcName : tmpStringSet) {
-        try {
-          num = Integer.parseInt(config.getProperty(lockName + "." + funcName + ".parameters"));
-        } catch (NumberFormatException e) {
-          num = 0;
+      if (tmpString != null) {
+        tmpStringSet = new HashSet<>(Arrays.asList(tmpString.split(", *")));
+        for (String funcName : tmpStringSet) {
+          try {
+            num = Integer.parseInt(config.getProperty(lockName + "." + funcName + ".parameters"));
+          } catch (NumberFormatException e) {
+            num = 0;
+          }
+          lockFunctions.put(funcName, num);
         }
-        lockFunctions.put(funcName, num);
       }
       unlockFunctions = new HashMap<>();
       tmpString = config.getProperty(lockName + ".unlock");
@@ -88,6 +88,11 @@ public class ConfigurationParser {
           }
           unlockFunctions.put(funcName, num);
         }
+      }
+      variables = new HashSet<>();
+      tmpString = config.getProperty(lockName + ".variable");
+      if (tmpString != null) {
+        variables = new HashSet<>(Arrays.asList(tmpString.split(", *")));
       }
       resetFunctions = new HashMap<>();
       tmpString = config.getProperty(lockName + ".reset");
@@ -108,7 +113,7 @@ public class ConfigurationParser {
       } catch (NumberFormatException e) {
         num = 100;
       }
-      tmpLockInfo = new LockInfo(lockName, lockFunctions, unlockFunctions, resetFunctions, tmpString, num);
+      tmpLockInfo = new LockInfo(lockName, lockFunctions, unlockFunctions, resetFunctions, variables, tmpString, num);
       tmpInfo.add(tmpLockInfo);
     }
     return tmpInfo;
@@ -171,7 +176,7 @@ public class ConfigurationParser {
             }
           }
         }
-        tmpString = config.getProperty("annotate." + fName + ".capture");
+        tmpString = config.getProperty("annotate." + fName + ".lock");
         captureLocks = null;
         if (tmpString != null) {
           tmpStringSet = new HashSet<>(Arrays.asList(tmpString.split(", *")));
@@ -180,9 +185,9 @@ public class ConfigurationParser {
             if (fullName.matches(".*\\(.*")) {
               String[] stringArray = fullName.split("\\(");
               assert stringArray.length == 2;
-              resetLocks.put(stringArray[0], stringArray[1]);
+              captureLocks.put(stringArray[0], stringArray[1]);
             } else {
-              resetLocks.put(fullName, "");
+              captureLocks.put(fullName, "");
             }
           }
         }

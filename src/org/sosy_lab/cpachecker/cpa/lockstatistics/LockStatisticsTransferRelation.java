@@ -25,6 +25,7 @@ package org.sosy_lab.cpachecker.cpa.lockstatistics;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -40,6 +41,8 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CAssignment;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallStatement;
+import org.sosy_lab.cpachecker.cfa.ast.c.CIntegerLiteralExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CLeftHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
@@ -110,9 +113,6 @@ public class LockStatisticsTransferRelation implements TransferRelation
     LockStatisticsState lockStatisticsElement     = (LockStatisticsState)element;
 
     LockStatisticsState successor;
-    /*if (cfaEdge.getLineNumber() == 8081) {
-      System.out.println("In CondWait()");
-    }*/
     switch (cfaEdge.getEdgeType()) {
 
       case FunctionCallEdge:
@@ -158,6 +158,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
           }
           if (annotatedfunctions.get(fName).captureLocks != null) {
             Map<String, String> locks = annotatedfunctions.get(fName).captureLocks;
+            successor = successor.restore(locks, logger);
             for (String name : locks.keySet()) {
               processLock(successor, cfaEdge.getLineNumber(), findLockByName(name), locks.get(name));
             }
@@ -230,10 +231,24 @@ public class LockStatisticsTransferRelation implements TransferRelation
       if (op2 instanceof CFunctionCallExpression) {
         CFunctionCallExpression function = (CFunctionCallExpression) op2;
         String functionName = function.getFunctionNameExpression().toASTString();
-        LockInfo lock = findLockByFunction(functionName);
-        if (lock != null) {
+        Set<LockInfo> changedLocks = findLockByFunction(functionName);
+        for (LockInfo lock : changedLocks) {
           changeState(newElement, lock, functionName, op2.getFileLocation().getStartingLineNumber(), currentFunction,
                            function.getParameterExpressions());
+        }
+      } else {
+        /*
+         * threadDispatchLevel = 1;
+         */
+        CLeftHandSide leftSide = ((CAssignment) expression).getLeftHandSide();
+        CRightHandSide rightSide = ((CAssignment) expression).getRightHandSide();
+        if (rightSide instanceof CIntegerLiteralExpression) {
+          int level = ((CIntegerLiteralExpression)rightSide).getValue().intValue();
+          String variable = leftSide.toASTString();
+          LockInfo lock = findLockByVariable(variable);
+          if (lock != null) {
+            processSetLevel(newElement, expression.getFileLocation().getStartingLineNumber(), level - 1, lock);
+          }
         }
       }
 
@@ -243,8 +258,8 @@ public class LockStatisticsTransferRelation implements TransferRelation
        */
       CFunctionCallStatement statement = (CFunctionCallStatement) expression;
       String functionName = statement.getFunctionCallExpression().getFunctionNameExpression().toASTString();
-      LockInfo lock = findLockByFunction(functionName);
-      if (lock != null) {
+      Set<LockInfo> changedLocks = findLockByFunction(functionName);
+      for (LockInfo lock : changedLocks) {
        changeState(newElement, lock, functionName, statement.getFileLocation().getStartingLineNumber(), currentFunction,
           statement.getFunctionCallExpression().getParameterExpressions());
       }
@@ -262,8 +277,8 @@ public class LockStatisticsTransferRelation implements TransferRelation
       }
     } else {
       String functionName = callEdge.getSuccessor().getFunctionName();
-      LockInfo lock = findLockByFunction(functionName);
-      if (lock != null) {
+      Set<LockInfo> changedLocks = findLockByFunction(functionName);
+      for (LockInfo lock : changedLocks) {
         changeState(newElement, lock, functionName, callEdge.getLineNumber(), callEdge.getPredecessor().getFunctionName(),
           callEdge.getArguments());
       }
@@ -271,14 +286,27 @@ public class LockStatisticsTransferRelation implements TransferRelation
     return newElement;
   }
 
-  private LockInfo findLockByFunction(String functionName) {
+  private Set<LockInfo> findLockByFunction(String functionName) {
+    Set<LockInfo> changedLocks = new HashSet<>();
     for (LockInfo lock : locks) {
       if (lock.LockFunctions.containsKey(functionName)
           || lock.UnlockFunctions.containsKey(functionName)
           || (lock.ResetFunctions != null && lock.ResetFunctions.containsKey(functionName))
           || (lock.setLevel != null && lock.setLevel.equals(functionName))
           ) {
-        return lock;
+        changedLocks.add(lock);
+      }
+    }
+    return changedLocks;
+  }
+
+  private LockInfo findLockByVariable(String varName) {
+    //LockInfo lock();
+    for (LockInfo lock : locks) {
+      for (String variable : lock.Variables) {
+        if (variable.equals(varName)) {
+          return lock;
+        }
       }
     }
     return null;
@@ -317,7 +345,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
 
     } else if (lock.setLevel != null && lock.setLevel.equals(functionName)) {
       int p = Integer.parseInt(params.get(0).toASTString()); //new level
-      processSetLevel(newElement, lineNumber, p - 1, lock, "");
+      processSetLevel(newElement, lineNumber, p - 1, lock);
       return;//they count from 1
     }
   }
@@ -349,7 +377,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
     }
   }
 
-  private void processSetLevel(LockStatisticsState newElement, int lineNumber, int level, LockInfo lock, String variable) throws HandleCodeException {
+  private void processSetLevel(LockStatisticsState newElement, int lineNumber, int level, LockInfo lock) throws HandleCodeException {
     CallstackState reducedCallstack =
         AbstractStates.extractStateByType(((UsageStatisticsTransferRelation)stateGetter.getTransferRelation()).getOldState(),
             CallstackState.class);
