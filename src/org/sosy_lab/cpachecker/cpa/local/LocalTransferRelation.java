@@ -38,6 +38,7 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCall;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallAssignmentStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CParameterDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CVariableDeclaration;
@@ -195,13 +196,14 @@ public class LocalTransferRelation implements TransferRelation {
     CFunctionEntryNode functionEntryNode = callEdge.getSuccessor();
     List<String> paramNames = functionEntryNode.getFunctionParameterNames();
     List<CExpression> arguments = callEdge.getArguments();
+    List<CParameterDeclaration> parameterTypes = functionEntryNode.getFunctionDefinition().getParameters();
 
     if (paramNames.size() == arguments.size()) {
       CExpression currentArgument;
       int dereference;
       for (int i = 0; i < arguments.size(); i++) {
         currentArgument = arguments.get(i);
-        dereference = findDereference(currentArgument.getExpressionType());
+        dereference = findDereference(parameterTypes.get(i).getType());
         AbstractIdentifier previousId;
 
         for (int j = 1, previousDeref = 1; j <= dereference; j++, previousDeref++) {
