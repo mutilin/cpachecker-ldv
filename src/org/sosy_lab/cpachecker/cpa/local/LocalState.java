@@ -23,11 +23,14 @@
  */
 package org.sosy_lab.cpachecker.cpa.local;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+import org.sosy_lab.common.configuration.Configuration;
+import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.BinaryIdentifier;
@@ -41,6 +44,8 @@ import org.sosy_lab.cpachecker.util.identifiers.VariableIdentifier;
 
 
 public class LocalState implements AbstractState {
+
+  private static Set<String> localVariables;
 
   public static enum DataType {
     LOCAL,
@@ -73,6 +78,14 @@ public class LocalState implements AbstractState {
     //returnExpression = null;
   }
 
+  public LocalState(LocalState state, Configuration pConfig) throws InvalidConfigurationException {
+    DataInfo = new HashMap<>();
+    previousState = state;
+    if (localVariables == null) {
+      localVariables = new HashSet<>(Arrays.asList(pConfig.getProperty("cpa.local.localvariables").split(", ")));
+    }
+  }
+
   private LocalState(Map<AbstractIdentifier, DataType> oldMap, LocalState state) {
     DataInfo = new HashMap<>(oldMap);
     previousState = state;
@@ -92,6 +105,10 @@ public class LocalState implements AbstractState {
   }*/
 
   public void set(AbstractIdentifier name, DataType type) {
+    if (localVariables.contains(name.toString())) {
+      DataInfo.put(name, DataType.LOCAL);
+      return;
+    }
     if (type == null) {
       if (DataInfo.containsKey(name)) {
         DataInfo.remove(name);
@@ -134,7 +151,9 @@ public class LocalState implements AbstractState {
     } else {
       name = pName;
     }
-
+    if (localVariables.contains(name.toString())) {
+      return DataType.LOCAL;
+    }
     if (DataInfo.containsKey(name)) {
       return DataInfo.get(name);
     } else {

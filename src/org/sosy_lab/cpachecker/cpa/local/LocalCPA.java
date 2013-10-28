@@ -76,7 +76,8 @@ public class LocalCPA implements ConfigurableProgramAnalysisWithABM {
       this.stopOperator = initializeStopOperator();
       reducer = new LocalReducer();
       this.transferRelation = new LocalTransferRelation(pConfig);
-
+      //evil hack to initialize local variables
+      new LocalState(null, pConfig);
     }
 
     private MergeOperator initializeMergeOperator() {
