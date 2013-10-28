@@ -63,6 +63,7 @@ import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackTransferRelation;
 import org.sosy_lab.cpachecker.cpa.local.IdentifierCreator;
 import org.sosy_lab.cpachecker.cpa.local.LocalState.DataType;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.BinderFunctionInfo.LinkerInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.EdgeInfo.EdgeType;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
@@ -113,10 +114,12 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     statistics = s;
 
     binderFunctionInfo = new HashMap<>();
-    BinderFunctionInfo tmpInfo;
-    for (String name : binderFunctions) {
-      tmpInfo = new BinderFunctionInfo(name, config);
-      binderFunctionInfo.put(name, tmpInfo);
+    if (binderFunctions != null) {
+      BinderFunctionInfo tmpInfo;
+      for (String name : binderFunctions) {
+        tmpInfo = new BinderFunctionInfo(name, config);
+        binderFunctionInfo.put(name, tmpInfo);
+      }
     }
     handler = new ExpressionHandler();
   }
@@ -163,11 +166,17 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       currentEdge = ((FunctionCallEdge)currentEdge).getSummaryEdge();
     }
 
-    Collection<? extends AbstractState> newWrappedStates = wrappedTransfer.getAbstractSuccessors(oldState.getWrappedState(), pPrecision.getWrappedPrecision(), currentEdge);
+    AbstractState oldWrappedState = oldState.getWrappedState();
+    LockStatisticsState lockState = AbstractStates.extractStateByType(oldWrappedState, LockStatisticsState.class);
+    Collection<? extends AbstractState> newWrappedStates = wrappedTransfer.getAbstractSuccessors(oldWrappedState, pPrecision.getWrappedPrecision(), currentEdge);
     for (AbstractState newWrappedState : newWrappedStates) {
       UsageStatisticsState newState = oldState.clone(newWrappedState);
+      LockStatisticsState newLockState = AbstractStates.extractStateByType(newWrappedState, LockStatisticsState.class);
 
-      newState = handleEdge(pPrecision, newState, oldState, pCfaEdge);
+      if (newLockState != null && newLockState.equals(lockState)) {
+        //It means, that there is no lock operations.
+        newState = handleEdge(pPrecision, newState, oldState, pCfaEdge);
+      }
       if (newState != null) {
         results.add(newState);
       }
@@ -197,8 +206,8 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
   private UsageStatisticsState handleEdge(UsageStatisticsPrecision precision, UsageStatisticsState newState
       , UsageStatisticsState oldState, CFAEdge pCfaEdge) throws CPATransferException {
 
-    /*if (pCfaEdge.getPredecessor().getFunctionName().equals("vcDevInit") && pCfaEdge.getSuccessor().getFunctionName().equals("vcDevInit")) {
-      System.out.println("In vcDevInit()");
+    /*if (pCfaEdge.getSuccessor().getFunctionName().equals("acquiredrain")) {
+      System.out.println("In acquiredrain()");
     }*/
     switch(pCfaEdge.getEdgeType()) {
 
@@ -241,7 +250,6 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
   private void handleFunctionCall(UsageStatisticsState pNewState
       , UsageStatisticsPrecision pPrecision, CFunctionCallEdge edge) throws HandleCodeException {
-
     CStatement statement = edge.getRawAST().get();
     String functionName = edge.getSuccessor().getFunctionName();
     if (abortfunctions != null && abortfunctions.contains(functionName)) {
