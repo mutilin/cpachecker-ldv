@@ -58,6 +58,7 @@ import org.sosy_lab.cpachecker.cpa.usagestatistics.EdgeInfo.EdgeType;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
+import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.GlobalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.LocalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
@@ -142,6 +143,14 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
     if (skippedvariables != null && skippedvariables.contains(id.getName())) {
       return;
+    } else if (skippedvariables != null && id instanceof StructureIdentifier) {
+      AbstractIdentifier owner = id;
+      while (owner instanceof StructureIdentifier) {
+        owner = ((StructureIdentifier)owner).getOwner();
+        if (owner instanceof SingleIdentifier && skippedvariables.contains(((SingleIdentifier)owner).getName())) {
+          return;
+        }
+      }
     }
     if (id instanceof LocalVariableIdentifier && id.getDereference() <= 0) {
       //we don't save in statistics ordinary local variables
@@ -454,5 +463,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
   public void setStackRestoration(ABMRestoreStack rStack) {
     stackRestoration = rStack;
+  }
+
+  public void addSkippedVariables(Set<String> vars) {
+    skippedvariables.addAll(vars);
   }
 }
