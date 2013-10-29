@@ -32,6 +32,7 @@ import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.core.ShutdownNotifier;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.reachedset.ForwardingReachedSet;
@@ -46,8 +47,8 @@ import org.sosy_lab.cpachecker.util.AbstractStates;
 public class CPALocalSaveAlgorithm extends CPAAlgorithm {
 
   private static Map<CFANode, LocalState> reachedStatistics;
-  public CPALocalSaveAlgorithm(ConfigurableProgramAnalysis pCpa, LogManager pLogger, Configuration pConfig)  throws InvalidConfigurationException {
-    super(pCpa, pLogger, pConfig);
+  public CPALocalSaveAlgorithm(ConfigurableProgramAnalysis pCpa, LogManager pLogger, Configuration pConfig, ShutdownNotifier pShutdownNotifier)  throws InvalidConfigurationException {
+    super(pCpa, pLogger, pConfig, pShutdownNotifier);
     if (reachedStatistics == null) {
       reachedStatistics = new HashMap<>();
     }

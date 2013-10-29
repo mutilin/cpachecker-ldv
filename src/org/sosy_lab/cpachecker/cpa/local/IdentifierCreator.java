@@ -27,12 +27,14 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CArraySubscriptExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CCastExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CCharLiteralExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CComplexCastExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpressionVisitor;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFieldReference;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFloatLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CImaginaryLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CIntegerLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CParameterDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CPointerExpression;
@@ -228,5 +230,15 @@ public class IdentifierCreator implements CExpressionVisitor<AbstractIdentifier,
     } else {
       return id;
     }
+  }
+
+  @Override
+  public AbstractIdentifier visit(CComplexCastExpression pComplexCastExpression) throws HandleCodeException {
+    return pComplexCastExpression.getOperand().accept(this);
+  }
+
+  @Override
+  public AbstractIdentifier visit(CImaginaryLiteralExpression PIastLiteralExpression) throws HandleCodeException {
+    return new ConstantIdentifier(PIastLiteralExpression.toASTString(), dereference);
   }
 }

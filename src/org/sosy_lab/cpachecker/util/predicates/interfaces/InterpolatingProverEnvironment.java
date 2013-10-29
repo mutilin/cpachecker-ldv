@@ -25,8 +25,8 @@ package org.sosy_lab.cpachecker.util.predicates.interfaces;
 
 import java.util.List;
 
+import org.sosy_lab.cpachecker.core.Model;
 import org.sosy_lab.cpachecker.exceptions.SolverException;
-import org.sosy_lab.cpachecker.util.predicates.Model;
 
 /**
  * This class provides an interface to an incremental SMT solver
@@ -57,7 +57,7 @@ public interface InterpolatingProverEnvironment<T> extends AutoCloseable {
   /**
    * Check whether the conjunction of all formulas on the stack is unsatisfiable.
    */
-  boolean isUnsat();
+  boolean isUnsat() throws InterruptedException;
 
   /**
    * Get an interpolant for two groups of formulas.

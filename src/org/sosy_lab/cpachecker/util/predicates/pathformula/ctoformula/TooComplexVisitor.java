@@ -23,7 +23,22 @@
  */
 package org.sosy_lab.cpachecker.util.predicates.pathformula.ctoformula;
 
-import org.sosy_lab.cpachecker.cfa.ast.c.*;
+import org.sosy_lab.cpachecker.cfa.ast.c.CArraySubscriptExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CCastExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CCharLiteralExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CComplexCastExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CExpressionVisitor;
+import org.sosy_lab.cpachecker.cfa.ast.c.CFieldReference;
+import org.sosy_lab.cpachecker.cfa.ast.c.CFloatLiteralExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CImaginaryLiteralExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CIntegerLiteralExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CPointerExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CStringLiteralExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CTypeIdExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CTypeIdInitializerExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.ctoformula.types.CtoFormulaTypeUtils;
 
 class TooComplexVisitor implements CExpressionVisitor<Boolean, RuntimeException> {
@@ -48,6 +63,11 @@ class TooComplexVisitor implements CExpressionVisitor<Boolean, RuntimeException>
 
   @Override
   public Boolean visit(CCastExpression pIastCastExpression) {
+    return pIastCastExpression.getOperand().accept(this);
+  }
+
+  @Override
+  public Boolean visit(CComplexCastExpression pIastCastExpression) {
     return pIastCastExpression.getOperand().accept(this);
   }
 
@@ -80,6 +100,11 @@ class TooComplexVisitor implements CExpressionVisitor<Boolean, RuntimeException>
 
   @Override
   public Boolean visit(CStringLiteralExpression pIastStringLiteralExpression) {
+    return false;
+  }
+
+  @Override
+  public Boolean visit(CImaginaryLiteralExpression pIastLiteralExpression) {
     return false;
   }
 

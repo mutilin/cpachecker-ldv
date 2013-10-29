@@ -1,8 +1,9 @@
 
 import subprocess
-
+import os
 import benchmark.util as Util
 import benchmark.tools.template
+import benchmark.result as result
 
 class Tool(benchmark.tools.template.BaseTool):
     """
@@ -10,7 +11,21 @@ class Tool(benchmark.tools.template.BaseTool):
     """
 
     def getExecutable(self):
-        return Util.findExecutable('lib/native/x86_64-linux/esbmc_64_static')
+        return Util.findExecutable('esbmc')
+
+
+    def getProgrammFiles(self, executable):
+        executableDir = os.path.dirname(executable)
+        return [executableDir]
+
+
+    def getWorkingDirectory(self, executable):
+        executableDir = os.path.dirname(executable)
+        return executableDir
+
+
+    def getEnvironments(self, executable):
+        return {"additionalEnv" : {'PATH' :  ':.'}}
 
 
     def getVersion(self, executable):
@@ -23,42 +38,55 @@ class Tool(benchmark.tools.template.BaseTool):
 
 
     def getCmdline(self, executable, options, sourcefile):
-        return [executable] + options + [sourcefile]
+        workingDir = self.getWorkingDirectory(executable)
+        return [os.path.relpath(executable, start=workingDir)] + options + [os.path.relpath(sourcefile, start=workingDir)]
+
 
 
     def getStatus(self, returncode, returnsignal, output, isTimeout):
+<<<<<<< HEAD
         status = 'UNKNOWN'
+=======
+        status = result.STR_UNKNOWN
+>>>>>>> master
 
         if self.allInText(['Violated property:',
                       'dereference failure: dynamic object lower bound',
                       'VERIFICATION FAILED'],
                       output):
-            status = 'FALSE(valid-deref)'
+            status = result.STR_PROP_DEREF
         elif self.allInText(['Violated property:',
                       'Operand of free must have zero pointer offset',
                       'VERIFICATION FAILED'],
                       output):
-            status = 'FALSE(valid-free)'
+            status = result.STR_PROP_FREE
         elif self.allInText(['Violated property:',
                       'error label',
                       'VERIFICATION FAILED'],
                       output):
-            status = 'UNSAFE'
+            status = result.STR_FALSE
         elif self.allInText(['Violated property:',
                       'assertion',
                       'VERIFICATION FAILED'],
                       output):
-            status = 'UNSAFE'
+            status = result.STR_FALSE
         elif self.allInText(['Violated property:',
                       'dereference failure: forgotten memory',
                       'VERIFICATION FAILED'],
                       output):
-            status = 'FALSE(valid-memtrack)'
+            status = result.STR_PROP_MEMTRACK
         elif 'VERIFICATION SUCCESSFUL' in output:
-            status = 'SAFE'
+            status = result.STR_TRUE
 
-        if status == 'UNKNOWN' and output.endswith(('error', 'error\n')):
-            status = 'ERROR'
+        if status == result.STR_UNKNOWN:
+            if isTimeout:
+                status = 'TIMEOUT'
+            elif output.endswith(('Z3 Error 9', 'Z3 Error 9\n')):
+                status = 'ERROR (Z3 Error 9)'
+            elif output.endswith(('error', 'error\n')):
+                status = 'ERROR'
+            elif 'Encountered Z3 conversion error:' in output:
+                status = 'ERROR (Z3 conversion error)'
 
         return status
 

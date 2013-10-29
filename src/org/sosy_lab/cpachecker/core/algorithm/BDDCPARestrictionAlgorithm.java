@@ -24,7 +24,7 @@
 package org.sosy_lab.cpachecker.core.algorithm;
 
 import static com.google.common.collect.ImmutableList.copyOf;
-import static org.sosy_lab.cpachecker.util.StatisticsUtils.toPercent;
+import static org.sosy_lab.cpachecker.util.statistics.StatisticsUtils.toPercent;
 
 import java.io.PrintStream;
 import java.util.ArrayDeque;
@@ -44,6 +44,7 @@ import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
+import org.sosy_lab.cpachecker.core.ShutdownNotifier;
 import org.sosy_lab.cpachecker.core.algorithm.cbmctools.CBMCChecker;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
@@ -63,6 +64,7 @@ import org.sosy_lab.cpachecker.exceptions.RefinementFailedException.Reason;
 import org.sosy_lab.cpachecker.util.predicates.NamedRegionManager;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.Region;
 
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 
 @Options(prefix="counterexample")
@@ -90,7 +92,7 @@ public class BDDCPARestrictionAlgorithm implements Algorithm, StatisticsProvider
 
   public BDDCPARestrictionAlgorithm(Algorithm algorithm,
       ConfigurableProgramAnalysis pCpa, Configuration config, LogManager logger,
-      CFA cfa, String filename) throws InvalidConfigurationException, CPAException {
+      ShutdownNotifier pShutdownNotifier, CFA cfa, String filename) throws InvalidConfigurationException, CPAException {
     this.algorithm = algorithm;
     this.logger = logger;
     config.inject(this);
@@ -104,7 +106,7 @@ public class BDDCPARestrictionAlgorithm implements Algorithm, StatisticsProvider
     if (checkerName.equals("CBMC")) {
       checker = new CBMCChecker(config, logger, cfa);
     } else if (checkerName.equals("CPACHECKER")) {
-      checker = new CounterexampleCPAChecker(config, logger, cfa, filename);
+      checker = new CounterexampleCPAChecker(config, logger, pShutdownNotifier, cfa, filename);
     } else {
       throw new AssertionError();
     }
@@ -187,7 +189,6 @@ public class BDDCPARestrictionAlgorithm implements Algorithm, StatisticsProvider
         } else {
           numberOfInfeasiblePaths++;
           logger.log(Level.INFO, "Error path found, but identified as infeasible by counterexample check with " + checkerName + ".");
-          cpa.clearCounterexample();
 
           if (continueAfterInfeasibleError) {
             // This counterexample is infeasible, so usually we would remove it
@@ -333,6 +334,7 @@ public class BDDCPARestrictionAlgorithm implements Algorithm, StatisticsProvider
       toRemove.removeFromARG();
     }
 
+    cpa.clearCounterexamples(ImmutableSet.of(errorState));
     reached.remove(parent);
     parent.removeFromARG();
 

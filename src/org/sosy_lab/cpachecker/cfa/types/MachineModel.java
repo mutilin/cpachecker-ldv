@@ -23,10 +23,18 @@
  */
 package org.sosy_lab.cpachecker.cfa.types;
 
-import org.sosy_lab.cpachecker.cfa.ast.c.*;
+import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression.BinaryOperator;
+import org.sosy_lab.cpachecker.cfa.ast.c.CCastExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CComplexCastExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CIntegerLiteralExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CPointerExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CTypeIdExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CTypeIdExpression.TypeIdOperator;
+import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression.UnaryOperator;
+import org.sosy_lab.cpachecker.cfa.ast.c.DefaultCExpressionVisitor;
 import org.sosy_lab.cpachecker.cfa.types.c.CArrayType;
 import org.sosy_lab.cpachecker.cfa.types.c.CCompositeType;
 import org.sosy_lab.cpachecker.cfa.types.c.CCompositeType.CCompositeTypeMemberDeclaration;
@@ -133,6 +141,33 @@ public enum MachineModel {
 
   public CSimpleType getPointerEquivalentSimpleType() {
     return ptrEquivalent;
+  }
+
+  /**
+   * This method returns the signed integer type of the result
+   * of subtracting two pointers, also called <code>ptrdiff_t</code>.
+   *
+   * <p>From ISO-C99 (6.5.6, #9):<p>
+   * When two pointers are subtracted, [...] The size of the result is implementation-defined,
+   * and its type (a signed integer type) is <code>ptrdiff_t</code> defined in the stddef.h-header.
+   */
+  public CSimpleType getPointerDiffType() {
+    // ptrEquivalent should not be unsigned, so canonical type is always signed
+    assert !ptrEquivalent.isUnsigned();
+    return ptrEquivalent.getCanonicalType();
+  }
+
+  /**
+   * This method decides, if a plain <code>char</code> is signed or unsigned.
+   *
+   * <p>From ISO-C99 (6.2.5, #15):<p>
+   * The three types <code>char</code>, <code>signed char</code>, and
+   * <code>unsigned char</code> are collectively called the <i>character types</i>.
+   * The implementation shall define <code>char</code> to have the same range, representation, and behavior
+   * as either <code>signed char</code> or <code>unsigned char</code>.
+   */
+  public boolean isDefaultCharSigned() {
+    return true;
   }
 
   public int getSizeofCharInBits() {
@@ -504,6 +539,11 @@ public enum MachineModel {
 
       @Override
       public Integer visit(CCastExpression pE) throws IllegalArgumentException {
+        return pE.getOperand().accept(this);
+      }
+
+      @Override
+      public Integer visit(CComplexCastExpression pE) throws IllegalArgumentException {
         return pE.getOperand().accept(this);
       }
     }

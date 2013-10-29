@@ -50,6 +50,11 @@ public abstract class ForwardingCExpressionVisitor<R, X extends Exception>
   }
 
   @Override
+  public R visit(CComplexCastExpression e) throws X {
+    return delegate.visit(e);
+  }
+
+  @Override
   public R visit(CFieldReference e) throws X {
     return delegate.visit(e);
   }
@@ -71,6 +76,11 @@ public abstract class ForwardingCExpressionVisitor<R, X extends Exception>
 
   @Override
   public R visit(CIntegerLiteralExpression e) throws X {
+    return delegate.visit(e);
+  }
+
+  @Override
+  public R visit(CImaginaryLiteralExpression e) throws X {
     return delegate.visit(e);
   }
 

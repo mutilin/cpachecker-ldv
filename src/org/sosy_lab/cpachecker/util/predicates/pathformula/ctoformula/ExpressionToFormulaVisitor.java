@@ -23,16 +23,32 @@
  */
 package org.sosy_lab.cpachecker.util.predicates.pathformula.ctoformula;
 
-import static org.sosy_lab.cpachecker.util.predicates.pathformula.ctoformula.types.CtoFormulaTypeUtils.*;
+import static org.sosy_lab.cpachecker.util.predicates.pathformula.ctoformula.types.CtoFormulaTypeUtils.getRealFieldOwner;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 
 import org.sosy_lab.cpachecker.cfa.ast.c.*;
 import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression.BinaryOperator;
+import org.sosy_lab.cpachecker.cfa.ast.c.CCastExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CCharLiteralExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CComplexCastExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CDeclaration;
+import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CFieldReference;
+import org.sosy_lab.cpachecker.cfa.ast.c.CFloatLiteralExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CImaginaryLiteralExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CIntegerLiteralExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CPointerExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CSimpleDeclaration;
+import org.sosy_lab.cpachecker.cfa.ast.c.CStringLiteralExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CTypeIdExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CTypeIdExpression.TypeIdOperator;
 import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression.UnaryOperator;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.types.c.CEnumType.CEnumerator;
+import org.sosy_lab.cpachecker.cfa.types.c.CPointerType;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCCodeException;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
@@ -63,6 +79,11 @@ class ExpressionToFormulaVisitor extends DefaultCExpressionVisitor<Formula, Unre
     return conv.makeVariableUnsafe(exp, function, ssa, false);
   }
 
+  private Formula getPointerTargetSizeLiteral(final CPointerType pointerType, final CType implicitType) {
+    final int pointerTargetSize = conv.getSizeof(pointerType.getType());
+    return conv.fmgr.makeNumber(conv.getFormulaTypeFromCType(implicitType), pointerTargetSize);
+  }
+
   @Override
   public Formula visit(CBinaryExpression exp) throws UnrecognizedCCodeException {
     BinaryOperator op = exp.getOperator();
@@ -81,9 +102,9 @@ class ExpressionToFormulaVisitor extends DefaultCExpressionVisitor<Formula, Unre
     Formula f1 = e1.accept(this);
     Formula f2 = e2.accept(this);
     CType promT1 = conv.getPromotedCType(t1);
-    f1 = conv.makeCast(t1, promT1, f1);
+    f1 = conv.makeCast(t1, promT1, f1, edge);
     CType promT2 = conv.getPromotedCType(t2);
-    f2 = conv.makeCast(t2, promT2, f2);
+    f2 = conv.makeCast(t2, promT2, f2, edge);
 
     CType implicitType;
     // FOR SHIFTS: The type of the result is that of the promoted left operand. (6.5.7 3)
@@ -91,13 +112,13 @@ class ExpressionToFormulaVisitor extends DefaultCExpressionVisitor<Formula, Unre
       implicitType = promT1;
 
       // TODO: This is probably not correct as we only need the right formula-type but not a cast
-      f2 = conv.makeCast(promT2, promT1, f2);
+      f2 = conv.makeCast(promT2, promT1, f2, edge);
 
       // UNDEFINED: When the right side is negative the result is not defined
     } else {
       implicitType = conv.getImplicitCType(promT1, promT2);
-      f1 = conv.makeCast(promT1, implicitType, f1);
-      f2 = conv.makeCast(promT2, implicitType, f2);
+      f1 = conv.makeCast(promT1, implicitType, f1, edge);
+      f2 = conv.makeCast(promT2, implicitType, f2, edge);
     }
 
     boolean signed = CtoFormulaTypeUtils.isSignedType(implicitType);
@@ -105,10 +126,46 @@ class ExpressionToFormulaVisitor extends DefaultCExpressionVisitor<Formula, Unre
     Formula ret;
     switch (op) {
     case PLUS:
-      ret = conv.fmgr.makePlus(f1, f2);
+      promT1 = promT1.getCanonicalType();
+      promT2 = promT2.getCanonicalType();
+      if (!(promT1 instanceof CPointerType) && !(promT2 instanceof CPointerType)) { // Just an addition e.g. 6 + 7
+        ret = conv.fmgr.makePlus(f1, f2);
+      } else if (!(promT2 instanceof CPointerType)) {
+        // operand1 is a pointer => we should multiply the second summand by the size of the pointer target
+        ret =  conv.fmgr.makePlus(f1, conv.fmgr.makeMultiply(f2,
+                                                             getPointerTargetSizeLiteral((CPointerType) promT1,
+                                                             implicitType)));
+      } else if (!(promT1 instanceof CPointerType)) {
+        // operand2 is a pointer => we should multiply the first summand by the size of the pointer target
+        ret =  conv.fmgr.makePlus(f2, conv.fmgr.makeMultiply(f1,
+                                                             getPointerTargetSizeLiteral((CPointerType) promT2,
+                                                             implicitType)));
+      } else {
+        throw new UnrecognizedCCodeException("Can't add pointers", edge, exp);
+      }
       break;
     case MINUS:
-      ret =  conv.fmgr.makeMinus(f1, f2);
+      promT1 = promT1.getCanonicalType();
+      promT2 = promT2.getCanonicalType();
+      if (!(promT1 instanceof CPointerType) && !(promT2 instanceof CPointerType)) { // Just a subtraction e.g. 6 - 7
+        ret =  conv.fmgr.makeMinus(f1, f2);
+      } else if (!(promT2 instanceof CPointerType)) {
+        // operand1 is a pointer => we should multiply the subtrahend by the size of the pointer target
+        ret =  conv.fmgr.makeMinus(f1, conv.fmgr.makeMultiply(f2,
+                                                              getPointerTargetSizeLiteral((CPointerType) promT1,
+                                                                                            implicitType)));
+      } else if (promT1 instanceof CPointerType) {
+        // Pointer subtraction => (operand1 - operand2) / sizeof (*operand1)
+        if (promT1.equals(promT2)) {
+          ret = conv.fmgr.makeDivide(conv.fmgr.makeMinus(f1, f2),
+                                     getPointerTargetSizeLiteral((CPointerType) promT1, implicitType),
+                                     true);
+        } else {
+          throw new UnrecognizedCCodeException("Can't subtract pointers of different types", edge, exp);
+        }
+      } else {
+        throw new UnrecognizedCCodeException("Can't subtract a pointer from a non-pointer", edge, exp);
+      }
       break;
     case MULTIPLY:
       ret =  conv.fmgr.makeMultiply(f1, f2);
@@ -176,15 +233,13 @@ class ExpressionToFormulaVisitor extends DefaultCExpressionVisitor<Formula, Unre
     }
 
     if (returnFormulaType != conv.fmgr.getFormulaType(ret)) {
-      // Could be because both types got promoted
-      if (!areEqual(promT1, t1) && !areEqual(promT2, t2)) {
-        // We have to cast back to the return type
-        ret = conv.makeCast(implicitType, returnType, ret);
-      }
+      // Could be because one or both of the types got promoted
+      // We have to cast back to the return type
+      ret = conv.makeCast(implicitType, returnType, ret, edge);
     }
 
     assert returnFormulaType == conv.fmgr.getFormulaType(ret)
-         : "Returntype and Formulatype do not match in visit(CBinaryExpression)";
+         : "Returntype and Formulatype do not match in visit(CBinaryExpression): " + exp;
     return ret;
   }
 
@@ -200,11 +255,17 @@ class ExpressionToFormulaVisitor extends DefaultCExpressionVisitor<Formula, Unre
 
     CType after = cexp.getExpressionType();
     CType before = op.getExpressionType();
-    return conv.makeCast(before, after, operand);
+    return conv.makeCast(before, after, operand, edge);
   }
 
   @Override
-  public Formula visit(CIdExpression idExp) {
+  public Formula visit(CComplexCastExpression exp) throws UnrecognizedCCodeException {
+    // TODO complex numbers are not supported for evaluation right now
+    return conv.makeVariableUnsafe(exp, function, ssa, false);
+  }
+
+  @Override
+  public Formula visit(CIdExpression idExp) throws UnrecognizedCCodeException {
 
     if (idExp.getDeclaration() instanceof CEnumerator) {
       CEnumerator enumerator = (CEnumerator)idExp.getDeclaration();
@@ -222,7 +283,7 @@ class ExpressionToFormulaVisitor extends DefaultCExpressionVisitor<Formula, Unre
 
   @Override
   public Formula visit(CFieldReference fExp) throws UnrecognizedCCodeException {
-    if (conv.handleFieldAccess) {
+    if (conv.options.handleFieldAccess()) {
       CExpression fieldOwner = getRealFieldOwner(fExp);
       Formula f = fieldOwner.accept(this);
       return conv.accessField(fExp, f);
@@ -254,7 +315,12 @@ class ExpressionToFormulaVisitor extends DefaultCExpressionVisitor<Formula, Unre
   @Override
   public Formula visit(CIntegerLiteralExpression iExp) throws UnrecognizedCCodeException {
     FormulaType<?> t = conv.getFormulaTypeFromCType(iExp.getExpressionType());
-    return conv.fmgr.makeNumber(t, iExp.getValue().longValue());
+    return conv.fmgr.makeNumber(t, iExp.getValue());
+  }
+
+  @Override
+  public Formula visit(CImaginaryLiteralExpression exp) throws UnrecognizedCCodeException {
+    return exp.getValue().accept(this);
   }
 
   @Override
@@ -263,20 +329,23 @@ class ExpressionToFormulaVisitor extends DefaultCExpressionVisitor<Formula, Unre
     final BigDecimal val = fExp.getValue();
     if (val.scale() <= 0) {
       // actually an integral number
-      return conv.fmgr.makeNumber(t, convertBigDecimalToLong(val, fExp));
+      return conv.fmgr.makeNumber(t, convertBigDecimalToBigInteger(val, fExp));
 
     } else {
+      if (t.isBitvectorType()) {
+        // not representible
+        return conv.makeConstant("__float_constant__" + val, fExp.getExpressionType(), ssa);
+      }
+
       // represent x.y by xy / (10^z) where z is the number of digits in y
       // (the "scale" of a BigDecimal)
 
-      final long numerator;
       BigDecimal n = val.movePointRight(val.scale()); // this is "xy"
-      numerator = convertBigDecimalToLong(n, fExp);
+      BigInteger numerator = convertBigDecimalToBigInteger(n, fExp);
 
-      final long denominator;
       BigDecimal d = BigDecimal.ONE.scaleByPowerOfTen(val.scale()); // this is "10^z"
-      denominator = convertBigDecimalToLong(d, fExp);
-      assert denominator > 0;
+      BigInteger denominator = convertBigDecimalToBigInteger(d, fExp);
+      assert denominator.signum() > 0;
 
       return conv.fmgr.makeDivide(conv.fmgr.makeNumber(t, numerator),
                                    conv.fmgr.makeNumber(t, denominator),
@@ -284,10 +353,10 @@ class ExpressionToFormulaVisitor extends DefaultCExpressionVisitor<Formula, Unre
     }
   }
 
-  private static long convertBigDecimalToLong(BigDecimal d, CFloatLiteralExpression fExp)
+  private static BigInteger convertBigDecimalToBigInteger(BigDecimal d, CFloatLiteralExpression fExp)
       throws NumberFormatException {
     try {
-      return d.longValueExact();
+      return d.toBigIntegerExact();
     } catch (ArithmeticException e) {
       NumberFormatException nfe = new NumberFormatException("Cannot represent floating point literal " + fExp.toASTString() + " as fraction because " + d + " cannot be represented as a long");
       nfe.initCause(e);
@@ -314,7 +383,7 @@ class ExpressionToFormulaVisitor extends DefaultCExpressionVisitor<Formula, Unre
       CType t = operand.getExpressionType();
       CType promoted = conv.getPromotedCType(t);
       Formula operandFormula = operand.accept(this);
-      operandFormula = conv.makeCast(t, promoted, operandFormula);
+      operandFormula = conv.makeCast(t, promoted, operandFormula, edge);
       Formula ret;
       if (op == UnaryOperator.PLUS) {
         ret = operandFormula;

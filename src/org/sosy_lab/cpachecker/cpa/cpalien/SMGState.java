@@ -23,6 +23,9 @@
  */
 package org.sosy_lab.cpachecker.cpa.cpalien;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
@@ -36,7 +39,10 @@ import org.sosy_lab.cpachecker.cfa.types.c.CType;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractQueryableState;
 import org.sosy_lab.cpachecker.cpa.cpalien.SMGTransferRelation.SMGAddress;
 import org.sosy_lab.cpachecker.cpa.cpalien.SMGTransferRelation.SMGAddressValue;
+import org.sosy_lab.cpachecker.cpa.cpalien.SMGTransferRelation.SMGKnownSymValue;
 import org.sosy_lab.cpachecker.cpa.cpalien.SMGTransferRelation.SMGSymbolicValue;
+import org.sosy_lab.cpachecker.cpa.cpalien.SMGJoin.SMGJoin;
+import org.sosy_lab.cpachecker.cpa.cpalien.SMGJoin.SMGJoinStatus;
 import org.sosy_lab.cpachecker.exceptions.InvalidQueryException;
 
 public class SMGState implements AbstractQueryableState {
@@ -98,6 +104,13 @@ public class SMGState implements AbstractQueryableState {
    */
   final public void setRuntimeCheck(SMGRuntimeCheck pLevel) throws SMGInconsistentException {
     runtimeCheckLevel = pLevel;
+
+    if (pLevel.isFinerOrEqualThan(SMGRuntimeCheck.FULL)) {
+      SMGJoin.performChecks(true);
+    } else {
+      SMGJoin.performChecks(false);
+    }
+
     if (pLevel.isFinerOrEqualThan(SMGRuntimeCheck.HALF)) {
       CLangSMG.setPerformChecks(true, logger);
     }
@@ -118,6 +131,26 @@ public class SMGState implements AbstractQueryableState {
     this.performConsistencyCheck(SMGRuntimeCheck.FULL);
   }
 
+  /**
+   * Makes SMGState create a new object and put it into the global namespace
+   *
+   * Keeps consistency: yes
+   *
+   * @param pType Type of the new object
+   * @param pVarName Name of the global variable
+   * @return Newly created object
+   *
+   * @throws SMGInconsistentException when resulting SMGState is inconsistent
+   * and the checks are enabled
+   */
+  public SMGObject addGlobalVariable(CType pType, String pVarName) throws SMGInconsistentException {
+    int size = heap.getMachineModel().getSizeof(pType);
+    SMGObject new_object = new SMGObject(size, pVarName);
+
+    heap.addGlobalObject(new_object);
+    this.performConsistencyCheck(SMGRuntimeCheck.HALF);
+    return new_object;
+  }
   /**
    * Makes SMGState create a new object and put it into the current stack
    * frame.
@@ -260,6 +293,21 @@ public class SMGState implements AbstractQueryableState {
   }
 
   /**
+   * Checks, if a symbolic value is an address.
+   *
+   * Constant.
+   *
+   * @param pValue A value for which to return the Points-To edge
+   * @return True, if the smg contains a {@link SMGEdgePointsTo} edge
+   * with {@link pValue} as source, false otherwise.
+   *
+   */
+  public boolean isPointer(Integer pValue) {
+
+    return heap.isPointer(pValue);
+  }
+
+  /**
    * Read Value in field (object, type) of an Object.
    *
    * @param pObject SMGObject representing the memory the field belongs to.
@@ -288,13 +336,81 @@ public class SMGState implements AbstractQueryableState {
       }
     }
 
-    // TODO: Nullified blocks coverage interpretation
+    if(isCoveredByNullifiedBlocks(edge)) {
+      return 0;
+    }
+
     this.performConsistencyCheck(SMGRuntimeCheck.HALF);
     return null;
   }
 
-  private void setInvalidRead() {
+  public void setInvalidRead() {
     this.invalidRead  = true;
+  }
+
+  private boolean isCoveredByNullifiedBlocks(SMGEdgeHasValue pEdge) {
+
+    //TODO better Algorithm and Refactor
+
+    MachineModel maModel = heap.getMachineModel();
+
+    SMGEdgeHasValueFilter filter = new SMGEdgeHasValueFilter();
+    filter.filterByObject(pEdge.getObject());
+
+    Set<SMGEdgeHasValue> objectEdges = getHVEdges(filter);
+
+    Set<SMGEdgeHasValue> overlappingEdges = new HashSet<>();
+
+    for (SMGEdgeHasValue edge : objectEdges) {
+      if (edge.overlapsWith(pEdge, maModel)) {
+        overlappingEdges.add(edge);
+      }
+    }
+
+    if(overlappingEdges.size() == 0) {
+      return false;
+    }
+
+    ArrayList<Integer> offsets = new ArrayList<>(overlappingEdges.size());
+
+    for( SMGEdgeHasValue edge : overlappingEdges) {
+      if(edge.getValue() != 0) {
+        return false;
+      }
+
+      int offset = edge.getOffset();
+
+      offsets.add(offset);
+    }
+
+   Collections.sort(offsets);
+
+    for (SMGEdgeHasValue edge : overlappingEdges) {
+      int offset = edge.getOffset();
+      int index = offsets.indexOf(offset);
+
+      //  edge does not cover beginning with 0
+      if(index == 0 && offset > pEdge.getOffset()) {
+        return false;
+      }
+
+      if (index + 1 >= offsets.size()) {
+        // edge does not cover end with null
+        if (offset + heap.getMachineModel().getSizeof(edge.getType()) <  pEdge.getOffset() + pEdge.getSizeInBytes(maModel)) {
+          return false;
+        }
+      } else {
+        int sizeOfBytes = edge.getSizeInBytes(maModel);
+
+        // edge does not cover to next overlapping edge
+        if (offsets.get(index + 1) > offset + sizeOfBytes) {
+          return false;
+        }
+      }
+
+    }
+
+    return true;
   }
 
   /**
@@ -324,7 +440,7 @@ public class SMGState implements AbstractQueryableState {
     }
 
     // If the value represents an address, and the address is known,
-    // add the neccessary points-To edge.
+    // add the necessary points-To edge.
     if (pValue instanceof SMGAddressValue) {
       if (!containsValue(value)) {
         SMGAddress address = ((SMGAddressValue) pValue).getAddress();
@@ -364,9 +480,8 @@ public class SMGState implements AbstractQueryableState {
    * @param machineModel Currently used Machine Model
    * @throws SMGInconsistentException
    */
-  public SMGEdgeHasValue writeValue(SMGObject pObject, int pOffset, CType pType, Integer pValue) throws SMGInconsistentException {
+  private SMGEdgeHasValue writeValue(SMGObject pObject, int pOffset, CType pType, Integer pValue) throws SMGInconsistentException {
     // vgl Algorithm 1 Byte-Precise Verification of Low-Level List Manipulation FIT-TR-2012-04
-    //TODO Does this method need to be public?
 
     if (pValue == null) {
       pValue = heap.getNullValue();
@@ -396,8 +511,23 @@ public class SMGState implements AbstractQueryableState {
 
     // We need to remove all non-zero overlapping edges
     for (SMGEdgeHasValue hv : edges) {
-      if (hv.getValue() != heap.getNullValue() && new_edge.overlapsWith(hv, heap.getMachineModel())) {
+      if (new_edge.overlapsWith(hv, heap.getMachineModel())) {
         heap.removeHasValueEdge(hv);
+        if (hv.getValue() == heap.getNullValue()) {
+          if (hv.getOffset() < new_edge.getOffset()) {
+            int prefixNullSize = new_edge.getOffset() - hv.getOffset();
+            SMGEdgeHasValue prefixNull = new SMGEdgeHasValue(prefixNullSize, hv.getOffset(), pObject, heap.getNullValue());
+            this.heap.addHasValueEdge(prefixNull);
+          }
+
+          int hvEnd = hv.getOffset() + hv.getSizeInBytes(MachineModel.LINUX64);
+          int neEnd = new_edge.getOffset() + new_edge.getSizeInBytes(MachineModel.LINUX64);
+          if (hvEnd > neEnd) {
+            int postfixNullSize = hvEnd - neEnd;
+            SMGEdgeHasValue postfixNull = new SMGEdgeHasValue(postfixNullSize, neEnd, pObject, heap.getNullValue());
+            this.heap.addHasValueEdge(postfixNull);
+          }
+        }
       }
     }
 
@@ -408,7 +538,11 @@ public class SMGState implements AbstractQueryableState {
     return new_edge;
   }
 
-  private void setInvalidWrite() {
+  /**
+   * Marks that an invalid write operation was performed on this smgState.
+   *
+   */
+  public void setInvalidWrite() {
     this.invalidWrite = true;
   }
 
@@ -432,9 +566,14 @@ public class SMGState implements AbstractQueryableState {
    *
    * @param reachedState already reached state, that may cover this state already.
    * @return True, if this state is covered by the given state, false otherwise.
+   * @throws SMGInconsistentException
    */
-  public boolean isLessOrEqual(SMGState reachedState) {
-    // TODO Auto-generated method stub
+  public boolean isLessOrEqual(SMGState reachedState) throws SMGInconsistentException {
+    SMGJoin join = new SMGJoin(reachedState.heap, this.heap);
+    if (join.isDefined() &&
+        (join.getStatus() == SMGJoinStatus.LEFT_ENTAIL || join.getStatus() == SMGJoinStatus.EQUAL)){
+      return true;
+    }
     return false;
   }
 
@@ -563,9 +702,27 @@ public class SMGState implements AbstractQueryableState {
    * @throws SMGInconsistentException
    */
   public void free(Integer address, Integer offset, SMGObject smgObject) throws SMGInconsistentException {
-    if (! this.heap.isObjectValid(smgObject)) {
-      this.setInvalidFree();
+
+    if (!heap.isHeapObject(smgObject)) {
+      // You may not free any objects not on the heap.
+      setInvalidFree();
+      return;
     }
+
+    if(!(offset == 0)) {
+      // you may not invoke free on any address that you
+      // didn't get through a malloc invocation.
+      setInvalidFree();
+      return;
+    }
+
+    if (! this.heap.isObjectValid(smgObject)) {
+      // you may not invoke free multiple times on
+      // the same object
+      this.setInvalidFree();
+      return;
+    }
+
     heap.setValidity(smgObject, false);
     SMGEdgeHasValueFilter filter = SMGEdgeHasValueFilter.objectFilter(smgObject);
 
@@ -573,16 +730,6 @@ public class SMGState implements AbstractQueryableState {
       heap.removeHasValueEdge(edge);
     }
     this.performConsistencyCheck(SMGRuntimeCheck.HALF);
-  }
-
-  /**
-   * Set the two given symbolic values to be not equal.
-   *
-   * @param value1 the first symbolic value.
-   * @param value2 the second symbolic value.
-   */
-  public void setUnequal(int value1, int value2) {
-    // TODO Auto-generated method stub
   }
 
   /**
@@ -595,8 +742,29 @@ public class SMGState implements AbstractQueryableState {
    * @return true, if the symbolic values are known to be not equal, false, if it is unknown.
    */
   public boolean isUnequal(int value1, int value2) {
-    // TODO Auto-generated method stub
-    return false;
+    // TODO Neq Relation for more precise comparison
+
+    if (isPointer(value1) && isPointer(value2)) {
+
+      if (value1 != value2) {
+        /* This is just a safety check,
+        equal pointers should have equal symbolic values.*/
+        SMGEdgePointsTo edge1;
+        SMGEdgePointsTo edge2;
+        try {
+          edge1 = getPointerFromValue(value1);
+          edge2 = getPointerFromValue(value2);
+        } catch (SMGInconsistentException e) {
+          throw new AssertionError(e.getMessage());
+        }
+
+        return edge1.getObject() != edge2.getObject() || edge1.getOffset() != edge2.getOffset();
+      } else {
+        return false;
+      }
+    } else {
+      return heap.haveNeqRelation(Integer.valueOf(value1), Integer.valueOf(value2));
+    }
   }
 
   /**
@@ -632,14 +800,92 @@ public class SMGState implements AbstractQueryableState {
   }
 
   /**
+   * Copys (shallow) the hv-edges of source in the given source range
+   * to the target at the given target offset. Note that the source
+   * range (pSourceRangeSize - pSourceRangeOffset) has to fit into
+   * the target range ( size of pTarget - pTargetRangeOffset).
+   * Also, pSourceRangeOffset has to be less or equal to the size
+   * of the source Object.
+   *
+   * This method is mainly used to assign struct variables.
+   *
+   * @param pSource the SMGObject providing the hv-edges
+   * @param pTarget the target of the copy process
+   * @param pTargetRangeOffset begin the copy of source at this offset
+   * @param pSourceRangeSize the size of the copy of source
+   * @param pSourceRangeOffset insert the copy of source into target at this offset
+   * @throws SMGInconsistentException thrown if the copying leads to an inconsistent SMG.
+   */
+  public void copy(SMGObject pSource, SMGObject pTarget, int pSourceRangeOffset, int pSourceRangeSize, int pTargetRangeOffset) throws SMGInconsistentException {
+
+    int copyRange = pSourceRangeSize - pSourceRangeOffset;
+
+    assert pSource.getSizeInBytes() >= pSourceRangeSize;
+    assert pSourceRangeOffset >= 0;
+    assert pTargetRangeOffset >= 0;
+    assert copyRange >= 0;
+    assert copyRange <= pTarget.getSizeInBytes();
+
+    // If copy range is 0, do nothing
+    if(copyRange == 0) {
+      return;
+    }
+
+    int targetRangeSize = pTargetRangeOffset + copyRange;
+
+    SMGEdgeHasValueFilter filterSource = new SMGEdgeHasValueFilter();
+    filterSource.filterByObject(pSource);
+    SMGEdgeHasValueFilter filterTarget = new SMGEdgeHasValueFilter();
+    filterTarget.filterByObject(pTarget);
+
+    //Remove all Target edges in range
+    Set<SMGEdgeHasValue> targetEdges = getHVEdges(filterTarget);
+
+    for (SMGEdgeHasValue edge : targetEdges) {
+      if (edge.overlapsWith(pTargetRangeOffset, targetRangeSize, heap.getMachineModel())) {
+        heap.removeHasValueEdge(edge);
+      }
+    }
+
+    // Copy all Source edges
+    Set<SMGEdgeHasValue> sourceEdges = getHVEdges(filterSource);
+
+    // Shift the source edge offset depending on the target range offset
+    int copyShift = pTargetRangeOffset - pSourceRangeOffset;
+
+    for (SMGEdgeHasValue edge : sourceEdges) {
+      if (edge.overlapsWith(pSourceRangeOffset, pSourceRangeSize, heap.getMachineModel())) {
+        int offset = edge.getOffset() + copyShift;
+        writeValue(pTarget, offset, edge.getType(), edge.getValue());
+      }
+    }
+
+    performConsistencyCheck(runtimeCheckLevel);
+    //TODO Why do I do this here?
+    heap.pruneUnreachable();
+    performConsistencyCheck(runtimeCheckLevel);
+  }
+
+  /**
    * Signals a dereference of a pointer or array
    *  which could not be resolved.
    */
-  public void setUnkownDereference() {
-    // TODO Auto-generated method stub
+  public void setUnknownDereference() {
+    //TODO: This can actually be an invalid read too
+    //      The flagging mechanism should be improved
+
+    this.invalidWrite = true;
   }
 
   public Set<SMGEdgeHasValue> getHVEdges(SMGEdgeHasValueFilter pFilter) {
     return this.heap.getHVEdges(pFilter);
+  }
+
+  public void identifyEqualValues(SMGKnownSymValue pKnownVal1, SMGKnownSymValue pKnownVal2) {
+    heap.mergeValues(pKnownVal1.getAsInt(), pKnownVal2.getAsInt());
+  }
+
+  public void identifyNonEqualValues(SMGKnownSymValue pKnownVal1, SMGKnownSymValue pKnownVal2) {
+    heap.addNeqRelation(pKnownVal1.getAsInt(), pKnownVal2.getAsInt());
   }
 }

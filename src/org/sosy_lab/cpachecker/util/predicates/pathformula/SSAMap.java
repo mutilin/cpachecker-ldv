@@ -27,24 +27,26 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Predicates.notNull;
 
 import java.io.Serializable;
+import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.SortedMap;
 import java.util.SortedSet;
 
 import javax.annotation.Nullable;
 
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.Triple;
+import org.sosy_lab.common.collect.Collections3;
 import org.sosy_lab.common.collect.PathCopyingPersistentTreeMap;
 import org.sosy_lab.common.collect.PersistentMap;
 import org.sosy_lab.common.collect.PersistentSortedMap;
 import org.sosy_lab.cpachecker.cfa.types.c.CFunctionType;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.FormulaList;
-import org.sosy_lab.cpachecker.util.predicates.pathformula.ctoformula.types.CtoFormulaTypeUtils;
 
 import com.google.common.base.Equivalence;
 import com.google.common.base.Function;
@@ -69,6 +71,8 @@ public class SSAMap implements Serializable {
 
   private static final long serialVersionUID = 7618801653203679876L;
 
+  private static final int INDEX_NOT_CONTAINED = -1;
+
   /**
    * Builder for SSAMaps. Its state starts with an existing SSAMap, but may be
    * changed later. It supports read access, but it is not recommended to use
@@ -80,15 +84,21 @@ public class SSAMap implements Serializable {
   public static class SSAMapBuilder {
 
     private SSAMap ssa;
-    private PersistentSortedMap<String, Integer> vars;
+    private PersistentSortedMap<String, Integer> vars; // Do not update without updating varsHashCode!
     private PersistentSortedMap<String, CType> varTypes;
     private Multiset<Pair<String, FormulaList>> funcsBuilder = null;
     private Map<Pair<String, FormulaList>, CType> funcTypesBuilder = null;
+
+    // Instead of computing vars.hashCode(),
+    // we calculate the hashCode ourselves incrementally
+    // (this is possible because a Map's hashCode is clearly defined).
+    private int varsHashCode;
 
     private SSAMapBuilder(SSAMap ssa) {
       this.ssa = ssa;
       this.vars = ssa.vars;
       this.varTypes = ssa.varTypes;
+      this.varsHashCode = ssa.varsHashCode;
     }
 
     public int getIndex(String variable) {
@@ -112,8 +122,10 @@ public class SSAMap implements Serializable {
       checkNotNull(type);
       CType oldType = varTypes.get(name);
       if (oldType != null) {
-        Preconditions.checkArgument(oldType.getCanonicalType().equals(type.getCanonicalType())
+        Preconditions.checkArgument(
+            name.startsWith("__content__")
             || type instanceof CFunctionType || oldType instanceof CFunctionType
+            || oldType.getCanonicalType().equals(type.getCanonicalType())
             , "Cannot change type of variable %s in SSAMap from %s to %s", name, oldType, type);
       } else {
         varTypes = varTypes.putAndCopy(name, type);
@@ -121,6 +133,11 @@ public class SSAMap implements Serializable {
 
       if (idx > oldIdx) {
         vars = vars.putAndCopy(name, idx);
+
+        if (oldIdx != INDEX_NOT_CONTAINED) {
+          varsHashCode -= mapEntryHashCode(name, oldIdx);
+        }
+        varsHashCode += mapEntryHashCode(name, idx);
       }
     }
 
@@ -151,8 +168,10 @@ public class SSAMap implements Serializable {
 
     public void deleteVariable(String variable) {
       int index = getIndex(variable);
-      if (index != -1) {
+      if (index != INDEX_NOT_CONTAINED) {
         vars = vars.removeAndCopy(variable);
+        varsHashCode -= mapEntryHashCode(variable, index);
+
         varTypes = varTypes.removeAndCopy(variable);
       }
     }
@@ -169,6 +188,10 @@ public class SSAMap implements Serializable {
       return varTypes.entrySet();
     }
 
+    public SortedMap<String, CType> allVariablesWithPrefix(String prefix) {
+      return Collections3.subMapWithPrefix(varTypes, prefix);
+    }
+
     /**
      * Returns an immutable SSAMap with all the changes made to the builder.
      */
@@ -177,17 +200,26 @@ public class SSAMap implements Serializable {
         return ssa;
       }
 
-      ssa = new SSAMap(vars,
+      ssa = new SSAMap(vars, varsHashCode,
                        Objects.firstNonNull(funcsBuilder, ssa.funcs),
                        varTypes,
                        Objects.firstNonNull(funcTypesBuilder, ssa.types));
       funcsBuilder = null;
       return ssa;
     }
+
+    /**
+     * Not-null safe copy of {@link SimpleImmutableEntry#hashCode()}
+     * for Object-to-int maps.
+     */
+    private static int mapEntryHashCode(Object key, int value) {
+      return key.hashCode() ^ value;
+    }
   }
 
   private static final SSAMap EMPTY_SSA_MAP = new SSAMap(
       PathCopyingPersistentTreeMap.<String, Integer>of(),
+      0,
       ImmutableMultiset.<Pair<String, FormulaList>>of(),
       PathCopyingPersistentTreeMap.<String, CType>of(),
       ImmutableMap.<Pair<String, FormulaList>, CType>of());
@@ -200,7 +232,7 @@ public class SSAMap implements Serializable {
   }
 
   public SSAMap withDefault(final int defaultValue) {
-    return new SSAMap(this.vars, this.funcs, this.varTypes, this.types) {
+    return new SSAMap(this.vars, this.varsHashCode, this.funcs, this.varTypes, this.types) {
 
       private static final long serialVersionUID = -5638018887478723717L;
 
@@ -270,7 +302,7 @@ public class SSAMap implements Serializable {
           new Equivalence<CType>() {
             @Override
             protected boolean doEquivalent(CType pA, CType pB) {
-              return CtoFormulaTypeUtils.areEqual(pA, pB);
+              return pA.getCanonicalType().equals(pB.getCanonicalType());
             }
 
             @Override
@@ -309,7 +341,7 @@ public class SSAMap implements Serializable {
       }
     }
 
-    return Pair.of(new SSAMap(vars, funcs, varTypes, funcTypes), differences);
+    return Pair.of(new SSAMap(vars, 0, funcs, varTypes, funcTypes), differences);
   }
 
   /**
@@ -341,10 +373,14 @@ public class SSAMap implements Serializable {
 
     // This loop iterates synchronously through both sets
     // by trying to keep the keys equal.
-    // If one iterator fails behind, the other is not forwarded until the first catches up.
+    // If one iterator falls behind, the other is not forwarded until the first catches up.
     // The advantage of this is it is in O(n log(n))
     // (n iterations, log(n) per update).
-    while (it1.hasNext() && it2.hasNext()) {
+    // Invariant: The elements e1 and e2, and all the elements in the iterator
+    //            still need to be handled.
+    while (((e1 != null) || it1.hasNext())
+        && ((e2 != null) || it2.hasNext())) {
+
       if (e1 == null) {
         e1 = it1.next();
       }
@@ -357,15 +393,29 @@ public class SSAMap implements Serializable {
       if (comp < 0) {
         // e1 < e2
 
+        K key = e1.getKey();
+        V value1 = e1.getValue();
+
+        if (collectDifferences != null) {
+          collectDifferences.add(Triple.<K,V,V>of(key, value1, null));
+        }
+
         // forward e1 until e2 catches up
         e1 = null;
 
       } else if (comp > 0) {
         // e1 > e2
 
+        K key = e2.getKey();
+        V value2 = e2.getValue();
+
         // e2 is not in map
-        assert !result.containsKey(e2.getKey());
-        result = result.putAndCopy(e2.getKey(), e2.getValue());
+        assert !result.containsKey(key);
+        result = result.putAndCopy(key, value2);
+
+        if (collectDifferences != null) {
+          collectDifferences.add(Triple.<K,V,V>of(key, null, value2));
+        }
 
         // forward e2 until e1 catches up
         e2 = null;
@@ -392,8 +442,11 @@ public class SSAMap implements Serializable {
       }
     }
 
-    // Now copy the rest of the mappings from s2.
+    // Now copy the rest of the mappings from s2 (e2 and it2).
     // For s1 this is not necessary.
+    if (e2 != null) {
+      result = result.putAndCopy(e2.getKey(), e2.getValue());
+    }
     while (it2.hasNext()) {
       e2 = it2.next();
       result = result.putAndCopy(e2.getKey(), e2.getValue());
@@ -453,7 +506,11 @@ public class SSAMap implements Serializable {
   private final PersistentSortedMap<String, CType> varTypes;
   private final Map<Pair<String, FormulaList>, CType> types;
 
+  // Cache hashCode of potentiall big map
+  private final int varsHashCode;
+
   private SSAMap(PersistentSortedMap<String, Integer> vars,
+                 int varsHashCode,
                  Multiset<Pair<String, FormulaList>> funcs,
                  PersistentSortedMap<String, CType> varTypes,
                  Map<Pair<String, FormulaList>, CType> types) {
@@ -461,6 +518,13 @@ public class SSAMap implements Serializable {
     this.funcs = funcs;
     this.varTypes = varTypes;
     this.types = types;
+
+    if (varsHashCode == 0) {
+      this.varsHashCode = vars.hashCode();
+    } else {
+      this.varsHashCode = varsHashCode;
+      assert varsHashCode == vars.hashCode();
+    }
   }
 
   /**
@@ -476,7 +540,7 @@ public class SSAMap implements Serializable {
       return i;
     } else {
       // no index found, return -1
-      return -1;
+      return INDEX_NOT_CONTAINED;
     }
   }
 
@@ -486,7 +550,7 @@ public class SSAMap implements Serializable {
       return i;
     } else {
       // no index found, return -1
-      return -1;
+      return INDEX_NOT_CONTAINED;
     }
   }
 
@@ -538,7 +602,7 @@ public class SSAMap implements Serializable {
 
   @Override
   public int hashCode() {
-    return (31 + funcs.hashCode()) * 31 + vars.hashCode();
+    return (31 + funcs.hashCode()) * 31 + varsHashCode;
   }
 
   @Override
@@ -549,7 +613,11 @@ public class SSAMap implements Serializable {
       return false;
     } else {
       SSAMap other = (SSAMap)obj;
-      return vars.equals(other.vars) && funcs.equals(other.funcs);
+      // Do a few cheap checks before the expensive ones.
+      return varsHashCode == other.varsHashCode
+          && funcs.entrySet().size() == other.funcs.entrySet().size()
+          && vars.equals(other.vars)
+          && funcs.equals(other.funcs);
     }
   }
 }

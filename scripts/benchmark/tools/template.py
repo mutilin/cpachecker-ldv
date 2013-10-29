@@ -55,3 +55,39 @@ class BaseTool(object):
         If not supported, this method does not need to get overridden.
         """
         pass
+
+
+    def getProgrammFiles(self, executable):
+        """
+        OPTIONAL, this method is only necessary for "cloud-mode".
+        Returns a list of files or directories, 
+        that are necessary to run the tool in "cloud-mode".
+        """
+        return []
+
+
+    def getWorkingDirectory(self, executable):
+        """
+        OPTIONAL, this method is only necessary for "cloud-mode".
+        Returns a working directory, that is used to run the tool in "cloud-mode".
+        """
+        return "."
+
+
+    def getEnvironments(self, executable):
+        """
+        OPTIONAL, this method is only necessary for special tools.
+        It contains some info, how the environment has to be changed, so that the tool can run. 
+        Returns a map, that contains identifiers for several submaps.
+        All keys and values have to be Strings!
+        
+        Currently we support 2 identifiers:
+        
+        "newEnv": Before the execution, the values are assigned to the real environment-identifiers.
+                  This will override existing values.
+        "additionalEnv": Before the execution, the values are appended to the real environment-identifiers.
+                  The seperator for the appending must be given in this method,
+                  so that the operation "realValue + additionalValue" is a valid value.
+                  For example in the PATH-variable the additionalValue starts with a ":".
+        """
+        return {}

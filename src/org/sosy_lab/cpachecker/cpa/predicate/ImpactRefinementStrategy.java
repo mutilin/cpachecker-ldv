@@ -73,7 +73,8 @@ class ImpactRefinementStrategy extends RefinementStrategy {
       out.println("  ARG update:                         " + argUpdate);
       out.println();
       out.println("Number of abstractions during refinements:  " + impact.abstractionTime.getNumberOfIntervals());
-      ImpactRefinementStrategy.this.printStatistics(out);
+
+      basicRefinementStatistics.printStatistics(out, pResult, pReached);
     }
   }
 
@@ -114,7 +115,7 @@ class ImpactRefinementStrategy extends RefinementStrategy {
    */
   @Override
   protected boolean performRefinementForState(BooleanFormula itp,
-      ARGState s) {
+      ARGState s) throws InterruptedException {
     checkArgument(!fmgr.getBooleanFormulaManager().isTrue(itp));
     checkArgument(!fmgr.getBooleanFormulaManager().isFalse(itp));
 
@@ -138,7 +139,7 @@ class ImpactRefinementStrategy extends RefinementStrategy {
   protected void finishRefinementOfPath(ARGState infeasiblePartOfART,
       List<ARGState> changedElements, ARGReachedSet pReached,
       boolean pRepeatedCounterexample)
-      throws CPAException {
+      throws CPAException, InterruptedException {
     checkState(lastAbstraction != null);
     lastAbstraction = null;
 

@@ -25,7 +25,16 @@ package org.sosy_lab.cpachecker.util.predicates.pathformula.ctoformula;
 
 import static org.sosy_lab.cpachecker.util.predicates.pathformula.ctoformula.types.CtoFormulaTypeUtils.getRealFieldOwner;
 
-import org.sosy_lab.cpachecker.cfa.ast.c.*;
+import org.sosy_lab.cpachecker.cfa.ast.c.CArraySubscriptExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CComplexCastExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CDeclaration;
+import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CFieldReference;
+import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CPointerExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CSimpleDeclaration;
+import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.DefaultCExpressionVisitor;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCCodeException;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BitvectorFormula;
@@ -75,13 +84,22 @@ class LvalueVisitor extends
   }
 
   @Override
+  public Formula visit(CComplexCastExpression pE) throws UnrecognizedCCodeException {
+    if(pE.isImaginaryCast()) {
+      throw new UnrecognizedCCodeException("Unknown lvalue", edge, pE);
+    }
+    // TODO complex numbers are not supported for evaluation right now
+    return giveUpAndJustMakeVariable(pE);
+  }
+
+  @Override
   public Formula visit(CPointerExpression pE) throws UnrecognizedCCodeException {
     return giveUpAndJustMakeVariable(pE);
   }
 
   @Override
   public Formula visit(CFieldReference fexp) throws UnrecognizedCCodeException {
-    if (!conv.handleFieldAccess) {
+    if (!conv.options.handleFieldAccess()) {
       CExpression fieldRef = fexp.getFieldOwner();
       if (fieldRef instanceof CIdExpression) {
         CSimpleDeclaration decl = ((CIdExpression) fieldRef).getDeclaration();

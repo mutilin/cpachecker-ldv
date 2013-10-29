@@ -26,6 +26,7 @@ package org.sosy_lab.cpachecker.cpa.invariants;
 import static org.junit.Assert.*;
 
 import java.math.BigInteger;
+import java.util.List;
 
 import org.junit.Test;
 
@@ -75,6 +76,24 @@ public class CompoundStateTest {
     CompoundState six = CompoundState.singleton(6);
     assertEquals(2, zeroToThree.unionWith(six).getIntervals().size());
     assertEquals(zeroToThree.unionWith(six), six.unionWith(zeroToThree));
+    assertEquals(zeroToThree, zeroToThree.unionWith(CompoundState.singleton(0)));
+    assertEquals(zeroToThree, zeroToThree.unionWith(CompoundState.singleton(1)));
+    assertEquals(zeroToThree, zeroToThree.unionWith(CompoundState.singleton(2)));
+    assertEquals(zeroToThree, zeroToThree.unionWith(CompoundState.singleton(3)));
+    assertEquals(zeroToThree, zeroToThree.unionWith(zeroToThree));
+
+    CompoundState steps = CompoundState.bottom();
+    for (int i = -6; i <= 6; i += 2) {
+      steps = steps.unionWith(CompoundState.singleton(i));
+    }
+    steps = steps.extendToNegativeInfinity().extendToPositiveInfinity();
+    for (int i = -6; i <= 6; i += 2) {
+      assertTrue(steps.contains(i));
+    }
+    CompoundState stepsNegInf = steps.unionWith(CompoundState.singleton(BigInteger.valueOf(-4)).extendToNegativeInfinity());
+    for (int i = -6; i <= 6; i += 2) {
+      assertTrue(stepsNegInf.contains(i));
+    }
   }
 
   @Test
@@ -109,6 +128,8 @@ public class CompoundStateTest {
       assertTrue(invertedState.contains(i - 1));
       assertTrue(invertedState.contains(i + 1));
     }
+    assertEquals(CompoundState.singleton(0).extendToNegativeInfinity().unionWith(CompoundState.singleton(6)),
+        CompoundState.of(SimpleInterval.of(BigInteger.ONE, BigInteger.valueOf(5))).unionWith(CompoundState.singleton(7).extendToPositiveInfinity()).invert());
   }
 
   @Test
@@ -133,6 +154,66 @@ public class CompoundStateTest {
     CompoundState negFourToNegTwo = CompoundState.of(SimpleInterval.of(BigInteger.valueOf(-4), BigInteger.valueOf(-2)));
     CompoundState oneToTwo = CompoundState.of(SimpleInterval.of(BigInteger.ONE, BigInteger.valueOf(2)));
     assertEquals(oneToTwo.unionWith(negFourToNegTwo), negTwoToNegOne.unionWith(twoToFour).negate());
+  }
+
+  @Test
+  public void testIsSingleton() {
+    CompoundState negOne = CompoundState.singleton(-1);
+    CompoundState zero = CompoundState.singleton(0);
+    CompoundState one = CompoundState.singleton(1);
+    CompoundState ten = CompoundState.singleton(10);
+    assertTrue(negOne.isSingleton());
+    assertTrue(zero.isSingleton());
+    assertTrue(one.isSingleton());
+    assertTrue(ten.isSingleton());
+    assertFalse(CompoundState.span(one, ten).isSingleton());
+    assertFalse(zero.unionWith(ten).isSingleton());
+    assertFalse(negOne.unionWith(CompoundState.span(one, ten)).isSingleton());
+  }
+
+  @Test
+  public void containsTest() {
+    assertTrue(CompoundState.singleton(-1).contains(-1));
+    assertTrue(CompoundState.singleton(0).contains(0));
+    assertTrue(CompoundState.singleton(1).contains(1));
+    assertTrue(CompoundState.singleton(-1).contains(CompoundState.singleton(-1)));
+    assertTrue(CompoundState.singleton(0).contains(CompoundState.singleton(0)));
+    assertTrue(CompoundState.singleton(1).contains(CompoundState.singleton(1)));
+    assertTrue(CompoundState.of(SimpleInterval.of(BigInteger.ZERO, BigInteger.TEN)).contains(CompoundState.of(SimpleInterval.of(BigInteger.ONE, BigInteger.TEN))));
+    assertFalse(CompoundState.of(SimpleInterval.of(BigInteger.ONE, BigInteger.TEN)).contains(CompoundState.of(SimpleInterval.of(BigInteger.ZERO, BigInteger.TEN))));
+    assertTrue(CompoundState.of(SimpleInterval.of(BigInteger.ZERO, BigInteger.TEN)).contains(5));
+    assertFalse(CompoundState.of(SimpleInterval.of(BigInteger.ZERO, BigInteger.TEN)).contains(-1));
+    assertFalse(CompoundState.of(SimpleInterval.of(BigInteger.ZERO, BigInteger.valueOf(4))).unionWith(SimpleInterval.of(BigInteger.valueOf(6), BigInteger.TEN)).contains(5));
+  }
+
+  @Test
+  public void binaryNotTest() {
+    CompoundState.singleton(1).extendToNegativeInfinity().binaryNot();
+  }
+
+  @Test
+  public void testMultiply() {
+    CompoundState topMultNeg2 = CompoundState.top().multiply(BigInteger.valueOf(-2));
+    List<SimpleInterval> intervals = topMultNeg2.getIntervals();
+    int i = 0;
+    BigInteger lastUpperBound = null;
+    for (SimpleInterval interval : intervals) {
+      if (i == 0) {
+        assertFalse(interval.hasLowerBound());
+      } else {
+        assertTrue(interval.hasLowerBound());
+        // Check that intervals to not overlap, touch or are in the wrong order
+        assertTrue(interval.getLowerBound().subtract(lastUpperBound).compareTo(BigInteger.ONE) > 0);
+      }
+      if (i == intervals.size() - 1) {
+        assertFalse(interval.hasUpperBound());
+      }
+      if (interval.hasUpperBound()) {
+        lastUpperBound = interval.getUpperBound();
+      }
+      ++i;
+    }
+    assertEquals(topMultNeg2, topMultNeg2.unionWith(topMultNeg2));
   }
 
 }

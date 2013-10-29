@@ -45,6 +45,7 @@ import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
 import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
+import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.GraphUtils;
 
@@ -130,21 +131,21 @@ public class ARGUtils {
   }
 
 
-  static final Function<ARGState, Collection<ARGState>> CHILDREN_OF_STATE = new Function<ARGState, Collection<ARGState>>() {
+  public static final Function<ARGState, Collection<ARGState>> CHILDREN_OF_STATE = new Function<ARGState, Collection<ARGState>>() {
         @Override
         public Collection<ARGState> apply(ARGState pInput) {
           return pInput.getChildren();
         }
       };
 
-  static final Function<ARGState, Collection<ARGState>> PARENTS_OF_STATE = new Function<ARGState, Collection<ARGState>>() {
+  public static final Function<ARGState, Collection<ARGState>> PARENTS_OF_STATE = new Function<ARGState, Collection<ARGState>>() {
         @Override
         public Collection<ARGState> apply(ARGState pInput) {
           return pInput.getParents();
         }
       };
 
-  private static final Predicate<AbstractState> AT_RELEVANT_LOCATION = Predicates.compose(
+  public static final Predicate<AbstractState> AT_RELEVANT_LOCATION = Predicates.compose(
       new Predicate<CFANode>() {
         @Override
         public boolean apply(CFANode pInput) {
@@ -155,9 +156,33 @@ public class ARGUtils {
       },
       AbstractStates.EXTRACT_LOCATION);
 
-  static final Predicate<ARGState> RELEVANT_STATE = Predicates.or(
+  static final Predicate<AbstractState> IMPORTANT_FOR_ANALYSIS = Predicates.compose(
+      notNullAnd(PredicateAbstractState.FILTER_ABSTRACTION_STATES),
+      AbstractStates.toState(PredicateAbstractState.class));
+
+  private static <T> Predicate<T> notNullAnd(final Predicate<T> p) {
+    return new Predicate<T>() {
+        @Override
+        public boolean apply(T pInput) {
+          if (pInput == null) {
+            return false;
+          }
+          return p.apply(pInput);
+        }
+      };
+  }
+
+  @SuppressWarnings("unchecked")
+  public static final Predicate<ARGState> RELEVANT_STATE = Predicates.or(
       AbstractStates.IS_TARGET_STATE,
-      AT_RELEVANT_LOCATION
+      AT_RELEVANT_LOCATION,
+      new Predicate<ARGState>() {
+          @Override
+          public boolean apply(ARGState pInput) {
+            return !pInput.wasExpanded();
+          }
+        },
+      IMPORTANT_FOR_ANALYSIS
       );
 
   /**
@@ -172,7 +197,7 @@ public class ARGUtils {
    * @param root The start of the subgraph of the ARG to project (always considered relevant).
    * @param isRelevant The predicate determining which states are in the resulting relationship.
    */
-  static SetMultimap<ARGState, ARGState> projectARG(final ARGState root,
+  public static SetMultimap<ARGState, ARGState> projectARG(final ARGState root,
       final Function<? super ARGState, ? extends Iterable<ARGState>> successorFunction,
       Predicate<? super ARGState> isRelevant) {
 

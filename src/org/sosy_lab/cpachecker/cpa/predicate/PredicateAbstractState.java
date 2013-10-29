@@ -31,13 +31,10 @@ import java.io.Serializable;
 import org.sosy_lab.common.collect.PersistentMap;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
-import org.sosy_lab.cpachecker.core.interfaces.FormulaReportingState;
 import org.sosy_lab.cpachecker.core.interfaces.NonMergeableAbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Partitionable;
 import org.sosy_lab.cpachecker.util.predicates.AbstractionFormula;
-import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormulaManager;
-import org.sosy_lab.cpachecker.util.predicates.interfaces.view.FormulaManagerView;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormula;
 
 import com.google.common.base.Preconditions;
@@ -46,7 +43,7 @@ import com.google.common.base.Predicate;
 /**
  * AbstractState for Symbolic Predicate Abstraction CPA
  */
-public abstract class PredicateAbstractState implements AbstractState, Partitionable, FormulaReportingState, Serializable {
+public abstract class PredicateAbstractState implements AbstractState, Partitionable, Serializable {
 
   private static final long serialVersionUID = -265763837277453447L;
 
@@ -74,7 +71,11 @@ public abstract class PredicateAbstractState implements AbstractState, Partition
       super(pf, pA, pAbstractionLocations);
       // Check whether the pathFormula of an abstraction element is just "true".
       // partialOrder relies on this for optimization.
-      Preconditions.checkArgument(bfmgr.isTrue(pf.getFormula()));
+      //Preconditions.checkArgument(bfmgr.isTrue(pf.getFormula()));
+      // Check uncommented because we may pre-initialize the path formula
+      // with an invariant.
+      // This is no problem for the partial order because the invariant
+      // is always the same when the location is the same.
     }
 
     @Override
@@ -185,7 +186,7 @@ public abstract class PredicateAbstractState implements AbstractState, Partition
   /** The path formula for the path from the last abstraction node to this node.
    * it is set to true on a new abstraction location and updated with a new
    * non-abstraction location */
-  private final PathFormula pathFormula;
+  private PathFormula pathFormula;
 
   /** The abstraction which is updated only on abstraction locations */
   private AbstractionFormula abstractionFormula;
@@ -233,12 +234,15 @@ public abstract class PredicateAbstractState implements AbstractState, Partition
     }
   }
 
-  public PathFormula getPathFormula() {
-    return pathFormula;
+  /**
+   * Replace the path formula part of this element.
+   * THIS IS POTENTIALLY UNSOUND!
+   */
+  public void setPathFormula(PathFormula pPathFormula) {
+    pathFormula = checkNotNull(pPathFormula);
   }
 
-  @Override
-  public BooleanFormula getFormulaApproximation(FormulaManagerView manager) {
-    return getAbstractionFormula().asFormula();
+  public PathFormula getPathFormula() {
+    return pathFormula;
   }
 }

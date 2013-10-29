@@ -137,11 +137,11 @@ public final class CSimpleType implements CType {
 
     CSimpleType other = (CSimpleType) obj;
 
-    return Objects.equals(isComplex, other.isComplex) && Objects.equals(isConst, other.isConst)
-           && Objects.equals(isVolatile, other.isVolatile) && Objects.equals(isImaginary, other.isImaginary)
-           && Objects.equals(isLong, other.isLong) && Objects.equals(isLongLong, other.isLongLong)
-           && Objects.equals(isShort, other.isShort) && Objects.equals(isSigned, other.isSigned)
-           && Objects.equals(isUnsigned, other.isUnsigned) && Objects.equals(type, other.type);
+    return isComplex == other.isComplex && isConst == other.isConst
+           && isVolatile == other.isVolatile && isImaginary == other.isImaginary
+           && isLong == other.isLong && isLongLong == other.isLongLong
+           && isShort == other.isShort && isSigned == other.isSigned
+           && isUnsigned == other.isUnsigned && type == other.type;
   }
 
   @Override
@@ -204,6 +204,10 @@ public final class CSimpleType implements CType {
       newType = CBasicType.INT;
     }
 
-    return new CSimpleType(isConst || pForceConst, isVolatile || pForceVolatile, newType, isLong, isShort, isSigned, isUnsigned, isComplex, isImaginary, isLongLong);
+    boolean newIsSigned = isSigned;
+    if (newType == CBasicType.INT && !isSigned && !isUnsigned) {
+      newIsSigned = true;
+    }
+    return new CSimpleType(isConst || pForceConst, isVolatile || pForceVolatile, newType, isLong, isShort, newIsSigned, isUnsigned, isComplex, isImaginary, isLongLong);
   }
 }

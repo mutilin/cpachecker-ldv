@@ -31,10 +31,12 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CArraySubscriptExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CCastExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CCharLiteralExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CComplexCastExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpressionVisitor;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFieldReference;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFloatLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CImaginaryLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CIntegerLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CPointerExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStringLiteralExpression;
@@ -151,6 +153,15 @@ public class ExpressionHandler implements CExpressionVisitor<Void, HandleCodeExc
     pPointerExpression.getOperand().accept(this);
     return null;
   }
+
+  @Override
+  public Void visit(CComplexCastExpression pComplexCastExpression) throws HandleCodeException {
+    pComplexCastExpression.getOperand().accept(this);
+    return null;
+  }
+
+  @Override
+  public Void visit(CImaginaryLiteralExpression PIastLiteralExpression) throws HandleCodeException { return null; }
 
 }
 

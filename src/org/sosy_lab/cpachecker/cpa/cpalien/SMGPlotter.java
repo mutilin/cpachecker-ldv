@@ -23,15 +23,30 @@
  */
 package org.sosy_lab.cpachecker.cpa.cpalien;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
+
+import org.sosy_lab.common.Files;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Strings;
 
 
 public final class SMGPlotter {
+  static final public void debuggingPlot(CLangSMG pSmg, String pId) throws IOException {
+    File exportSMGFilePattern = new File("smg-debug-%s.dot");
+    pId = pId.replace("\"", "");
+    File outputFile = new File(String.format(exportSMGFilePattern.getAbsolutePath(), pId));
+    SMGPlotter plotter = new SMGPlotter();
+
+    Files.writeFile(outputFile, plotter.smgAsDot(pSmg, pId, "debug plot"));
+  }
+
   private final HashMap <SMGObject, String> objectIndex = new HashMap<>();
   static private int nulls = 0;
   private int offset = 0;
@@ -63,6 +78,18 @@ public final class SMGPlotter {
     for (int value : smg.getValues()) {
       if (value != smg.getNullValue()) {
         sb.append(newLineWithOffset(smgValueAsDot(value)));
+      }
+    }
+
+    Set<Integer> processed = new HashSet<>();
+    for (Integer value : smg.getValues()) {
+      if (value != smg.getNullValue()) {
+        for (Integer neqValue : smg.getNeqsForValue(value)) {
+          if (! processed.contains(neqValue)) {
+            sb.append(newLineWithOffset(neqRelationAsDot(value, neqValue)));
+          }
+        }
+        processed.add(value);
       }
     }
 
@@ -139,7 +166,7 @@ public final class SMGPlotter {
     }
   }
 
-  private String newNullLabel() {
+  private static String newNullLabel() {
     SMGPlotter.nulls += 1;
     return "value_null_" + SMGPlotter.nulls;
   }
@@ -170,6 +197,18 @@ public final class SMGPlotter {
 
   private static String smgValueAsDot(int value) {
     return "value_" + value + "[label=\"#" + value + "\"];";
+  }
+
+  private static String neqRelationAsDot(Integer v1, Integer v2) {
+    String targetNode;
+    String returnString = "";
+    if (v2.equals(0)) {
+      targetNode = newNullLabel();
+      returnString = targetNode + "[shape=plaintext, label=\"NULL\", fontcolor=\"red\"];\n";
+    } else {
+      targetNode = "value_" + v2;
+    }
+    return returnString + "value_" + v1 + " -> " + targetNode + "[color=\"red\", fontcolor=\"red\", label=\"neq\"]";
   }
 
   private String newLineWithOffset(String pLine) {

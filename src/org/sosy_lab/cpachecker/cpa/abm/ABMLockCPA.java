@@ -32,6 +32,7 @@ import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.core.ShutdownNotifier;
 import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.CPAFactory;
@@ -55,8 +56,8 @@ public class ABMLockCPA extends ABMCPA {
   protected Class<? extends PartitioningHeuristic> blockHeuristic = FunctionAndLoopPartitioning.class;*/
 
   public ABMLockCPA(ConfigurableProgramAnalysis pCpa, Configuration config, LogManager pLogger,
-    ReachedSetFactory pReachedSetFactory, CFA pCfa) throws InvalidConfigurationException, CPAException {
-    super(pCpa, config, pLogger, pReachedSetFactory, pCfa);
+    ReachedSetFactory pReachedSetFactory, ShutdownNotifier pShutdownNotifier, CFA pCfa) throws InvalidConfigurationException, CPAException {
+    super(pCpa, config, pLogger, pReachedSetFactory, pShutdownNotifier, pCfa);
     config.inject(this);
   }
 

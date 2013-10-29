@@ -28,6 +28,7 @@ import java.util.Objects;
 
 public final class CPointerType implements CType {
 
+  public static final CPointerType POINTER_TO_VOID = new CPointerType(false, false, CNumericTypes.VOID);
 
   private final CType type;
   private boolean   isConst;
@@ -115,7 +116,7 @@ public final class CPointerType implements CType {
 
     CPointerType other = (CPointerType) obj;
 
-    return Objects.equals(isConst, other.isConst) && Objects.equals(isVolatile, other.isVolatile)
+    return isConst == other.isConst && isVolatile == other.isVolatile
            && Objects.equals(type, other.type);
   }
 

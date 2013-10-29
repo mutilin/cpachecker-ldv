@@ -28,7 +28,11 @@ import static org.sosy_lab.cpachecker.util.predicates.pathformula.ctoformula.typ
 import java.util.Arrays;
 import java.util.logging.Level;
 
-import org.sosy_lab.cpachecker.cfa.ast.c.*;
+import org.sosy_lab.cpachecker.cfa.ast.c.CArraySubscriptExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CFieldReference;
+import org.sosy_lab.cpachecker.cfa.ast.c.CPointerExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression.UnaryOperator;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.types.c.CPointerType;
@@ -199,7 +203,7 @@ class LvalueVisitorUIF extends LvalueVisitor {
 
   @Override
   public Formula visit(CFieldReference fexp) throws UnrecognizedCCodeException {
-    if (!conv.handleFieldAccess) {
+    //if (!conv.handleFieldAccess) {
       String field = fexp.getFieldName();
       CExpression owner = getRealFieldOwner(fexp);
       Formula term = conv.buildTerm(owner, edge, function, ssa, constraints);
@@ -216,10 +220,10 @@ class LvalueVisitorUIF extends LvalueVisitor {
       // see above for the case of &x and *x
       return conv.ffmgr.createFuncAndCall(
          ufname, idx, formulaType, ImmutableList.of(term));
-    }
+   // }
 
     // When handleFieldAccess is true we can handle this case already
-    return super.visit(fexp);
+  //  return super.visit(fexp);
   }
 
   @Override

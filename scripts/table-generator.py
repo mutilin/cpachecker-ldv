@@ -36,6 +36,7 @@ import os.path
 import glob
 import json
 import argparse
+import re
 import subprocess
 import time
 import tempita
@@ -55,6 +56,7 @@ TEMPLATE_FILE_NAME = os.path.join(os.path.dirname(__file__), 'table-generator-te
 TEMPLATE_FORMATS = ['html', 'csv']
 TEMPLATE_ENCODING = 'UTF-8'
 
+LOG_VALUE_EXTRACT_PATTERN = re.compile(': *([^ :]*)')
 
 class Util:
     """
@@ -180,6 +182,21 @@ class Util:
     def json(obj):
         return tempita.html(json.dumps(obj))
 
+    @staticmethod
+    def prettylist(list):
+        if not list:
+            return ''
+
+        # Filter out duplicate values while keeping order
+        values = set()
+        uniqueList = []
+        for entry in list:
+            if not entry in values:
+                values.add(entry)
+                uniqueList.append(entry)
+
+        return uniqueList[0] if len(uniqueList) == 1 \
+            else '[' + '; '.join(uniqueList) + ']'
 
 def parseTableDefinitionFile(file):
     '''
@@ -231,16 +248,15 @@ def parseTableDefinitionFile(file):
 
     for unionTag in tableGenFile.findall('union'):
         columnsToShow = extractColumnsFromTableDefinitionFile(unionTag) or defaultColumnsToShow
-        result = RunSetResult([], {}, columnsToShow)
+        result = RunSetResult([], collections.defaultdict(list), columnsToShow)
 
         for resultTag in getResultTags(unionTag):
             filelist = Util.getFileList(os.path.join(baseDir, resultTag.get('filename'))) # expand wildcards
             for resultsFile in filelist:
                 result.append(resultsFile, parseResultsFile(resultsFile))
 
-        result.attributes['name'] = unionTag.get('title', unionTag.get('name', result.attributes['name']))
-
         if result.filelist:
+            result.attributes['name'] = unionTag.get('title', unionTag.get('name', result.attributes['name']))
             runSetResults.append(result)
 
     return runSetResults
@@ -273,22 +289,9 @@ class RunSetResult():
         return [file.get('name') for file in self.filelist if Util.getColumnValue(file, 'status')]
 
     def append(self, resultFile, resultElem):
-        def updateAttributes(newAttributes):
-            for key in newAttributes:
-                newValue = newAttributes[key]
-                if key in self.attributes:
-                    oldValue = self.attributes[key]
-                    if not isinstance(oldValue, str):
-                        if not newValue in oldValue:
-                            oldValue.append(newValue)
-                    else:
-                        if (oldValue != newValue):
-                            self.attributes[key] = [oldValue, newValue]
-                else:
-                    self.attributes[key] = newAttributes[key]
-
         self.filelist += resultElem.findall('sourcefile')
-        updateAttributes(RunSetResult._extractAttributesFromResult(resultFile, resultElem))
+        for attrib, values in RunSetResult._extractAttributesFromResult(resultFile, resultElem).items():
+            self.attributes[attrib].extend(values)
 
         if not self.columns:
             self.columns = RunSetResult._extractExistingColumnsFromResult(resultFile, resultElem)
@@ -319,29 +322,25 @@ class RunSetResult():
 
     @staticmethod
     def _extractAttributesFromResult(resultFile, resultTag):
-        attributes = { # Defaults
-                'timelimit': None,
-                'memlimit':  None,
-                'cpuCores':  None,
-                'options':   ' ',
-                'benchmarkname': resultTag.get('benchmarkname'),
-                'name':      resultTag.get('name', resultTag.get('benchmarkname')),
-                'branch':    os.path.basename(resultFile).split('#')[0] if '#' in resultFile else '',
-                }
-        attributes.update(resultTag.attrib) # Update with real values
+        attributes = collections.defaultdict(list)
+
+        # Defaults
+        attributes['name'  ] = [resultTag.get('benchmarkname')]
+        attributes['branch'] = [os.path.basename(resultFile).split('#')[0] if '#' in resultFile else '']
+
+        # Update with real values
+        for attrib, value in resultTag.attrib.items():
+            attributes[attrib] = [value]
 
         # Add system information if present
-        systemTag = resultTag.find('systeminfo')
-        if systemTag is not None:
+        for systemTag in resultTag.findall('systeminfo'):
             cpuTag = systemTag.find('cpu')
-            attributes.update({
-                'os':        systemTag.find('os').get('name'),
-                'cpu':       cpuTag.get('model'),
-                'cores':     cpuTag.get('cores'),
-                'freq':      cpuTag.get('frequency'),
-                'ram':       systemTag.find('ram').get('size'),
-                'host':      systemTag.get('hostname', 'unknown')
-                })
+            attributes['os'   ].append(systemTag.find('os').get('name'))
+            attributes['cpu'  ].append(cpuTag.get('model'))
+            attributes['cores'].append( cpuTag.get('cores'))
+            attributes['freq' ].append(cpuTag.get('frequency'))
+            attributes['ram'  ].append(systemTag.find('ram').get('size'))
+            attributes['host' ].append(systemTag.get('hostname', 'unknown'))
 
         return attributes
 
@@ -444,6 +443,7 @@ def mergeFilelists(runSetResults, filenames):
             if fileResult == None:
                 fileResult = ET.Element('sourcefile') # create an empty dummy element
                 fileResult.logfile = None
+                fileResult.set('name', filename)
                 print ('    no result for {0}'.format(filename))
             result.filelist.append(fileResult)
 
@@ -503,12 +503,8 @@ class RunResult:
             # stop after the first line, that contains the searched text
             for line in lines:
                 if identifier in line:
-                    startPosition = line.find(':') + 1
-                    endPosition = line.find('(', startPosition) # bracket maybe not found -> (-1)
-                    if (endPosition == -1):
-                        return line[startPosition:].strip()
-                    else:
-                        return line[startPosition: endPosition].strip()
+                    match = LOG_VALUE_EXTRACT_PATTERN.search(line)
+                    return match.group(1).strip() if match else None
             return None
 
         status = Util.getColumnValue(sourcefileTag, 'status', '')
@@ -636,6 +632,12 @@ def getTableHead(runSetResults, commonFileNamePrefix):
     # It is used for calculating the column spans of the header cells.
     runSetWidths = [len(runSetResult.columns) for runSetResult in runSetResults]
 
+    for runSetResult in runSetResults:
+        # Ugly because this overwrites the entries in the map,
+        # but we don't need them anymore and this is the easiest way
+        for key in runSetResult.attributes:
+            runSetResult.attributes[key] = Util.prettylist(runSetResult.attributes[key])
+
     def getRow(rowName, format, collapse=False, onlyIf=None):
         def formatCell(attributes):
             if onlyIf and not onlyIf in attributes:
@@ -675,18 +677,18 @@ def getTableHead(runSetResults, commonFileNamePrefix):
 
 
 def getStats(rows):
-    countUnsafe = len([row for row in rows if result.fileIsUnsafe(row.fileName)])
-    countSafe = len([row for row in rows if result.fileIsSafe(row.fileName)])
-    maxScore = result.SCORE_CORRECT_UNSAFE * countUnsafe + result.SCORE_CORRECT_SAFE * countSafe
+    countFalse = len([row for row in rows if result.fileIsFalse(row.fileName)])
+    countTrue = len([row for row in rows if result.fileIsTrue(row.fileName)])
+    maxScore = result.SCORE_CORRECT_FALSE * countFalse + result.SCORE_CORRECT_TRUE * countTrue
 
     stats = [getStatsOfRunSet(runResults) for runResults in rowsToColumns(rows)] # column-wise
     rowsForStats = list(map(Util.flatten, zip(*stats))) # row-wise
 
     return [tempita.bunch(default=None, title='total files', content=rowsForStats[0]),
-            tempita.bunch(default=None, title='correct results', description='(no bug exists + result is SAFE) OR (bug exists + result is UNSAFE)', content=rowsForStats[1]),
-            tempita.bunch(default=None, title='false negatives', description='bug exists + result is SAFE', content=rowsForStats[2]),
-            tempita.bunch(default=None, title='false positives', description='no bug exists + result is UNSAFE', content=rowsForStats[3]),
-            tempita.bunch(default=None, title='score ({0} files, max score: {1})'.format(len(rows), maxScore), id='score', description='{0} safe files, {1} unsafe files'.format(countSafe, countUnsafe), content=rowsForStats[4])
+            tempita.bunch(default=None, title='correct results', description='(no bug exists + result is TRUE) OR (bug exists + result is FALSE)', content=rowsForStats[1]),
+            tempita.bunch(default=None, title='false negatives', description='bug exists + result is TRUE', content=rowsForStats[2]),
+            tempita.bunch(default=None, title='false positives', description='no bug exists + result is FALSE', content=rowsForStats[3]),
+            tempita.bunch(default=None, title='score ({0} files, max score: {1})'.format(len(rows), maxScore), id='score', description='{0} true files, {1} false files'.format(countTrue, countFalse), content=rowsForStats[4])
             ]
 
 def getStatsOfRunSet(runResults):
@@ -696,7 +698,7 @@ def getStatsOfRunSet(runResults):
     """
 
     # convert:
-    # [['SAFE', 0,1], ['UNSAFE', 0,2]] -->  [['SAFE', 'UNSAFE'], [0,1, 0,2]]
+    # [['TRUE', 0,1], ['FALSE', 0,2]] -->  [['TRUE', 'FALSE'], [0,1, 0,2]]
     # in python2 this is a list, in python3 this is the iterator of the list
     # this works, because we iterate over the list some lines below
     listsOfValues = zip(*[runResult.values for runResult in runResults])
@@ -707,39 +709,39 @@ def getStatsOfRunSet(runResults):
     # collect some statistics
     sumRow = []
     correctRow = []
-    wrongSafeRow = []
-    wrongUnsafeRow = []
+    wrongTrueRow = []
+    wrongFalseRow = []
     scoreRow = []
 
     for column, values in zip(columns, listsOfValues):
         if column.title == 'status':
-            countCorrectSafe, countCorrectUnsafe, countWrongSafe, countWrongUnsafe = getCategoryCount(statusList)
+            countCorrectTrue, countCorrectFalse, countWrongTrue, countWrongFalse = getCategoryCount(statusList)
 
             sum     = StatValue(len(statusList))
-            correct = StatValue(countCorrectSafe + countCorrectUnsafe)
+            correct = StatValue(countCorrectTrue + countCorrectFalse)
             score   = StatValue(
-                                result.SCORE_CORRECT_SAFE   * countCorrectSafe + \
-                                result.SCORE_CORRECT_UNSAFE * countCorrectUnsafe + \
-                                result.SCORE_WRONG_SAFE     * countWrongSafe + \
-                                result.SCORE_WRONG_UNSAFE   * countWrongUnsafe,
+                                result.SCORE_CORRECT_TRUE   * countCorrectTrue + \
+                                result.SCORE_CORRECT_FALSE * countCorrectFalse + \
+                                result.SCORE_WRONG_TRUE     * countWrongTrue + \
+                                result.SCORE_WRONG_FALSE   * countWrongFalse,
                                 )
-            wrongSafe   = StatValue(countWrongSafe)
-            wrongUnsafe = StatValue(countWrongUnsafe)
+            wrongTrue   = StatValue(countWrongTrue)
+            wrongFalse = StatValue(countWrongFalse)
 
         else:
-            sum, correct, wrongSafe, wrongUnsafe = getStatsOfNumberColumn(values, statusList)
+            sum, correct, wrongTrue, wrongFalse = getStatsOfNumberColumn(values, statusList, column.title)
             score = ''
 
-        if (sum.sum, correct.sum, wrongSafe.sum, wrongUnsafe.sum) == (0,0,0,0):
-            (sum, correct, wrongSafe, wrongUnsafe) = (None, None, None, None)
+        if (sum.sum, correct.sum, wrongTrue.sum, wrongFalse.sum) == (0,0,0,0):
+            (sum, correct, wrongTrue, wrongFalse) = (None, None, None, None)
 
         sumRow.append(sum)
         correctRow.append(correct)
-        wrongSafeRow.append(wrongSafe)
-        wrongUnsafeRow.append(wrongUnsafe)
+        wrongTrueRow.append(wrongTrue)
+        wrongFalseRow.append(wrongFalse)
         scoreRow.append(score)
 
-    return (sumRow, correctRow, wrongSafeRow, wrongUnsafeRow, scoreRow)
+    return (sumRow, correctRow, wrongTrueRow, wrongFalseRow, scoreRow)
 
 
 class StatValue:
@@ -772,18 +774,19 @@ def getCategoryCount(categoryList):
     for category in categoryList:
         counts[category] += 1
 
-    return (counts[result.RESULT_CORRECT_SAFE],
-            counts[result.RESULT_CORRECT_UNSAFE],
-            counts[result.RESULT_WRONG_SAFE],
-            counts[result.RESULT_WRONG_UNSAFE])
+    return (counts[result.RESULT_CORRECT_TRUE],
+            counts[result.RESULT_CORRECT_FALSE],
+            counts[result.RESULT_WRONG_TRUE],
+            counts[result.RESULT_WRONG_FALSE])
 
 
-def getStatsOfNumberColumn(values, categoryList):
+def getStatsOfNumberColumn(values, categoryList, columnTitle):
     assert len(values) == len(categoryList)
     try:
         valueList = [Util.toDecimal(v) for v in values]
     except InvalidOperation as e:
-        print("Warning: {0}. Statistics may be wrong.".format(e))
+        if columnTitle != "host": # we ignore values of column host, used in cloud-mode
+            print("Warning: {0}. Statistics may be wrong.".format(e))
         return (StatValue(0), StatValue(0), StatValue(0), StatValue(0))
 
     valuesPerCategory = collections.defaultdict(list)
@@ -794,8 +797,8 @@ def getStatsOfNumberColumn(values, categoryList):
 
     return (StatValue.fromList(valueList),
             StatValue.fromList(valuesPerCategory['correct_tmp']),
-            StatValue.fromList(valuesPerCategory[result.RESULT_WRONG_SAFE]),
-            StatValue.fromList(valuesPerCategory[result.RESULT_WRONG_UNSAFE]),
+            StatValue.fromList(valuesPerCategory[result.RESULT_WRONG_TRUE]),
+            StatValue.fromList(valuesPerCategory[result.RESULT_WRONG_FALSE]),
             )
 
 
@@ -804,10 +807,10 @@ def getCounts(rows): # for options.dumpCounts
 
     for runResults in rowsToColumns(rows):
         statusList = [runResult.category for runResult in runResults]
-        correctSafe, correctUnsafe, wrongSafe, wrongUnsafe = getCategoryCount(statusList)
+        correctTrue, correctFalse, wrongTrue, wrongFalse = getCategoryCount(statusList)
 
-        correct = correctSafe + correctUnsafe
-        wrong = wrongSafe + wrongUnsafe
+        correct = correctTrue + correctFalse
+        wrong = wrongTrue + wrongFalse
         unknown = len(statusList) - correct - wrong
 
         countsList.append((correct, wrong, unknown))

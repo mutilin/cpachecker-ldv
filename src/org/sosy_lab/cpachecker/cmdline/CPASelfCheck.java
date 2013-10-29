@@ -36,6 +36,7 @@ import java.util.logging.Level;
 import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
+import org.sosy_lab.common.log.BasicLogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.CParser;
 import org.sosy_lab.cpachecker.cfa.Language;
@@ -70,7 +71,7 @@ public class CPASelfCheck {
    */
   public static void main(String[] args) throws Exception {
     config = Configuration.defaultConfiguration();
-    logManager = new LogManager(config);
+    logManager = new BasicLogManager(config);
 
     CFA cfa = createCFA();
     FunctionEntryNode main = cfa.getMainFunction();
@@ -155,7 +156,7 @@ public class CPASelfCheck {
   }
 
   private static boolean checkJoin(Class<ConfigurableProgramAnalysis> pCpa,
-                                ConfigurableProgramAnalysis pCpaInst, FunctionEntryNode pMain) throws CPAException {
+                                ConfigurableProgramAnalysis pCpaInst, FunctionEntryNode pMain) throws CPAException, InterruptedException {
     AbstractDomain d = pCpaInst.getAbstractDomain();
     AbstractState initial = pCpaInst.getInitialState(pMain);
 
@@ -164,7 +165,7 @@ public class CPASelfCheck {
   }
 
   private static boolean checkMergeSoundness(Class<ConfigurableProgramAnalysis> pCpa,
-                                 ConfigurableProgramAnalysis pCpaInst, FunctionEntryNode pMain) throws CPAException {
+                                 ConfigurableProgramAnalysis pCpaInst, FunctionEntryNode pMain) throws CPAException, InterruptedException {
     AbstractDomain d = pCpaInst.getAbstractDomain();
     MergeOperator merge = pCpaInst.getMergeOperator();
     AbstractState initial = pCpaInst.getInitialState(pMain);
@@ -177,7 +178,7 @@ public class CPASelfCheck {
 
   private static boolean checkStopEmptyReached(
                                             Class<ConfigurableProgramAnalysis> pCpa,
-                                            ConfigurableProgramAnalysis pCpaInst, FunctionEntryNode pMain) throws CPAException {
+                                            ConfigurableProgramAnalysis pCpaInst, FunctionEntryNode pMain) throws CPAException, InterruptedException {
     StopOperator stop = pCpaInst.getStopOperator();
     HashSet<AbstractState> reached = new HashSet<>();
     AbstractState initial = pCpaInst.getInitialState(pMain);
@@ -187,7 +188,7 @@ public class CPASelfCheck {
   }
 
   private static boolean checkStopReached(Class<ConfigurableProgramAnalysis> pCpa,
-                                       ConfigurableProgramAnalysis pCpaInst, FunctionEntryNode pMain) throws CPAException {
+                                       ConfigurableProgramAnalysis pCpaInst, FunctionEntryNode pMain) throws CPAException, InterruptedException {
     StopOperator stop = pCpaInst.getStopOperator();
     HashSet<AbstractState> reached = new HashSet<>();
     AbstractState initial = pCpaInst.getInitialState(pMain);

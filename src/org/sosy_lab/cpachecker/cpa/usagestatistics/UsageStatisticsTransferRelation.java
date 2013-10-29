@@ -360,7 +360,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
         handleFunctionCallExpression(pNewState, pPrecision, left, (CFunctionCallExpression)right);
 
       } else {
-        throw new HandleCodeException("Unrecognised type of right side of assignment: " + assignment.asStatement().toASTString());
+        throw new HandleCodeException("Unrecognised type of right side of assignment: " + assignment.toASTString());
       }
 
     } else if (pStatement instanceof CFunctionCallStatement) {

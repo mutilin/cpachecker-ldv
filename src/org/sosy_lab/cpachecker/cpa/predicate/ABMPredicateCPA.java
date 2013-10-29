@@ -32,15 +32,18 @@ import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.blocks.BlockPartitioning;
+import org.sosy_lab.cpachecker.core.ShutdownNotifier;
 import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
 import org.sosy_lab.cpachecker.core.interfaces.CPAFactory;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysisWithABM;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
+import org.sosy_lab.cpachecker.core.reachedset.ReachedSetFactory;
 import org.sosy_lab.cpachecker.cpa.predicate.relevantpredicates.AuxiliaryComputer;
 import org.sosy_lab.cpachecker.cpa.predicate.relevantpredicates.CachingRelevantPredicatesComputer;
 import org.sosy_lab.cpachecker.cpa.predicate.relevantpredicates.RefineableOccurrenceComputer;
 import org.sosy_lab.cpachecker.cpa.predicate.relevantpredicates.RelevantPredicatesComputer;
+import org.sosy_lab.cpachecker.exceptions.CPAException;
 
 
 /**
@@ -62,8 +65,11 @@ public class ABMPredicateCPA extends PredicateCPA implements ConfigurableProgram
   private boolean auxiliaryPredicateComputer = true;
 
 
-  private ABMPredicateCPA(Configuration config, LogManager logger, ABMBlockOperator pBlk, CFA pCfa) throws InvalidConfigurationException {
-    super(config, logger, pBlk, pCfa);
+  private ABMPredicateCPA(Configuration config, LogManager logger,
+      ABMBlockOperator pBlk, CFA pCfa, ReachedSetFactory reachedSetFactory,
+      ShutdownNotifier pShutdownNotifier)
+          throws InvalidConfigurationException, CPAException {
+    super(config, logger, pBlk, pCfa, reachedSetFactory, pShutdownNotifier);
 
     config.inject(this, ABMPredicateCPA.class);
 

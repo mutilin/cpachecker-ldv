@@ -45,7 +45,7 @@ class UsageStatisticsPrecisionAdjustment implements PrecisionAdjustment {
 
   @Override
   public Triple<AbstractState, Precision, Action> prec(AbstractState pElement,
-      Precision oldPrecision, UnmodifiableReachedSet pElements) throws CPAException {
+      Precision oldPrecision, UnmodifiableReachedSet pElements) throws CPAException, InterruptedException {
 
     Preconditions.checkArgument(pElement instanceof UsageStatisticsState);
     UsageStatisticsState element = (UsageStatisticsState)pElement;

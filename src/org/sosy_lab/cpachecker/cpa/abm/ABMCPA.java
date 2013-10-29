@@ -42,6 +42,7 @@ import org.sosy_lab.cpachecker.cfa.blocks.builder.FunctionPartitioning;
 import org.sosy_lab.cpachecker.cfa.blocks.builder.PartitioningHeuristic;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.core.ShutdownNotifier;
 import org.sosy_lab.cpachecker.core.defaults.AbstractSingleWrapperCPA;
 import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractDomain;
@@ -91,7 +92,7 @@ public class ABMCPA extends AbstractSingleWrapperCPA implements StatisticsProvid
   private Class<? extends PartitioningHeuristic> blockHeuristic = FunctionPartitioning.class;
 
   public ABMCPA(ConfigurableProgramAnalysis pCpa, Configuration config, LogManager pLogger,
-      ReachedSetFactory pReachedSetFactory, CFA pCfa) throws InvalidConfigurationException, CPAException {
+      ReachedSetFactory pReachedSetFactory, ShutdownNotifier pShutdownNotifier, CFA pCfa) throws InvalidConfigurationException, CPAException {
     super(pCpa);
     config.inject(this);
 
@@ -102,21 +103,21 @@ public class ABMCPA extends AbstractSingleWrapperCPA implements StatisticsProvid
         "ABM needs CPAs that are capable for ABM"); }
     Reducer wrappedReducer = ((ConfigurableProgramAnalysisWithABM) pCpa).getReducer();
     if (wrappedReducer == null) { throw new InvalidConfigurationException("ABM needs CPAs that are capable for ABM"); }
-    reducer = new TimedReducer(wrappedReducer);
-    prec = new ABMPrecisionAdjustment(getWrappedCpa().getPrecisionAdjustment());
-    transfer = new ABMTransferRelation(config, logger, this, pReachedSetFactory);
-    prec.setABMTransferRelation(transfer);
-    merge = new ABMMergeOperator(pCpa.getMergeOperator(), transfer);
-    stop = new ABMStopOperator(getWrappedCpa().getStopOperator());
-
-    stats = new ABMCPAStatistics(this);
-    heuristic = getPartitioningHeuristic();
 
     if (pCpa instanceof ProofChecker) {
       this.wrappedProofChecker = (ProofChecker) pCpa;
     } else {
       this.wrappedProofChecker = null;
     }
+    reducer = new TimedReducer(wrappedReducer);
+    prec = new ABMPrecisionAdjustment(getWrappedCpa().getPrecisionAdjustment());
+    transfer = new ABMTransferRelation(config, logger, this, wrappedProofChecker, pReachedSetFactory, pShutdownNotifier);
+    prec.setABMTransferRelation(transfer);
+    merge = new ABMMergeOperator(pCpa.getMergeOperator(), transfer);
+    stop = new ABMStopOperator(getWrappedCpa().getStopOperator());
+
+    stats = new ABMCPAStatistics(this);
+    heuristic = getPartitioningHeuristic();
   }
 
   @Override
@@ -201,11 +202,11 @@ public class ABMCPA extends AbstractSingleWrapperCPA implements StatisticsProvid
   public boolean areAbstractSuccessors(AbstractState pState, CFAEdge pCfaEdge,
       Collection<? extends AbstractState> pSuccessors) throws CPATransferException, InterruptedException {
     Preconditions.checkNotNull(wrappedProofChecker, "Wrapped CPA has to implement ProofChecker interface");
-    return transfer.areAbstractSuccessors(pState, pCfaEdge, pSuccessors, wrappedProofChecker);
+    return transfer.areAbstractSuccessors(pState, pCfaEdge, pSuccessors);
   }
 
   @Override
-  public boolean isCoveredBy(AbstractState pState, AbstractState pOtherState) throws CPAException {
+  public boolean isCoveredBy(AbstractState pState, AbstractState pOtherState) throws CPAException, InterruptedException {
     Preconditions.checkNotNull(wrappedProofChecker, "Wrapped CPA has to implement ProofChecker interface");
     return wrappedProofChecker.isCoveredBy(pState, pOtherState);
   }

@@ -66,6 +66,7 @@ import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Precisions;
 import org.sosy_lab.cpachecker.util.predicates.AbstractionPredicate;
+import org.sosy_lab.cpachecker.util.predicates.PathChecker;
 import org.sosy_lab.cpachecker.util.predicates.Solver;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.PathFormulaManager;
@@ -127,7 +128,12 @@ public final class ABMPredicateRefiner extends AbstractABMBasedRefiner implement
                                           predicateCpa.getSolver(),
                                           predicateCpa.getFormulaManagerFactory(),
                                           predicateCpa.getConfiguration(),
+                                          predicateCpa.getShutdownNotifier(),
                                           logger);
+
+    PathChecker pathChecker = new PathChecker(logger,
+                                          predicateCpa.getPathFormulaManager(),
+                                          predicateCpa.getSolver());
 
     RefinementStrategy strategy = new ABMPredicateAbstractionRefinementStrategy(
                                           predicateCpa.getConfiguration(),
@@ -135,17 +141,18 @@ public final class ABMPredicateRefiner extends AbstractABMBasedRefiner implement
                                           predicateCpa,
                                           predicateCpa.getFormulaManager(),
                                           predicateCpa.getSolver(),
-                                          predicateCpa.getPredicateManager());
+                                          predicateCpa.getPredicateManager(),
+                                          predicateCpa.getStaticRefiner());
 
     this.refiner = new ExtendedPredicateRefiner(
                                           predicateCpa.getConfiguration(),
                                           logger,
                                           pCpa,
                                           manager,
+                                          pathChecker,
                                           predicateCpa.getFormulaManager(),
                                           predicateCpa.getPathFormulaManager(),
-                                          strategy,
-                                          predicateCpa.getStaticRefiner());
+                                          strategy);
   }
 
   @Override
@@ -168,12 +175,13 @@ public final class ABMPredicateRefiner extends AbstractABMBasedRefiner implement
     private ExtendedPredicateRefiner(final Configuration config, final LogManager logger,
         final ConfigurableProgramAnalysis pCpa,
         final InterpolationManager pInterpolationManager,
+        final PathChecker pPathChecker,
         final FormulaManagerView pFormulaManager,
         final PathFormulaManager pPathFormulaManager,
-        final RefinementStrategy pStrategy,
-        final PredicateStaticRefiner pExtractor) throws CPAException, InvalidConfigurationException {
+        final RefinementStrategy pStrategy)
+            throws CPAException, InvalidConfigurationException {
 
-      super(config, logger, pCpa, pInterpolationManager, pFormulaManager, pPathFormulaManager, pStrategy, pExtractor);
+      super(config, logger, pCpa, pInterpolationManager, pPathChecker, pFormulaManager, pPathFormulaManager, pStrategy);
 
       pfmgr = pPathFormulaManager;
     }
@@ -283,10 +291,11 @@ public final class ABMPredicateRefiner extends AbstractABMBasedRefiner implement
     private ABMPredicateAbstractionRefinementStrategy(final Configuration config, final LogManager logger,
         final ABMPredicateCPA predicateCpa,
         final FormulaManagerView pFormulaManager, final Solver pSolver,
-        final PredicateAbstractionManager pPredAbsMgr)
+        final PredicateAbstractionManager pPredAbsMgr,
+        final PredicateStaticRefiner pStaticRefiner)
             throws CPAException, InvalidConfigurationException {
 
-      super(config, logger, pFormulaManager, pPredAbsMgr, pSolver);
+      super(config, logger, pFormulaManager, pPredAbsMgr, pStaticRefiner, pSolver);
 
       RelevantPredicatesComputer relevantPredicatesComputer = predicateCpa.getRelevantPredicatesComputer();
       if (relevantPredicatesComputer instanceof RefineableRelevantPredicatesComputer) {
@@ -319,7 +328,7 @@ public final class ABMPredicateRefiner extends AbstractABMBasedRefiner implement
         ARGReachedSet pReached,
         List<ARGState> pPath,
         List<BooleanFormula> pInterpolants,
-        boolean pRepeatedCounterexample) throws CPAException {
+        boolean pRepeatedCounterexample) throws CPAException, InterruptedException {
 
       // overriding this method is needed, as, in principle, it is possible to get two successive spurious counterexamples
       // which only differ in its abstractions (with 'aggressive caching').
@@ -372,6 +381,11 @@ public final class ABMPredicateRefiner extends AbstractABMBasedRefiner implement
       }
 
       ((ABMPredicateReducer)predicateCpa.getReducer()).clearCaches();
+    }
+
+    @Override
+    protected void analyzePathPrecisions(ARGReachedSet argReached, List<ARGState> path) {
+      // Not implemented for ABM (different sets of reached states have to be handled)
     }
   }
 

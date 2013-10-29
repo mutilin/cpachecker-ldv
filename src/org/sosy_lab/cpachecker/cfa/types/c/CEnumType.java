@@ -25,7 +25,6 @@ package org.sosy_lab.cpachecker.cfa.types.c;
 
 import static com.google.common.base.Preconditions.*;
 import static com.google.common.collect.Iterables.transform;
-import static org.sosy_lab.cpachecker.cfa.ast.c.CAstNode.TO_AST_STRING;
 
 import java.util.List;
 import java.util.Objects;
@@ -96,7 +95,7 @@ public final class CEnumType implements CComplexType {
     lASTString.append(name);
 
     lASTString.append(" {\n  ");
-    Joiner.on(",\n  ").appendTo(lASTString, transform(enumerators, TO_AST_STRING));
+    Joiner.on(",\n  ").appendTo(lASTString, transform(enumerators, CEnumerator.TO_AST_STRING));
     lASTString.append("\n} ");
     lASTString.append(pDeclarator);
 
@@ -105,7 +104,9 @@ public final class CEnumType implements CComplexType {
 
   @Override
   public String toString() {
-    return this.toASTString("");
+    return (isConst() ? "const " : "") +
+           (isVolatile() ? "volatile " : "") +
+           "enum " + name;
   }
 
   public static final class CEnumerator extends ASimpleDeclarations implements CSimpleDeclaration {
@@ -143,8 +144,12 @@ public final class CEnumType implements CComplexType {
 
       CEnumerator other = (CEnumerator) obj;
 
-      return (value == other.value) && (qualifiedName.equals(other.qualifiedName))
-             && (enumType == other.enumType);
+      return (value == other.value) && (qualifiedName.equals(other.qualifiedName));
+      // do not compare the enumType, comparing it with == is wrong because types which
+      // are the same but not identical would lead to wrong results
+      // comparing it with equals is no good choice, too. This would lead to a stack
+      // overflow
+      //  && (enumType == other.enumType);
     }
 
     @Override
@@ -225,7 +230,7 @@ public final class CEnumType implements CComplexType {
 
     CEnumType other = (CEnumType) obj;
 
-    return Objects.equals(isConst, other.isConst) && Objects.equals(isVolatile, other.isVolatile)
+    return isConst == other.isConst && isVolatile == other.isVolatile
            && Objects.equals(name, other.name) && Objects.equals(enumerators, other.enumerators);
   }
 

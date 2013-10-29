@@ -26,7 +26,7 @@ package org.sosy_lab.cpachecker.cpa.predicate;
 import static com.google.common.collect.FluentIterable.from;
 import static java.util.Collections.unmodifiableList;
 import static org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState.getPredicateState;
-import static org.sosy_lab.cpachecker.util.StatisticsUtils.div;
+import static org.sosy_lab.cpachecker.util.statistics.StatisticsUtils.div;
 
 import java.io.PrintStream;
 import java.util.ArrayDeque;
@@ -337,7 +337,7 @@ public class ImpactGlobalRefiner implements Refiner, StatisticsProvider {
    */
   private <T> void performRefinementOnPath(List<T> itpStack, final ARGState unreachableState,
       Map<ARGState, ARGState> predecessors, ReachedSet reached,
-      InterpolatingProverEnvironment<T> itpProver) throws CPAException {
+      InterpolatingProverEnvironment<T> itpProver) throws CPAException, InterruptedException {
     assert !itpStack.isEmpty();
     BooleanFormulaManagerView bfmgr = fmgr.getBooleanFormulaManager();
     assert bfmgr.isFalse(itpProver.getInterpolant(itpStack)); // last interpolant is False
@@ -397,7 +397,7 @@ public class ImpactGlobalRefiner implements Refiner, StatisticsProvider {
    *          on all of the state's parents is also not necessary)
    */
   private boolean performRefinementForState(BooleanFormula interpolant,
-      ARGState state) {
+      ARGState state) throws InterruptedException {
 
     // Passing null as lastAbstraction is ok because
     // we check for impact.requirePreviousBlockAbstraction() in the constructor.
@@ -424,8 +424,8 @@ public class ImpactGlobalRefiner implements Refiner, StatisticsProvider {
    * @throws CPAException
    */
   private void finishRefinementOfPath(final ARGState unreachableState, List<ARGState> affectedStates,
-      ReachedSet reached) throws CPAException {
-    ARGReachedSet arg = new ARGReachedSet(reached, argCpa, -1);
+      ReachedSet reached) throws CPAException, InterruptedException {
+    ARGReachedSet arg = new ARGReachedSet(reached, argCpa);
 
     argUpdate.start();
     for (ARGState w : affectedStates) {

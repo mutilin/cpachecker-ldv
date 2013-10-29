@@ -92,8 +92,13 @@ analysis.reachedSet = PARTITIONED
 # restart the algorithm using a different CPA after unknown result
 analysis.restartAfterUnknown = false
 
+<<<<<<< HEAD
 # Save results of local analysis
 analysis.saveLocalResults = false
+=======
+# simplify pure numeral expressions like '1+2' to '3'
+analysis.simplifyExpressions = false
+>>>>>>> master
 
 # stop after the first error has been found
 analysis.stopAfterError = true
@@ -219,16 +224,13 @@ bmc.boundingAssertions = true
 bmc.checkTargetStates = true
 
 # dump counterexample formula to file
-bmc.dumpCounterexampleFormula = "counterexample.smt2"
+bmc.dumpCounterexampleFormula = "ErrorPath.%d.smt2"
 
 # try using induction to verify programs with loops
 bmc.induction = false
 
-# configuration file for invariant generation
-bmc.invariantGenerationConfigFile = no default value
-
-# generate invariants for induction in parallel to the analysis
-bmc.parallelInvariantGeneration = false
+# Generate invariants and add them to the induction hypothesis.
+bmc.useInvariantsForInduction = false
 
 # file name where to put the path program that is generated as input for
 # CBMC. A temporary file is used if this is unspecified.
@@ -260,6 +262,16 @@ cegar.globalRefinement = false
 # omitted.
 cegar.refiner = no default value
 
+# dump a simple call graph
+cfa.callgraph.export = true
+
+# file name for call graph as .dot file
+cfa.callgraph.file = "functionCalls.dot"
+
+# while this option is activated, before each use of aPointerExpression, or a
+# dereferenced field access the expression ischecked if it is 0
+cfa.checkNullPointers = false
+
 # export CFA as .dot file
 cfa.export = true
 
@@ -290,6 +302,9 @@ cfa.variableClassification.logfile = "VariableClassification.log"
 # Print some information about the variable classification.
 cfa.variableClassification.printStatsOnStartup = false
 
+# Dump variable type mapping to a file.
+cfa.variableClassification.typeMapFile = "VariableTypeMapping.txt"
+
 # Dump the complete configuration to a file.
 configuration.dumpFile = "UsedConfiguration.properties"
 
@@ -311,12 +326,18 @@ counterexample.continueAfterInfeasibleError = true
 counterexample.removeInfeasibleErrors = false
 
 # print coverage info to file
+<<<<<<< HEAD
 coverage.export = false
 coverage.file = "coverage.info"
 
 # print information about coverage
 coverage.output = "coverage.info"
 
+=======
+coverage.export = true
+coverage.file = "coverage.info"
+
+>>>>>>> master
 # CPA to use (see doc/Configuration.txt for more documentation on this)
 cpa = CompositeCPA.class.getCanonicalName()
 
@@ -334,23 +355,23 @@ cpa.abm.blockHeuristic = FunctionPartitioning.class
 cpa.abm.gatherCacheMissStatistics = false
 
 # export one variable assignment for error path to file, if one is found
-cpa.arg.errorPath.assignment = "ErrorPathAssignment.txt"
+cpa.arg.errorPath.assignment = "ErrorPath.%d.assignment.txt"
 
 # export error path to file as an automaton
-cpa.arg.errorPath.automaton = "ErrorPath.spc"
+cpa.arg.errorPath.automaton = "ErrorPath.%d.spc"
 
 # export error path to file, if one is found
-cpa.arg.errorPath.core = "ErrorPathCore.txt"
+cpa.arg.errorPath.core = "ErrorPath.%d.core.txt"
 cpa.arg.errorPath.export = true
 
 # translate error path to C program
 cpa.arg.errorPath.exportAsSource = true
 
 # export error path to file, if one is found
-cpa.arg.errorPath.file = "ErrorPath.txt"
-cpa.arg.errorPath.graph = "ErrorPath.dot"
-cpa.arg.errorPath.json = "ErrorPath.json"
-cpa.arg.errorPath.source = "ErrorPath.c"
+cpa.arg.errorPath.file = "ErrorPath.%d.txt"
+cpa.arg.errorPath.graph = "ErrorPath.%d.dot"
+cpa.arg.errorPath.json = "ErrorPath.%d.json"
+cpa.arg.errorPath.source = "ErrorPath.%d.c"
 
 # export final ARG as .dot file
 cpa.arg.export = true
@@ -427,9 +448,20 @@ cpa.bdd.trackIntEqual = true
 # depth of recursion bound
 cpa.callstack.depth = 0
 
+# Skip recursion if it happens only by going via a function pointer (this is
+# unsound). Imprecise function pointer tracking often lead to false
+# recursions.
+cpa.callstack.skipFunctionPointerRecursion = false
+
 # Skip recursion. Treat function call as a statement (the same as for
 # functions without bodies)
+# Skip recursion (this is unsound). Treat function call as a statement (the
+# same as for functions without bodies)
 cpa.callstack.skipRecursion = false
+
+# Skip recursion if it happens only by going via a void function (this is
+# unsound).
+cpa.callstack.skipVoidRecursion = false
 
 # which composite merge operator to use (plain or agree)
 # Both delegate to the component cpas, but agree only allows merging if all
@@ -498,8 +530,12 @@ cpa.cpalien.enableMallocFail = true
 # Filename format for SMG graph dumps
 cpa.cpalien.exportSMG.file = "smg-%s.dot"
 
-# Describes when SMG graphs should be dumped. One of: {never, leaf, every}
+# Describes when SMG graphs should be dumped. One of: {never, leaf,
+# interesting, every}
 cpa.cpalien.exportSMGwhen = "never"
+
+# Sets how unknown functions are handled. One of: {strict, assume_safe}
+cpa.cpalien.handleUnknownFunctions = "strict"
 
 # Sets the level of runtime checking: NONE, HALF, FULL
 cpa.cpalien.runtimeCheck = NONE
@@ -561,7 +597,11 @@ cpa.explicit.precision.sharing = "scope"
 cpa.explicit.precisionFile = no default value
 
 # whether or not to avoid restarting at assume edges after a refinement
-cpa.explicit.refiner.avoidAssumes = true
+cpa.explicit.refiner.avoidAssumes = false
+
+# whether or not to check for repeated refinements, to then reset the
+# refinement root
+cpa.explicit.refiner.checkForRepeatedRefinements = true
 
 # whether or not to do lazy-abstraction
 cpa.explicit.refiner.doLazyAbstraction = true
@@ -603,10 +643,29 @@ cpa.interval.splitIntervals = false
 # at most that many intervals will be tracked per variable
 cpa.interval.threshold = 0
 
+# determine variables relevant to the decision whether or not a target path
+# assume edge is taken and limit the analyis to those variables.
+cpa.invariants.analyzeRelevantVariablesOnly = true
+
+# determine target locations in advance and analyse paths to the target
+# locations only.
+cpa.invariants.analyzeTargetPathsOnly = true
+
+# the maximum number of predicates to consider as interesting. -1 one
+# disables the limit, but this is not recommended. 0 means that guessing
+# interesting predicates is disabled.
+cpa.invariants.interestingPredicatesLimit = 0
+
+# the maximum number of variables to consider as interesting. -1 one disables
+# the limit, but this is not recommended. 0 means that guessing interesting
+# variables is disabled.
+cpa.invariants.interestingVariableLimit = 2
+
 # which merge operator to use for InvariantCPA
 cpa.invariants.merge = "JOIN"
   allowed values: [JOIN, SEP]
 
+<<<<<<< HEAD
 # functions, which allocate new free memory
 cpa.local.allocatefunctions = no default value
 
@@ -626,6 +685,11 @@ cpa.lockStatistics.lockinfo = no default value
 
 # function to reset state
 cpa.lockStatistics.lockreset = no default value
+=======
+# whether or not to use a bit vector formula manager when extracting
+# invariant approximations from states.
+cpa.invariants.useBitvectors = false
+>>>>>>> master
 
 # threshold for unrolling loops of the program (0 is infinite)
 # works only if assumption storage CPA is enabled, because otherwise it would
@@ -652,7 +716,7 @@ cpa.pointer.merge = "sep"
 cpa.pointer.printWarnings = true
 
 # which merge operator to use for PointerACPA
-cpa.pointerA.merge = "SEP"
+cpa.pointerA.merge = "JOIN"
   allowed values: [SEP, JOIN]
 
 # which stop operator to use for PointerACPA
@@ -666,8 +730,12 @@ cpa.predicate.abm.auxiliaryPredicateComputer = true
 # use caching of abstractions
 cpa.predicate.abs.useCache = true
 
-# whether to use Boolean (false) or Cartesian (true) abstraction
+# DEPRECATED: whether to use Boolean (false) or Cartesian (true) abstraction
 cpa.predicate.abstraction.cartesian = false
+
+# whether to use Boolean or Cartesian abstraction or both
+cpa.predicate.abstraction.computation = BOOLEAN
+  enum:     [CARTESIAN, BOOLEAN, COMBINED]
 
 # dump the abstraction formulas if they took to long
 cpa.predicate.abstraction.dumpHardQueries = false
@@ -687,9 +755,15 @@ cpa.predicate.abstraction.initialPredicates.applyFunctionWide = false
 # in the program)
 cpa.predicate.abstraction.initialPredicates.applyGlobally = false
 
+# An initial set of comptued abstractions that might be reusable
+cpa.predicate.abstraction.reuseAbstractionsFrom = no default value
+
 # What to use for storing abstractions
 cpa.predicate.abstraction.type = "BDD"
   allowed values: [BDD, FORMULA]
+
+# file that consists of one abstraction formula for each abstraction state
+cpa.predicate.abstractions.file = "abstractions.txt"
 
 # force abstractions immediately after threshold is reached (no effect if
 # threshold = 0)
@@ -722,6 +796,10 @@ cpa.predicate.blk.useCache = true
 # always check satisfiability at end of block, even if precision is empty
 cpa.predicate.checkBlockFeasibility = false
 
+# Use deferred allocation heuristic that tracks void * variables until the
+# actual type of the allocation is figured out.
+cpa.predicate.deferUntypedAllocations = false
+
 # Enable the possibility to precompute explicit abstraction locations.
 cpa.predicate.enableBlockreducer = false
 
@@ -740,6 +818,11 @@ cpa.predicate.handleFieldAccess = false
 # Handle field aliasing formulas.
 cpa.predicate.handleFieldAliasing = false
 
+# Handle pointer aliasing for pointers with unknown values (coming from
+# uninitialized variables or external function calls). This is slow and
+# provides little benefit.
+cpa.predicate.handleNondetPointerAliasing = false
+
 # Handle aliasing of pointers. This adds disjunctions to the formulas, so be
 # careful when using cartesian abstraction.
 cpa.predicate.handlePointerAliasing = true
@@ -747,6 +830,11 @@ cpa.predicate.handlePointerAliasing = true
 # Allows to ignore Concat and Extract Calls when Bitvector theory was
 # replaced.
 cpa.predicate.ignoreExtractConcat = true
+
+# Which solver to use specifically for interpolation (default is to use the
+# main one).
+cpa.predicate.interpolationSolver = no default value
+  enum:     [MATHSAT5, SMTINTERPOL, Z3]
 
 # export final loop invariants
 cpa.predicate.invariants.export = true
@@ -760,45 +848,59 @@ cpa.predicate.invariants.file = "invariants.txt"
 # file for precision that consists of invariants.
 cpa.predicate.invariants.precisionFile = "invariantPrecs.txt"
 
-# use uninterpreted functions for *, & and array access
-cpa.predicate.lvalsAsUIFs = false
-
 # List of further options which will be passed to Mathsat in addition to the
 # default options. Format is 'key1=value1,key2=value2'
 cpa.predicate.mathsat5.furtherOptions = ""
 
 # Export solver queries in Smtlib format into a file (for Mathsat5).
 cpa.predicate.mathsat5.logAllQueries = false
-cpa.predicate.mathsat5.logfile = "mathsat5.%d.smt2"
+cpa.predicate.mathsat5.logfile = "mathsat5.%03d.smt2"
 
-# list of functions that provide new memory on the heap. This is only used,
-# when handling of pointers is enabled.
+# Max. number of edge of the abstraction tree to prescan for reuse
+cpa.predicate.maxAbstractionReusePrescan = 1
+
+# Maximum size of allocations for which all structure fields are regarded
+# always essential, regardless of whether they were ever really used in code.
+cpa.predicate.maxPreFilledAllocationSize = 0
+
+# Set of functions that non-deterministically provide new memory on the heap,
+# i.e. they can return either a valid pointer or zero.
 cpa.predicate.memoryAllocationFunctions = {
-      "malloc", "__kmalloc", "kzalloc"
+      "malloc", "__kmalloc", "kmalloc"
       }
+
+# Set of functions that non-deterministically provide new zeroed memory on
+# the heap, i.e. they can return either a valid pointer or zero.
+cpa.predicate.memoryAllocationFunctionsWithZeroing = {"kzalloc"}
+
+# Setting this to true makes memoryAllocationFunctions always return a valid
+# pointer.
+cpa.predicate.memoryAllocationsAlwaysSucceed = false
 
 # which merge operator to use for predicate cpa (usually ABE should be used)
 cpa.predicate.merge = "ABE"
   allowed values: [SEP, ABE]
 
-# list of functions that should be considered as giving a non-deterministic
-# return value
-#  Only predicate analysis honors this option. If you specify this option,
-# the default values are not added automatically to the list, so you need to
-# specify them explicitly if you need them. Mentioning a function in this
-# list has only an effect, if it is an 'external function', i.e., no source
-# is given in the code for this function.
+# Set of functions that should be considered as giving a non-deterministic
+# return value. If you specify this option, the default values are not added
+# automatically to the list, so you need to specify them explicitly if you
+# need them. Mentioning a function in this list has only an effect, if it is
+# an 'external function', i.e., no source is given in the code for this
+# function.
 cpa.predicate.nondetFunctions = {
-      "malloc", "__kmalloc", "kzalloc",
       "sscanf",
       "random"}
 
 # Regexp pattern for functions that should be considered as giving a
 # non-deterministic return value (c.f. cpa.predicate.nondedFunctions)
-cpa.predicate.nondetFunctionsRegexp = "^(__VERIFIER_)?nondet_[a-z]*"
+cpa.predicate.nondetFunctionsRegexp = "^(__VERIFIER_)?nondet_[a-zA-Z0-9_]*"
 
 # Handle field aliasing formulas.
 cpa.predicate.omitNonPointerInFieldAliasing = true
+
+# Encode pointer aliasing information with uninterpreted functions (more
+# precise) if pointer aliasing is handled.
+cpa.predicate.pointerAnalysisWithUFs = false
 
 # Where to apply the found predicates to?
 cpa.predicate.precision.sharing = LOCATION
@@ -809,6 +911,10 @@ cpa.predicate.predmap.export = true
 
 # file for exporting final predicate map
 cpa.predicate.predmap.file = "predmap.txt"
+
+# Format for exporting predicates from precisions.
+cpa.predicate.predmap.predicateFormat = SMTLIB2
+  enum:     [PLAIN, SMTLIB2]
 
 # If an abstraction is computed during refinement, use only the interpolant
 # as input, not the concrete block.
@@ -836,7 +942,7 @@ cpa.predicate.refinement.doAbstractionComputation = false
 
 # where to dump the counterexample formula in case the error location is
 # reached
-cpa.predicate.refinement.dumpCounterexampleFile = "counterexample.smt2"
+cpa.predicate.refinement.dumpCounterexampleFile = "ErrorPath.%d.smt2"
 
 # dump all interpolation problems
 cpa.predicate.refinement.dumpInterpolationProblems = false
@@ -898,22 +1004,58 @@ cpa.predicate.refinement.verifyInterpolants = false
 # replace the Bitvector with the Rational- and FunctionTheory
 cpa.predicate.replaceBitvectorWithRationalAndFunctionTheory = true
 
+# Enable the option to allow detecting the allocation type by type of the LHS
+# of the assignment, e.g. char *arr = malloc(size) is detected as char[size]
+cpa.predicate.revealAllocationTypeFromLhs = false
+
 # maximum blocksize before a satisfiability check is done
 # (non-negative number, 0 means never, if positive should be smaller than
 # blocksize)
 cpa.predicate.satCheck = 0
 
+# Double check generated results like interpolants and models whether they
+# are correct
+cpa.predicate.smtinterpol.checkResults = false
+
 # Export solver queries in Smtlib format into a file.
 cpa.predicate.smtinterpol.logAllQueries = false
-cpa.predicate.smtinterpol.logfile = "smtinterpol.smt2"
 
-# Whether to use MathSAT 5 or SmtInterpol as SMT solver
+# Export interpolation queries in Smtlib format into a file.
+cpa.predicate.smtinterpol.logInterpolationQueries = false
+
+# Export solver queries in Smtlib format into a file.
+cpa.predicate.smtinterpol.logfile = "smtinterpol.%03d.smt2"
+
+# Whether to use MathSAT 5, SmtInterpol or Z3 as SMT solver (Z3 needs the
+# FOCI library from http://www.kenmcmil.com/foci2/).
 cpa.predicate.solver = MATHSAT5
-  allowed values: [MATHSAT5, SMTINTERPOL]
+  enum:     [MATHSAT5, SMTINTERPOL, Z3]
 
 # Encode program variables as INTEGER variables, instead of using REALs. Not
 # all solvers might support this.
 cpa.predicate.solver.useIntegers = false
+
+# log some solver actions, this may be slow!
+cpa.predicate.solver.useLogger = false
+
+# Export solver queries in Smtlib2 format.
+cpa.predicate.solver.z3.logger.logfile = "z3smtlog.%d.smt2"
+
+# Export solver queries in Smtlib2 format, there are small differences for
+# different solvers, choose target-solver.
+cpa.predicate.solver.z3.logger.target = Z3
+  allowed values: [Z3, MATHSAT5]
+
+# simplify formulas when they are asserted in a solver.
+cpa.predicate.solver.z3.simplifyFormulas = false
+
+# The function used to model successful heap object allocation. This is only
+# used, when pointer analysis with UFs is enabled.
+cpa.predicate.successfulAllocFunctionName = "__VERIFIER_successful_alloc"
+
+# The function used to model successful heap object allocation with zeroing.
+# This is only used, when pointer analysis with UFs is enabled.
+cpa.predicate.successfulZallocFunctionName = "__VERIFIER_successful_zalloc"
 
 # whether to include the symbolic path formula in the coverage checks or do
 # only the fast abstract checks
@@ -926,6 +1068,10 @@ cpa.predicate.targetStateSatCheck = true
 # (which are encoded as UFs): essentially, we simply collect all the numbers
 # used in bitwise operations, and add axioms like (0 & n = 0)
 cpa.predicate.useBitwiseAxioms = false
+
+# Generate invariants and strengthen the formulas during abstraction with
+# them.
+cpa.predicate.useInvariantsForAbstraction = false
 
 # add special information to formulas about non-deterministic functions
 cpa.predicate.useNondetFlags = false
@@ -1000,6 +1146,12 @@ cpa.usagestatistics.unsafedetector.detectByReadAccess = no default value
 # enable the Forced Covering optimization
 impact.useForcedCovering = true
 
+# generate invariants in parallel to the normal analysis
+invariantGeneration.async = false
+
+# configuration file for invariant generation
+invariantGeneration.config = no default value
+
 # Specify the class code path to search for java class or interface
 # definitions
 java.classpath = ""
@@ -1023,6 +1175,14 @@ java.version = JavaCore.VERSION_1_7
 # C or Java?
 language = C
   enum:     [C, JAVA]
+
+# Limit for cpu time used by CPAchecker (use seconds or specify a unit; -1
+# for infinite)
+limits.time.cpu = -1
+
+# Limit for wall time used by CPAchecker (use seconds or specify a unit; -1
+# for infinite)
+limits.time.wall = -1
 
 # C dialect for parser
 parser.dialect = GNUC
@@ -1052,6 +1212,9 @@ pcc.proofgen.doPCC = false
 # used.
 pcc.strategy = "org.sosy_lab.cpachecker.pcc.strategy.ARGProofCheckerStrategy"
 
+# number of cpus/cores which should be used in parallel for proof checking
+pcc.useCores = 1
+
 # print reached set to text file
 reachedSet.export = true
 reachedSet.file = "reached.txt"
@@ -1067,9 +1230,19 @@ restartAlgorithm.configFiles = no default value
 # (see config/specification/ for examples)
 specification = no default value
 
+# Add all assumtions from the control flow automaton to the precision.
+staticRefiner.addAllControlFlowAssumes = false
+
+# Add all assumtions along a error trace to the precision.
+staticRefiner.addAllErrorTraceAssumes = false
+staticRefiner.addAssumesByBoundedBackscan = true
+
 # Apply mined predicates on the corresponding scope. false = add them to the
 # global precision.
 staticRefiner.applyScoped = true
+
+# Dump CFA assume edges as SMTLIB2 formulas to a file.
+staticRefiner.assumePredicatesFile = no default value
 
 # collect at most this number of assumes along a path, backwards from each
 # target (= error) location

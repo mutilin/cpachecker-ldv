@@ -47,7 +47,7 @@ class UsageStatisticsDomain implements AbstractDomain {
   }
 
   @Override
-  public boolean isLessOrEqual(AbstractState pElement1, AbstractState pElement2) throws CPAException {
+  public boolean isLessOrEqual(AbstractState pElement1, AbstractState pElement2) throws CPAException, InterruptedException {
     // returns true if element1 < element2 on lattice
 
     UsageStatisticsState elem1 = (UsageStatisticsState) pElement1;

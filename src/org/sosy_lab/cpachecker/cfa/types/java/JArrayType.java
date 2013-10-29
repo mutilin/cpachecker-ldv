@@ -23,13 +23,11 @@
  */
 package org.sosy_lab.cpachecker.cfa.types.java;
 
-import org.sosy_lab.cpachecker.cfa.types.AArrayType;
-
 import java.util.Objects;
 
+import org.sosy_lab.cpachecker.cfa.types.AArrayType;
 
 public class JArrayType extends AArrayType implements JReferenceType {
-
   private final int dimension;
 
   public JArrayType(final JType pElementType, final int pDimension) {
@@ -80,6 +78,6 @@ public class JArrayType extends AArrayType implements JReferenceType {
 
       JArrayType other = (JArrayType) obj;
 
-      return Objects.equals(dimension, other.dimension);
+      return dimension == other.dimension;
     }
 }

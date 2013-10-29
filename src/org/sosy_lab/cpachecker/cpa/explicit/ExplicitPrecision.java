@@ -89,8 +89,7 @@ public class ExplicitPrecision implements Precision {
   private final Optional<VariableClassification> varClass;
 
   public ExplicitPrecision(String variableBlacklist, Configuration config,
-      Optional<VariableClassification> vc,
-      Multimap<CFANode, String> mapping) throws InvalidConfigurationException {
+      Optional<VariableClassification> vc) throws InvalidConfigurationException {
     config.inject(this);
 
     blackListPattern = Pattern.compile(variableBlacklist);
@@ -212,19 +211,15 @@ public class ExplicitPrecision implements Precision {
   private boolean isInIgnoredVarClass(String variable) {
     if (varClass==null || !varClass.isPresent()) { return false; }
 
-    Pair<String, String> var = splitVar(variable);
+    final Pair<String, String> var = splitVar(variable);
 
-    final boolean isBoolean = varClass.get().getBooleanVars().containsEntry(var.getFirst(), var.getSecond());
+    final boolean isBoolean = varClass.get().getIntBoolVars().containsEntry(var.getFirst(), var.getSecond());
     final boolean isIntEqual = varClass.get().getIntEqualVars().containsEntry(var.getFirst(), var.getSecond());
     final boolean isIntAdd = varClass.get().getIntAddVars().containsEntry(var.getFirst(), var.getSecond());
 
     final boolean isIgnoredBoolean = ignoreBoolean && isBoolean;
-
-    // if a var is boolean and intEqual, it is not handled as intEqual.
-    final boolean isIgnoredIntEqual = ignoreIntEqual && !isBoolean && isIntEqual;
-
-    // if a var is (boolean or intEqual) and intAdd, it is not handled as intAdd.
-    final boolean isIgnoredIntAdd = ignoreIntAdd && !isBoolean && !isIntEqual && isIntAdd;
+    final boolean isIgnoredIntEqual = ignoreIntEqual && isIntEqual;
+    final boolean isIgnoredIntAdd = ignoreIntAdd && isIntAdd;
 
     return isIgnoredBoolean || isIgnoredIntEqual || isIgnoredIntAdd;
   }
@@ -369,7 +364,7 @@ public class ExplicitPrecision implements Precision {
 
     @Override
     int getSize() {
-      return rawPrecision.get(location).size();
+      return rawPrecision.size();
     }
 
     @Override

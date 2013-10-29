@@ -32,13 +32,13 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.sosy_lab.common.Pair;
+import org.sosy_lab.cpachecker.core.Model;
+import org.sosy_lab.cpachecker.core.Model.AssignableTerm;
+import org.sosy_lab.cpachecker.core.Model.Constant;
+import org.sosy_lab.cpachecker.core.Model.Function;
+import org.sosy_lab.cpachecker.core.Model.TermType;
+import org.sosy_lab.cpachecker.core.Model.Variable;
 import org.sosy_lab.cpachecker.exceptions.SolverException;
-import org.sosy_lab.cpachecker.util.predicates.Model;
-import org.sosy_lab.cpachecker.util.predicates.Model.AssignableTerm;
-import org.sosy_lab.cpachecker.util.predicates.Model.Function;
-import org.sosy_lab.cpachecker.util.predicates.Model.TermType;
-import org.sosy_lab.cpachecker.util.predicates.Model.Variable;
-import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.view.FormulaManagerView;
 import org.sosy_lab.cpachecker.util.predicates.mathsat5.Mathsat5NativeApi.ModelIterator;
 
@@ -68,17 +68,22 @@ class Mathsat5Model {
     }
   }
 
-  private static Variable toVariable(long env, long pVariableId) {
-    if (!msat_term_is_constant(env, pVariableId)) {
-      throw new IllegalArgumentException("Given mathsat id doesn't correspond to a variable! (" + msat_term_repr(pVariableId) + ")");
+  private static Constant toConstant(final long env, final long variableId) {
+    if (!msat_term_is_constant(env, variableId)) {
+      throw new IllegalArgumentException("Given mathsat id doesn't correspond to a constant! (" +
+                                         msat_term_repr(variableId) + ")");
     }
 
-    long lDeclarationId = msat_term_get_decl(pVariableId);
-    String lName = msat_decl_get_name(lDeclarationId);
-    TermType lType = toMathsatType(env, msat_decl_get_return_type(lDeclarationId));
+    final long declarationId = msat_term_get_decl(variableId);
+    final String name = msat_decl_get_name(declarationId);
+    final TermType type = toMathsatType(env, msat_decl_get_return_type(declarationId));
 
-    Pair<String, Integer> lSplitName = FormulaManagerView.parseName(lName);
-    return new Variable(lSplitName.getFirst(), lSplitName.getSecond(), lType);
+    final Pair<String, Integer> nameIndex = FormulaManagerView.parseName(name);
+    if (nameIndex.getSecond() != null) {
+      return new Variable(nameIndex.getFirst(), nameIndex.getSecond(), type);
+    } else {
+      return new Constant(nameIndex.getFirst(), type);
+    }
   }
 
 
@@ -122,15 +127,13 @@ class Mathsat5Model {
     if (!msat_term_is_constant(env, pTermId)) {
       return toFunction(env, pTermId);
     } else {
-      return toVariable(env, pTermId);
+      return toConstant(env, pTermId);
     }
   }
 
   static Model createMathsatModel(final long sourceEnvironment,
-       final Mathsat5FormulaManager fmgr, final boolean sharedEnvironment) throws SolverException {
-    final long targetEnvironment = fmgr.getMsatEnv();
+       final Mathsat5FormulaManager fmgr) throws SolverException {
     ImmutableMap.Builder<AssignableTerm, Object> model = ImmutableMap.builder();
-    long modelFormula = msat_make_true(targetEnvironment);
 
     ModelIterator lModelIterator;
     try {
@@ -147,27 +150,12 @@ class Mathsat5Model {
       long lKeyTerm = lModelElement[0];
       long lValueTerm = lModelElement[1];
 
-      if (!sharedEnvironment) {
-        lKeyTerm = msat_make_copy_from(targetEnvironment, lKeyTerm, sourceEnvironment);
-        lValueTerm = msat_make_copy_from(targetEnvironment, lValueTerm, sourceEnvironment);
-      }
-
-      long equivalence;
-
-      if (msat_is_bool_type(targetEnvironment, msat_term_get_type(lKeyTerm)) && msat_is_bool_type(targetEnvironment, msat_term_get_type(lValueTerm))) {
-        equivalence = msat_make_iff(targetEnvironment, lKeyTerm, lValueTerm);
-      } else {
-        equivalence = msat_make_equal(targetEnvironment, lKeyTerm, lValueTerm);
-      }
-
-      modelFormula = msat_make_and(targetEnvironment, modelFormula, equivalence);
-
-      AssignableTerm lAssignable = toAssignable(targetEnvironment, lKeyTerm);
+      AssignableTerm lAssignable = toAssignable(sourceEnvironment, lKeyTerm);
 
       // TODO maybe we have to convert to SMTLIB format and then read in values in a controlled way, e.g., size of bitvector
       // TODO we are assuming numbers as values
-      if (!(msat_term_is_number(targetEnvironment, lValueTerm)
-            || msat_term_is_boolean_constant(targetEnvironment, lValueTerm) || msat_term_is_false(targetEnvironment, lValueTerm) || msat_term_is_true(targetEnvironment, lValueTerm))) {
+      if (!(msat_term_is_number(sourceEnvironment, lValueTerm)
+            || msat_term_is_boolean_constant(sourceEnvironment, lValueTerm) || msat_term_is_false(sourceEnvironment, lValueTerm) || msat_term_is_true(sourceEnvironment, lValueTerm))) {
         throw new IllegalArgumentException("Mathsat term is not a number!");
       }
 
@@ -205,7 +193,7 @@ class Mathsat5Model {
     }
 
     lModelIterator.free();
-    return new Model(model.build(), fmgr.encapsulateTerm(BooleanFormula.class, modelFormula));
+    return new Model(model.build());
   }
 
   private static Pattern BITVECTOR_PATTERN = Pattern.compile("^(\\d+)_(\\d+)$");

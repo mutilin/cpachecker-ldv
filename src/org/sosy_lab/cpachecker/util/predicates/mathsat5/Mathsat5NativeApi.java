@@ -43,9 +43,9 @@ class Mathsat5NativeApi {
   }
 
   // msat_result
-  public static final int MSAT_UNKNOWN = -1;
-  public static final int MSAT_UNSAT = 0;
-  public static final int MSAT_SAT = 1;
+  private static final int MSAT_UNKNOWN = -1;
+  private static final int MSAT_UNSAT = 0;
+  private static final int MSAT_SAT = 1;
 
   // msat_truth_value
   public static final int MSAT_UNDEF = -1;
@@ -54,16 +54,36 @@ class Mathsat5NativeApi {
 
   interface AllSatModelCallback {
 
-    void callback(long[] model);
+    void callback(long[] model) throws InterruptedException;
+  }
+
+  static interface TerminationTest {
+    boolean shouldTerminate() throws InterruptedException;
   }
 
   // wrappers for some of the native methods with a different number
   // of arguments
   public static int msat_all_sat(long e, long[] important,
-      AllSatModelCallback func) {
+      AllSatModelCallback func) throws InterruptedException {
 
     int result = msat_all_sat(e, important, important.length, func);
     return result;
+  }
+
+  /**
+   * Solve environment and check for satisfiability.
+   * Return true if sat, false if unsat.
+   */
+  public static boolean msat_check_sat(long e) throws InterruptedException {
+    int res = msat_solve(e);
+    switch (res) {
+    case MSAT_SAT:
+      return true;
+    case MSAT_UNSAT:
+      return false;
+    default:
+      throw new IllegalStateException("msat_solve returned " + res);
+    }
   }
 
   public static ModelIterator msat_create_ModelIterator(long e) {
@@ -299,10 +319,10 @@ class Mathsat5NativeApi {
   public static native void msat_assert_formula(long e, long formula);
   //public static native int msat_add_preferred_for_branching(long e, long termBoolvar);
   //public static native int msat_clear_preferred_for_branching(long e)
-  public static native int msat_solve(long e);
+  private static native int msat_solve(long e) throws InterruptedException;
   //public static native int msat_solve_with_assumptions(long e, long[] assumptions, size numAssumptions)
   private static native int msat_all_sat(long e, long[] important, int num_important,
-      AllSatModelCallback func);
+      AllSatModelCallback func) throws InterruptedException;
   //private static native int msat_solve_diversify(long e, DiversifyModelCallback func, long userData)
   public static native long[] msat_get_asserted_formulas(long e);
   public static native long[] msat_get_theory_lemmas(long e);
@@ -335,6 +355,8 @@ class Mathsat5NativeApi {
   /*
    * Special functions
    */
+  public static native long msat_set_termination_test(long e, TerminationTest callback);
+  public static native void msat_free_termination_test(long t);
   public static native String msat_get_version();
   public static native String msat_last_error_message(long e);
 }

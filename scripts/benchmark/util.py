@@ -2,7 +2,7 @@
 CPAchecker is a tool for configurable software verification.
 This file is part of CPAchecker.
 
-Copyright (C) 2007-2012  Dirk Beyer
+Copyright (C) 2007-2013  Dirk Beyer
 All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,7 +22,8 @@ CPAchecker web page:
   http://cpachecker.sosy-lab.org
 """
 
-from __future__ import absolute_import, unicode_literals
+# prepare for Python 3
+from __future__ import absolute_import, print_function, unicode_literals
 
 import glob
 import os
