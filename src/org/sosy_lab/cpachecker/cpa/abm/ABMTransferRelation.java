@@ -54,6 +54,8 @@ import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionSummaryEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionSummaryStatementEdge;
 import org.sosy_lab.cpachecker.core.ShutdownNotifier;
 import org.sosy_lab.cpachecker.core.algorithm.CPAAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.CPALocalSaveAlgorithm;
@@ -438,9 +440,10 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
           return attachAdditionalInfoToCallNodes(wrappedTransfer.getAbstractSuccessors(pElement, pPrecision, edge));
         }
         if (BlockStack.contains(nextBlock)) {
-          logger.log(Level.FINER, "BlockStack contains nextBlock");
-          //We shouldn't be here
-          throw new HandleCodeException("ABM detects recursion");
+          logger.log(Level.INFO, "BlockStack contains nextBlock");
+          //go by summaryEdge
+          callstackTransfer.setFlag();
+          return attachAdditionalInfoToCallNodes(wrappedTransfer.getAbstractSuccessors(pElement, pPrecision, getSummaryEdge(node)));
         }
         if (isHeadOfMainFunction(node)) {
           //skip main function
@@ -499,31 +502,52 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
         logger.log(Level.ALL, "Expanded results:", expandedResult);
 
         currentBlock = outerSubtree;
-
+        //System.out.println("Abm size of result1 = " + expandedResult.size());
         return attachAdditionalInfoToCallNodes(expandedResult);
       } else {
         List<AbstractState> result = new ArrayList<>();
         for (int i = 0; i < node.getNumLeavingEdges(); i++) {
           CFAEdge e = node.getLeavingEdge(i);
-          if (e instanceof CFunctionCallEdge) {
-            //need to check recursion here
-            for (Block block : BlockStack) {
-              if (block.getCallNode().equals(e.getSuccessor())) {
-                //go throw block, where we've already been
-                callstackTransfer.setFlag();
-                e = node.getLeavingSummaryEdge();
-                result.addAll(getAbstractSuccessors0(pElement, pPrecision, e));
-                return attachAdditionalInfoToCallNodes(result);
-              }
-            }
+          if (e instanceof CFunctionSummaryStatementEdge) {
+            continue;
+            //if it is need, we go by it, when find recursion
           }
-          result.addAll(getAbstractSuccessors0(pElement, pPrecision, e));
+          if (isRecursionEdge(e)) {
+            callstackTransfer.setFlag();
+            result.addAll(getAbstractSuccessors0(pElement, pPrecision, getSummaryEdge(node)));
+            break;
+          }
+          if (!(e instanceof CFunctionSummaryEdge)) {
+            result.addAll(getAbstractSuccessors0(pElement, pPrecision, e));
+          }
         }
         return attachAdditionalInfoToCallNodes(result);
       }
     } else {
       return attachAdditionalInfoToCallNodes(getAbstractSuccessors0(pElement, pPrecision, edge));
     }
+  }
+
+  private boolean isRecursionEdge(CFAEdge e) {
+    if (e instanceof CFunctionCallEdge) {
+      for (Block block : BlockStack) {
+        if (block.getCallNode().equals(e.getSuccessor())) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  private CFunctionSummaryStatementEdge getSummaryEdge(CFANode node) {
+    CFAEdge e;
+    for (int i = 0; i < node.getNumLeavingEdges(); i++) {
+      e = node.getLeavingEdge(i);
+      if (e instanceof CFunctionSummaryStatementEdge) {
+        return (CFunctionSummaryStatementEdge)e;
+      }
+    }
+    return null;
   }
 
   private Collection<? extends AbstractState> getAbstractSuccessors0(AbstractState pElement, Precision pPrecision,
