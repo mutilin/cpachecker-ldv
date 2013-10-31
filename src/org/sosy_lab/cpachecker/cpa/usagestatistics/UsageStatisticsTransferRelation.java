@@ -52,9 +52,11 @@ import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdgeType;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionCallEdge;
+import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionSummaryStatementEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
@@ -163,7 +165,15 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
     if (checkSkippedFunciton(pCfaEdge)) {
       callstackTransfer.setFlag();
-      currentEdge = ((FunctionCallEdge)currentEdge).getSummaryEdge();
+      //Find right summary edge
+      CFANode node = AbstractStates.extractLocation(oldState);
+      for (int k = 0; k < node.getNumLeavingEdges(); k++) {
+        currentEdge = node.getLeavingEdge(k);
+        if (currentEdge instanceof CFunctionSummaryStatementEdge) {
+          break;
+        }
+      }
+      assert (currentEdge instanceof CFunctionSummaryStatementEdge);
     }
 
     AbstractState oldWrappedState = oldState.getWrappedState();
@@ -175,7 +185,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
       if (newLockState != null && newLockState.equals(lockState)) {
         //It means, that there is no lock operations.
-        newState = handleEdge(pPrecision, newState, oldState, pCfaEdge);
+        newState = handleEdge(pPrecision, newState, pCfaEdge);
       }
       if (newState != null) {
         results.add(newState);
@@ -204,11 +214,11 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
   }
 
   private UsageStatisticsState handleEdge(UsageStatisticsPrecision precision, UsageStatisticsState newState
-      , UsageStatisticsState oldState, CFAEdge pCfaEdge) throws CPATransferException {
+      , CFAEdge pCfaEdge) throws CPATransferException {
 
-    /*if (pCfaEdge.getSuccessor().getFunctionName().equals("acquiredrain")) {
-      System.out.println("In acquiredrain()");
-    }*/
+    if (pCfaEdge.getSuccessor().getFunctionName().equals("mtxCheckSignal")) {
+      System.out.println("In mtxCheckSignal()");
+    }
     switch(pCfaEdge.getEdgeType()) {
 
       case DeclarationEdge: {
@@ -225,7 +235,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       }
 
       case AssumeEdge: {
-        visitStatement(oldState, precision, ((CAssumeEdge)pCfaEdge).getExpression(), Access.READ, EdgeType.ASSUMPTION);
+        visitStatement(newState, precision, ((CAssumeEdge)pCfaEdge).getExpression(), Access.READ, EdgeType.ASSUMPTION);
         break;
       }
 
@@ -240,6 +250,12 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       case CallToReturnEdge: {
         break;
       }
+
+      case MultiEdge:
+        for (CFAEdge edge : ((MultiEdge)pCfaEdge).getEdges()) {
+          newState = handleEdge(precision, newState, edge);
+        }
+        break;
 
       default:
         throw new UnrecognizedCFAEdgeException(pCfaEdge);
