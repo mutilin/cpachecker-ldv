@@ -40,6 +40,7 @@ import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.WrapperCPA;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSetFactory;
+import org.sosy_lab.cpachecker.cpa.predicate.ABMPredicateCPA;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsCPA;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 
@@ -66,7 +67,10 @@ public class ABMLockCPA extends ABMCPA {
     if (blockPartitioning == null) {
       blockPartitioning = heuristic.buildPartitioning(node);
       transfer.setBlockPartitioning(blockPartitioning);
-
+      ABMPredicateCPA predicateCpa = ((WrapperCPA) getWrappedCpa()).retrieveWrappedCpa(ABMPredicateCPA.class);
+      if (predicateCpa != null) {
+        predicateCpa.setPartitioning(blockPartitioning);
+      }
       UsageStatisticsCPA usCpa = ((WrapperCPA) getWrappedCpa()).retrieveWrappedCpa(UsageStatisticsCPA.class);
       if (usCpa != null) {
         usCpa.getStats().setStackRestoration(transfer);
