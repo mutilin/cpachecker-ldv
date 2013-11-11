@@ -69,7 +69,7 @@ public class BlockPartitioning {
 
   /**
    * @param node
-   * @return true, if there is a <code>Block</code> such that <code>node</node> is a callnode of the subtree.
+   * @return true, if there is a <code>Block</code> such that <code>node</code> is a callnode of the subtree.
    */
   public boolean isCallNode(CFANode node) {
     return callNodeToBlock.containsKey(node);
