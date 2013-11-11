@@ -51,7 +51,6 @@ public class LockStatisticsLock {
       String name2 = pO2.toString();
       return (result + name1.compareTo(name2));
     }
-
   }
 
   public static enum LockType {
@@ -65,29 +64,26 @@ public class LockStatisticsLock {
     }
   }
 
-  private String name;
-  private Stack<AccessPoint> accessPoints;
-  private LockType type;
-  private int recursiveCounter;
-  private String variable;
+  private final String name;
+  private final Stack<AccessPoint> accessPoints;
+  private final LockType type;
+  private final String variable;
 
   LockStatisticsLock(String n, int l, LockType t, CallstackState s, CallstackState reduced, String v) {
     name = n;
     accessPoints = new Stack<>();
     accessPoints.add(new AccessPoint( new LineInfo(l), s, reduced));
     type = t;
-    recursiveCounter = 0;
     variable = v;
   }
 
-  private LockStatisticsLock(String n, LockType t, Stack<AccessPoint> points, String v, int r) {
+  private LockStatisticsLock(String n, LockType t, Stack<AccessPoint> points, String v) {
     name = n;
     accessPoints = new Stack<>();
     for (AccessPoint point : points) {
       accessPoints.add(point);
     }
     type = t;
-    recursiveCounter = r;
     variable = v;
   }
 
@@ -104,13 +100,13 @@ public class LockStatisticsLock {
   }
 
   public int getRecursiveCounter() {
-    return recursiveCounter;
+    return accessPoints.size();
   }
 
   @Override
   public LockStatisticsLock clone() {
     LockStatisticsLock result =
-        new LockStatisticsLock(this.name, this.type, new Stack<AccessPoint>(), this.variable, this.recursiveCounter);
+        new LockStatisticsLock(this.name, this.type, new Stack<AccessPoint>(), this.variable);
     for (AccessPoint point : this.accessPoints) {
       result.accessPoints.add(point.clone());
     }
@@ -119,15 +115,13 @@ public class LockStatisticsLock {
 
   public LockStatisticsLock addAccessPointer(AccessPoint accessPoint) {
     LockStatisticsLock cloned = this.clone();
-    cloned.recursiveCounter++;
     cloned.accessPoints.push(accessPoint);
     return cloned;
   }
 
   public LockStatisticsLock removeLastAccessPointer() {
-    if(recursiveCounter > 0) {
+    if(!this.accessPoints.isEmpty()) {
       LockStatisticsLock cloned = this.clone();
-      cloned.recursiveCounter--;
       cloned.accessPoints.pop();
       return cloned;
     } else {
@@ -146,7 +140,7 @@ public class LockStatisticsLock {
       myVariableName = myVariableName.replaceAll("\\)", "");
       String otherVariable = variableName.replaceAll("\\(", "");
       otherVariable = otherVariable.replaceAll("\\)", "");
-      //this is only for cil: it likes change i -> i___0
+      //this is only for cil: it likes to change i -> i___0
       myVariableName = myVariableName.replaceAll("___\\d*", "");
       otherVariable = otherVariable.replaceAll("___\\d*", "");
       return (this.name.equals(lockName) && myVariableName.equals(otherVariable));
@@ -167,7 +161,7 @@ public class LockStatisticsLock {
     int result = 1;
     result = prime * result + ((variable == null) ? 0 : variable.hashCode());
     result = prime * result + ((name == null) ? 0 : name.hashCode());
-    result = prime * result + recursiveCounter;
+    result = prime * result + accessPoints.size();
     result = prime * result + ((type == null) ? 0 : type.hashCode());
     //result = prime * result + ((accessPoints == null) ? 0 : accessPoints.hashCode());
     return result;
@@ -199,7 +193,7 @@ public class LockStatisticsLock {
     } else if (!name.equals(other.name)) {
       return false;
     }
-    if (recursiveCounter != other.recursiveCounter) {
+    if (accessPoints.size() != other.accessPoints.size()) {
       return false;
     }
     if (type != other.type) {
@@ -210,8 +204,7 @@ public class LockStatisticsLock {
 
   @Override
   public String toString() {
-
-    return/*type.toASTString() + " " +*/ name + ( variable != "" ? ("(" + variable + ")") : "" )  + "[" + recursiveCounter + "]";
+    return name + ( variable != "" ? ("(" + variable + ")") : "" )  + "[" + accessPoints.size() + "]";
   }
 
   public boolean existsIn(List<LockStatisticsLock> locks) {

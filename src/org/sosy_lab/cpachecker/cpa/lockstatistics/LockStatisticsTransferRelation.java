@@ -71,7 +71,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
       description="function to reset state")
   private String lockreset;
 
-  private Map<String, AnnotationInfo> annotatedfunctions;
+  private final Map<String, AnnotationInfo> annotatedfunctions;
 
   private UsageStatisticsCPA stateGetter;
   private final Set<LockInfo> locks;
@@ -79,13 +79,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
   /*@Option(name="exceptions",
       description="functions with parameters, which we don't need to use")
   private Set<String> exceptions;
-
-
-  @Option(name="functionhandler", values={"LINUX", "OS"},toUppercase=true,
-      description="which type of function handler we should use")
-  private String HandleType = "LINUX";*/
-
-  //private FunctionHandlerOS handler;
+*/
   private LogManager logger;
 
   public LockStatisticsTransferRelation(Configuration config, LogManager logger) throws InvalidConfigurationException {
@@ -96,14 +90,6 @@ public class LockStatisticsTransferRelation implements TransferRelation
 
     locks = parser.parseLockInfo();
     annotatedfunctions = parser.parseAnnotatedFunctions();
-   /* if (HandleType.equals("LINUX")) {
-      handler = new FunctionHandlerLinux(lock, unlock, exceptions);
-    }
-    else if (HandleType.equals("OS")) {*/
-    //handler = new FunctionHandlerOS(tmpInfo, logger);
-    /*} else {
-      throw new InvalidConfigurationException("Unsupported function handler");
-    }*/
   }
 
   @Override
@@ -118,16 +104,10 @@ public class LockStatisticsTransferRelation implements TransferRelation
 
       case FunctionCallEdge:
         String fCallName = ((CFunctionCallEdge)cfaEdge).getSuccessor().getFunctionName();
-      	if (annotatedfunctions != null && annotatedfunctions.containsKey(fCallName)) {
-      		CFANode pred = ((CFunctionCallEdge)cfaEdge).getPredecessor();
-      		logger.log(Level.FINER,"annotated name=" + fCallName + ", call"
-                     + ", node=" + pred
-                     + ", line=" + pred.getLineNumber()
-                         + ", successor=" + lockStatisticsElement
-                     );
-      	}
         successor = handleFunctionCall(lockStatisticsElement, (CFunctionCallEdge)cfaEdge);
         if (annotatedfunctions != null && annotatedfunctions.containsKey(fCallName)) {
+          logger.log(Level.FINE, "Annotated function " + fCallName + " call"
+              + ", \n\tline = " + cfaEdge.getLineNumber());
           successor.setRestoreState(lockStatisticsElement);
         }
         break;
@@ -135,38 +115,42 @@ public class LockStatisticsTransferRelation implements TransferRelation
       case FunctionReturnEdge:
         CFANode tmpNode = ((CFunctionReturnEdge)cfaEdge).getSummaryEdge().getPredecessor();
         String fName =((CFunctionReturnEdge)cfaEdge).getSummaryEdge().getExpression().getFunctionCallExpression().getFunctionNameExpression().toASTString();
+        /*if (fName.equals("vrele")) {
+          System.out.println("vrele");
+        }*/
         if (annotatedfunctions != null && annotatedfunctions.containsKey(fName)) {
           successor = lockStatisticsElement.clone();
+          logger.log(Level.FINE, "Annotated function " + fName + " return");
           if (annotatedfunctions.get(fName).restoreLocks != null) {
-            //At first, get restored state, because we can have a set of returned states
-            //and all changes should be in terms of this returned state
             successor = successor.restore(annotatedfunctions.get(fName).restoreLocks, logger);
 
-    		    logger.log(Level.FINER, "annotated name=" + fName + ", return"
-                + ", node=" + tmpNode
-                + ", line=" + tmpNode.getLineNumber()
-                + ",\n\t successor=" + successor
-                + ",\n\t element=" + element
-                );
+            logger.log(Level.FINER, "Restore " + annotatedfunctions.get(fName).restoreLocks
+                + ", \n\tline=" + tmpNode.getLineNumber());
 
-          }
-          if (annotatedfunctions.get(fName).freeLocks != null) {
-            //free some locks
+          } else if (annotatedfunctions.get(fName).freeLocks != null) {
+            //Free in state at first restores saved state
+            logger.log(Level.FINER, "Free " + annotatedfunctions.get(fName).freeLocks.keySet() + " in " + successor
+                        + ", \n\t line = " + tmpNode.getLineNumber());
             successor = successor.free(annotatedfunctions.get(fName).freeLocks, logger);
-          }
-          if (annotatedfunctions.get(fName).resetLocks != null) {
+          } else if (annotatedfunctions.get(fName).resetLocks != null) {
+            //Reset in state at first restores saved state
+            logger.log(Level.FINER, "Reset " + annotatedfunctions.get(fName).resetLocks.keySet() + " in " + successor
+                + ", \n\t line = " + tmpNode.getLineNumber());
             successor = successor.reset(annotatedfunctions.get(fName).resetLocks, logger);
-          }
-          if (annotatedfunctions.get(fName).captureLocks != null) {
+          } else if (annotatedfunctions.get(fName).captureLocks != null) {
             Map<String, String> locks = annotatedfunctions.get(fName).captureLocks;
+            logger.log(Level.FINER, "Force lock of " + annotatedfunctions.get(fName).captureLocks.keySet() + " in " + successor
+                + ", \n\t line = " + tmpNode.getLineNumber());
             successor = successor.restore(locks, logger);
             for (String name : locks.keySet()) {
               processLock(successor, cfaEdge.getLineNumber(), findLockByName(name), locks.get(name));
             }
           }
-          break;
+          logger.log(Level.FINEST, "\tPredessor = " + lockStatisticsElement
+                  + "\n\tSuccessor = " + successor);
+        } else {
+          successor = lockStatisticsElement.clone();
         }
-        successor = lockStatisticsElement.clone();
         break;
 
       default:
@@ -371,10 +355,10 @@ public class LockStatisticsTransferRelation implements TransferRelation
       StringBuilder message = new StringBuilder();
       message.append("Try to lock " + lock.lockName + " more, than " + lock.maxLock + " in " + lineNumber + " line. Previous were in ");
       for (AccessPoint point : access) {
-        message.append(point.line.getLine() + ", ");
+        message.append(point.getLineInfo().getLine() + ", ");
       }
       message.delete(message.length() - 2, message.length());
-      System.err.println(message.toString());
+      logger.log(Level.WARNING, message.toString());
     }
   }
 
@@ -387,6 +371,4 @@ public class LockStatisticsTransferRelation implements TransferRelation
     logger.log(Level.FINER, "Set a lock level " + level + " at line " + lineNumber + ", Callstack: " + callstack);
     newElement.set(lock.lockName, level, lineNumber, callstack, reducedCallstack, "");
   }
-
-  //private
 }

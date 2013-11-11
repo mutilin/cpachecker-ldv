@@ -31,7 +31,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.logging.Level;
 
+import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
@@ -103,13 +105,14 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
   //TODO: strengthen (CallStackCPA, LockStatisticsCPA)
   //pass the state to LockStatisticsCPA to bind Callstack to lock
   private UsageStatisticsState oldState;
+  private final LogManager logger;
 
   int globalAdress = 0;
   int localAdress = 0;
   int structAdress = 0;
 
   public UsageStatisticsTransferRelation(TransferRelation pWrappedTransfer,
-      Configuration config, UsageStatisticsCPAStatistics s, CallstackTransferRelation transfer) throws InvalidConfigurationException {
+      Configuration config, LogManager pLogger, UsageStatisticsCPAStatistics s, CallstackTransferRelation transfer) throws InvalidConfigurationException {
     config.inject(this);
     wrappedTransfer = pWrappedTransfer;
     callstackTransfer = transfer;
@@ -124,6 +127,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       }
     }
     handler = new ExpressionHandler();
+    logger = pLogger;
   }
 
   @Override
@@ -160,6 +164,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     CFAEdge currentEdge = pCfaEdge;
 
     if (checkAbortFunciton(currentEdge)) {
+      logger.log(Level.FINEST, currentEdge + " is abort edge, analysis was stopped");
       return;
     }
 
@@ -174,6 +179,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
         }
       }
       assert (currentEdge instanceof CFunctionSummaryStatementEdge);
+      logger.log(Level.FINEST, ((CFunctionSummaryStatementEdge)currentEdge).getFunctionName() + " is skipped due to configuration");
     }
 
     AbstractState oldWrappedState = oldState.getWrappedState();
@@ -216,9 +222,9 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
   private UsageStatisticsState handleEdge(UsageStatisticsPrecision precision, UsageStatisticsState newState
       , CFAEdge pCfaEdge) throws CPATransferException {
 
-    if (pCfaEdge.getSuccessor().getFunctionName().equals("mtxCheckSignal")) {
+    /*if (pCfaEdge.getSuccessor().getFunctionName().equals("mtxCheckSignal")) {
       System.out.println("In mtxCheckSignal()");
-    }
+    }*/
     switch(pCfaEdge.getEdgeType()) {
 
       case DeclarationEdge: {
@@ -270,6 +276,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     String functionName = edge.getSuccessor().getFunctionName();
     if (abortfunctions != null && abortfunctions.contains(functionName)) {
       pNewState = null;
+      logger.log(Level.FINEST, functionName + " is abort function and was skipped");
       return;
     }
     if (statement instanceof CFunctionCallAssignmentStatement) {
@@ -439,6 +446,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     if (state.containsLinks(idFrom)) {
       idFrom = state.getLinks(idFrom);
     }
+    logger.log(Level.FINEST, "Link " + idIn + " and " + idFrom);
     state.put(idIn, idFrom);
   }
 
@@ -479,7 +487,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
           System.out.println(id.toString());
         System.out.println(globalAdress + " : " + localAdress + " : " + structAdress);
       }*/
-
+      logger.log(Level.FINE, singleId + " is considered to be local, so it wasn't add to statistics");
       return;
     }
 
@@ -520,7 +528,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
         return null;//may be null...
       }
     } else {
-      System.err.println("Unknown identifier type: " + aId.toString());
+      logger.log(Level.WARNING, "Unknown identifier type: " + aId.toString());
       return null;
     }
   }

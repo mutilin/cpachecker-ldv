@@ -104,8 +104,8 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
     } else {
       reducer = null;
     }
-    this.statistics = new UsageStatisticsCPAStatistics(pConfig);
-    this.transferRelation = new UsageStatisticsTransferRelation(pCpa.getTransferRelation(), pConfig, statistics
+    this.statistics = new UsageStatisticsCPAStatistics(pConfig, pLogger);
+    this.transferRelation = new UsageStatisticsTransferRelation(pCpa.getTransferRelation(), pConfig, pLogger, statistics
         , (CallstackTransferRelation) (CPAs.retrieveCPA(this, CallstackCPA.class)).getTransferRelation());
 
     LockStatisticsCPA LockCpa = ((WrapperCPA) getWrappedCpa()).retrieveWrappedCpa(LockStatisticsCPA.class);

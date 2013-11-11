@@ -32,7 +32,7 @@ import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 
 
 public class AccessPoint {
-  public LineInfo line;
+  private final LineInfo line;
   /**
    * callstack is responsible for information in report.
    * So, in every moment in time this field should be correct to state of analysis
@@ -73,6 +73,10 @@ public class AccessPoint {
 
   public boolean isNew() {
     return isNewPoint;
+  }
+
+  public LineInfo getLineInfo() {
+    return line;
   }
 
   @Override
@@ -136,7 +140,8 @@ public class AccessPoint {
 
   public AccessPoint reduceCallstack(CallstackReducer pReducer, CFANode pNode) {
     AccessPoint result = this.clone();
-    CallstackState reducedState = (CallstackState)pReducer.getVariableReducedState(callstack, null, pNode);
+    CallstackState reducedState;
+    reducedState = (CallstackState)pReducer.getVariableReducedState(callstack, null, pNode);
     result.setReducedCallstack(reducedState);
     return result;
   }

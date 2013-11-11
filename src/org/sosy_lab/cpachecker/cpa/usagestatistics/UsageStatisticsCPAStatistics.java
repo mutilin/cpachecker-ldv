@@ -38,7 +38,9 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.logging.Level;
 
+import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.FileOption;
@@ -88,6 +90,8 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       description="which data process we should use")
   private String unsafeDetectorType = "PAIR";
 
+  private final LogManager logger;
+
   //@Option(description="if we need to print all variables, not only unsafe cases")
   //private boolean fullstatistics = true;
 
@@ -123,7 +127,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     counter[i][j]++;*/
   }
 
-  public UsageStatisticsCPAStatistics(Configuration config) throws InvalidConfigurationException{
+  public UsageStatisticsCPAStatistics(Configuration config, LogManager pLogger) throws InvalidConfigurationException{
     Stat = new HashMap<>();
     config.inject(this);
 
@@ -132,9 +136,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     } else if (unsafeDetectorType.equals("SETDIFF")) {
       unsafeDetector = new SetDifferenceUnsafeDetector(config);
     } else {
-      System.out.println("Unknown data procession " + unsafeDetectorType);
-      System.exit(0);
+      throw new InvalidConfigurationException("Unknown data procession " + unsafeDetectorType);
     }
+    logger = pLogger;
   }
 
   public void add(SingleIdentifier id, Access access, UsageStatisticsState state, EdgeType type) throws HandleCodeException {
@@ -164,8 +168,10 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       id = ((StructureIdentifier)id).toStructureFieldIdentifier();
     }
 
+    logger.log(Level.FINE, "Add id " + id + " to unsafe statistics");
     List<UsageInfo> uset;
     LockStatisticsState lockState = AbstractStates.extractStateByType(state, LockStatisticsState.class);
+    logger.log(Level.FINEST, "Its locks are: " + lockState);
     CallstackState callstackState = AbstractStates.extractStateByType(state, CallstackState.class);
     CFANode location = AbstractStates.extractLocation(state);
 
@@ -219,7 +225,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       for (LockStatisticsLock lock : Locks.getLocks()) {
         for (AccessPoint accessPoint : lock.getAccessPoints()) {
           currentLeaf = createTree(accessPoint.getCallstack());
-          currentLeaf.add(lock.toString(), accessPoint.line.line);
+          currentLeaf.add(lock.toString(), accessPoint.getLineInfo().line);
         }
       }
     }
@@ -366,7 +372,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   public void printStatistics(PrintStream out, Result result, ReachedSet reached) {
 		PrintWriter writer = null;
 		FileOutputStream file = null;
-
     try {
       File outputFile = outputStatFileName.toFile();
       if (!outputFile.exists()) {
@@ -379,18 +384,20 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       file = new FileOutputStream (outputFile.getPath());
       writer = new PrintWriter(file);
     } catch(FileNotFoundException e) {
-      System.err.println("File " + outputStatFileName + " not found");
+      logger.log(Level.SEVERE, "File " + outputStatFileName + " not found");
       return;
     } catch (IOException e) {
-      System.err.println(e.getMessage());
+      logger.log(Level.SEVERE, e.getMessage());
       return;
     }
 
+    logger.log(Level.FINE, "Print statistics about unsafe cases");
     printCountStatistics(writer, Stat.keySet());
     Collection<SingleIdentifier> unsafeCases = unsafeDetector.getUnsafes(Stat);
     printCountStatistics(writer, unsafeCases);
     printLockStatistics(writer);
 
+    logger.log(Level.FINEST, "Processing unsafe identifiers");
     for (SingleIdentifier id : unsafeCases) {
       createVisualization(id, writer);
     }
@@ -458,7 +465,11 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
   public CallstackState createStack(CallstackState state) throws HandleCodeException {
     //need to LockStatistics usage
-    return stackRestoration.restoreCallstack(state);
+    if (stackRestoration != null) {
+      return stackRestoration.restoreCallstack(state);
+    } else {
+      return state;
+    }
   }
 
   public void setStackRestoration(ABMRestoreStack rStack) {

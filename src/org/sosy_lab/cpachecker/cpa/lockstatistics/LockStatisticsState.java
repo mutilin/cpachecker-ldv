@@ -24,7 +24,6 @@
 package org.sosy_lab.cpachecker.cpa.lockstatistics;
 
 import java.io.Serializable;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -81,22 +80,9 @@ public class LockStatisticsState implements AbstractState, Serializable {
   @Override
   public String toString() {
     StringBuilder sb = new StringBuilder();
-    LockStatisticsLock tmpLock;
-    Map<String, LockStatisticsLock> locksToString = new HashMap<>();
 
     for (LockStatisticsLock lock : locks) {
-      if (!locksToString.containsKey(lock.getName() + lock.getVariable())) {
-        locksToString.put(lock.getName() + lock.getVariable(), lock);
-      } else {
-        tmpLock = locksToString.get(lock.getName() + lock.getVariable());
-        if (tmpLock.getRecursiveCounter() < lock.getRecursiveCounter()) {
-          locksToString.put(lock.getName() + lock.getVariable(), lock);
-        }
-      }
-    }
-
-    for (String lockName : locksToString.keySet()) {
-      sb.append(locksToString.get(lockName).toString() + ", ");
+      sb.append(lock.toString() + ", ");
     }
     if (locks.size() > 0) {
       sb.delete(sb.length() - 2, sb.length());
@@ -106,7 +92,7 @@ public class LockStatisticsState implements AbstractState, Serializable {
     return sb.toString();
   }
 
-  void add(String lockName, int line, CallstackState state, CallstackState reduced, String variable, LogManager logger) {
+  public void add(String lockName, int line, CallstackState state, CallstackState reduced, String variable, LogManager logger) {
     boolean b;
     String locksBefore = locks.toString();
 
@@ -122,8 +108,8 @@ public class LockStatisticsState implements AbstractState, Serializable {
       b = locks.add(tmpLock);
     }
     if(b && logger != null) {
-      logger.log(Level.FINER, "Locks before: " + locksBefore);
-      logger.log(Level.FINER, "Locks after: " + locks);
+      logger.log(Level.FINEST, "Locks before: " + locksBefore);
+      logger.log(Level.FINEST, "Locks after: " + locks);
     }
   }
 
@@ -136,12 +122,12 @@ public class LockStatisticsState implements AbstractState, Serializable {
     return null;
   }
 
-  void add(LockStatisticsLock l, LogManager logger) {
+  public void add(LockStatisticsLock l, LogManager logger) {
 	  String locksBefore = locks.toString();
 	  boolean b = locks.add(l);
 	  if(b && logger != null) {
-		  logger.log(Level.FINER, "Locks before: " + locksBefore);
-		  logger.log(Level.FINER, "Locks after: " + locks);
+		  logger.log(Level.FINEST, "Locks before: " + locksBefore);
+		  logger.log(Level.FINEST, "Locks after: " + locks);
 	  }
   }
 
@@ -153,22 +139,24 @@ public class LockStatisticsState implements AbstractState, Serializable {
     if (newLock != null) {
       locks.add(newLock);
       if (logger != null) {
-        logger.log(Level.FINER, "Locks before: " + locksBefore);
-        logger.log(Level.FINER, "Locks after: " + locks);
+        logger.log(Level.FINEST, "Locks before: " + locksBefore);
+        logger.log(Level.FINEST, "Locks after: " + locks);
       }
     }
   }
 
-  void free(String lockName, String variable, LogManager logger) {
+  public void free(String lockName, String variable, LogManager logger) {
 	  LockStatisticsLock oldLock = findLock(lockName, variable);
 	  if (oldLock == null) {
-      //TODO what should we do, if we've lost a lock?
+	    /*if (logger != null) {
+	      logger.log(Level.WARNING, "Free nonexisting lock: " + lockName);
+	    }*/
 	    return;
     }
     free(oldLock, logger);
   }
 
-  void reset(String lockName, String var, LogManager logger) {
+  public void reset(String lockName, String var, LogManager logger) {
     LockStatisticsLock lock = findLock(lockName, var);
     reset(lock, logger);
   }
@@ -177,12 +165,12 @@ public class LockStatisticsState implements AbstractState, Serializable {
     String locksBefore = locks.toString();
     boolean b = locks.remove(lock);
     if (b && logger != null) {
-      logger.log(Level.FINER, "Locks before: " + locksBefore);
-      logger.log(Level.FINER, "Locks after: " + locks);
+      logger.log(Level.FINEST, "Locks before: " + locksBefore);
+      logger.log(Level.FINEST, "Locks after: " + locks);
     }
   }
 
-  LockStatisticsState reset(Map<String, String> pResetLocks, LogManager pLogger) {
+  public LockStatisticsState reset(Map<String, String> pResetLocks, LogManager pLogger) {
     LockStatisticsState newState = this.restore(pResetLocks, pLogger);
     for (String lockName : pResetLocks.keySet()) {
       newState.reset(lockName, pResetLocks.get(lockName), pLogger);
@@ -190,7 +178,7 @@ public class LockStatisticsState implements AbstractState, Serializable {
     return newState;
   }
 
-  void set(String lockName, int num, int line, CallstackState state, CallstackState reduced, String variable) {
+  public void set(String lockName, int num, int line, CallstackState state, CallstackState reduced, String variable) {
     //num can be equal -1, this means, that in origin file it is 0 and we should delete locks
     LockStatisticsLock oldLock = findLock(lockName, variable);
     LockStatisticsLock newLock;
@@ -218,7 +206,7 @@ public class LockStatisticsState implements AbstractState, Serializable {
     }
   }
 
-  LockStatisticsState restore(Map<String, String> lockNames, LogManager logger) {
+  public LockStatisticsState restore(Map<String, String> lockNames, LogManager logger) {
     LockStatisticsState restoredState = this.toRestore;
     if (restoredState == null) {
       return this.clone();
@@ -250,7 +238,7 @@ public class LockStatisticsState implements AbstractState, Serializable {
     return newState;
   }
 
-  LockStatisticsState free(Map<String, String> freeLocks, LogManager logger) {
+  public LockStatisticsState free(Map<String, String> freeLocks, LogManager logger) {
     LockStatisticsState newState = this.restore(freeLocks, logger); //it also clones
     String variable;
 
@@ -280,7 +268,7 @@ public class LockStatisticsState implements AbstractState, Serializable {
     for (LockStatisticsLock lock : locks) {
       if (lock.hasEqualNameAndVariable(lockName, null)) {
         for (AccessPoint point : lock.getAccessPoints()) {
-          sb.append(point.line.getLine() + ", ");
+          sb.append(point.getLineInfo().getLine() + ", ");
         }
       }
     }
@@ -298,7 +286,7 @@ public class LockStatisticsState implements AbstractState, Serializable {
    * @param other the other element to join with this element
    * @return a new element representing the join of this element and the other element
    */
-  LockStatisticsState join(LockStatisticsState other) {
+  public LockStatisticsState join(LockStatisticsState other) {
     Set<LockStatisticsLock> newGlobalLocks = new HashSet<>();
 
     for (LockStatisticsLock otherLock : other.locks) {
@@ -317,7 +305,7 @@ public class LockStatisticsState implements AbstractState, Serializable {
    * @param other the other element
    * @return true, if this element is less or equal than the other element, based on the order imposed by the lattice
    */
-  boolean isLessOrEqual(LockStatisticsState other) {
+  public boolean isLessOrEqual(LockStatisticsState other) {
 
     if (toRestore != null && !toRestore.equals(other.toRestore)) {
       return false;
@@ -392,17 +380,26 @@ public class LockStatisticsState implements AbstractState, Serializable {
     return true;
   }
 
-  public void expandCallstack(LockStatisticsLock oldLock, LockStatisticsLock rootLock, ABMRestoreStack restorator) {
-    LockStatisticsLock newLock = oldLock.expandCallstack(rootLock, restorator);
-    if (oldLock != newLock) {
-      locks.remove(oldLock);
-      locks.add(newLock);
+  public void expandCallstack(LockStatisticsState rootState, ABMRestoreStack restorator) {
+    Set<Pair<LockStatisticsLock, LockStatisticsLock>> toChange = new HashSet<>();
+    LockStatisticsLock tmpLock;
+    for (LockStatisticsLock lock : this.locks) {
+      tmpLock = rootState.findLock(lock.getName(), lock.getVariable());
+      //null is also correct (it shows, that we've found new lock)
+      tmpLock = lock.expandCallstack(tmpLock, restorator);
+      if (lock != tmpLock) {
+        toChange.add(Pair.of(lock, tmpLock));
+      }
+    }
+    for (Pair<LockStatisticsLock, LockStatisticsLock> pair : toChange) {
+      locks.remove(pair.getFirst());
+      locks.add(pair.getSecond());
     }
   }
 
   public void reduceCallstack(CallstackReducer pReducer, CFANode pNode) {
     Set<Pair<LockStatisticsLock, LockStatisticsLock>> toChange = new HashSet<>();
-    for (LockStatisticsLock lock : getLocks()) {
+    for (LockStatisticsLock lock : this.locks) {
       LockStatisticsLock newLock = lock.reduceCallStack(pReducer, pNode);
       if (lock != newLock) {
         toChange.add(Pair.of(lock, newLock));
@@ -412,5 +409,47 @@ public class LockStatisticsState implements AbstractState, Serializable {
       locks.remove(pair.getFirst());
       locks.add(pair.getSecond());
     }
+  }
+
+  /**
+   * This method find the difference between two states in some metric.
+   * It is useful for comparators.
+   * @param other The other LockStatisticsState
+   * @return Difference between two states
+   */
+  public int diff(LockStatisticsState other) {
+    int result = 0;
+    for (LockStatisticsLock lock : this.locks) {
+      if (lock.getName().equals("")) {
+        result -= 10;
+      }
+      for (AccessPoint point : lock.getAccessPoints()) {
+        result += point.getCallstack().getDepth();
+      }
+    }
+    for (LockStatisticsLock lock : other.locks) {
+      if (lock.getName().equals("")) {
+        result += 10;
+      }
+      for (AccessPoint point : lock.getAccessPoints()) {
+        result -= point.getCallstack().getDepth();
+      }
+    }
+    return result;
+  }
+
+  public boolean intersects(LockStatisticsState pLocks) {
+    if (pLocks.locks.size() == 0 && this.locks.size() == 0) {
+      return true;
+    }
+
+    for (LockStatisticsLock lock : pLocks.locks) {
+      for (LockStatisticsLock myLock : this.locks) {
+        if (lock.hasEqualNameAndVariable(myLock)) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 }

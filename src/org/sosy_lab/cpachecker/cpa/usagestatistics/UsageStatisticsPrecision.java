@@ -80,29 +80,43 @@ public class UsageStatisticsPrecision implements Precision {
 
   @Override
   public boolean equals(Object obj) {
-    if (this == obj)
+    if (this == obj) {
       return true;
-    if (obj == null)
+    }
+    if (obj == null) {
       return false;
-    if (getClass() != obj.getClass())
+    }
+    if (getClass() != obj.getClass()) {
       return false;
+    }
     UsageStatisticsPrecision other = (UsageStatisticsPrecision) obj;
     if (localStatistics == null) {
-      if (other.localStatistics != null)
+      if (other.localStatistics != null) {
         return false;
-    } else if (!localStatistics.equals(other.localStatistics))
+      }
+    } else if (!localStatistics.equals(other.localStatistics)) {
       return false;
+    }
     if (wrappedPrecision == null) {
-      if (other.wrappedPrecision != null)
+      if (other.wrappedPrecision != null) {
         return false;
-    } else if (!wrappedPrecision.equals(other.wrappedPrecision))
+      }
+    } else if (!wrappedPrecision.equals(other.wrappedPrecision)) {
       return false;
+    }
     return true;
   }
 
   @Override
   public UsageStatisticsPrecision clone() {
     return clone(this.wrappedPrecision);
+  }
+
+  @Override
+  public String toString() {
+    String s = "Size = " + localStatistics.size() + ";";
+    s += wrappedPrecision.toString();
+    return s;
   }
 
   public int getTotalRecords() {
