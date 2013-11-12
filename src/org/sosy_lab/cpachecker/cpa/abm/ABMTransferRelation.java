@@ -436,7 +436,7 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
           if (BlockStack.size() == 0) {
             BlockStack.add(currentBlock);
           }
-          logger.log(Level.FINER, "\nnextBlock = currentBlock, get successors");
+          logger.log(Level.FINER, "nextBlock = currentBlock, get successors");
           return attachAdditionalInfoToCallNodes(wrappedTransfer.getAbstractSuccessors(pElement, pPrecision, edge));
         }
         if (BlockStack.contains(nextBlock)) {
