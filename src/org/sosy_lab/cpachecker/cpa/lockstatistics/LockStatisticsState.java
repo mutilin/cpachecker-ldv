@@ -179,17 +179,17 @@ public class LockStatisticsState implements AbstractState, Serializable {
   }
 
   public void set(String lockName, int num, int line, CallstackState state, CallstackState reduced, String variable) {
-    //num can be equal -1, this means, that in origin file it is 0 and we should delete locks
+    //num can be equal 0, this means, that in origin file it is 0 and we should delete locks
     LockStatisticsLock oldLock = findLock(lockName, variable);
     LockStatisticsLock newLock;
 
     if (oldLock != null) {
       newLock = oldLock;
-      if (num > oldLock.getRecursiveCounter()) {
-        newLock = oldLock.addRecursiveAccessPointer(num - oldLock.getRecursiveCounter(),
+      if (num > oldLock.getAccessCounter()) {
+        newLock = oldLock.addRecursiveAccessPointer(num - oldLock.getAccessCounter(),
             new AccessPoint(new LineInfo(line), state, reduced));
-      } else if (num < oldLock.getRecursiveCounter()) {
-        for (int i = 0; i < oldLock.getRecursiveCounter() - num; i++) {
+      } else if (num < oldLock.getAccessCounter()) {
+        for (int i = 0; i < oldLock.getAccessCounter() - num; i++) {
           newLock = newLock.removeLastAccessPointer();
         }
       }
@@ -256,7 +256,7 @@ public class LockStatisticsState implements AbstractState, Serializable {
   public int getCounter(String lockName, String varName) {
     for (LockStatisticsLock lock : locks) {
       if (lock.hasEqualNameAndVariable(lockName, varName)) {
-        return lock.getRecursiveCounter();
+        return lock.getAccessCounter();
       }
     }
     return 0;

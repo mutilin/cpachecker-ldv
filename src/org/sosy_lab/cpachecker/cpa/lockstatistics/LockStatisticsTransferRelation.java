@@ -232,7 +232,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
           String variable = leftSide.toASTString();
           LockInfo lock = findLockByVariable(variable);
           if (lock != null) {
-            processSetLevel(newElement, expression.getFileLocation().getStartingLineNumber(), level - 1, lock);
+            processSetLevel(newElement, expression.getFileLocation().getStartingLineNumber(), level, lock);
           }
         }
       }
@@ -330,7 +330,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
 
     } else if (lock.setLevel != null && lock.setLevel.equals(functionName)) {
       int p = Integer.parseInt(params.get(0).toASTString()); //new level
-      processSetLevel(newElement, lineNumber, p - 1, lock);
+      processSetLevel(newElement, lineNumber, p, lock);
       return;//they count from 1
     }
   }

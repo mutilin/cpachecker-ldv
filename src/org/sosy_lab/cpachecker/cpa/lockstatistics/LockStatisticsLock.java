@@ -99,7 +99,7 @@ public class LockStatisticsLock {
     return accessPoints;
   }
 
-  public int getRecursiveCounter() {
+  public int getAccessCounter() {
     return accessPoints.size();
   }
 
@@ -120,7 +120,7 @@ public class LockStatisticsLock {
   }
 
   public LockStatisticsLock removeLastAccessPointer() {
-    if(!this.accessPoints.isEmpty()) {
+    if(this.accessPoints.size() > 1) { //we have access points after removing
       LockStatisticsLock cloned = this.clone();
       cloned.accessPoints.pop();
       return cloned;
