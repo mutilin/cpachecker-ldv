@@ -28,6 +28,8 @@ import java.util.Comparator;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.EdgeInfo.EdgeType;
+import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 
 public class UsageInfo {
@@ -110,6 +112,9 @@ public class UsageInfo {
     if (other.locks == null || this.locks == null) {
       return false;
     }
+    if (this.accessType == Access.READ && other.accessType == Access.READ) {
+      return true;
+    }
 
     return this.locks.intersects(other.locks);
   }
@@ -184,5 +189,21 @@ public class UsageInfo {
     return sb.toString();
   }
 
-
+  public String createUsageView(SingleIdentifier id) {
+    String name = id.toString();
+    if (info.getEdgeType() == EdgeType.ASSIGNMENT) {
+      if (accessType == Access.READ) {
+        name = "... = " + name + ";";
+      } else if (accessType == Access.WRITE) {
+        name += " = ...;";
+      }
+    } else if (info.getEdgeType() == EdgeType.ASSUMPTION) {
+      name = "if ("  + name + ") {}";
+    } else if (info.getEdgeType() == EdgeType.FUNCTION_CALL) {
+      name = "f("  + name + ");";
+    } else if (info.getEdgeType() == EdgeType.DECLARATION) {
+      name = id.getType().toASTString(name);
+    }
+    return name;
+  }
 }

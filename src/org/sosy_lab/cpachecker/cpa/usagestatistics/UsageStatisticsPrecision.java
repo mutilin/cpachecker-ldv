@@ -34,10 +34,11 @@ import org.sosy_lab.cpachecker.util.identifiers.GeneralIdentifier;
 
 public class UsageStatisticsPrecision implements Precision {
   private HashMap<CFANode, Map<GeneralIdentifier, DataType>> localStatistics;
-  Precision wrappedPrecision;
+  private final Precision wrappedPrecision;
 
-  UsageStatisticsPrecision() {
+  UsageStatisticsPrecision(Precision pWrappedPrecision) {
     localStatistics = new HashMap<>();
+    wrappedPrecision = pWrappedPrecision;
   }
 
   public boolean add(CFANode node, Map<GeneralIdentifier, DataType> info) {
@@ -58,14 +59,9 @@ public class UsageStatisticsPrecision implements Precision {
     return wrappedPrecision;
   }
 
-  public void setPrecision(Precision pWrappedPrecision) {
-    wrappedPrecision = pWrappedPrecision;
-  }
-
   public UsageStatisticsPrecision clone(Precision wrappedPrecision) {
-    UsageStatisticsPrecision newPrecision = new UsageStatisticsPrecision();
+    UsageStatisticsPrecision newPrecision = new UsageStatisticsPrecision(wrappedPrecision);
     newPrecision.localStatistics = this.localStatistics;
-    newPrecision.wrappedPrecision = wrappedPrecision;
     return newPrecision;
   }
 

@@ -35,7 +35,6 @@ import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
@@ -73,7 +72,7 @@ public class PairwiseUnsafeDetector implements UnsafeDetector {
 
     for (UsageInfo info1 : uinfo) {
       for (UsageInfo info2 : uinfo) {
-        if ((info1.getAccess() == Access.WRITE || info2.getAccess() == Access.WRITE) && !info1.intersect(info2)) {
+        if (!info1.intersect(info2)) {
           return Pair.of(info1, info2);
         }
       }
@@ -84,7 +83,7 @@ public class PairwiseUnsafeDetector implements UnsafeDetector {
   private boolean isUnsafeId(List<UsageInfo> uset) {
     for (UsageInfo uinfo : uset) {
       for (UsageInfo uinfo2 : uset) {
-        if (!uinfo.intersect(uinfo2) && (uinfo.getAccess() == Access.WRITE || uinfo2.getAccess() == Access.WRITE)) {
+        if (!uinfo.intersect(uinfo2)) {
           return true;
         }
       }

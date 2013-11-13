@@ -231,7 +231,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
 
     currentLeaf = createTree(usage.getCallStack());
-    currentLeaf.addLast(createIdUsageView(id, usage), usage.getLine().line);
+    currentLeaf.addLast(usage.createUsageView(id), usage.getLine().line);
 
     //print this tree with aide of dfs
     currentLeaf = TreeLeaf.getTrunkState();
@@ -276,24 +276,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       currentLeaf = tmpLeaf;
     }
     return currentLeaf;
-  }
-
-  private String createIdUsageView(SingleIdentifier id, UsageInfo ui) {
-    String name = id.toString();
-    if (ui.getEdgeInfo().getEdgeType() == EdgeType.ASSIGNMENT) {
-      if (ui.getAccess() == Access.READ) {
-        name = "... = " + name + ";";
-      } else if (ui.getAccess() == Access.WRITE) {
-        name += " = ...;";
-      }
-    } else if (ui.getEdgeInfo().getEdgeType() == EdgeType.ASSUMPTION) {
-      name = "if ("  + name + ") {}";
-    } else if (ui.getEdgeInfo().getEdgeType() == EdgeType.FUNCTION_CALL) {
-      name = "f("  + name + ");";
-    } else if (ui.getEdgeInfo().getEdgeType() == EdgeType.DECLARATION) {
-      name = id.getType().toASTString(name);
-    }
-    return name;
   }
 
   private TreeLeaf createTree(CallstackState state) {

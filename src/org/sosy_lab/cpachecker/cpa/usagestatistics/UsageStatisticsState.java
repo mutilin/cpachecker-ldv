@@ -38,7 +38,7 @@ class UsageStatisticsState extends AbstractSingleWrapperState  {
 
   private static final long serialVersionUID = -898577877284268426L;
 
-  private Map<AbstractIdentifier, AbstractIdentifier> variableBindingRelation;
+  private final Map<AbstractIdentifier, AbstractIdentifier> variableBindingRelation;
 
   public UsageStatisticsState(AbstractState pWrappedElement) {
     super(pWrappedElement);
@@ -52,7 +52,7 @@ class UsageStatisticsState extends AbstractSingleWrapperState  {
 
   public boolean containsLinks(AbstractIdentifier id) {
     /* Special contains!
-    *  if we have *b, map contains also **b.
+    *  if we have *b, map also contains **b, ***b and so on.
     *  So, if we get **b, having (*b, c), we give *c
     */
     AbstractIdentifier tmpId = id.clone();
@@ -70,8 +70,9 @@ class UsageStatisticsState extends AbstractSingleWrapperState  {
   }
 
   public void put(AbstractIdentifier id1, AbstractIdentifier id2) {
-    if (!id1.equals(id2))
+    if (!id1.equals(id2)) {
       variableBindingRelation.put(id1, id2);
+    }
   }
 
   public AbstractIdentifier get(AbstractIdentifier id) {
@@ -98,10 +99,6 @@ class UsageStatisticsState extends AbstractSingleWrapperState  {
     return null;
   }
 
-  public Map<AbstractIdentifier, AbstractIdentifier> getMap() {
-    return variableBindingRelation;
-  }
-
   @Override
   public UsageStatisticsState clone() {
     return new UsageStatisticsState(this.getWrappedState(), this.variableBindingRelation);
@@ -121,18 +118,23 @@ class UsageStatisticsState extends AbstractSingleWrapperState  {
 
   @Override
   public boolean equals(Object obj) {
-    if (this == obj)
+    if (this == obj) {
       return true;
-    if (obj == null)
+    }
+    if (obj == null) {
       return false;
-    if (getClass() != obj.getClass())
+    }
+    if (getClass() != obj.getClass()) {
       return false;
+    }
     UsageStatisticsState other = (UsageStatisticsState) obj;
     if (variableBindingRelation == null) {
-      if (other.variableBindingRelation != null)
+      if (other.variableBindingRelation != null) {
         return false;
-    } else if (!variableBindingRelation.equals(other.variableBindingRelation))
+      }
+    } else if (!variableBindingRelation.equals(other.variableBindingRelation)) {
       return false;
+    }
     return true;
   }
 

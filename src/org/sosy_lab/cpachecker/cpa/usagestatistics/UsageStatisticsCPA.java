@@ -60,14 +60,15 @@ import org.sosy_lab.cpachecker.util.CPAs;
 @Options(prefix="cpa.usagestatistics")
 public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements ConfigurableProgramAnalysisWithABM {
 
-  private UsageStatisticsDomain abstractDomain;
-  private MergeOperator mergeOperator;
-  private StopOperator stopOperator;
-  private TransferRelation transferRelation;
-  private PrecisionAdjustment precisionAdjustment;
+  private final UsageStatisticsDomain abstractDomain;
+  private final MergeOperator mergeOperator;
+  private final StopOperator stopOperator;
+  private final TransferRelation transferRelation;
+  private final PrecisionAdjustment precisionAdjustment;
   private final Reducer reducer;
   private final UsageStatisticsCPAStatistics statistics;
   private UsageStatisticsPrecision precision;
+  private final CFA cfa;
 
   public static CPAFactory factory() {
     return AutomaticCPAFactory.forType(UsageStatisticsCPA.class);
@@ -89,6 +90,7 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
   private UsageStatisticsCPA(ConfigurableProgramAnalysis pCpa, CFA pCfa, LogManager pLogger, Configuration pConfig) throws InvalidConfigurationException {
     super(pCpa);
     pConfig.inject(this);
+    this.cfa = pCfa;
     this.abstractDomain = new UsageStatisticsDomain(pCpa.getAbstractDomain());
     this.mergeOperator = initializeMergeOperator();
     this.stopOperator = initializeStopOperator();
@@ -117,8 +119,6 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
     if (tmpString != null) {
       outputFileName = tmpString;
     }
-    PresisionParser parser = new PresisionParser(outputFileName, pCfa);
-    this.precision = parser.parse();
   }
 
   private MergeOperator initializeMergeOperator() {
@@ -180,7 +180,9 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
 
   @Override
   public Precision getInitialPrecision(CFANode pNode) {
-    precision.setPrecision(this.getWrappedCpa().getInitialPrecision(pNode));
+    precision = new UsageStatisticsPrecision(this.getWrappedCpa().getInitialPrecision(pNode));
+    PresisionParser parser = new PresisionParser(outputFileName, cfa);
+    parser.parse(precision);
     return precision;
   }
 

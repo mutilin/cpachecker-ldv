@@ -71,7 +71,7 @@ public class UsageStatisticsReducer implements Reducer {
   @Override
   public Precision getVariableReducedPrecision(Precision pPrecision, Block pContext) {
     UsageStatisticsPrecision newPrecision = ((UsageStatisticsPrecision)pPrecision).clone(wrappedReducer.getVariableReducedPrecision(
-        ((UsageStatisticsPrecision)pPrecision).wrappedPrecision, pContext));
+        ((UsageStatisticsPrecision)pPrecision).getWrappedPrecision(), pContext));
     return newPrecision;
   }
 

@@ -55,7 +55,7 @@ class UsageStatisticsPrecisionAdjustment implements PrecisionAdjustment {
 
     AbstractState oldElement = element.getWrappedState();
 
-    Precision oldWrappedPrecision = ((UsageStatisticsPrecision)oldPrecision).wrappedPrecision;
+    Precision oldWrappedPrecision = ((UsageStatisticsPrecision)oldPrecision).getWrappedPrecision();
     Triple<AbstractState, Precision, Action> unwrappedResult = wrappedPrecAdjustment.prec(oldElement, oldWrappedPrecision, elements);
 
     AbstractState newElement = unwrappedResult.getFirst();
@@ -69,8 +69,7 @@ class UsageStatisticsPrecisionAdjustment implements PrecisionAdjustment {
 
     AbstractState resultElement = new UsageStatisticsState(newElement);
 
-    UsageStatisticsPrecision newPrecision = ((UsageStatisticsPrecision)oldPrecision).clone();
-    newPrecision.setPrecision(newWrappedPrecision);
+    UsageStatisticsPrecision newPrecision = ((UsageStatisticsPrecision)oldPrecision).clone(newWrappedPrecision);
     return Triple.of(resultElement, (Precision)newPrecision, action);
   }
 }

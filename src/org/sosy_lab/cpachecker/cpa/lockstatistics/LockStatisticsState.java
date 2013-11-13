@@ -69,12 +69,12 @@ public class LockStatisticsState implements AbstractState, Serializable {
     return locks;
   }
 
-  public LockStatisticsState getRestoreState() {
-    return toRestore;
-  }
-
   public void setRestoreState(LockStatisticsState state) {
     toRestore = state;
+  }
+
+  public void copyRestoreState(LockStatisticsState pRootState) {
+    setRestoreState(pRootState.toRestore);
   }
 
   @Override
@@ -116,6 +116,16 @@ public class LockStatisticsState implements AbstractState, Serializable {
   public LockStatisticsLock findLock(String lockName, String variable) {
     for (LockStatisticsLock lock : locks) {
       if (lock.hasEqualNameAndVariable(lockName, variable)) {
+        return lock;
+      }
+    }
+    return null;
+  }
+
+  public LockStatisticsLock findLock(LockStatisticsLock target) {
+    //this search checks faster (without cleaning variable)
+    for (LockStatisticsLock lock : locks) {
+      if (lock.hasEqualNameAndVariable(target)) {
         return lock;
       }
     }
@@ -234,7 +244,7 @@ public class LockStatisticsState implements AbstractState, Serializable {
         }
       }
     }
-    newState.setRestoreState(restoredState.getRestoreState());
+    newState.copyRestoreState(restoredState);
     return newState;
   }
 
@@ -263,7 +273,7 @@ public class LockStatisticsState implements AbstractState, Serializable {
   }
 
   //this function is used only in debugging. Do not delete!
-  public String getAllLines(String lockName) {
+  /*public String getAllLines(String lockName) {
     StringBuilder sb = new StringBuilder();
     for (LockStatisticsLock lock : locks) {
       if (lock.hasEqualNameAndVariable(lockName, null)) {
@@ -278,7 +288,7 @@ public class LockStatisticsState implements AbstractState, Serializable {
     }
 
     return sb.toString();
-  }
+  }*/
 
   /**
    * This element joins this element with another element.
@@ -320,7 +330,7 @@ public class LockStatisticsState implements AbstractState, Serializable {
     // also, this element is not less or equal than the other element,
     // if any one constant's value of the other element differs from the constant's value in this element
     for (LockStatisticsLock Lock : locks) {
-      if (other.findLock(Lock.getName(), Lock.getVariable()) == null) {
+      if (other.findLock(Lock) == null) {
         return false;
       }
     }
@@ -384,7 +394,7 @@ public class LockStatisticsState implements AbstractState, Serializable {
     Set<Pair<LockStatisticsLock, LockStatisticsLock>> toChange = new HashSet<>();
     LockStatisticsLock tmpLock;
     for (LockStatisticsLock lock : this.locks) {
-      tmpLock = rootState.findLock(lock.getName(), lock.getVariable());
+      tmpLock = rootState.findLock(lock);
       //null is also correct (it shows, that we've found new lock)
       tmpLock = lock.expandCallstack(tmpLock, restorator);
       if (lock != tmpLock) {
@@ -420,20 +430,10 @@ public class LockStatisticsState implements AbstractState, Serializable {
   public int diff(LockStatisticsState other) {
     int result = 0;
     for (LockStatisticsLock lock : this.locks) {
-      if (lock.getName().equals("")) {
-        result -= 10;
-      }
-      for (AccessPoint point : lock.getAccessPoints()) {
-        result += point.getCallstack().getDepth();
-      }
+      result += lock.norm();
     }
     for (LockStatisticsLock lock : other.locks) {
-      if (lock.getName().equals("")) {
-        result += 10;
-      }
-      for (AccessPoint point : lock.getAccessPoints()) {
-        result -= point.getCallstack().getDepth();
-      }
+      result -= lock.norm();
     }
     return result;
   }
@@ -451,4 +451,5 @@ public class LockStatisticsState implements AbstractState, Serializable {
     }
     return false;
   }
+
 }

@@ -67,10 +67,6 @@ public class AccessPoint {
     isNewPoint = false;
   }
 
-  public void markAsNew() {
-    isNewPoint = true;
-  }
-
   public boolean isNew() {
     return isNewPoint;
   }

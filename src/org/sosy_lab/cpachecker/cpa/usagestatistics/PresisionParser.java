@@ -50,8 +50,7 @@ public class PresisionParser {
     cfa = pCfa;
   }
 
-  public UsageStatisticsPrecision parse() {
-    UsageStatisticsPrecision precision = new UsageStatisticsPrecision();
+  public UsageStatisticsPrecision parse(UsageStatisticsPrecision precision) {
     BufferedReader reader = null;
     try {
       reader = new BufferedReader(new FileReader(file));
