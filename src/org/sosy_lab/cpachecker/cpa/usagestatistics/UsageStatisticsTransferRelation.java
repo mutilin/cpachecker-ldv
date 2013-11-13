@@ -222,8 +222,8 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
   private UsageStatisticsState handleEdge(UsageStatisticsPrecision precision, UsageStatisticsState newState
       , CFAEdge pCfaEdge) throws CPATransferException {
 
-    /*if (pCfaEdge.getSuccessor().getFunctionName().equals("mtxCheckSignal")) {
-      System.out.println("In mtxCheckSignal()");
+    /*if (pCfaEdge.getPredecessor().getFunctionName().equals("brelse")) {
+      System.out.println("In brelse");
     }*/
     switch(pCfaEdge.getEdgeType()) {
 

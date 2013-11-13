@@ -107,7 +107,7 @@ public class UsageInfo {
     if (other == null) {
       return false;
     }
-    if (other.locks == null && this.locks != null) {
+    if (other.locks == null || this.locks == null) {
       return false;
     }
 

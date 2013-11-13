@@ -74,7 +74,7 @@ public class LockStatisticsLock {
     accessPoints = new Stack<>();
     accessPoints.add(new AccessPoint( new LineInfo(l), s, reduced));
     type = t;
-    variable = v;
+    variable = getCleanName(v);
   }
 
   private LockStatisticsLock(String n, LockType t, Stack<AccessPoint> points, String v) {
@@ -84,7 +84,7 @@ public class LockStatisticsLock {
       accessPoints.add(point);
     }
     type = t;
-    variable = v;
+    variable = getCleanName(v);
   }
 
   public String getName() {
@@ -101,6 +101,22 @@ public class LockStatisticsLock {
 
   public int getAccessCounter() {
     return accessPoints.size();
+  }
+
+  /**
+   * This function clean variable name from brackets and cil's '___0'
+   * @param originName original name of variable
+   * @return new name
+   */
+  private String getCleanName(String originName) {
+    if (originName != null) {
+      String newName = originName.replaceAll("\\(", "");
+      newName = newName.replaceAll("\\)", "");
+      newName = newName.replaceAll("___\\d*", "");
+      return newName;
+    } else {
+      return null;
+    }
   }
 
   @Override
@@ -130,23 +146,14 @@ public class LockStatisticsLock {
   }
 
   public boolean hasEqualNameAndVariable(LockStatisticsLock lock) {
-    return hasEqualNameAndVariable(lock.name, lock.variable);
+    //Here we know exactly, that variable is clean, so check equals at once (without getCleanName)
+    return this.name.equals(lock.name) && this.variable.equals(lock.variable);
   }
 
   public boolean hasEqualNameAndVariable(String lockName, String variableName) {
-    if (variableName != null) {
-      //variable is important
-      String myVariableName = this.variable.replaceAll("\\(", "");
-      myVariableName = myVariableName.replaceAll("\\)", "");
-      String otherVariable = variableName.replaceAll("\\(", "");
-      otherVariable = otherVariable.replaceAll("\\)", "");
-      //this is only for cil: it likes to change i -> i___0
-      myVariableName = myVariableName.replaceAll("___\\d*", "");
-      otherVariable = otherVariable.replaceAll("___\\d*", "");
-      return (this.name.equals(lockName) && myVariableName.equals(otherVariable));
-    } else {
-      return this.name.equals(lockName);
-    }
+    //most of cases, where is used this method, have such variables, as 'var___0', so we need clean it
+    //variable is important
+    return (this.name.equals(lockName) && variable.equals(getCleanName(variableName)));
   }
 
   public void markOldPoints() {

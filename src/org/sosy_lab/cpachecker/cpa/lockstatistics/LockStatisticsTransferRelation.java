@@ -98,7 +98,6 @@ public class LockStatisticsTransferRelation implements TransferRelation
     throws CPATransferException {
 
     LockStatisticsState lockStatisticsElement     = (LockStatisticsState)element;
-
     LockStatisticsState successor;
     switch (cfaEdge.getEdgeType()) {
 
@@ -115,8 +114,8 @@ public class LockStatisticsTransferRelation implements TransferRelation
       case FunctionReturnEdge:
         CFANode tmpNode = ((CFunctionReturnEdge)cfaEdge).getSummaryEdge().getPredecessor();
         String fName =((CFunctionReturnEdge)cfaEdge).getSummaryEdge().getExpression().getFunctionCallExpression().getFunctionNameExpression().toASTString();
-        /*if (fName.equals("vrele")) {
-          System.out.println("vrele");
+        /*if (fName.equals("tsleep")) {
+          System.out.println("tsleep");
         }*/
         if (annotatedfunctions != null && annotatedfunctions.containsKey(fName)) {
           successor = lockStatisticsElement.clone();
