@@ -67,7 +67,7 @@ import org.sosy_lab.cpachecker.util.identifiers.GlobalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.LocalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.ReturnIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
-import org.sosy_lab.cpachecker.util.identifiers.VariableIdentifier;
+import org.sosy_lab.cpachecker.util.identifiers.StructureIdentifier;
 
 @Options(prefix="cpa.local")
 public class LocalTransferRelation implements TransferRelation {
@@ -75,21 +75,18 @@ public class LocalTransferRelation implements TransferRelation {
   @Option(name="allocatefunctions", description = "functions, which allocate new free memory")
   private Set<String> allocate;
 
-  private IdentifierCreator idCreator = new IdentifierCreator();
+  private final IdentifierCreator idCreator;
 
   public LocalTransferRelation(Configuration config) throws InvalidConfigurationException {
     config.inject(this);
+    idCreator = new IdentifierCreator();
   }
-
   @Override
   public Collection<? extends AbstractState> getAbstractSuccessors(AbstractState pState, Precision pPrecision,
       CFAEdge pCfaEdge) throws CPATransferException, InterruptedException {
 
     LocalState LocalElement = (LocalState) pState;
     LocalState successor = LocalElement.clone();
-    /*if (pCfaEdge.getSuccessor().getFunctionName().equals("io_flush")) {
-      System.out.println("In io_flush()");
-    }*/
     switch(pCfaEdge.getEdgeType()) {
 
       case DeclarationEdge: {
@@ -146,7 +143,6 @@ public class LocalTransferRelation implements TransferRelation {
         pSuccessor.set(ReturnIdentifier.getInstance(), type);
       }
     }
-    //pSuccessor.setReturnExpression(pCfaEdge.getExpression());
   }
 
   private LocalState handleReturnEdge(LocalState pSuccessor, CFunctionReturnEdge pCfaEdge) throws HandleCodeException {
@@ -168,8 +164,6 @@ public class LocalTransferRelation implements TransferRelation {
           //check, if it
           newElement.set(returnId, returnType);
           handleFunctionCallExpression(newElement, returnId, assignExp.getRightHandSide());
-          //... and save it in new
-          //pSuccessor.setReturnExpression(null);
         }
       } else {
         //we don't know type
@@ -225,23 +219,30 @@ public class LocalTransferRelation implements TransferRelation {
       CAssignment assignment = (CAssignment)pStatement;
       CExpression left = assignment.getLeftHandSide();
 
-      CType type = left.getExpressionType();
-      if (type instanceof CPointerType ||
+      //CType type = left.getExpressionType();
+      int leftDereference = findDereference(left.getExpressionType());
+      /*if (type instanceof CPointerType ||
           (type instanceof CTypedefType && ((CTypedefType)type).getRealType() instanceof CPointerType)
-          ) {
+          ) {*/
+      if (leftDereference > 0) {
         CRightHandSide right = assignment.getRightHandSide();
-        int dereference = findDereference(left.getExpressionType());
-        AbstractIdentifier leftId = createId(left, dereference);
 
-        if (right instanceof CExpression) {
-          assume(pSuccessor, leftId, createId((CExpression)right, dereference));
-        } else if (right instanceof CFunctionCallExpression) {
-          if (pSuccessor.getType(leftId) == DataType.LOCAL) {
-            //reset it
-            pSuccessor.set(leftId, null);
+        int rightDereference = findDereference(right.getExpressionType());
+        //if (leftDereference == rightDereference) {
+          AbstractIdentifier leftId = createId(left, leftDereference);
+
+          if (right instanceof CExpression) {
+            assume(pSuccessor, leftId, createId((CExpression)right, rightDereference));
+          } else if (right instanceof CFunctionCallExpression) {
+            if (pSuccessor.getType(leftId) == DataType.LOCAL) {
+              //reset it
+              pSuccessor.set(leftId, null);
+            }
+            handleFunctionCallExpression(pSuccessor, leftId, (CFunctionCallExpression)assignment.getRightHandSide());
           }
-          handleFunctionCallExpression(pSuccessor, leftId, (CFunctionCallExpression)assignment.getRightHandSide());
-        }
+       /* } else {
+          System.out.println("Not equal dereferences: " + pStatement.toASTString());
+        }*/
       }
     }
   }
@@ -274,16 +275,9 @@ public class LocalTransferRelation implements TransferRelation {
       //Can't assume to constant, but this situation can occur, if we have *(a + b)...
       return;
     }
-    /*else if (leftId instanceof BinaryIdentifier) {
-      //TODO may be, it should be changed...
-      //assume(pSuccessor, ((BinaryIdentifier)leftId).getIdentifier1(), right);
-      //assume(pSuccessor, ((BinaryIdentifier)leftId).getIdentifier2(), right);
-      pSuccessor.set(leftId, type)
-      //System.out.println("Binary assumption: " + leftId.toString() + ":" + right.getFileLocation().getStartingLineNumber());
-      return;
-    }*/
-    //AbstractIdentifier left = (AbstractIdentifier) leftId;
-    //AbstractIdentifier rightId = createId(right, leftId.getDereference());
+    if (leftId instanceof StructureIdentifier && ((StructureIdentifier)leftId).getName().equals("m_objDestroyCnt")) {
+      System.out.println("m_objDestroyCnt");
+    }
     if (leftId.isGlobal()) {
       //Variable is global, not memory location!
       //So, we should set the type of 'right' to global
@@ -291,21 +285,6 @@ public class LocalTransferRelation implements TransferRelation {
     } else {
       DataType type = pSuccessor.getType(rightId);
       pSuccessor.set(leftId, type);
-      if (!pSuccessor.contains(rightId) && type != null) {
-        //In some cases we know the type of right expression,
-        //but haven't got it in successor's state
-        //It can be, f.e., in structure processing:
-        //We saved the name of structure, but didn't save its field
-        //So, save it now
-
-        //We shouldn't save such identifiers, as &t.
-        //But we save all structures
-        if (rightId instanceof VariableIdentifier && rightId.getDereference() <= 0) {
-          return;
-        }
-
-        pSuccessor.set(rightId, type);
-      }
     }
   }
 

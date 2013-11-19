@@ -37,10 +37,8 @@ import org.sosy_lab.cpachecker.util.identifiers.BinaryIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.ConstantIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.GlobalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.LocalVariableIdentifier;
-import org.sosy_lab.cpachecker.util.identifiers.ReturnIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.StructureIdentifier;
-import org.sosy_lab.cpachecker.util.identifiers.VariableIdentifier;
 
 
 public class LocalState implements AbstractState {
@@ -67,15 +65,12 @@ public class LocalState implements AbstractState {
     }
   }
   //map from variable id to its type
-  private LocalState previousState;
-  //private CExpression returnExpression;
+  private final LocalState previousState;
   private final Map<AbstractIdentifier, DataType> DataInfo;
-  //private static int counter = 0;
 
   public LocalState(LocalState state) {
     DataInfo = new HashMap<>();
     previousState = state;
-    //returnExpression = null;
   }
 
   public LocalState(LocalState state, Configuration pConfig) throws InvalidConfigurationException {
@@ -89,63 +84,46 @@ public class LocalState implements AbstractState {
   private LocalState(Map<AbstractIdentifier, DataType> oldMap, LocalState state) {
     DataInfo = new HashMap<>(oldMap);
     previousState = state;
-    //returnExpression = ret;
   }
 
   public LocalState getPreviousState() {
     return previousState;
   }
 
-  /*public void setReturnExpression(CExpression expr) {
-    returnExpression = expr;
-  }
-
-  public CExpression getReturnExpression() {
-    return returnExpression;
-  }*/
-
   public void set(AbstractIdentifier name, DataType type) {
     if (localVariables.contains(name.toString())) {
       DataInfo.put(name, DataType.LOCAL);
       return;
     }
+    if (name instanceof GlobalVariableIdentifier) {
+      //Don't save obvious information
+      return;
+    }
+    //Check information we've already have;
+    AbstractIdentifier infoId = name.containsIn(DataInfo.keySet());
+    if (infoId == null) {
+      //We have no information
+      if (type != null) {
+        DataInfo.put(name, type);
+      }
+      return;
+    }
+    DataType lastType = DataInfo.get(infoId);
     if (type == null) {
-      if (DataInfo.containsKey(name)) {
+      if (name == infoId) {
+      //if (DataInfo.containsKey(name)) {
         DataInfo.remove(name);
       }
       return;
     }
-    if (name instanceof VariableIdentifier) {
-      if (name instanceof ReturnIdentifier && DataInfo.containsKey(name)) {
-        DataInfo.put(name, DataType.max(type, DataInfo.get(name)));
-      } else {
-        DataInfo.put(name, type);
-      }
-    } else if (name instanceof StructureIdentifier){
-      //check if parent struct is global
-      AbstractIdentifier owner = name;
-      while (owner instanceof StructureIdentifier) {
-        owner = ((StructureIdentifier)owner).getOwner();
-        if (DataInfo.containsKey(owner)) {
-          DataInfo.put(name, DataType.max(type, DataInfo.get(owner)));
-          return;
-        }
-      }
-      //we've found nothing
+    if (infoId == name) {
       DataInfo.put(name, type);
-    } else if (name instanceof ConstantIdentifier) {
-      //ConstantIdentifier - do nothing
-    } else if (name instanceof BinaryIdentifier) {
-      if (((BinaryIdentifier)name).getDereference() > 0) {
-        DataInfo.put(name, type);
-      } else {
-        set(((BinaryIdentifier)name).getIdentifier1(), type);
-        set(((BinaryIdentifier)name).getIdentifier2(), type);
-      }
+    } else {
+      DataInfo.put(name, DataType.max(type, lastType));
     }
   }
   public DataType getType(AbstractIdentifier pName) {
-    AbstractIdentifier name;
+    /*AbstractIdentifier name;
     if (pName instanceof GlobalVariableIdentifier || pName instanceof LocalVariableIdentifier) {
       name = ((SingleIdentifier)pName).getGeneralId();
     } else {
@@ -159,16 +137,9 @@ public class LocalState implements AbstractState {
     } else {
       if (name instanceof GlobalVariableIdentifier) {
         return DataType.GLOBAL;
-      } else if (name instanceof LocalVariableIdentifier) {
-        LocalVariableIdentifier localId = (LocalVariableIdentifier) name;
-        if (localId.getDereference() == 0/* && !(localId.getType() instanceof CPointerType)*/) {
-          //it is not value of variable, it is memory location
-          return DataType.LOCAL;
-        } else if (localId.getDereference() < 0) {
-          //this is error. We can't get address here
-          System.err.println("Adress in getType()");
-        }
-        return null;
+      } else if (name instanceof LocalVariableIdentifier && name.getDereference() == 0) {
+        //it is not value of variable, it is memory location
+        return DataType.LOCAL;
       }
       else if (name instanceof BinaryIdentifier) {
         //in good case, we won't use this... But let it be.
@@ -176,13 +147,56 @@ public class LocalState implements AbstractState {
         DataType type2 = getType(((BinaryIdentifier)name).getIdentifier2());
         return DataType.max(type1, type2);
       } else if (name instanceof ConstantIdentifier) {
-        /*if (name.getDereference() > 0)
-          return DataType.GLOBAL;
-        else*/
-          return DataType.LOCAL;
+        return DataType.LOCAL;
       } else if (name instanceof StructureIdentifier){
         StructureIdentifier id = (StructureIdentifier) name;
         return this.getType(id.getOwner());
+      } else {
+        return null;
+      }
+    }*/
+    return getType(this.DataInfo, pName);
+  }
+
+  public static DataType getType(Map<? extends AbstractIdentifier, DataType> localInfo, AbstractIdentifier aId) {
+    AbstractIdentifier name;
+    if (aId instanceof LocalVariableIdentifier || aId instanceof GlobalVariableIdentifier) {
+      name = ((SingleIdentifier)aId).getGeneralId();
+    } else {
+      name = aId;
+    }
+    if (localVariables.contains(name.toString())) {
+      return DataType.LOCAL;
+    }
+    if (localInfo.containsKey(name)) {
+      return localInfo.get(name);
+    } else {
+      if (name instanceof GlobalVariableIdentifier) {
+        return DataType.GLOBAL;
+      } else if (name instanceof LocalVariableIdentifier && !name.isPointer()) {
+        //it is not value of variable, it is memory location
+        return DataType.LOCAL;
+      }
+      else if (name instanceof BinaryIdentifier) {
+        AbstractIdentifier id1 = ((BinaryIdentifier)name).getIdentifier1();
+        AbstractIdentifier id2 = ((BinaryIdentifier)name).getIdentifier2();
+        DataType type1 = getType(localInfo, id1);
+        DataType type2 = getType(localInfo, id2);
+        if (aId.getDereference() == id1.getDereference() && id1.getDereference() != id2.getDereference()) {
+          return type1;
+        } else if (aId.getDereference() == id2.getDereference() && id1.getDereference() != id2.getDereference()) {
+          return type2;
+        }
+        return DataType.max(type1, type2);
+      } else if (name instanceof ConstantIdentifier) {
+        if (name.isPointer()) {
+          return DataType.GLOBAL;
+        } else {
+          return DataType.LOCAL;
+        }
+      } else if (name instanceof StructureIdentifier){
+        StructureIdentifier id = (StructureIdentifier) name;
+        return getType(localInfo, id.getOwner());
       } else {
         return null;
       }
@@ -198,14 +212,16 @@ public class LocalState implements AbstractState {
     return new LocalState(this.DataInfo, this.previousState);
   }
 
-  public LocalState reduce() {
-    return new LocalState(this.DataInfo, null);
+  private LocalState clone(LocalState pPreviousState) {
+    return new LocalState(this.DataInfo, pPreviousState);
   }
 
   public LocalState expand(LocalState rootState) {
-    //LocalState newState = this.clone();
-    this.previousState = rootState.previousState;
-    return this;
+    return this.clone(rootState.previousState);
+  }
+
+  public LocalState reduce() {
+    return this.clone(null);
   }
 
   public LocalState join(LocalState pState2) {
@@ -213,7 +229,17 @@ public class LocalState implements AbstractState {
     if (this.equals(pState2)) {
       return pState2;
     }
-    LocalState joinState = this.clone();
+    LocalState joinedPreviousState = null;
+    if ((this.previousState != null && pState2.previousState == null)
+        && (this.previousState == null && pState2.previousState != null) ) {
+      System.err.println("Panic! Merging states, but one of them has previous and another hasn't");
+    } else if (this.previousState != null && pState2.previousState != null
+        && !this.previousState.equals(pState2.previousState)) {
+      //it can be, when we join states, called from different functions
+      joinedPreviousState = this.previousState.join(pState2.previousState);
+    }
+
+    LocalState joinState = this.clone(joinedPreviousState);
     Set<AbstractIdentifier> toDelete = new HashSet<>();
 
     for (AbstractIdentifier name : joinState.DataInfo.keySet()) {
@@ -233,35 +259,7 @@ public class LocalState implements AbstractState {
         joinState.DataInfo.put(name, DataType.max(this.DataInfo.get(name), pState2.DataInfo.get(name)));
       }
     }
-    //counter++;
-    //System.out.println("Merge: " + counter);
-    if ((this.previousState != null && pState2.previousState == null)
-        && (this.previousState == null && pState2.previousState != null) ) {
-      System.err.println("Panic! Merging states, but one of them has previous and another hasn't");
-    } else if (this.previousState != null && pState2.previousState != null
-        && !this.previousState.equals(pState2.previousState)) {
-      //it can be, when we join states, called from different functions
-      joinState.previousState = this.previousState.join(pState2.previousState);
-    }
 
-    /*if ((this.returnExpression != null && pState2.returnExpression == null)
-        && (this.returnExpression == null && pState2.returnExpression != null) ) {
-      System.err.println("Panic! Merging states, but one of them has returnExpression and another hasn't");
-
-    } else if (this.returnExpression != null && pState2.returnExpression != null) {
-      IdentifierCreator creator = new IdentifierCreator();
-      try {
-        AbstractIdentifier thisId = this.returnExpression.accept(creator);
-        AbstractIdentifier otherId = pState2.returnExpression.accept(creator);
-        DataType thisType = this.getType(thisId);
-        DataType otherType = pState2.getType(otherId);
-        if (DataType.max(thisType, otherType) != thisType) {
-          joinState.returnExpression = pState2.returnExpression;
-        }
-      } catch (HandleCodeException e) {
-        System.err.println("Can't create id for " + this.returnExpression.toASTString());
-      }
-    }*/
     return joinState;
   }
 
@@ -334,16 +332,13 @@ public class LocalState implements AbstractState {
   public String toString() {
     StringBuilder sb = new StringBuilder();
 
-    //sb.append("{");
     for (AbstractIdentifier id : DataInfo.keySet()) {
-      //sb.append("(");
       sb.append(id.toString() + " - " + DataInfo.get(id) + "\n");
     }
 
     if (sb.length() > 2) {
       sb.delete(sb.length() - 1, sb.length());
     }
-    //sb.append("}");
     return sb.toString();
   }
 }
