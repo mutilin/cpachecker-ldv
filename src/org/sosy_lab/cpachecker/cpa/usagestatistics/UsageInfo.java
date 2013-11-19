@@ -40,6 +40,18 @@ public class UsageInfo {
     public int compare(UsageInfo pO1, UsageInfo pO2) {
       int result = 0;
 
+      if (pO1 == null && pO2 == null) {
+        return 0;
+      } else if (pO1 == null || pO2 == null) {
+        return 20;
+      }
+
+      if (pO1.locks == null && pO2.locks == null) {
+        return 0;
+      } else if (pO1.locks == null || pO2.locks == null) {
+        return 20;
+      }
+
       if (pO1.locks.getSize() == 0) {
         result -= 50;
       }
