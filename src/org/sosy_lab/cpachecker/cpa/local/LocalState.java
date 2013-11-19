@@ -111,7 +111,6 @@ public class LocalState implements AbstractState {
     DataType lastType = DataInfo.get(infoId);
     if (type == null) {
       if (name == infoId) {
-      //if (DataInfo.containsKey(name)) {
         DataInfo.remove(name);
       }
       return;
@@ -122,39 +121,8 @@ public class LocalState implements AbstractState {
       DataInfo.put(name, DataType.max(type, lastType));
     }
   }
+
   public DataType getType(AbstractIdentifier pName) {
-    /*AbstractIdentifier name;
-    if (pName instanceof GlobalVariableIdentifier || pName instanceof LocalVariableIdentifier) {
-      name = ((SingleIdentifier)pName).getGeneralId();
-    } else {
-      name = pName;
-    }
-    if (localVariables.contains(name.toString())) {
-      return DataType.LOCAL;
-    }
-    if (DataInfo.containsKey(name)) {
-      return DataInfo.get(name);
-    } else {
-      if (name instanceof GlobalVariableIdentifier) {
-        return DataType.GLOBAL;
-      } else if (name instanceof LocalVariableIdentifier && name.getDereference() == 0) {
-        //it is not value of variable, it is memory location
-        return DataType.LOCAL;
-      }
-      else if (name instanceof BinaryIdentifier) {
-        //in good case, we won't use this... But let it be.
-        DataType type1 = getType(((BinaryIdentifier)name).getIdentifier1());
-        DataType type2 = getType(((BinaryIdentifier)name).getIdentifier2());
-        return DataType.max(type1, type2);
-      } else if (name instanceof ConstantIdentifier) {
-        return DataType.LOCAL;
-      } else if (name instanceof StructureIdentifier){
-        StructureIdentifier id = (StructureIdentifier) name;
-        return this.getType(id.getOwner());
-      } else {
-        return null;
-      }
-    }*/
     return getType(this.DataInfo, pName);
   }
 
@@ -178,16 +146,8 @@ public class LocalState implements AbstractState {
         return DataType.LOCAL;
       }
       else if (name instanceof BinaryIdentifier) {
-        AbstractIdentifier id1 = ((BinaryIdentifier)name).getIdentifier1();
-        AbstractIdentifier id2 = ((BinaryIdentifier)name).getIdentifier2();
-        DataType type1 = getType(localInfo, id1);
-        DataType type2 = getType(localInfo, id2);
-        if (aId.getDereference() == id1.getDereference() && id1.getDereference() != id2.getDereference()) {
-          return type1;
-        } else if (aId.getDereference() == id2.getDereference() && id1.getDereference() != id2.getDereference()) {
-          return type2;
-        }
-        return DataType.max(type1, type2);
+        AbstractIdentifier tmp = name.containsIn(localInfo.keySet());
+        return (tmp == null ? null : localInfo.get(tmp));
       } else if (name instanceof ConstantIdentifier) {
         if (name.isPointer()) {
           return DataType.GLOBAL;
