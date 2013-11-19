@@ -26,7 +26,7 @@ package org.sosy_lab.cpachecker.util.identifiers;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
 
 
-public class ReturnIdentifier extends VariableIdentifier {
+public class ReturnIdentifier extends VariableIdentifier implements GeneralIdentifier {
 
   private static ReturnIdentifier instance;
 

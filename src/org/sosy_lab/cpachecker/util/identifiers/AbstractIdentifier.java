@@ -23,6 +23,8 @@
  */
 package org.sosy_lab.cpachecker.util.identifiers;
 
+import java.util.Collection;
+
 
 public interface AbstractIdentifier {
   @Override
@@ -43,4 +45,12 @@ public interface AbstractIdentifier {
   public void setDereference(int d);
 
   public boolean isPointer();
+
+  /**
+   * This method recursively checks owners of identifier, if any is contained in given collection.
+   * It is useful for structures or binary identifiers, when we should check dependents of this identifier.
+   * @param set - some collection of identifiers
+   * @return first abstract identifier, which is found or null if no owners are found in collection
+   */
+  public AbstractIdentifier containsIn(Collection<? extends AbstractIdentifier> set);
 }

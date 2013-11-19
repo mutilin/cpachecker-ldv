@@ -23,8 +23,9 @@
  */
 package org.sosy_lab.cpachecker.util.identifiers;
 
+import java.util.Collection;
+
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
-import org.sosy_lab.cpachecker.cpa.local.LocalTransferRelation;
 
 
 public abstract class SingleIdentifier implements AbstractIdentifier{
@@ -52,22 +53,15 @@ public abstract class SingleIdentifier implements AbstractIdentifier{
     return name;
   }
 
-  public String getPointers() {
-    StringBuilder sb = new StringBuilder();
-    for (int i = 0; i < dereference; i++) {
-      sb.append("*");
-    }
-    return sb.toString();
-  }
-
   @Override
   public boolean isPointer() {
-    if (dereference > 0)
+    if (dereference > 0) {
       return true;
-    else if (LocalTransferRelation.findDereference(type) > 0)
+    }/* else if (LocalTransferRelation.findDereference(type) > 0) {
       return true;
-    else
+    } */else {
       return false;
+    }
   }
 
   @Override
@@ -82,25 +76,33 @@ public abstract class SingleIdentifier implements AbstractIdentifier{
 
   @Override
   public boolean equals(Object obj) {
-    if (this == obj)
+    if (this == obj) {
       return true;
-    if (obj == null)
+    }
+    if (obj == null) {
       return false;
-    if (getClass() != obj.getClass())
+    }
+    if (getClass() != obj.getClass()) {
       return false;
+    }
     SingleIdentifier other = (SingleIdentifier) obj;
-    if (dereference != other.dereference)
+    if (dereference != other.dereference) {
       return false;
+    }
     if (name == null) {
-      if (other.name != null)
+      if (other.name != null) {
         return false;
-    } else if (!name.equals(other.name))
+      }
+    } else if (!name.equals(other.name)) {
       return false;
+    }
     if (type == null) {
-      if (other.type != null)
+      if (other.type != null) {
         return false;
-    } else if (!type.toASTString("").equals(other.type.toASTString("")))
+      }
+    } else if (!type.toASTString("").equals(other.type.toASTString(""))) {
       return false;
+    }
     return true;
   }
 
@@ -121,4 +123,13 @@ public abstract class SingleIdentifier implements AbstractIdentifier{
     dereference = pD;
   }
 
+  @Override
+  public AbstractIdentifier containsIn(Collection<? extends AbstractIdentifier> set) {
+    GeneralIdentifier generalId = this.getGeneralId();
+    if (set.contains(generalId)) {
+      return generalId;
+    } else {
+      return null;
+    }
+  }
 }

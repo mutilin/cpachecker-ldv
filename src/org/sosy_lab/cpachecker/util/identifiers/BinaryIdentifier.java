@@ -23,6 +23,9 @@
  */
 package org.sosy_lab.cpachecker.util.identifiers;
 
+import java.util.Collection;
+
+
 
 public class BinaryIdentifier implements AbstractIdentifier {
   protected AbstractIdentifier id1;
@@ -46,25 +49,33 @@ public class BinaryIdentifier implements AbstractIdentifier {
   }
   @Override
   public boolean equals(Object obj) {
-    if (this == obj)
+    if (this == obj) {
       return true;
-    if (obj == null)
+    }
+    if (obj == null) {
       return false;
-    if (getClass() != obj.getClass())
+    }
+    if (getClass() != obj.getClass()) {
       return false;
+    }
     BinaryIdentifier other = (BinaryIdentifier) obj;
-    if (dereference != other.dereference)
+    if (dereference != other.dereference) {
       return false;
+    }
     if (id1 == null) {
-      if (other.id1 != null)
+      if (other.id1 != null) {
         return false;
-    } else if (!id1.equals(other.id1))
+      }
+    } else if (!id1.equals(other.id1)) {
       return false;
+    }
     if (id2 == null) {
-      if (other.id2 != null)
+      if (other.id2 != null) {
         return false;
-    } else if (!id2.equals(other.id2))
+      }
+    } else if (!id2.equals(other.id2)) {
       return false;
+    }
     return true;
   }
 
@@ -112,9 +123,9 @@ public class BinaryIdentifier implements AbstractIdentifier {
 
   @Override
   public boolean isPointer() {
-    if (dereference != 0)
+    if (dereference != 0) {
       return true;
-    else
+    } else
       if ( id1.isPointer() && id2.isPointer()) {
         return true;
       } else if (!id1.isPointer() && !id2.isPointer()) {
@@ -131,4 +142,26 @@ public class BinaryIdentifier implements AbstractIdentifier {
     dereference = pD;
   }
 
+  @Override
+  public AbstractIdentifier containsIn(Collection<? extends AbstractIdentifier> pSet) {
+    if (pSet.contains(this)) {
+      return this;
+    } else {
+      int deref = id1.getDereference();
+      AbstractIdentifier tmp1 = id1.clone();
+      AbstractIdentifier tmp2 = id2.clone();
+      tmp1.setDereference(dereference + deref);
+      deref = id2.getDereference();
+      tmp2.setDereference(dereference + deref);
+      AbstractIdentifier id1Container = tmp1.containsIn(pSet);
+      AbstractIdentifier id2Container = tmp2.containsIn(pSet);
+      if (id1Container != null) {
+        return id1Container;
+      } else if (id2Container != null) {
+        return id2Container;
+      } else {
+        return null;
+      }
+    }
+  }
 }

@@ -23,6 +23,8 @@
  */
 package org.sosy_lab.cpachecker.util.identifiers;
 
+import java.util.Collection;
+
 import org.sosy_lab.cpachecker.cfa.types.c.CBasicType;
 import org.sosy_lab.cpachecker.cfa.types.c.CProblemType;
 import org.sosy_lab.cpachecker.cfa.types.c.CSimpleType;
@@ -142,5 +144,24 @@ public class StructureIdentifier extends SingleIdentifier{
 
   public StructureFieldIdentifier toStructureFieldIdentifier() {
     return new StructureFieldIdentifier(name, type.toASTString(""), getStructureType(), dereference);
+  }
+
+  /**
+   * This method recursively checks owners of this structure, if any is contained in given collection
+   * @param set - some collection of identifiers
+   * @return first abstract identifier, which is found or null if no owners are found in collection
+   */
+  @Override
+  public AbstractIdentifier containsIn(Collection<? extends AbstractIdentifier> set) {
+    if (set.contains(this)) {
+      return this;
+    } else {
+      AbstractIdentifier ownerContainer = owner.containsIn(set);
+      if (ownerContainer == null) {
+        return null;
+      } else {
+        return ownerContainer;
+      }
+    }
   }
 }
