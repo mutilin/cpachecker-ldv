@@ -243,6 +243,9 @@ public class CallstackTransferRelation implements TransferRelation {
   }
 
   private boolean shouldGoByFunctionSummaryStatement(CallstackState element, CFunctionSummaryStatementEdge sumEdge) {
+    if (goByStatementNow) {
+      return true;
+    }
     String functionName = sumEdge.getFunctionName();
     FunctionCallEdge callEdge = findOutgoingCallEdge(sumEdge.getPredecessor());
     assert functionName.equals(callEdge.getSuccessor().getFunctionName());
