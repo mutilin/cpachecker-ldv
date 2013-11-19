@@ -23,12 +23,10 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
-import java.io.File;
+import java.io.BufferedWriter;
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
-import java.io.PrintWriter;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collection;
@@ -40,6 +38,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
 
+import org.sosy_lab.common.Files;
 import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.Configuration;
@@ -47,7 +46,6 @@ import org.sosy_lab.common.configuration.FileOption;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
-import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
@@ -89,6 +87,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   @Option(values={"PAIR", "SETDIFF"},toUppercase=true,
       description="which data process we should use")
   private String unsafeDetectorType = "PAIR";
+
+  @Option(description="which data process we should use")
+  private boolean printAllUnsafeUsages = false;
 
   private final LogManager logger;
 
@@ -141,7 +142,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     logger = pLogger;
   }
 
-  public void add(SingleIdentifier id, Access access, UsageStatisticsState state, EdgeType type) throws HandleCodeException {
+  public void add(SingleIdentifier id, Access access, UsageStatisticsState state, EdgeType type, int line) throws HandleCodeException {
     if (state.containsLinks(id)) {
       id = (SingleIdentifier) state.getLinks(id);
     }
@@ -173,11 +174,11 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     LockStatisticsState lockState = AbstractStates.extractStateByType(state, LockStatisticsState.class);
     logger.log(Level.FINEST, "Its locks are: " + lockState);
     CallstackState callstackState = AbstractStates.extractStateByType(state, CallstackState.class);
-    CFANode location = AbstractStates.extractLocation(state);
 
     callstackState = createStack(callstackState);
 
-    LineInfo lineInfo = new LineInfo(location.getLineNumber());
+    //We can't get line from location, because it is old state
+    LineInfo lineInfo = new LineInfo(line);
     EdgeInfo info = new EdgeInfo(type);
 
     UsageInfo usage = new UsageInfo(access, lineInfo, info, lockState, callstackState);
@@ -215,7 +216,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   /*
    * looks through all unsafe cases of current identifier and find the example of two lines with different locks, one of them must be 'write'
    */
-  private void createVisualization(SingleIdentifier id, UsageInfo usage, PrintWriter writer) {
+  private void createVisualization(SingleIdentifier id, UsageInfo usage, BufferedWriter writer) throws IOException {
     LinkedList<TreeLeaf> leafStack = new LinkedList<>();
     TreeLeaf currentLeaf;
 
@@ -240,25 +241,25 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       leafStack.push(currentLeaf);
       currentLeaf = currentLeaf.children.getFirst();
     } else {
-      System.err.println("Empty error path, can't proceed");
+      logger.log(Level.WARNING, "Empty error path, can't proceed");
       return;
     }
-    writer.println("Line 0:     N0 -{/*_____________________*/}-> N0");
-    writer.println("Line 0:     N0 -{/*" + (Locks == null ? "empty" : Locks.toString()) + "*/}-> N0");
+    writer.append("Line 0:     N0 -{/*_____________________*/}-> N0" + "\n");
+    writer.append("Line 0:     N0 -{/*" + (Locks == null ? "empty" : Locks.toString()) + "*/}-> N0" + "\n");
     while (currentLeaf != null) {
       if (currentLeaf.children.size() > 0) {
-        writer.println("Line " + currentLeaf.line + ":     N0 -{" + currentLeaf.code + "();}-> N0");
-        writer.println("Line 0:     N0 -{Function start dummy edge}-> N0");
+        writer.append("Line " + currentLeaf.line + ":     N0 -{" + currentLeaf.code + "();}-> N0" + "\n");
+        writer.append("Line 0:     N0 -{Function start dummy edge}-> N0" + "\n");
         leafStack.push(currentLeaf);
         currentLeaf = currentLeaf.children.getFirst();
       } else {
-        writer.println("Line " + currentLeaf.line + ":     N0 -{" + currentLeaf.code + "}-> N0");
+        writer.append("Line " + currentLeaf.line + ":     N0 -{" + currentLeaf.code + "}-> N0" + "\n");
         currentLeaf = findFork(writer, currentLeaf, leafStack);
       }
     }
   }
 
-  private TreeLeaf findFork(PrintWriter writer, TreeLeaf pCurrentLeaf, LinkedList<TreeLeaf> leafStack) {
+  private TreeLeaf findFork(BufferedWriter writer, TreeLeaf pCurrentLeaf, LinkedList<TreeLeaf> leafStack) throws IOException {
     TreeLeaf tmpLeaf, currentLeaf = pCurrentLeaf;
 
     while (true) {
@@ -272,7 +273,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         currentLeaf = null;
         break;
       }
-      writer.println("Line 0:     N0 -{return;}-> N0");
+      writer.append("Line 0:     N0 -{return;}-> N0\n");
       currentLeaf = tmpLeaf;
     }
     return currentLeaf;
@@ -305,66 +306,59 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     return tmpList;
   }
 
-  private void createVisualization(SingleIdentifier id, PrintWriter writer) {
+  private void createVisualization(SingleIdentifier id, BufferedWriter writer) throws IOException {
     List<UsageInfo> uinfo = Stat.get(id);
 
     if (uinfo == null || uinfo.size() == 0) {
       return;
     }
     if (id instanceof StructureFieldIdentifier) {
-      writer.println("###");
+      writer.append("###\n");
     } else if (id instanceof GlobalVariableIdentifier) {
-      writer.println("#");
+      writer.append("#\n");
     } else if (id instanceof LocalVariableIdentifier) {
-      writer.println("##" + ((LocalVariableIdentifier)id).getFunction());
+      writer.append("##" + ((LocalVariableIdentifier)id).getFunction() + "\n");
     } else {
       System.err.println("What is it?" + id.toString());
     }
-    /*if (id.getDereference() < 0) {
-      System.out.println("Adress unsafe: " + id.getName());
-    }*/
-    writer.println(id.getDereference());
-    writer.println(id.getType().toASTString(id.getName()));
-    writer.println("Line 0:     N0 -{/*Number of usages:" + uinfo.size() + "*/}-> N0");
-    writer.println("Line 0:     N0 -{/*Two examples:*/}-> N0");
+    writer.append(id.getDereference() + "\n");
+    writer.append(id.getType().toASTString(id.getName()) + "\n");
+    writer.append("Line 0:     N0 -{/*Number of usages:" + uinfo.size() + "*/}-> N0" + "\n");
+    writer.append("Line 0:     N0 -{/*Two examples:*/}-> N0" + "\n");
     try {
       Pair<UsageInfo, UsageInfo> tmpPair = unsafeDetector.getUnsafePair(uinfo);
       createVisualization(id, tmpPair.getFirst(), writer);
       createVisualization(id, tmpPair.getSecond(), writer);
-      /*writer.println("Line 0:     N0 -{_____________________}-> N0");
-      writer.println("Line 0:     N0 -{All usages:}-> N0");
-      for (UsageInfo ui : uinfo)
-        createVisualization(id, ui, writer);
-      */
+      if (printAllUnsafeUsages) {
+        writer.append("Line 0:     N0 -{_____________________}-> N0" + "\n");
+        writer.append("Line 0:     N0 -{All usages:}-> N0" + "\n");
+        for (UsageInfo ui : uinfo) {
+          createVisualization(id, ui, writer);
+        }
+      }
     } catch (HandleCodeException e) {
-      System.err.println("Can't find unsafes in " + id.getName());
+      logger.log(Level.WARNING, "Can't find unsafes in " + id.getName());
       return;
     }
   }
 
-  private void createDir(File file) throws IOException {
-    File previousDir = file.getParentFile();
-    if (!previousDir.exists()) {
-      createDir(previousDir);
-    }
-    file.mkdir();
-  }
-
   @Override
   public void printStatistics(PrintStream out, Result result, ReachedSet reached) {
-		PrintWriter writer = null;
-		FileOutputStream file = null;
+		BufferedWriter writer = null;
     try {
-      File outputFile = outputStatFileName.toFile();
-      if (!outputFile.exists()) {
-        File previousDir = outputFile.getParentFile();
-        if (!previousDir.exists()) {
-          createDir(previousDir);
-        }
-        outputFile.createNewFile();
+      writer = Files.openOutputFile(outputStatFileName);
+      logger.log(Level.FINE, "Print statistics about unsafe cases");
+      printCountStatistics(writer, Stat.keySet());
+      Collection<SingleIdentifier> unsafeCases = unsafeDetector.getUnsafes(Stat);
+      printCountStatistics(writer, unsafeCases);
+      printLockStatistics(writer);
+
+      logger.log(Level.FINEST, "Processing unsafe identifiers");
+      for (SingleIdentifier id : unsafeCases) {
+        createVisualization(id, writer);
       }
-      file = new FileOutputStream (outputFile.getPath());
-      writer = new PrintWriter(file);
+
+      writer.close();
     } catch(FileNotFoundException e) {
       logger.log(Level.SEVERE, "File " + outputStatFileName + " not found");
       return;
@@ -373,36 +367,23 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       return;
     }
 
-    logger.log(Level.FINE, "Print statistics about unsafe cases");
-    printCountStatistics(writer, Stat.keySet());
-    Collection<SingleIdentifier> unsafeCases = unsafeDetector.getUnsafes(Stat);
-    printCountStatistics(writer, unsafeCases);
-    printLockStatistics(writer);
-
-    logger.log(Level.FINEST, "Processing unsafe identifiers");
-    for (SingleIdentifier id : unsafeCases) {
-      createVisualization(id, writer);
-    }
-
-    writer.close();
-
     /*System.out.println(" \t \t Global Local \t Structure");
     System.out.println("Assignment: \t " + counter[0][0] + " \t " + counter[1][0] + " \t " + counter[2][0]);
     System.out.println("Assumption: \t " + counter[0][1] +" \t " + counter[1][1] +" \t " + counter[2][1] );
     System.out.println("Function call: \t " + counter[0][2] +" \t " + counter[1][2] +" \t " + counter[2][2]);*/
   }
 
-  private void printLockStatistics(PrintWriter writer) {
+  private void printLockStatistics(BufferedWriter writer) throws IOException {
     List<LockStatisticsLock> mutexes = findAllLocks();
 
     Collections.sort(mutexes, new LockStatisticsLock.LockComparator());
-    writer.println(mutexes.size());
+    writer.append(mutexes.size() + "\n");
     for (LockStatisticsLock lock : mutexes) {
-      writer.println(lock.toString());
+      writer.append(lock.toString() + "\n");
     }
   }
 
-  private void printCountStatistics(PrintWriter writer, Collection<SingleIdentifier> idSet) {
+  private void printCountStatistics(BufferedWriter writer, Collection<SingleIdentifier> idSet) throws IOException {
     int global = 0, local = 0, fields = 0;
     int globalPointer = 0, localPointer = 0, fieldPointer = 0;
 
@@ -430,14 +411,14 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       }
     }
     //writer.println(counter);
-    writer.println(global);
-    writer.println(globalPointer);
-    writer.println(local);
-    writer.println(localPointer);
+    writer.append(global + "\n");
+    writer.append(globalPointer + "\n");
+    writer.append(local + "\n");
+    writer.append(localPointer + "\n");
     //writer.println("--Structures:           " + structures);
-    writer.println(fields);
-    writer.println(fieldPointer);
-    writer.println(global + globalPointer + local + localPointer + fields + fieldPointer);
+    writer.append(fields + "\n");
+    writer.append(fieldPointer + "\n");
+    writer.append(global + globalPointer + local + localPointer + fields + fieldPointer + "\n");
   }
 
   @Override

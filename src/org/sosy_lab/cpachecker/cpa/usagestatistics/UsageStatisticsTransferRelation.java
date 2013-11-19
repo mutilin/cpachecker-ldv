@@ -66,8 +66,8 @@ import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackTransferRelation;
 import org.sosy_lab.cpachecker.cpa.local.IdentifierCreator;
+import org.sosy_lab.cpachecker.cpa.local.LocalState;
 import org.sosy_lab.cpachecker.cpa.local.LocalState.DataType;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.BinderFunctionInfo.LinkerInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.EdgeInfo.EdgeType;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
@@ -76,12 +76,8 @@ import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCFAEdgeException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
-import org.sosy_lab.cpachecker.util.identifiers.BinaryIdentifier;
-import org.sosy_lab.cpachecker.util.identifiers.ConstantIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.GeneralIdentifier;
-import org.sosy_lab.cpachecker.util.identifiers.LocalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
-import org.sosy_lab.cpachecker.util.identifiers.StructureIdentifier;
 
 @Options(prefix="cpa.usagestatistics")
 public class UsageStatisticsTransferRelation implements TransferRelation {
@@ -102,9 +98,6 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
   private final CallstackTransferRelation callstackTransfer;
 
   private Map<String, BinderFunctionInfo> binderFunctionInfo;
-  //TODO: strengthen (CallStackCPA, LockStatisticsCPA)
-  //pass the state to LockStatisticsCPA to bind Callstack to lock
-  private UsageStatisticsState oldState;
   private final LogManager logger;
 
   int globalAdress = 0;
@@ -135,23 +128,22 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       AbstractState pElement, Precision pPrecision, CFAEdge pCfaEdge)
       throws InterruptedException, CPATransferException {
 
-    oldState = (UsageStatisticsState)pElement;
     Collection<UsageStatisticsState> results;
 
     assert (pPrecision instanceof UsageStatisticsPrecision);
 
     if (pCfaEdge == null) {
-      CFANode node = extractLocation(oldState);
+      CFANode node = extractLocation(pElement);
       results = new ArrayList<>(node.getNumLeavingEdges());
 
       for (int edgeIdx = 0; edgeIdx < node.getNumLeavingEdges(); edgeIdx++) {
         CFAEdge edge = node.getLeavingEdge(edgeIdx);
-          getAbstractSuccessorForEdge(oldState, (UsageStatisticsPrecision)pPrecision, edge, results);
+          getAbstractSuccessorForEdge((UsageStatisticsState)pElement, (UsageStatisticsPrecision)pPrecision, edge, results);
       }
 
     } else {
       results = new ArrayList<>(1);
-      getAbstractSuccessorForEdge(oldState, (UsageStatisticsPrecision)pPrecision, pCfaEdge, results);
+      getAbstractSuccessorForEdge((UsageStatisticsState)pElement, (UsageStatisticsPrecision)pPrecision, pCfaEdge, results);
 
     }
     return results;
@@ -183,16 +175,10 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     }
 
     AbstractState oldWrappedState = oldState.getWrappedState();
-    LockStatisticsState lockState = AbstractStates.extractStateByType(oldWrappedState, LockStatisticsState.class);
+    oldState = handleEdge(pPrecision, oldState, pCfaEdge);
     Collection<? extends AbstractState> newWrappedStates = wrappedTransfer.getAbstractSuccessors(oldWrappedState, pPrecision.getWrappedPrecision(), currentEdge);
     for (AbstractState newWrappedState : newWrappedStates) {
       UsageStatisticsState newState = oldState.clone(newWrappedState);
-      LockStatisticsState newLockState = AbstractStates.extractStateByType(newWrappedState, LockStatisticsState.class);
-
-      if (newLockState != null && newLockState.equals(lockState)) {
-        //It means, that there is no lock operations.
-        newState = handleEdge(pPrecision, newState, pCfaEdge);
-      }
       if (newState != null) {
         results.add(newState);
       }
@@ -222,9 +208,6 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
   private UsageStatisticsState handleEdge(UsageStatisticsPrecision precision, UsageStatisticsState newState
       , CFAEdge pCfaEdge) throws CPATransferException {
 
-    /*if (pCfaEdge.getPredecessor().getFunctionName().equals("brelse")) {
-      System.out.println("In brelse");
-    }*/
     switch(pCfaEdge.getEdgeType()) {
 
       case DeclarationEdge: {
@@ -286,7 +269,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       CRightHandSide right = ((CFunctionCallAssignmentStatement)statement).getRightHandSide();
       CExpression variable = ((CFunctionCallAssignmentStatement)statement).getLeftHandSide();
 
-      visitStatement(oldState, pPrecision, variable, Access.WRITE, EdgeType.ASSIGNMENT);
+      visitStatement(pNewState, pPrecision, variable, Access.WRITE, EdgeType.ASSIGNMENT);
       // expression - only name of function
       if (right instanceof CFunctionCallExpression) {
         handleFunctionCallExpression(pNewState, pPrecision, variable, (CFunctionCallExpression)right);
@@ -330,7 +313,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       String funcName = AbstractStates.extractStateByType(pNewState, CallstackState.class).getCurrentFunction();
 
       AbstractIdentifier id = IdentifierCreator.createIdentifier(decl, funcName, 0);
-      visitId(pNewState, pPrecision, id, Access.WRITE, EdgeType.DECLARATION);
+      visitId(pNewState, pPrecision, id, Access.WRITE, EdgeType.DECLARATION, declEdge.getLineNumber());
     }
   }
 
@@ -355,12 +338,12 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       for (int i = 0; i < params.size(); i++) {
         creator.setDereference(currentInfo.pInfo.get(i).dereference);
         id = params.get(i).accept(creator);
-        visitId(oldState, pPrecision, id, currentInfo.pInfo.get(i).access, EdgeType.FUNCTION_CALL);
+        visitId(pNewState, pPrecision, id, currentInfo.pInfo.get(i).access, EdgeType.FUNCTION_CALL, fcExpression.getFileLocation().getStartingLineNumber());
       }
 
     } else {
       for (CExpression p : fcExpression.getParameterExpressions()) {
-        visitStatement(oldState, pPrecision, p, Access.READ, EdgeType.FUNCTION_CALL);
+        visitStatement(pNewState, pPrecision, p, Access.READ, EdgeType.FUNCTION_CALL);
       }
     }
   }
@@ -457,13 +440,13 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     expression.accept(handler);
 
     for (Pair<AbstractIdentifier, Access> pair : handler.result) {
-      visitId(state, pPrecision, pair.getFirst(), pair.getSecond(), eType);
+      visitId(state, pPrecision, pair.getFirst(), pair.getSecond(), eType, expression.getFileLocation().getStartingLineNumber());
     }
 
   }
 
   private void visitId(UsageStatisticsState state, UsageStatisticsPrecision pPrecision
-      , AbstractIdentifier id, Access access, EdgeType eType) throws HandleCodeException {
+      , AbstractIdentifier id, Access access, EdgeType eType, int line) throws HandleCodeException {
 
     //Precise information, using results of shared analysis
     if (! (id instanceof SingleIdentifier)) {
@@ -475,7 +458,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     CFANode node = AbstractStates.extractLocation(state);
     Map<GeneralIdentifier, DataType> localInfo = pPrecision.get(node);
 
-    if (localInfo != null && getDataType(localInfo, singleId) == DataType.LOCAL) {
+    if (localInfo != null && LocalState.getType(localInfo, singleId) == DataType.LOCAL) {
       /*if (id.toString().contains("&")) {
         if (id instanceof GlobalVariableIdentifier)
           globalAdress++;
@@ -491,10 +474,10 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       return;
     }
 
-    statistics.add(singleId, access, state, eType);
+    statistics.add(singleId, access, state, eType, line);
   }
 
-  private DataType getDataType(Map<GeneralIdentifier, DataType> localInfo, AbstractIdentifier aId) {
+  /*private DataType getDataType(Map<GeneralIdentifier, DataType> localInfo, AbstractIdentifier aId) {
     if (aId instanceof BinaryIdentifier) {
       AbstractIdentifier id1 = ((BinaryIdentifier) aId).getIdentifier1();
       AbstractIdentifier id2 = ((BinaryIdentifier) aId).getIdentifier2();
@@ -531,7 +514,8 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       logger.log(Level.WARNING, "Unknown identifier type: " + aId.toString());
       return null;
     }
-  }
+    return ;
+  }*/
 
 
   @Override
@@ -541,9 +525,5 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     // in this method we could access the abstract domains of other CPAs
     // if required.
     return null;
-  }
-
-  public UsageStatisticsState getOldState() {
-    return oldState;
   }
 }
