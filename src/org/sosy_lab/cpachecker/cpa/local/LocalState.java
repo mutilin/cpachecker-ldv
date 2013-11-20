@@ -133,7 +133,7 @@ public class LocalState implements AbstractState {
     } else {
       name = aId;
     }
-    if (localVariables.contains(name.toString())) {
+    if (localVariables != null && localVariables.contains(name.toString())) {
       return DataType.LOCAL;
     }
     if (localInfo.containsKey(name)) {
@@ -161,10 +161,6 @@ public class LocalState implements AbstractState {
         return null;
       }
     }
-  }
-
-  public boolean contains(AbstractIdentifier name) {
-    return DataInfo.containsKey(name);
   }
 
   @Override

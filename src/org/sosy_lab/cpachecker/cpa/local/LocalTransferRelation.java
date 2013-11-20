@@ -67,7 +67,6 @@ import org.sosy_lab.cpachecker.util.identifiers.GlobalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.LocalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.ReturnIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
-import org.sosy_lab.cpachecker.util.identifiers.StructureIdentifier;
 
 @Options(prefix="cpa.local")
 public class LocalTransferRelation implements TransferRelation {
@@ -274,9 +273,6 @@ public class LocalTransferRelation implements TransferRelation {
     if (leftId instanceof ConstantIdentifier) {
       //Can't assume to constant, but this situation can occur, if we have *(a + b)...
       return;
-    }
-    if (leftId instanceof StructureIdentifier && ((StructureIdentifier)leftId).getName().equals("m_objDestroyCnt")) {
-      System.out.println("m_objDestroyCnt");
     }
     if (leftId.isGlobal()) {
       //Variable is global, not memory location!
