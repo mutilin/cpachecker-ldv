@@ -33,6 +33,7 @@ import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.CPAFactory;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysisWithABM;
+import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
 
 @Options(prefix="cpa.lockstatistics")
@@ -52,6 +53,11 @@ public class LockStatisticsCPA extends AbstractCPA implements ConfigurableProgra
   @Override
   public AbstractState getInitialState(CFANode node) {
     return new LockStatisticsState();
+  }
+
+  @Override
+  public Precision getInitialPrecision(CFANode pNode) {
+    return new LockStatisticsPrecision(null);
   }
 
   @Override

@@ -254,22 +254,17 @@ public class LockStatisticsState implements AbstractState, Serializable {
 
     for (String lockName : freeLocks.keySet()) {
       variable = freeLocks.get(lockName);
-      for (LockStatisticsLock currentLock : this.locks) {
-        if (currentLock.hasEqualNameAndVariable(lockName, freeLocks.get(lockName))) {
-          newState.free(lockName, variable, logger);
-        }
+      LockStatisticsLock lock = findLock(lockName, variable);
+      if (lock != null) {
+        newState.free(lockName, variable, logger);
       }
     }
     return newState;
   }
 
   public int getCounter(String lockName, String varName) {
-    for (LockStatisticsLock lock : locks) {
-      if (lock.hasEqualNameAndVariable(lockName, varName)) {
-        return lock.getAccessCounter();
-      }
-    }
-    return 0;
+    LockStatisticsLock lock = findLock(lockName, varName);
+    return (lock == null ? 0 : lock.getAccessCounter());
   }
 
   //this function is used only in debugging. Do not delete!
@@ -297,16 +292,16 @@ public class LockStatisticsState implements AbstractState, Serializable {
    * @return a new element representing the join of this element and the other element
    */
   public LockStatisticsState join(LockStatisticsState other) {
-    Set<LockStatisticsLock> newGlobalLocks = new HashSet<>();
+    Set<LockStatisticsLock> newLocks = new HashSet<>();
 
     for (LockStatisticsLock otherLock : other.locks) {
 
       if (locks.contains(otherLock)) {
-        newGlobalLocks.add(otherLock);
+        newLocks.add(otherLock);
       }
     }
 
-    return new LockStatisticsState(newGlobalLocks, this.toRestore);
+    return new LockStatisticsState(newLocks, this.toRestore);
   }
 
   /**
