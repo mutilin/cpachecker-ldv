@@ -32,6 +32,7 @@ import java.nio.file.Paths;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -41,6 +42,7 @@ import java.util.logging.Level;
 import org.sosy_lab.common.Files;
 import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.Pair;
+import org.sosy_lab.common.Timer;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.FileOption;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
@@ -88,15 +90,16 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       description="which data process we should use")
   private String unsafeDetectorType = "PAIR";
 
-  @Option(description="which data process we should use")
+  @Option(description="print all unsafe cases in report")
   private boolean printAllUnsafeUsages = false;
 
   private final LogManager logger;
+  private Set<SingleIdentifier> unsafes = new HashSet<>();
+  Timer full = new Timer();
+  Timer one = new Timer();
+  Timer two = new Timer();
 
-  //@Option(description="if we need to print all variables, not only unsafe cases")
-  //private boolean fullstatistics = true;
-
-  public void addTmp(SingleIdentifier id, EdgeInfo.EdgeType e, int line) {
+  /*public void addTmp(SingleIdentifier id, EdgeInfo.EdgeType e, int line) {
     int i, j;
     if (id instanceof GlobalVariableIdentifier) {
       i = 0;
@@ -122,11 +125,11 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         System.err.println("What is the type of usage: " + e);
         return;
     }
-    /*if (i == 1 && j == 0) {
+    if (i == 1 && j == 0) {
       System.out.println(line);
     }
-    counter[i][j]++;*/
-  }
+    counter[i][j]++;
+  }*/
 
   public UsageStatisticsCPAStatistics(Configuration config, LogManager pLogger) throws InvalidConfigurationException{
     Stat = new HashMap<>();
@@ -134,9 +137,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
     if (unsafeDetectorType.equals("PAIR")) {
       unsafeDetector = new PairwiseUnsafeDetector(config);
-    } else if (unsafeDetectorType.equals("SETDIFF")) {
+    }/* else if (unsafeDetectorType.equals("SETDIFF")) {
       unsafeDetector = new SetDifferenceUnsafeDetector(config);
-    } else {
+    } */else {
       throw new InvalidConfigurationException("Unknown data procession " + unsafeDetectorType);
     }
     logger = pLogger;
@@ -168,7 +171,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     if (id instanceof StructureIdentifier) {
       id = ((StructureIdentifier)id).toStructureFieldIdentifier();
     }
-
+    /*if (!printAllUnsafeUsages && unsafes.contains(id)) {
+      return;
+    }*/
     logger.log(Level.FINE, "Add id " + id + " to unsafe statistics");
     List<UsageInfo> uset;
     LockStatisticsState lockState = AbstractStates.extractStateByType(state, LockStatisticsState.class);
@@ -188,6 +193,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       Stat.put(id, uset);
     } else {
       uset = Stat.get(id);
+      if (!unsafes.contains(id) && unsafeDetector.isUnsafeCase(Stat.get(id), usage)) {
+        unsafes.add(id);
+      }
     }
     uset.add(usage);
   }
@@ -214,7 +222,8 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   }
 
   /*
-   * looks through all unsafe cases of current identifier and find the example of two lines with different locks, one of them must be 'write'
+   * looks through all unsafe cases of current identifier and find the example of two lines with different locks,
+   * one of them must be 'write'
    */
   private void createVisualization(SingleIdentifier id, UsageInfo usage, BufferedWriter writer) throws IOException {
     LinkedList<TreeLeaf> leafStack = new LinkedList<>();
@@ -244,16 +253,16 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       logger.log(Level.WARNING, "Empty error path, can't proceed");
       return;
     }
-    writer.append("Line 0:     N0 -{/*_____________________*/}-> N0" + "\n");
-    writer.append("Line 0:     N0 -{/*" + (Locks == null ? "empty" : Locks.toString()) + "*/}-> N0" + "\n");
+    writer.append("Line 0:     N0 -{/*_____________________*/}-> N0\n");
+    writer.append("Line 0:     N0 -{/*" + (Locks == null ? "empty" : Locks.toString()) + "*/}-> N0\n");
     while (currentLeaf != null) {
       if (currentLeaf.children.size() > 0) {
-        writer.append("Line " + currentLeaf.line + ":     N0 -{" + currentLeaf.code + "();}-> N0" + "\n");
+        writer.append(currentLeaf.toString() + "();}-> N0\n");
         writer.append("Line 0:     N0 -{Function start dummy edge}-> N0" + "\n");
         leafStack.push(currentLeaf);
         currentLeaf = currentLeaf.children.getFirst();
       } else {
-        writer.append("Line " + currentLeaf.line + ":     N0 -{" + currentLeaf.code + "}-> N0" + "\n");
+        writer.append(currentLeaf.toString() + "}-> N0\n");
         currentLeaf = findFork(writer, currentLeaf, leafStack);
       }
     }
@@ -291,7 +300,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       currentLeaf = currentLeaf.add(tmpList.getFirst().getCallNode().getFunctionName(), 0);
     }
     for (CallstackState callstack : tmpList) {
-      currentLeaf = currentLeaf.addLast(callstack);
+      currentLeaf = currentLeaf.addLast(callstack.getCurrentFunction(), state.getCallNode().getLeavingEdge(0).getLineNumber());
     }
     return currentLeaf;
   }
@@ -319,7 +328,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     } else if (id instanceof LocalVariableIdentifier) {
       writer.append("##" + ((LocalVariableIdentifier)id).getFunction() + "\n");
     } else {
-      System.err.println("What is it?" + id.toString());
+      logger.log(Level.WARNING, "What is it? " + id.toString());
     }
     writer.append(id.getDereference() + "\n");
     writer.append(id.getType().toASTString(id.getName()) + "\n");
@@ -345,19 +354,22 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   @Override
   public void printStatistics(PrintStream out, Result result, ReachedSet reached) {
 		BufferedWriter writer = null;
+		full.start();
     try {
       writer = Files.openOutputFile(outputStatFileName);
       logger.log(Level.FINE, "Print statistics about unsafe cases");
+      one.start();
       printCountStatistics(writer, Stat.keySet());
-      Collection<SingleIdentifier> unsafeCases = unsafeDetector.getUnsafes(Stat);
+      Collection<SingleIdentifier> unsafeCases = unsafes;//unsafeDetector.getUnsafes(Stat);
       printCountStatistics(writer, unsafeCases);
       printLockStatistics(writer);
-
+      one.stop();
+      two.start();
       logger.log(Level.FINEST, "Processing unsafe identifiers");
       for (SingleIdentifier id : unsafeCases) {
         createVisualization(id, writer);
       }
-
+      two.stop();
       writer.close();
     } catch(FileNotFoundException e) {
       logger.log(Level.SEVERE, "File " + outputStatFileName + " not found");

@@ -51,11 +51,8 @@ import org.sosy_lab.cpachecker.core.interfaces.Reducer;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.interfaces.StopOperator;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
-import org.sosy_lab.cpachecker.core.interfaces.WrapperCPA;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackCPA;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackTransferRelation;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsCPA;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsTransferRelation;
 import org.sosy_lab.cpachecker.util.CPAs;
 @Options(prefix="cpa.usagestatistics")
 public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements ConfigurableProgramAnalysisWithABM {
@@ -84,9 +81,6 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
 
   private String outputFileName = "output/localsave";
 
-  @Option(description="do we need to collect statistics to generate file for Lcov")
-  private boolean covering = false;
-
   private UsageStatisticsCPA(ConfigurableProgramAnalysis pCpa, CFA pCfa, LogManager pLogger, Configuration pConfig) throws InvalidConfigurationException {
     super(pCpa);
     pConfig.inject(this);
@@ -109,11 +103,6 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
     this.statistics = new UsageStatisticsCPAStatistics(pConfig, pLogger);
     this.transferRelation = new UsageStatisticsTransferRelation(pCpa.getTransferRelation(), pConfig, pLogger, statistics
         , (CallstackTransferRelation) (CPAs.retrieveCPA(this, CallstackCPA.class)).getTransferRelation());
-
-    LockStatisticsCPA LockCpa = ((WrapperCPA) getWrappedCpa()).retrieveWrappedCpa(LockStatisticsCPA.class);
-    if (LockCpa != null) {
-      ((LockStatisticsTransferRelation)LockCpa.getTransferRelation()).setUsCPA(this);
-    }
 
     String tmpString = pConfig.getProperty("precision.path");
     if (tmpString != null) {

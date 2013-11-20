@@ -28,30 +28,20 @@ import java.util.LinkedList;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 
 public class TreeLeaf {
-  public CallstackState stack;
-  public String code;
-  public int line;
-  public LinkedList<TreeLeaf> children;
+  private final String code;
+  private final int line;
+  public final LinkedList<TreeLeaf> children;
 
-  private static TreeLeaf trunk = new TreeLeaf(null, "super_main", 0);
+  private static TreeLeaf trunk = new TreeLeaf("super_main", 0);
 
-  private TreeLeaf(CallstackState name, String c, int l) {
-    stack = name;
+  private TreeLeaf(String c, int l) {
     code = c;
     line = l;
     children = new LinkedList<>();
   }
 
   public static TreeLeaf create(CallstackState state) {
-    return new TreeLeaf(state, state.getCurrentFunction(), state.getCallNode().getLeavingEdge(0).getLineNumber());
-  }
-
-  public static TreeLeaf init(CallstackState state) {
-    return new TreeLeaf(state, state.getCallNode().getFunctionName(), 0);
-  }
-
-  public static TreeLeaf init(String code, LineInfo line) {
-    return new TreeLeaf(null, code, line.getLine());
+    return new TreeLeaf(state.getCurrentFunction(), state.getCallNode().getLeavingEdge(0).getLineNumber());
   }
 
   @Override
@@ -65,45 +55,43 @@ public class TreeLeaf {
 
   @Override
   public boolean equals(Object obj) {
-    if (this == obj)
+    if (this == obj) {
       return true;
-    if (obj == null)
+    }
+    if (obj == null) {
       return false;
-    if (getClass() != obj.getClass())
+    }
+    if (getClass() != obj.getClass()) {
       return false;
+    }
     TreeLeaf other = (TreeLeaf) obj;
     if (code == null) {
-      if (other.code != null)
+      if (other.code != null) {
         return false;
-    } else if (!code.equals(other.code))
+      }
+    } else if (!code.equals(other.code)) {
       return false;
-    if (line != other.line)
+    }
+    if (line != other.line) {
       return false;
+    }
     return true;
   }
 
-  public TreeLeaf add(CallstackState state) {
-    return add(state, state.getCurrentFunction(), state.getCallNode().getLeavingEdge(0).getLineNumber());
-  }
-
   public TreeLeaf add(String code, int line) {
-    return add(null, code, line);
-  }
-
-  private TreeLeaf add(CallstackState state, String code, int line) {
     for (TreeLeaf leaf : this.children) {
       if (leaf.code.equals(code) && leaf.line == line) {
         return leaf;
       }
     }
-    TreeLeaf returnLeaf = new TreeLeaf(state, code, line);
+    TreeLeaf returnLeaf = new TreeLeaf(code, line);
     this.children.add(returnLeaf);
     return returnLeaf;
   }
 
   @Override
   public String toString() {
-    return code + " in " + line + " with " + (stack == null ? "empty stack" : stack.hashCode()) + " stack and " + (children == null ? "no children" : children.size()) + " children.\n";
+    return "Line " + line + ":     N0 -{" + code;
   }
 
   public static TreeLeaf getTrunkState() {
@@ -115,11 +103,7 @@ public class TreeLeaf {
     return getTrunkState();
   }
 
-  public TreeLeaf addLast(CallstackState state) {
-    return addLast(state, state.getCurrentFunction(), state.getCallNode().getLeavingEdge(0).getLineNumber());
-  }
-
-  private TreeLeaf addLast(CallstackState state, String code, int line) {
+  public TreeLeaf addLast(String code, int line) {
     for (TreeLeaf leaf : this.children) {
       if (leaf.code.equals(code) && leaf.line == line) {
         if (this.children.size() > this.children.indexOf(leaf) + 1) {
@@ -130,12 +114,8 @@ public class TreeLeaf {
         return leaf;
       }
     }
-    TreeLeaf returnLeaf = new TreeLeaf(state, code, line);
+    TreeLeaf returnLeaf = new TreeLeaf(code, line);
     this.children.add(returnLeaf);
     return returnLeaf;
-  }
-
-  public void addLast(String code, int line) {
-    addLast(null, code, line);
   }
 }

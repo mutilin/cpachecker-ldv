@@ -65,9 +65,11 @@ import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackTransferRelation;
+import org.sosy_lab.cpachecker.cpa.composite.CompositePrecision;
 import org.sosy_lab.cpachecker.cpa.local.IdentifierCreator;
 import org.sosy_lab.cpachecker.cpa.local.LocalState;
 import org.sosy_lab.cpachecker.cpa.local.LocalState.DataType;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsPrecision;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.BinderFunctionInfo.LinkerInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.EdgeInfo.EdgeType;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
@@ -100,9 +102,9 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
   private Map<String, BinderFunctionInfo> binderFunctionInfo;
   private final LogManager logger;
 
-  int globalAdress = 0;
+  /*int globalAdress = 0;
   int localAdress = 0;
-  int structAdress = 0;
+  int structAdress = 0;*/
 
   public UsageStatisticsTransferRelation(TransferRelation pWrappedTransfer,
       Configuration config, LogManager pLogger, UsageStatisticsCPAStatistics s, CallstackTransferRelation transfer) throws InvalidConfigurationException {
@@ -155,12 +157,12 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
     CFAEdge currentEdge = pCfaEdge;
 
-    if (checkAbortFunciton(currentEdge)) {
+    if (checkFunciton(pCfaEdge, abortfunctions)) {
       logger.log(Level.FINEST, currentEdge + " is abort edge, analysis was stopped");
       return;
     }
 
-    if (checkSkippedFunciton(pCfaEdge)) {
+    if (checkFunciton(pCfaEdge, skippedfunctions)) {
       callstackTransfer.setFlag();
       //Find right summary edge
       CFANode node = AbstractStates.extractLocation(oldState);
@@ -176,6 +178,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
     AbstractState oldWrappedState = oldState.getWrappedState();
     oldState = handleEdge(pPrecision, oldState, pCfaEdge);
+    preciseLockStatisticsPrecision(oldState, pPrecision);
     Collection<? extends AbstractState> newWrappedStates = wrappedTransfer.getAbstractSuccessors(oldWrappedState, pPrecision.getWrappedPrecision(), currentEdge);
     for (AbstractState newWrappedState : newWrappedStates) {
       UsageStatisticsState newState = oldState.clone(newWrappedState);
@@ -185,20 +188,30 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     }
   }
 
-  private boolean checkAbortFunciton(CFAEdge pCfaEdge) {
-    if (pCfaEdge.getEdgeType() == CFAEdgeType.FunctionCallEdge) {
-      String FunctionName = ((FunctionCallEdge)pCfaEdge).getSuccessor().getFunctionName();
-      if (abortfunctions != null && abortfunctions.contains(FunctionName)) {
-        return true;
+  private void preciseLockStatisticsPrecision(UsageStatisticsState pOldState, UsageStatisticsPrecision pPrecision) {
+    CallstackState state = AbstractStates.extractStateByType(pOldState, CallstackState.class);
+
+    CompositePrecision precision = (CompositePrecision) pPrecision.getWrappedPrecision();
+    for (Precision prec : precision.getPrecisions()) {
+      if (prec instanceof LockStatisticsPrecision) {
+        CallstackState previousState = ((LockStatisticsPrecision)prec).getPreciseState();
+        if (previousState == null || !previousState.equals(state)) {
+          try {
+            CallstackState fullState = statistics.createStack(state);
+            ((LockStatisticsPrecision)prec).setPreciseState(fullState);
+          } catch (HandleCodeException e) {
+            logger.log(Level.WARNING, "Can't restore callstack");
+          }
+        }
+        return;
       }
     }
-    return false;
   }
 
-  private boolean checkSkippedFunciton(CFAEdge pCfaEdge) {
+  private boolean checkFunciton(CFAEdge pCfaEdge, Set<String> functionSet) {
     if (pCfaEdge.getEdgeType() == CFAEdgeType.FunctionCallEdge) {
       String FunctionName = ((FunctionCallEdge)pCfaEdge).getSuccessor().getFunctionName();
-      if (skippedfunctions != null && skippedfunctions.contains(FunctionName)) {
+      if (functionSet != null && functionSet.contains(FunctionName)) {
         return true;
       }
     }
@@ -476,47 +489,6 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
     statistics.add(singleId, access, state, eType, line);
   }
-
-  /*private DataType getDataType(Map<GeneralIdentifier, DataType> localInfo, AbstractIdentifier aId) {
-    if (aId instanceof BinaryIdentifier) {
-      AbstractIdentifier id1 = ((BinaryIdentifier) aId).getIdentifier1();
-      AbstractIdentifier id2 = ((BinaryIdentifier) aId).getIdentifier2();
-
-      if (id1.isGlobal() || id2.isGlobal()) {
-        return DataType.GLOBAL;
-      } else if (id1.getDereference() == 0) {
-        return getDataType(localInfo, id2);
-      } else if (id2.getDereference() == 0) {
-        return getDataType(localInfo, id1);
-      } else {
-        return DataType.max(getDataType(localInfo, id1), getDataType(localInfo, id2));
-      }
-    } else if (aId instanceof ConstantIdentifier) {
-      if (aId.getDereference() > 0) {
-        return DataType.GLOBAL;
-      } else {
-        return DataType.LOCAL;
-      }
-    } else if (aId instanceof SingleIdentifier) {
-      GeneralIdentifier generalId = ((SingleIdentifier) aId).getGeneralId();
-      if (localInfo.containsKey(generalId)) {
-        return localInfo.get(generalId);
-      }
-      if (aId instanceof StructureIdentifier) {
-        AbstractIdentifier tmpId = ((StructureIdentifier)aId).getOwner();
-        return getDataType(localInfo, tmpId);
-      } else if (aId instanceof LocalVariableIdentifier && !aId.isPointer()) {
-        return DataType.LOCAL;
-      } else {
-        return null;//may be null...
-      }
-    } else {
-      logger.log(Level.WARNING, "Unknown identifier type: " + aId.toString());
-      return null;
-    }
-    return ;
-  }*/
-
 
   @Override
   public Collection<? extends AbstractState> strengthen(

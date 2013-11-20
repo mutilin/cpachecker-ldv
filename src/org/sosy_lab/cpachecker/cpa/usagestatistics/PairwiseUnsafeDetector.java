@@ -28,12 +28,10 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
-import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
@@ -46,11 +44,11 @@ import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 @Options(prefix="cpa.usagestatistics.unsafedetector")
 public class PairwiseUnsafeDetector implements UnsafeDetector {
-  @Option(description = "variables, which will be unsafes even only with read access (they can be changed invisibly)")
-  private Set<String> detectByReadAccess;
+  /*@Option(description = "variables, which will be unsafes even only with read access (they can be changed invisibly)")
+  private Set<String> detectByReadAccess;*/
 
   public PairwiseUnsafeDetector(Configuration config) throws InvalidConfigurationException {
-	  config.inject(this);
+	  //config.inject(this);
   }
 
   @Override
@@ -94,6 +92,16 @@ public class PairwiseUnsafeDetector implements UnsafeDetector {
   @Override
   public String getDescription() {
     return "All lines with different mutexes were printed";
+  }
+
+  @Override
+  public boolean isUnsafeCase(List<UsageInfo> oldUsages, UsageInfo newUsage) {
+    for (UsageInfo old : oldUsages) {
+      if (!newUsage.intersect(old)) {
+        return true;
+      }
+    }
+    return false;
   }
 
 }

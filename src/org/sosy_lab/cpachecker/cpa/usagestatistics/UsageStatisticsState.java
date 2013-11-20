@@ -45,7 +45,7 @@ class UsageStatisticsState extends AbstractSingleWrapperState  {
     variableBindingRelation = new HashMap<>();
   }
 
-  public UsageStatisticsState(AbstractState pWrappedElement, Map<AbstractIdentifier, AbstractIdentifier> map) {
+  private UsageStatisticsState(AbstractState pWrappedElement, Map<AbstractIdentifier, AbstractIdentifier> map) {
     super(pWrappedElement);
     variableBindingRelation = new HashMap<>(map);
   }
@@ -65,18 +65,10 @@ class UsageStatisticsState extends AbstractSingleWrapperState  {
     return false;
   }
 
-  public boolean contains(AbstractIdentifier id) {
-    return variableBindingRelation.containsKey(id);
-  }
-
   public void put(AbstractIdentifier id1, AbstractIdentifier id2) {
     if (!id1.equals(id2)) {
       variableBindingRelation.put(id1, id2);
     }
-  }
-
-  public AbstractIdentifier get(AbstractIdentifier id) {
-    return variableBindingRelation.get(id);
   }
 
   public AbstractIdentifier getLinks(AbstractIdentifier id) {

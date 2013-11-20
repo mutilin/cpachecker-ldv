@@ -55,4 +55,6 @@ public interface UnsafeDetector {
 
   public Pair<UsageInfo, UsageInfo> getUnsafePair(List<UsageInfo> uinfo)
 		throws HandleCodeException;
+
+  public boolean isUnsafeCase(List<UsageInfo> pList, UsageInfo uInfo);
 }

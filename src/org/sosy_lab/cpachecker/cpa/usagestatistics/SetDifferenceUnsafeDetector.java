@@ -34,13 +34,12 @@ import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 
-public class SetDifferenceUnsafeDetector implements UnsafeDetector {
+public class SetDifferenceUnsafeDetector {
 
   public SetDifferenceUnsafeDetector(Configuration config) {
 		// TODO Auto-generated constructor stub
 	}
 
-@Override
   public Collection<SingleIdentifier> getUnsafes(Map<SingleIdentifier, List<UsageInfo>> variables) {
     Collection<SingleIdentifier> unsafe = new HashSet<>();
     //Map<Integer, Set<Set<LockStatisticsLock>>> Cases = new HashMap<Integer, Set<Set<LockStatisticsLock>>>();
@@ -102,12 +101,10 @@ public class SetDifferenceUnsafeDetector implements UnsafeDetector {
     return unsafe;
   }
 
-  @Override
   public String getDescription() {
     return "All lines with different sets of mutexes were printed";
   }
 
-  @Override
   public Pair<UsageInfo, UsageInfo> getUnsafePair(List<UsageInfo> uinfo)
 		throws HandleCodeException {
 	// TODO Auto-generated method stub

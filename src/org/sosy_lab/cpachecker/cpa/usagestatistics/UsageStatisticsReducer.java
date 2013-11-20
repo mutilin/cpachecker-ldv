@@ -41,10 +41,7 @@ public class UsageStatisticsReducer implements Reducer {
                                           Block pContext, CFANode pLocation) {
     UsageStatisticsState funElement = (UsageStatisticsState)pExpandedElement;
     AbstractState red = wrappedReducer.getVariableReducedState(funElement.getWrappedState(), pContext, pLocation);
-    //System.out.println("exp " + funElement);
-    //System.out.println("red " + red);
     return new UsageStatisticsState(red);
-    //return pExpandedElement;
 
   }
 
@@ -54,9 +51,6 @@ public class UsageStatisticsReducer implements Reducer {
     UsageStatisticsState funRootState = (UsageStatisticsState)pRootElement;
     UsageStatisticsState funReducedState = (UsageStatisticsState)pReducedElement;
     AbstractState exp = wrappedReducer.getVariableExpandedState(funRootState.getWrappedState(), pReducedContext, funReducedState.getWrappedState());
-    //System.out.println("after:root " + funRootState);
-    //System.out.println("after:red " + funReducedState);
-    //System.out.println("after:exp " + exp);
     return funRootState.clone(exp);
   }
 
@@ -64,7 +58,6 @@ public class UsageStatisticsReducer implements Reducer {
   public Object getHashCodeForState(AbstractState pElementKey, Precision pPrecisionKey) {
     UsageStatisticsState funElement = (UsageStatisticsState)pElementKey;
     UsageStatisticsPrecision precision = (UsageStatisticsPrecision) pPrecisionKey;
-    //return wrappedReducer.getHashCodeForState(funElement.getWrappedState(), pPrecisionKey);
     return wrappedReducer.getHashCodeForState(funElement.getWrappedState(), precision.getWrappedPrecision());
   }
 
