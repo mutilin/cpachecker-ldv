@@ -34,6 +34,9 @@ import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
+
 @Options(prefix="cpa.lockStatistics")
 public class ConfigurationParser {
   private Configuration config;
@@ -51,7 +54,7 @@ public class ConfigurationParser {
     config = pConfig;
   }
 
-  public Set<LockInfo> parseLockInfo() {
+  public ImmutableSet<LockInfo> parseLockInfo() {
     Set<LockInfo> tmpInfo = new HashSet<>();
     Map<String, Integer> lockFunctions;
     Map<String, Integer> unlockFunctions;
@@ -116,10 +119,10 @@ public class ConfigurationParser {
       tmpLockInfo = new LockInfo(lockName, lockFunctions, unlockFunctions, resetFunctions, variables, tmpString, num);
       tmpInfo.add(tmpLockInfo);
     }
-    return tmpInfo;
+    return ImmutableSet.copyOf(tmpInfo);
   }
 
-  public Map<String, AnnotationInfo> parseAnnotatedFunctions() {
+  public ImmutableMap<String, AnnotationInfo> parseAnnotatedFunctions() {
     Map<String, String> freeLocks;
     Map<String, String> restoreLocks;
     Map<String, String> resetLocks;
@@ -200,6 +203,6 @@ public class ConfigurationParser {
         annotatedfunctions.put(fName, tmpAnnotationInfo);
       }
     }
-    return annotatedfunctions;
+    return ImmutableMap.copyOf(annotatedfunctions);
   }
 }

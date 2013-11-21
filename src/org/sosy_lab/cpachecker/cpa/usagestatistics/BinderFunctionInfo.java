@@ -32,6 +32,7 @@ import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 
 /**
  * Information about special functions like sdlFirst() and sdlNext();
@@ -60,12 +61,12 @@ public class BinderFunctionInfo {
 
   String name;
   int parameters;
-  List<ParameterInfo> pInfo;
+  public final ImmutableList<ParameterInfo> pInfo;
   /*
    * 0 - before equal,
    * 1 - first parameter, etc..
    */
-  Pair<LinkerInfo, LinkerInfo> linkInfo;
+  public final Pair<LinkerInfo, LinkerInfo> linkInfo;
 
   BinderFunctionInfo(String nm, Configuration pConfig) throws InvalidConfigurationException {
     name = nm;
@@ -75,13 +76,14 @@ public class BinderFunctionInfo {
       Preconditions.checkNotNull(line);
       String[] options = line.split(", *");
       String[] pOption;
-      pInfo = new LinkedList<>();
+      List<ParameterInfo> tmpInfo = new LinkedList<>();
       for (String option : options) {
         pOption = option.split(":");
-        if (pOption.length == 1)
-          pInfo.add(new ParameterInfo(Access.getValue(pOption[0]), 0));
-        else
-          pInfo.add(new ParameterInfo(Access.getValue(pOption[0]), Integer.parseInt(pOption[1])));
+        if (pOption.length == 1) {
+          tmpInfo.add(new ParameterInfo(Access.getValue(pOption[0]), 0));
+        } else {
+          tmpInfo.add(new ParameterInfo(Access.getValue(pOption[0]), Integer.parseInt(pOption[1])));
+        }
       }
       line = pConfig.getProperty(name + ".linkInfo");
       if (line != null) {
@@ -90,15 +92,17 @@ public class BinderFunctionInfo {
         LinkerInfo[] lInfo = new LinkerInfo[2];
         for (int i = 0; i < 2; i++) {
           pOption = options[i].split(":");
-          if (pOption.length == 1)
+          if (pOption.length == 1) {
             lInfo[i] = new LinkerInfo(Integer.parseInt(pOption[0]), 0);
-          else
+          } else {
             lInfo[i] = new LinkerInfo(Integer.parseInt(pOption[0]), Integer.parseInt(pOption[1]));
+          }
         }
         linkInfo = Pair.of(lInfo[0], lInfo[1]);
       } else {
         linkInfo = null;
       }
+      pInfo = ImmutableList.copyOf(tmpInfo);
     } catch (NumberFormatException e) {
       System.err.println("No information about parameters in " + name + " function");
       throw e;

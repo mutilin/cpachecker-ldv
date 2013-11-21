@@ -23,23 +23,26 @@
  */
 package org.sosy_lab.cpachecker.cpa.lockstatistics;
 
+import java.util.HashMap;
 import java.util.Map;
+
+import com.google.common.collect.ImmutableMap;
 
 
 public class AnnotationInfo {
   public final String funcName;
-  public final Map<String, String> freeLocks;
-  public final Map<String, String> restoreLocks;
-  public final Map<String, String> resetLocks;
-  public final Map<String, String> captureLocks;
+  public final ImmutableMap<String, String> freeLocks;
+  public final ImmutableMap<String, String> restoreLocks;
+  public final ImmutableMap<String, String> resetLocks;
+  public final ImmutableMap<String, String> captureLocks;
 
   public AnnotationInfo(String name, Map<String, String> free, Map<String, String> restore, Map<String, String> reset
       , Map<String, String> capture) {
     funcName = name;
-    freeLocks = free;
-    restoreLocks = restore;
-    resetLocks = reset;
-    captureLocks = capture;
+    freeLocks = (free == null ? ImmutableMap.copyOf(new HashMap<String, String>()) : ImmutableMap.copyOf(free));
+    restoreLocks = (restore == null ? ImmutableMap.copyOf(new HashMap<String, String>()) : ImmutableMap.copyOf(restore));
+    resetLocks = (reset == null ? ImmutableMap.copyOf(new HashMap<String, String>()) : ImmutableMap.copyOf(reset));
+    captureLocks = (capture == null ? ImmutableMap.copyOf(new HashMap<String, String>()) : ImmutableMap.copyOf(capture));
   }
 
 }
