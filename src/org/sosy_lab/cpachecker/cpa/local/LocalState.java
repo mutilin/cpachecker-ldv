@@ -23,7 +23,6 @@
  */
 package org.sosy_lab.cpachecker.cpa.local;
 
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -42,8 +41,6 @@ import org.sosy_lab.cpachecker.util.identifiers.StructureIdentifier;
 
 
 public class LocalState implements AbstractState {
-
-  private static Set<String> localVariables;
 
   public static enum DataType {
     LOCAL,
@@ -76,9 +73,6 @@ public class LocalState implements AbstractState {
   public LocalState(LocalState state, Configuration pConfig) throws InvalidConfigurationException {
     DataInfo = new HashMap<>();
     previousState = state;
-    if (localVariables == null) {
-      localVariables = new HashSet<>(Arrays.asList(pConfig.getProperty("cpa.local.localvariables").split(", ")));
-    }
   }
 
   private LocalState(Map<AbstractIdentifier, DataType> oldMap, LocalState state) {
@@ -91,7 +85,7 @@ public class LocalState implements AbstractState {
   }
 
   public void set(AbstractIdentifier name, DataType type) {
-    if (localVariables.contains(name.toString())) {
+    if (LocalCPA.localVariables.contains(name.toString())) {
       DataInfo.put(name, DataType.LOCAL);
       return;
     }
@@ -133,7 +127,7 @@ public class LocalState implements AbstractState {
     } else {
       name = aId;
     }
-    if (localVariables != null && localVariables.contains(name.toString())) {
+    if (LocalCPA.localVariables != null && LocalCPA.localVariables.contains(name.toString())) {
       return DataType.LOCAL;
     }
     if (localInfo.containsKey(name)) {

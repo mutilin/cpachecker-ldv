@@ -23,6 +23,10 @@
  */
 package org.sosy_lab.cpachecker.cpa.local;
 
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
+
 import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
@@ -57,6 +61,8 @@ public class LocalCPA implements ConfigurableProgramAnalysisWithABM {
     private TransferRelation transferRelation;
     private final Reducer reducer;
 
+    public static Set<String> localVariables;
+
     public static CPAFactory factory() {
       return AutomaticCPAFactory.forType(LocalCPA.class);
     }
@@ -76,8 +82,8 @@ public class LocalCPA implements ConfigurableProgramAnalysisWithABM {
       this.stopOperator = initializeStopOperator();
       reducer = new LocalReducer();
       this.transferRelation = new LocalTransferRelation(pConfig);
-      //evil hack to initialize local variables
-      new LocalState(null, pConfig);
+      // @Option is not allowed on static members
+      localVariables = new HashSet<>(Arrays.asList(pConfig.getProperty("cpa.local.localvariables").split(", ")));
     }
 
     private MergeOperator initializeMergeOperator() {
