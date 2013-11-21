@@ -58,6 +58,8 @@ import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCCodeException;
 
+import com.google.common.collect.ImmutableMap;
+
 @Options(prefix="cpa.lockStatistics")
 public class LockStatisticsTransferRelation implements TransferRelation
 {
@@ -92,61 +94,29 @@ public class LockStatisticsTransferRelation implements TransferRelation
     return Collections.singleton(((LockStatisticsState)element).clone());
   }
 
-  public Collection<LockStatisticsState> getAbstractSuccessors0(AbstractState element, Precision pPrecision, CallstackState state, CFAEdge cfaEdge) throws UnrecognizedCCodeException
+  public Collection<LockStatisticsState> getAbstractSuccessors0(AbstractState element, Precision pPrecision,
+      CallstackState state, CFAEdge cfaEdge) throws UnrecognizedCCodeException
      {
 
     LockStatisticsState lockStatisticsElement     = (LockStatisticsState)element;
-    LockStatisticsPrecision lockStatisticsPrecision = (LockStatisticsPrecision) pPrecision;
+    LockStatisticsPrecision precision = (LockStatisticsPrecision) pPrecision;
     LockStatisticsState successor;
     switch (cfaEdge.getEdgeType()) {
 
       case FunctionCallEdge:
         String fCallName = ((CFunctionCallEdge)cfaEdge).getSuccessor().getFunctionName();
-        successor = handleFunctionCall(lockStatisticsElement, lockStatisticsPrecision, state, (CFunctionCallEdge)cfaEdge);
+        successor = handleFunctionCall(lockStatisticsElement, precision, state, (CFunctionCallEdge)cfaEdge);
         if (annotatedfunctions != null && annotatedfunctions.containsKey(fCallName)) {
           successor.setRestoreState(lockStatisticsElement);
         }
         break;
 
       case FunctionReturnEdge:
-        CFANode tmpNode = ((CFunctionReturnEdge)cfaEdge).getSummaryEdge().getPredecessor();
-        String fName =((CFunctionReturnEdge)cfaEdge).getSummaryEdge().getExpression().getFunctionCallExpression().getFunctionNameExpression().toASTString();
-        if (annotatedfunctions != null && annotatedfunctions.containsKey(fName)) {
-          successor = lockStatisticsElement.clone();
-          if (annotatedfunctions.get(fName).restoreLocks != null) {
-            successor = successor.restore(annotatedfunctions.get(fName).restoreLocks, logger);
-
-            logger.log(Level.FINER, "Restore " + annotatedfunctions.get(fName).restoreLocks
-                + ", \n\tline=" + tmpNode.getLineNumber());
-
-          } else if (annotatedfunctions.get(fName).freeLocks != null) {
-            //Free in state at first restores saved state
-            logger.log(Level.FINER, "Free " + annotatedfunctions.get(fName).freeLocks.keySet() + " in " + successor
-                        + ", \n\t line = " + tmpNode.getLineNumber());
-            successor = successor.free(annotatedfunctions.get(fName).freeLocks, logger);
-          } else if (annotatedfunctions.get(fName).resetLocks != null) {
-            //Reset in state at first restores saved state
-            logger.log(Level.FINER, "Reset " + annotatedfunctions.get(fName).resetLocks.keySet() + " in " + successor
-                + ", \n\t line = " + tmpNode.getLineNumber());
-            successor = successor.reset(annotatedfunctions.get(fName).resetLocks, logger);
-          } else if (annotatedfunctions.get(fName).captureLocks != null) {
-            Map<String, String> locks = annotatedfunctions.get(fName).captureLocks;
-            logger.log(Level.FINER, "Force lock of " + annotatedfunctions.get(fName).captureLocks.keySet() + " in " + successor
-                + ", \n\t line = " + tmpNode.getLineNumber());
-            successor = successor.restore(locks, logger);
-            for (String name : locks.keySet()) {
-              processLock(successor, lockStatisticsPrecision, state, cfaEdge.getLineNumber(), findLockByName(name), locks.get(name));
-            }
-          }
-          logger.log(Level.FINEST, "\tPredessor = " + lockStatisticsElement
-                  + "\n\tSuccessor = " + successor);
-        } else {
-          successor = lockStatisticsElement.clone();
-        }
+        successor = handleFunctionReturnEdge(lockStatisticsElement, (CFunctionReturnEdge)cfaEdge, precision, state);
         break;
 
       default:
-        successor = handleSimpleEdge(lockStatisticsElement, lockStatisticsPrecision, state, cfaEdge);
+        successor = handleSimpleEdge(lockStatisticsElement, precision, state, cfaEdge);
     }
 
     if (!successor.equals(lockStatisticsElement)) {
@@ -156,7 +126,8 @@ public class LockStatisticsTransferRelation implements TransferRelation
     }
   }
 
-  private LockStatisticsState handleSimpleEdge(LockStatisticsState element, LockStatisticsPrecision precision, CallstackState state, CFAEdge cfaEdge) throws UnrecognizedCCodeException {
+  private LockStatisticsState handleSimpleEdge(LockStatisticsState element, LockStatisticsPrecision precision,
+      CallstackState state, CFAEdge cfaEdge) throws UnrecognizedCCodeException {
 
     switch(cfaEdge.getEdgeType()) {
       case StatementEdge:
@@ -185,6 +156,54 @@ public class LockStatisticsTransferRelation implements TransferRelation
       default:
         throw new UnrecognizedCCodeException("Unknown edge type", cfaEdge);
     }
+  }
+
+  private LockStatisticsState handleFunctionReturnEdge(LockStatisticsState lockStatisticsElement, CFunctionReturnEdge cfaEdge,
+      LockStatisticsPrecision lockStatisticsPrecision, CallstackState state) {
+    CFANode tmpNode = cfaEdge.getSummaryEdge().getPredecessor();
+    String fName = cfaEdge.getSummaryEdge().getExpression().getFunctionCallExpression().getFunctionNameExpression().toASTString();
+    LockStatisticsState successor = lockStatisticsElement.clone();
+    if (annotatedfunctions != null && annotatedfunctions.containsKey(fName)) {
+      AnnotationInfo currentAnnotation = annotatedfunctions.get(fName);
+      if (currentAnnotation.restoreLocks.size() > 0) {
+        successor = successor.restore(annotatedfunctions.get(fName).restoreLocks, logger);
+
+        logger.log(Level.FINER, "Restore " + annotatedfunctions.get(fName).restoreLocks
+            + ", \n\tline=" + tmpNode.getLineNumber());
+
+      } else if (currentAnnotation.freeLocks.size() > 0) {
+        //Free in state at first restores saved state
+        logger.log(Level.FINER, "Free " + annotatedfunctions.get(fName).freeLocks.keySet() + " in " + successor
+                    + ", \n\t line = " + tmpNode.getLineNumber());
+        ImmutableMap<String, String> freeLocks = annotatedfunctions.get(fName).freeLocks;
+        successor = successor.restore(freeLocks, logger); //it also clones
+        String variable;
+
+        for (String lockName : freeLocks.keySet()) {
+          variable = freeLocks.get(lockName);
+          LockStatisticsLock lock = successor.findLock(lockName, variable);
+          if (lock != null) {
+            successor.free(lockName, variable, logger);
+          }
+        }
+      } else if (currentAnnotation.resetLocks.size() > 0) {
+        //Reset in state at first restores saved state
+        logger.log(Level.FINER, "Reset " + annotatedfunctions.get(fName).resetLocks.keySet() + " in " + successor
+            + ", \n\t line = " + tmpNode.getLineNumber());
+        successor = successor.reset(annotatedfunctions.get(fName).resetLocks, logger);
+      } else if (currentAnnotation.captureLocks.size() > 0) {
+        Map<String, String> locks = annotatedfunctions.get(fName).captureLocks;
+        logger.log(Level.FINER, "Force lock of " + annotatedfunctions.get(fName).captureLocks.keySet() + " in " + successor
+            + ", \n\t line = " + tmpNode.getLineNumber());
+        successor = successor.restore(locks, logger);
+        for (String name : locks.keySet()) {
+          processLock(successor, lockStatisticsPrecision, state, cfaEdge.getLineNumber(), findLockByName(name), locks.get(name));
+        }
+      }
+      logger.log(Level.FINEST, "\tPredessor = " + lockStatisticsElement
+              + "\n\tSuccessor = " + successor);
+    }
+    return successor;
   }
 
   @Override
@@ -264,8 +283,8 @@ public class LockStatisticsTransferRelation implements TransferRelation
       String functionName = callEdge.getSuccessor().getFunctionName();
       Set<LockInfo> changedLocks = findLockByFunction(functionName);
       for (LockInfo lock : changedLocks) {
-        changeState(newElement, precision, state, lock, functionName, callEdge.getLineNumber(), callEdge.getPredecessor().getFunctionName(),
-          callEdge.getArguments());
+        changeState(newElement, precision, state, lock, functionName, callEdge.getLineNumber(),
+            callEdge.getPredecessor().getFunctionName(), callEdge.getArguments());
       }
     }
     return newElement;
@@ -355,8 +374,8 @@ public class LockStatisticsTransferRelation implements TransferRelation
   }
 
   private void processSetLevel(LockStatisticsState newElement, LockStatisticsPrecision precision, CallstackState reducedCallstack, int lineNumber, int level, LockInfo lock) {
-    CallstackState callstack1 = precision.getPreciseState();
-    logger.log(Level.FINER, "Set a lock level " + level + " at line " + lineNumber + ", Callstack: " + callstack1);
-    newElement.set(lock.lockName, level, lineNumber, callstack1, reducedCallstack, "");
+    CallstackState callstack = precision.getPreciseState();
+    logger.log(Level.FINER, "Set a lock level " + level + " at line " + lineNumber + ", Callstack: " + callstack);
+    newElement.set(lock.lockName, level, lineNumber, callstack, reducedCallstack, "");
   }
 }
