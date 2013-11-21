@@ -142,6 +142,9 @@ public class LockStatisticsState implements AbstractState, Serializable {
   }
 
   private void free(LockStatisticsLock oldLock, LogManager logger) {
+    if (oldLock == null) {
+      return;
+    }
     String locksBefore = locks.toString();
     boolean b = locks.remove(oldLock);
     assert b;
@@ -248,7 +251,7 @@ public class LockStatisticsState implements AbstractState, Serializable {
     return newState;
   }
 
-  public LockStatisticsState free(Map<String, String> freeLocks, LogManager logger) {
+ /* public LockStatisticsState free(Map<String, String> freeLocks, LogManager logger) {
     LockStatisticsState newState = this.restore(freeLocks, logger); //it also clones
     String variable;
 
@@ -260,7 +263,7 @@ public class LockStatisticsState implements AbstractState, Serializable {
       }
     }
     return newState;
-  }
+  }*/
 
   public int getCounter(String lockName, String varName) {
     LockStatisticsLock lock = findLock(lockName, varName);
