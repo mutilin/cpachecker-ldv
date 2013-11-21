@@ -59,10 +59,6 @@ public class AccessPoint {
     return callstack;
   }
 
-  public void setReducedCallstack(CallstackState reduced) {
-    reducedCallstack = reduced;
-  }
-
   public void markAsOld() {
     isNewPoint = false;
   }
@@ -136,9 +132,7 @@ public class AccessPoint {
 
   public AccessPoint reduceCallstack(CallstackReducer pReducer, CFANode pNode) {
     AccessPoint result = this.clone();
-    CallstackState reducedState;
-    reducedState = (CallstackState)pReducer.getVariableReducedState(callstack, null, pNode);
-    result.setReducedCallstack(reducedState);
+    result.reducedCallstack = (CallstackState)pReducer.getVariableReducedState(callstack, null, pNode);
     return result;
   }
 }

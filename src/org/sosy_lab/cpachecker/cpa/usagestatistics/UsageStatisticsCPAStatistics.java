@@ -42,7 +42,6 @@ import java.util.logging.Level;
 import org.sosy_lab.common.Files;
 import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.Pair;
-import org.sosy_lab.common.Timer;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.FileOption;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
@@ -74,7 +73,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   //ABM interface to restore original callstacks
   private ABMRestoreStack stackRestoration;
 
-  UnsafeDetector unsafeDetector = null;
+  private UnsafeDetector unsafeDetector = null;
 
   @Option(name="localanalysis", description="should we use local analysis?")
   private boolean localAnalysis = false;
@@ -94,12 +93,12 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   private boolean printAllUnsafeUsages = false;
 
   private final LogManager logger;
-  private Set<SingleIdentifier> unsafes = new HashSet<>();
-  Timer full = new Timer();
+  private final Set<SingleIdentifier> unsafes = new HashSet<>();
+  /*Timer full = new Timer();
   Timer one = new Timer();
   Timer two = new Timer();
 
-  /*public void addTmp(SingleIdentifier id, EdgeInfo.EdgeType e, int line) {
+  public void addTmp(SingleIdentifier id, EdgeInfo.EdgeType e, int line) {
     int i, j;
     if (id instanceof GlobalVariableIdentifier) {
       i = 0;
@@ -235,13 +234,13 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       for (LockStatisticsLock lock : Locks.getLocks()) {
         for (AccessPoint accessPoint : lock.getAccessPoints()) {
           currentLeaf = createTree(accessPoint.getCallstack());
-          currentLeaf.add(lock.toString(), accessPoint.getLineInfo().line);
+          currentLeaf.add(lock.toString(), accessPoint.getLineInfo().getLine());
         }
       }
     }
 
     currentLeaf = createTree(usage.getCallStack());
-    currentLeaf.addLast(usage.createUsageView(id), usage.getLine().line);
+    currentLeaf.addLast(usage.createUsageView(id), usage.getLine().getLine());
 
     //print this tree with aide of dfs
     currentLeaf = TreeLeaf.getTrunkState();
@@ -300,7 +299,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       currentLeaf = currentLeaf.add(tmpList.getFirst().getCallNode().getFunctionName(), 0);
     }
     for (CallstackState callstack : tmpList) {
-      currentLeaf = currentLeaf.addLast(callstack.getCurrentFunction(), state.getCallNode().getLeavingEdge(0).getLineNumber());
+      currentLeaf = currentLeaf.addLast(callstack.getCurrentFunction(), callstack.getCallNode().getLeavingEdge(0).getLineNumber());
     }
     return currentLeaf;
   }
@@ -354,22 +353,22 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   @Override
   public void printStatistics(PrintStream out, Result result, ReachedSet reached) {
 		BufferedWriter writer = null;
-		full.start();
+		//full.start();
     try {
       writer = Files.openOutputFile(outputStatFileName);
       logger.log(Level.FINE, "Print statistics about unsafe cases");
-      one.start();
+      //one.start();
       printCountStatistics(writer, Stat.keySet());
       Collection<SingleIdentifier> unsafeCases = unsafes;//unsafeDetector.getUnsafes(Stat);
       printCountStatistics(writer, unsafeCases);
       printLockStatistics(writer);
-      one.stop();
-      two.start();
+      //one.stop();
+      //two.start();
       logger.log(Level.FINEST, "Processing unsafe identifiers");
       for (SingleIdentifier id : unsafeCases) {
         createVisualization(id, writer);
       }
-      two.stop();
+      //two.stop();
       writer.close();
     } catch(FileNotFoundException e) {
       logger.log(Level.SEVERE, "File " + outputStatFileName + " not found");

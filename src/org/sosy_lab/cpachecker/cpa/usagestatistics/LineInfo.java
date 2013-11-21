@@ -25,7 +25,7 @@ package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
 
 public class LineInfo {
-  int line;
+  private final int line;
 
   public LineInfo(int l) {
     line = l;
@@ -50,15 +50,19 @@ public class LineInfo {
 
   @Override
   public boolean equals(Object obj) {
-    if (this == obj)
+    if (this == obj) {
       return true;
-    if (obj == null)
+    }
+    if (obj == null) {
       return false;
-    if (getClass() != obj.getClass())
+    }
+    if (getClass() != obj.getClass()) {
       return false;
+    }
     LineInfo other = (LineInfo) obj;
-    if (line != other.line)
+    if (line != other.line) {
       return false;
+    }
     return true;
   }
 

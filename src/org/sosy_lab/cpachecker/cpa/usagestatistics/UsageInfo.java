@@ -83,11 +83,11 @@ public class UsageInfo {
     }
   }
 
-  private LineInfo line;
-  private EdgeInfo info;
-  private LockStatisticsState locks;
-  private CallstackState callstack;
-  private Access accessType;
+  private final LineInfo line;
+  private final EdgeInfo info;
+  private final LockStatisticsState locks;
+  private final CallstackState callstack;
+  private final Access accessType;
 
   public UsageInfo(Access atype, LineInfo l, EdgeInfo t, LockStatisticsState lock, CallstackState call) {
     line = l;
