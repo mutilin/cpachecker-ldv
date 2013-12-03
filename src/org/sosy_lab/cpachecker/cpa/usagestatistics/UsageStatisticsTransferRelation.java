@@ -65,7 +65,6 @@ import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackTransferRelation;
-import org.sosy_lab.cpachecker.cpa.composite.CompositePrecision;
 import org.sosy_lab.cpachecker.cpa.local.LocalState;
 import org.sosy_lab.cpachecker.cpa.local.LocalState.DataType;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsPrecision;
@@ -178,32 +177,11 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
     AbstractState oldWrappedState = oldState.getWrappedState();
     oldState = handleEdge(pPrecision, oldState, pCfaEdge);
-    preciseLockStatisticsPrecision(oldState, pPrecision);
     Collection<? extends AbstractState> newWrappedStates = wrappedTransfer.getAbstractSuccessors(oldWrappedState, pPrecision.getWrappedPrecision(), currentEdge);
     for (AbstractState newWrappedState : newWrappedStates) {
       UsageStatisticsState newState = oldState.clone(newWrappedState);
       if (newState != null) {
         results.add(newState);
-      }
-    }
-  }
-
-  private void preciseLockStatisticsPrecision(UsageStatisticsState pOldState, UsageStatisticsPrecision pPrecision) {
-    CallstackState state = AbstractStates.extractStateByType(pOldState, CallstackState.class);
-
-    CompositePrecision precision = (CompositePrecision) pPrecision.getWrappedPrecision();
-    for (Precision prec : precision.getPrecisions()) {
-      if (prec instanceof LockStatisticsPrecision) {
-        CallstackState previousState = ((LockStatisticsPrecision)prec).getPreciseState();
-        if (previousState == null || !previousState.equals(state)) {
-          try {
-            CallstackState fullState = statistics.createStack(state);
-            ((LockStatisticsPrecision)prec).setPreciseState(fullState);
-          } catch (HandleCodeException e) {
-            logger.log(Level.WARNING, "Can't restore callstack");
-          }
-        }
-        return;
       }
     }
   }
@@ -488,7 +466,8 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       return;
     }
 
-    statistics.add(singleId, access, state, eType, line);
+    CallstackState fullCallstack = pPrecision.retrieveWrappedPrecision(LockStatisticsPrecision.class).getPreciseState();
+    statistics.add(singleId, access, state, eType, line, fullCallstack);
   }
 
   @Override
