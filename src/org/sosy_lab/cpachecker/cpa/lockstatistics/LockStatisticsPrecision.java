@@ -30,7 +30,7 @@ import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 public class LockStatisticsPrecision implements Precision {
   private CallstackState preciseState;
 
-  LockStatisticsPrecision(CallstackState state) {
+  public LockStatisticsPrecision(CallstackState state) {
     setPreciseState(state);
   }
 
