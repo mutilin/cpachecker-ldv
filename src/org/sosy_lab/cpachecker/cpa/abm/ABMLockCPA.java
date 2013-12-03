@@ -41,7 +41,6 @@ import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.WrapperCPA;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSetFactory;
 import org.sosy_lab.cpachecker.cpa.predicate.ABMPredicateCPA;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsCPA;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 
 @Options(prefix="cpa.abm")
@@ -71,10 +70,10 @@ public class ABMLockCPA extends ABMCPA {
       if (predicateCpa != null) {
         predicateCpa.setPartitioning(blockPartitioning);
       }
-      UsageStatisticsCPA usCpa = ((WrapperCPA) getWrappedCpa()).retrieveWrappedCpa(UsageStatisticsCPA.class);
+      /*UsageStatisticsCPA usCpa = ((WrapperCPA) getWrappedCpa()).retrieveWrappedCpa(UsageStatisticsCPA.class);
       if (usCpa != null) {
         usCpa.getStats().setStackRestoration(transfer);
-      }
+      }*/
 
       Map<AbstractState, Precision> forwardPrecisionToExpandedPrecision = new HashMap<>();
       transfer.setForwardPrecisionToExpandedPrecision(forwardPrecisionToExpandedPrecision);
