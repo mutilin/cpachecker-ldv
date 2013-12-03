@@ -50,7 +50,6 @@ import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
-import org.sosy_lab.cpachecker.cpa.abm.ABMRestoreStack;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.AccessPoint;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsLock;
@@ -70,8 +69,6 @@ import org.sosy_lab.cpachecker.util.identifiers.StructureIdentifier;
 public class UsageStatisticsCPAStatistics implements Statistics {
 
   private Map<SingleIdentifier, List<UsageInfo>> Stat;
-  //ABM interface to restore original callstacks
-  private ABMRestoreStack stackRestoration;
 
   private UnsafeDetector unsafeDetector = null;
 
@@ -144,7 +141,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     logger = pLogger;
   }
 
-  public void add(SingleIdentifier id, Access access, UsageStatisticsState state, EdgeType type, int line) throws HandleCodeException {
+  public void add(SingleIdentifier id, Access access, UsageStatisticsState state, EdgeType type, int line, CallstackState callstackState) throws HandleCodeException {
     if (state.containsLinks(id)) {
       id = (SingleIdentifier) state.getLinks(id);
     }
@@ -177,9 +174,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     List<UsageInfo> uset;
     LockStatisticsState lockState = AbstractStates.extractStateByType(state, LockStatisticsState.class);
     logger.log(Level.FINEST, "Its locks are: " + lockState);
-    CallstackState callstackState = AbstractStates.extractStateByType(state, CallstackState.class);
-
-    callstackState = createStack(callstackState);
 
     //We can't get line from location, because it is old state
     LineInfo lineInfo = new LineInfo(line);
@@ -353,22 +347,17 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   @Override
   public void printStatistics(PrintStream out, Result result, ReachedSet reached) {
 		BufferedWriter writer = null;
-		//full.start();
     try {
       writer = Files.openOutputFile(outputStatFileName);
       logger.log(Level.FINE, "Print statistics about unsafe cases");
-      //one.start();
       printCountStatistics(writer, Stat.keySet());
       Collection<SingleIdentifier> unsafeCases = unsafes;//unsafeDetector.getUnsafes(Stat);
       printCountStatistics(writer, unsafeCases);
       printLockStatistics(writer);
-      //one.stop();
-      //two.start();
       logger.log(Level.FINEST, "Processing unsafe identifiers");
       for (SingleIdentifier id : unsafeCases) {
         createVisualization(id, writer);
       }
-      //two.stop();
       writer.close();
     } catch(FileNotFoundException e) {
       logger.log(Level.SEVERE, "File " + outputStatFileName + " not found");
@@ -435,19 +424,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   @Override
   public String getName() {
     return "UsageStatisticsCPA";
-  }
-
-  public CallstackState createStack(CallstackState state) throws HandleCodeException {
-    //need to LockStatistics usage
-    if (stackRestoration != null) {
-      return stackRestoration.restoreCallstack(state);
-    } else {
-      return state;
-    }
-  }
-
-  public void setStackRestoration(ABMRestoreStack rStack) {
-    stackRestoration = rStack;
   }
 
   public void addSkippedVariables(Set<String> vars) {
