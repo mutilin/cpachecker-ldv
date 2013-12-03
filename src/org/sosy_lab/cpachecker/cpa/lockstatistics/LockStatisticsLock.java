@@ -24,14 +24,16 @@
 package org.sosy_lab.cpachecker.cpa.lockstatistics;
 
 import java.util.Comparator;
+import java.util.LinkedList;
 import java.util.List;
-import java.util.Stack;
 
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cpa.abm.ABMRestoreStack;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackReducer;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.LineInfo;
+
+import com.google.common.collect.ImmutableList;
 
 
 public class LockStatisticsLock {
@@ -65,29 +67,27 @@ public class LockStatisticsLock {
   }
 
   private final String name;
-  private final Stack<AccessPoint> accessPoints;
+  private final ImmutableList<AccessPoint> accessPoints;
   private final LockType type;
   private final String variable;
 
   LockStatisticsLock(String n, int l, LockType t, CallstackState s, CallstackState reduced, String v) {
     name = n;
-    accessPoints = new Stack<>();
-    accessPoints.add(new AccessPoint( new LineInfo(l), s, reduced));
+    LinkedList<AccessPoint> tmpAccessPoints = new LinkedList<>();
+    tmpAccessPoints.add(new AccessPoint( new LineInfo(l), s, reduced));
+    accessPoints = ImmutableList.copyOf(tmpAccessPoints);
     type = t;
     variable = getCleanName(v);
   }
 
-  private LockStatisticsLock(String n, LockType t, Stack<AccessPoint> points, String v) {
+  private LockStatisticsLock(String n, LockType t, LinkedList<AccessPoint> points, String v) {
     name = n;
-    accessPoints = new Stack<>();
-    for (AccessPoint point : points) {
-      accessPoints.add(point);
-    }
+    accessPoints = ImmutableList.copyOf(points);
     type = t;
     variable = getCleanName(v);
   }
 
-  public Stack<AccessPoint> getAccessPoints() {
+  public ImmutableList<AccessPoint> getAccessPoints() {
     return accessPoints;
   }
 
@@ -113,25 +113,24 @@ public class LockStatisticsLock {
 
   @Override
   public LockStatisticsLock clone() {
-    LockStatisticsLock result =
-        new LockStatisticsLock(this.name, this.type, new Stack<AccessPoint>(), this.variable);
+    LinkedList<AccessPoint> tmpAccessPoints = new LinkedList<>();
     for (AccessPoint point : this.accessPoints) {
-      result.accessPoints.add(point.clone());
+      tmpAccessPoints.add(point.clone());
     }
-    return result;
+    return new LockStatisticsLock(this.name, this.type, tmpAccessPoints, this.variable);
   }
 
   public LockStatisticsLock addAccessPointer(AccessPoint accessPoint) {
-    LockStatisticsLock cloned = this.clone();
-    cloned.accessPoints.push(accessPoint);
-    return cloned;
+    LinkedList<AccessPoint> tmpAccessPoints = new LinkedList<>(this.accessPoints);
+    tmpAccessPoints.add(accessPoint);
+    return new LockStatisticsLock(this.name, this.type, tmpAccessPoints, this.variable);
   }
 
   public LockStatisticsLock removeLastAccessPointer() {
     if(this.accessPoints.size() > 1) { //we have access points after removing
-      LockStatisticsLock cloned = this.clone();
-      cloned.accessPoints.pop();
-      return cloned;
+      LinkedList<AccessPoint> tmpAccessPoints = new LinkedList<>(this.accessPoints);
+      tmpAccessPoints.removeLast();
+      return new LockStatisticsLock(this.name, this.type, tmpAccessPoints, this.variable);
     } else {
       return null;
     }
@@ -226,48 +225,50 @@ public class LockStatisticsLock {
   public LockStatisticsLock expandCallstack(LockStatisticsLock rootLock, ABMRestoreStack restorator) {
     boolean changed = false;
 
-    LockStatisticsLock expandedLock = this.clone();
     AccessPoint tmpPoint, newPoint;
+    LinkedList<AccessPoint> newAccessPoints = new LinkedList<>(this.accessPoints);
+
     for (int i = 0; i < this.accessPoints.size(); i++) {
       tmpPoint = accessPoints.get(i);
       if (tmpPoint.isNew() || rootLock == null) {
         newPoint = tmpPoint.expandCallstack(restorator);
         if (newPoint != tmpPoint) {
           changed = true;
-          expandedLock.accessPoints.setElementAt(newPoint, i);
+          newAccessPoints.set(i, newPoint);
         }
       } else if (rootLock.accessPoints.size() > i) {
         //restore marks, which were new before function call
         changed = true;
-        expandedLock.accessPoints.setElementAt(rootLock.accessPoints.get(i).clone(), i);
+        newAccessPoints.set(i, rootLock.accessPoints.get(i).clone());
       } else {
         //Also strange situation...
         System.out.println("size < i");
       }
     }
     if (changed) {
-      return expandedLock;
+      return new LockStatisticsLock(name, type, newAccessPoints, variable);
     } else {
       return this;
     }
   }
 
   public LockStatisticsLock reduceCallStack(CallstackReducer pReducer, CFANode pNode) {
-    LockStatisticsLock newLock = this.clone();
     boolean isChanged = false;
     AccessPoint tmpPoint, newPoint;
+    LinkedList<AccessPoint> newAccessPoints = new LinkedList<>(this.accessPoints);
+
     for (int i = 0; i < this.accessPoints.size(); i++) {
       tmpPoint = accessPoints.get(i);
       if (tmpPoint.isNew()) {
         newPoint = tmpPoint.reduceCallstack(pReducer, pNode);
         if (newPoint != tmpPoint) {
           isChanged = true;
-          newLock.accessPoints.setElementAt(newPoint, i);
+          newAccessPoints.set(i, newPoint);
         }
       }
     }
     if (isChanged) {
-      return newLock;
+      return new LockStatisticsLock(name, type, newAccessPoints, variable);
     } else {
       return this;
     }
