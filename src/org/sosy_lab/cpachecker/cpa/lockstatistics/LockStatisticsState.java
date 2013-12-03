@@ -57,10 +57,6 @@ public class LockStatisticsState implements AbstractState, Serializable {
     toRestore = state;
   }
 
-  public boolean contains(String lockName, String variableName) {
-    return (findLock(lockName, variableName) != null);
-  }
-
   public int getSize() {
     return locks.size();
   }
@@ -184,7 +180,7 @@ public class LockStatisticsState implements AbstractState, Serializable {
   }
 
   public LockStatisticsState reset(Map<String, String> pResetLocks, LogManager pLogger) {
-    LockStatisticsState newState = this.restore(pResetLocks, pLogger);
+    LockStatisticsState newState = this.clone();
     for (String lockName : pResetLocks.keySet()) {
       newState.reset(lockName, pResetLocks.get(lockName), pLogger);
     }
@@ -210,7 +206,7 @@ public class LockStatisticsState implements AbstractState, Serializable {
       if (newLock != null) {
         locks.add(newLock);
       }
-    } else if (num > -1) {
+    } else if (num > 0) {
       newLock = new LockStatisticsLock(lockName, line, LockType.GLOBAL_LOCK, state, reduced, variable);
       newLock = newLock.addRecursiveAccessPointer(num, new AccessPoint(new LineInfo(line), state, reduced));
       if (newLock != null) {
@@ -250,20 +246,6 @@ public class LockStatisticsState implements AbstractState, Serializable {
     newState.copyRestoreState(restoredState);
     return newState;
   }
-
- /* public LockStatisticsState free(Map<String, String> freeLocks, LogManager logger) {
-    LockStatisticsState newState = this.restore(freeLocks, logger); //it also clones
-    String variable;
-
-    for (String lockName : freeLocks.keySet()) {
-      variable = freeLocks.get(lockName);
-      LockStatisticsLock lock = findLock(lockName, variable);
-      if (lock != null) {
-        newState.free(lockName, variable, logger);
-      }
-    }
-    return newState;
-  }*/
 
   public int getCounter(String lockName, String varName) {
     LockStatisticsLock lock = findLock(lockName, varName);
