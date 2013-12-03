@@ -29,7 +29,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.Stack;
 import java.util.logging.Level;
 
 import org.sosy_lab.common.LogManager;
@@ -77,6 +76,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
 */
   private LogManager logger;
 
+  int i = 0;
   public LockStatisticsTransferRelation(Configuration config, LogManager logger) throws InvalidConfigurationException {
     config.inject(this);
     this.logger = logger;
@@ -101,6 +101,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
     LockStatisticsState lockStatisticsElement     = (LockStatisticsState)element;
     LockStatisticsPrecision precision = (LockStatisticsPrecision) pPrecision;
     LockStatisticsState successor;
+
     switch (cfaEdge.getEdgeType()) {
 
       case FunctionCallEdge:
@@ -171,7 +172,8 @@ public class LockStatisticsTransferRelation implements TransferRelation
         logger.log(Level.FINER, "Restore " + annotatedfunctions.get(fName).restoreLocks
             + ", \n\tline=" + tmpNode.getLineNumber());
 
-      } else if (currentAnnotation.freeLocks.size() > 0) {
+      }
+      if (currentAnnotation.freeLocks.size() > 0) {
         //Free in state at first restores saved state
         logger.log(Level.FINER, "Free " + annotatedfunctions.get(fName).freeLocks.keySet() + " in " + successor
                     + ", \n\t line = " + tmpNode.getLineNumber());
@@ -186,12 +188,24 @@ public class LockStatisticsTransferRelation implements TransferRelation
             successor.free(lockName, variable, logger);
           }
         }
-      } else if (currentAnnotation.resetLocks.size() > 0) {
+      }
+      if (currentAnnotation.resetLocks.size() > 0) {
         //Reset in state at first restores saved state
         logger.log(Level.FINER, "Reset " + annotatedfunctions.get(fName).resetLocks.keySet() + " in " + successor
             + ", \n\t line = " + tmpNode.getLineNumber());
-        successor = successor.reset(annotatedfunctions.get(fName).resetLocks, logger);
-      } else if (currentAnnotation.captureLocks.size() > 0) {
+        ImmutableMap<String, String> resetLocks = annotatedfunctions.get(fName).resetLocks;
+        successor = successor.restore(resetLocks, logger); //it also clones
+        String variable;
+
+        for (String lockName : resetLocks.keySet()) {
+          variable = resetLocks.get(lockName);
+          LockStatisticsLock lock = successor.findLock(lockName, variable);
+          if (lock != null) {
+            successor.reset(lockName, variable, logger);
+          }
+        }
+      }
+      if (currentAnnotation.captureLocks.size() > 0) {
         Map<String, String> locks = annotatedfunctions.get(fName).captureLocks;
         logger.log(Level.FINER, "Force lock of " + annotatedfunctions.get(fName).captureLocks.keySet() + " in " + successor
             + ", \n\t line = " + tmpNode.getLineNumber());
@@ -362,7 +376,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
     if (d < lock.maxLock) {
       newElement.add(lock.lockName, lineNumber, callstack, reducedCallstack, variable, logger);
     } else {
-      Stack<AccessPoint> access = newElement.findLock(lock.lockName, variable).getAccessPoints();
+      List<AccessPoint> access = newElement.findLock(lock.lockName, variable).getAccessPoints();
       StringBuilder message = new StringBuilder();
       message.append("Try to lock " + lock.lockName + " more, than " + lock.maxLock + " in " + lineNumber + " line. Previous were in ");
       for (AccessPoint point : access) {
