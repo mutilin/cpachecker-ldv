@@ -77,4 +77,8 @@ public class PathFormula implements Serializable {
   public int hashCode() {
     return (formula.hashCode() * 17 + ssa.hashCode()) * 31 + length;
   }
+
+  public PathFormula clone(SSAMap pSsa) {
+    return new PathFormula(formula, pSsa, length);
+  }
 }

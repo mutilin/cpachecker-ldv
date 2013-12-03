@@ -31,6 +31,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.logging.Level;
 
 import org.sosy_lab.common.LogManager;
@@ -52,10 +53,13 @@ import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCFAEdgeException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.predicates.AbstractionFormula;
+import org.sosy_lab.cpachecker.util.predicates.AbstractionPredicate;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.PathFormulaManager;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.view.BooleanFormulaManagerView;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.view.FormulaManagerView;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormula;
+import org.sosy_lab.cpachecker.util.predicates.pathformula.SSAMap;
 
 /**
  * Transfer relation for symbolic predicate abstraction. First it computes
@@ -123,6 +127,13 @@ public class PredicateTransferRelation implements TransferRelation {
 
       // calculate strongest post
       PathFormula pathFormula = convertEdgeToPathFormula(element.getPathFormula(), edge);
+      Collection<AbstractionPredicate> tmpPredicates = ((PredicatePrecision) pPrecision).getPredicates(loc, 0);
+      final SSAMap ssa = pathFormula.getSsa();
+      BooleanFormula formula = formulaManager.buildFormula(pathFormula.getFormula());
+      Set<AbstractionPredicate> relevantPredicates = formulaManager.getRelevantPredicates(tmpPredicates, formula, ssa);
+      if (relevantPredicates.size() == 0) {
+        pathFormula = pathFormulaManager.makeEmptyPathFormula().clone(ssa);
+      }
       logger.log(Level.ALL, "New path formula is", pathFormula);
 
       // check whether to do abstraction

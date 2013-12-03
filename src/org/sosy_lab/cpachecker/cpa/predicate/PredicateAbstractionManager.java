@@ -517,7 +517,7 @@ public class PredicateAbstractionManager {
    * @param ssa The SSA map to use for instantiating predicates.
    * @return A subset of pPredicates.
    */
-  private ImmutableSet<AbstractionPredicate> getRelevantPredicates(
+  public ImmutableSet<AbstractionPredicate> getRelevantPredicates(
       final Collection<AbstractionPredicate> pPredicates,
       final BooleanFormula f, final SSAMap ssa) {
 
@@ -751,7 +751,7 @@ public class PredicateAbstractionManager {
     }
   }
 
-  private BooleanFormula buildFormula(BooleanFormula symbFormula) {
+  public BooleanFormula buildFormula(BooleanFormula symbFormula) {
 
     if (fmgr.useBitwiseAxioms()) {
       BooleanFormula bitwiseAxioms = fmgr.getBitwiseAxioms(symbFormula);
