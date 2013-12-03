@@ -502,6 +502,7 @@ class CFABuilder extends ASTVisitor {
         }
         cfas.put(functionName, startNode);
         cfaNodes.putAll(functionName, functionBuilder.getCfaNodes());
+        globalDeclarations.addAll(functionBuilder.getGlobalDeclarations());
 
         encounteredAsm |= functionBuilder.didEncounterAsm();
         functionBuilder.finish();
@@ -589,6 +590,7 @@ class CFABuilder extends ASTVisitor {
         }
         cfas.put(functionName, startNode);
         cfaNodes.putAll(functionName, functionBuilder.getCfaNodes());
+        globalDeclarations.addAll(functionBuilder.getGlobalDeclarations());
 
         encounteredAsm |= functionBuilder.didEncounterAsm();
         functionBuilder.finish();

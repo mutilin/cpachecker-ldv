@@ -23,12 +23,16 @@
  */
 package org.sosy_lab.cpachecker.cfa;
 
+import static org.sosy_lab.cpachecker.util.CFAUtils.leavingEdges;
+
 import java.math.BigInteger;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.LinkedList;
 import java.util.List;
 
+import org.sosy_lab.common.configuration.Configuration;
+import org.sosy_lab.common.configuration.InvalidConfigurationException;
+import org.sosy_lab.common.configuration.Option;
+import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.ast.c.CArraySubscriptExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CAssignment;
@@ -48,6 +52,7 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CPointerExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSideVisitor;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression.UnaryOperator;
 import org.sosy_lab.cpachecker.cfa.ast.c.CVariableDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.DefaultCExpressionVisitor;
 import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
@@ -64,6 +69,11 @@ import org.sosy_lab.cpachecker.cfa.types.c.CNumericTypes;
 import org.sosy_lab.cpachecker.exceptions.CParserException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCCodeException;
 
+import com.google.common.base.Supplier;
+import com.google.common.base.Suppliers;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
+
 
 /******************************************************************+
  * NullPointerDetection
@@ -71,32 +81,77 @@ import org.sosy_lab.cpachecker.exceptions.UnrecognizedCCodeException;
  * Using detectNullPointers, before every occurence of *p we insert a test on
  * p == 0 in order to detect null pointers.
  */
-public class CFATransformations {
+@Options(prefix="cfa.checkNullPointers")
+class CFATransformations {
 
-  public static void detectNullPointers(MutableCFA cfa, LogManager logger) throws CParserException {
+  @Option(description="Whether to have a single target node per function"
+      + " for all invalid null pointer dereferences or to have separate nodes for each dereference")
+  private boolean singleTargetPerFunction = true;
+
+  private final LogManager logger;
+
+  CFATransformations(LogManager pLogger, Configuration config) throws InvalidConfigurationException {
+    config.inject(this);
+    logger = pLogger;
+  }
+
+  public void detectNullPointers(final MutableCFA cfa) throws CParserException {
 
     CBinaryExpressionBuilder binBuilder = new CBinaryExpressionBuilder(cfa.getMachineModel(), logger);
-    Collection<CFANode> allNodes = cfa.getAllNodes();
-    List<CFANode> copiedNodes = new LinkedList<>(allNodes);
 
-    for (CFANode node : copiedNodes) {
-      switch (node.getNumLeavingEdges()) {
-      case 0:
-        break;
-      case 1:
-        handleEdge(node.getLeavingEdge(0), cfa, binBuilder);
-        break;
-      case 2:
-        handleEdge(node.getLeavingEdge(0), cfa, binBuilder);
-        handleEdge(node.getLeavingEdge(1), cfa, binBuilder);
-        break;
-      default:
-        throw new CFAGenerationRuntimeException("Too much leaving Edges on CFANode");
+    for (final String function : cfa.getAllFunctionNames()) {
+
+      // This supplier creates the appropriate target nodes that get added
+      // to the CFA for the case the dereference fails.
+      Supplier<CFANode> targetNodeSupplier = new Supplier<CFANode>() {
+        @Override
+        public CFANode get() {
+
+          CFANode startNode = new CFANode(0, function);
+          CFANode endNode = new CFANode(0, function);
+          BlankEdge endEdge = new BlankEdge("null-deref", 0, startNode, endNode, "null-deref");
+          CFACreationUtils.addEdgeUnconditionallyToCFA(endEdge);
+
+          BlankEdge loopEdge = new BlankEdge("", 0, endNode, endNode, "");
+          CFACreationUtils.addEdgeUnconditionallyToCFA(loopEdge);
+
+          cfa.addNode(startNode);
+          cfa.addNode(endNode);
+          return startNode;
+        }
+      };
+
+      if (singleTargetPerFunction) {
+        // Only a single target node per function,
+        // memoize the first created one and reuse it
+        targetNodeSupplier = Suppliers.memoize(targetNodeSupplier);
+      }
+
+      for (CFANode node : ImmutableList.copyOf(cfa.getFunctionNodes(function))) {
+        switch (node.getNumLeavingEdges()) {
+        case 0:
+          break;
+        case 1:
+          handleEdge(node.getLeavingEdge(0), cfa, targetNodeSupplier, binBuilder);
+          break;
+        case 2:
+          if (node.getLeavingEdge(0) instanceof AssumeEdge
+              && node.getLeavingEdge(1) instanceof AssumeEdge) {
+            // handle only one edge, both contain the same expression
+            handleEdge(node.getLeavingEdge(0), cfa, targetNodeSupplier, binBuilder);
+          } else {
+            handleEdge(node.getLeavingEdge(0), cfa, targetNodeSupplier, binBuilder);
+            handleEdge(node.getLeavingEdge(1), cfa, targetNodeSupplier, binBuilder);
+          }
+          break;
+        default:
+          throw new CFAGenerationRuntimeException("Too much leaving Edges on CFANode");
+        }
       }
     }
   }
 
-  private static void handleEdge(CFAEdge edge, MutableCFA cfa, CBinaryExpressionBuilder builder) throws CParserException {
+  private static void handleEdge(CFAEdge edge, MutableCFA cfa, Supplier<CFANode> targetNode, CBinaryExpressionBuilder builder) throws CParserException {
     ContainsPointerVisitor visitor = new ContainsPointerVisitor();
     if (edge instanceof CReturnStatementEdge) {
       CExpression returnExp = ((CReturnStatementEdge)edge).getExpression();
@@ -125,25 +180,32 @@ public class CFATransformations {
           throw new CParserException(e);
         }
       }
+    } else if (edge instanceof CAssumeEdge) {
+      ((CAssumeEdge)edge).getExpression().accept(visitor);
     }
 
-    for (CExpression exp : visitor.dereferencedExpressions) {
-      edge = insertNullPointerCheck(edge, exp, cfa, builder);
+    for (CExpression exp : Lists.reverse(visitor.dereferencedExpressions)) {
+      edge = insertNullPointerCheck(edge, exp, cfa, targetNode, builder);
     }
   }
 
-  private static CFAEdge insertNullPointerCheck(CFAEdge edge, CExpression exp, MutableCFA cfa, CBinaryExpressionBuilder binBuilder) {
+  private static CFAEdge insertNullPointerCheck(CFAEdge edge, CExpression exp, MutableCFA cfa, Supplier<CFANode> targetNode, CBinaryExpressionBuilder binBuilder) {
     CFANode predecessor = edge.getPredecessor();
     CFANode successor = edge.getSuccessor();
-    predecessor.removeLeavingEdge(edge);
-    successor.removeEnteringEdge(edge);
+    CFACreationUtils.removeEdgeFromNodes(edge);
 
-    CFANode trueNode = new CFANode(edge.getLineNumber(), predecessor.getFunctionName());
     CFANode falseNode = new CFANode(edge.getLineNumber(), predecessor.getFunctionName());
+
+    for (CFAEdge otherEdge : leavingEdges(predecessor).toList()) {
+      CFAEdge newEdge = createOldEdgeWithNewNodes(falseNode, otherEdge.getSuccessor(), otherEdge);
+      CFACreationUtils.removeEdgeFromNodes(otherEdge);
+      CFACreationUtils.addEdgeUnconditionallyToCFA(newEdge);
+    }
+
     CBinaryExpression assumeExpression = binBuilder.buildBinaryExpression(exp, new CIntegerLiteralExpression(exp.getFileLocation(), CNumericTypes.INT,BigInteger.valueOf(0)), BinaryOperator.EQUALS);
     AssumeEdge trueEdge = new CAssumeEdge(edge.getRawStatement(),
                                          edge.getLineNumber(),
-                                         predecessor, trueNode,
+                                         predecessor, targetNode.get(),
                                          assumeExpression,
                                          true);
     AssumeEdge falseEdge = new CAssumeEdge(edge.getRawStatement(),
@@ -158,16 +220,7 @@ public class CFATransformations {
     CFAEdge newEdge = createOldEdgeWithNewNodes(falseNode, successor, edge);
     CFACreationUtils.addEdgeUnconditionallyToCFA(newEdge);
 
-    CFANode endNode = new CFANode(edge.getLineNumber(), predecessor.getFunctionName());
-    BlankEdge endEdge = new BlankEdge("null-deref", edge.getLineNumber(), trueNode, endNode, "null-deref");
-    CFACreationUtils.addEdgeUnconditionallyToCFA(endEdge);
-
-    BlankEdge loopEdge = new BlankEdge("", edge.getLineNumber(), endNode, endNode, "");
-    CFACreationUtils.addEdgeUnconditionallyToCFA(loopEdge);
-
-    cfa.addNode(trueNode);
     cfa.addNode(falseNode);
-    cfa.addNode(endNode);
 
     return newEdge;
   }
@@ -241,6 +294,18 @@ public class CFATransformations {
 
     @Override
     public Void visit(CUnaryExpression e) {
+      if (e.getOperator() == UnaryOperator.SIZEOF) {
+        // We do not want cases like sizeof(*p)
+        return null;
+      }
+      if (e.getOperator() == UnaryOperator.AMPER) {
+        if (e.getOperand() instanceof CFieldReference
+            && ((CFieldReference)e.getOperand()).isPointerDereference()) {
+          // &(s->f)
+          // ignore this dereference and visit "s"
+          return ((CFieldReference)e.getOperand()).getFieldOwner().accept(this);
+        }
+      }
       return e.getOperand().accept(this);
     }
 

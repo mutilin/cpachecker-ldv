@@ -41,6 +41,7 @@ import org.sosy_lab.cpachecker.core.algorithm.BMCAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.CEGARAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.CPAAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.CounterexampleCheckAlgorithm;
+import org.sosy_lab.cpachecker.core.algorithm.PredicatedAnalysisAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.ProofCheckAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.RestartAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.RestartLockAlgorithm;
@@ -94,6 +95,11 @@ public class CoreComponentsFactory {
       description="restart the algorithm using a different CPA after unknown result")
   private boolean useRestartingAlgorithm = false;
 
+  @Option(name="predicatedAnalysis",
+      description="use a predicated analysis which proves if the program satisfies a specified property"
+          + " with the help of a PredicateCPA to separate differnt program paths")
+  private boolean usePredicatedAnalysisAlgorithm = false;
+
   @Option(description="use a proof check algorithm to validate a previously generated proof")
   private boolean useProofCheckAlgorithm = false;
 
@@ -145,6 +151,10 @@ public class CoreComponentsFactory {
 
     } else {
       algorithm = new CPAAlgorithm(cpa, logger, config, shutdownNotifier);
+
+      if(usePredicatedAnalysisAlgorithm){
+        algorithm = new PredicatedAnalysisAlgorithm(algorithm, cpa, cfa, logger, config, shutdownNotifier);
+      }
 
       if (useRefinement) {
         algorithm = new CEGARAlgorithm(algorithm, cpa, config, logger);
