@@ -6,7 +6,6 @@ use strict;
 
 my $visualize_fname;
 my $cilpath;
-my $path_to_etv;
 my $root_html_file = "Unsafes.html";
 
 sub usage{ 
@@ -29,7 +28,6 @@ usage_ends
 GetOptions(
         'trace|t=s'=>\$visualize_fname,
         'cil|c=s'=>\$cilpath,
-        'ldvrepo|r=s'=>\$path_to_etv,
 ) or usage("Unrecognized options!");
 
 usage("Can't find CPAChecker trace!") unless $visualize_fname;
@@ -37,25 +35,6 @@ open(my $visualize_fh, "<", $visualize_fname) or usage("Can't open file for read
 open(my $html_result, ">", $root_html_file) or usage("Can't open file for write");
 
 usage("Can't find cil-file") unless $cilpath;
-usage("No path to etv folder (you may specify path to local ldv-tools repository)") unless $path_to_etv;
-
-my $tmp_trace_name = "tmp_trace";
-open(my $tmp_trace, ">", $tmp_trace_name) or die("Can't open file tmp_trace for write");
-print($tmp_trace "CPAchecker error trace v1.1\n");
-print($tmp_trace "-------");
-my $String=`pwd`;
-chomp($String);
-$String=$String."/$cilpath-------\n";
-print($tmp_trace $String);
-
-#implement cat $cilpath >> tmp_trace
-open(CILFILE, $cilpath) or die("Can't open cil file");	# Open the cil file
-my @cillines = <CILFILE>;		# Read it into an array
-close(CILFILE);			# Close the file
-print($tmp_trace @cillines);	# Print the array
-
-print($tmp_trace "--------------\n");
-close($tmp_trace);
 
 my $line;
 my $simple_global_var = <$visualize_fh>;
@@ -155,9 +134,6 @@ while (<$visualize_fh>) {
 	}
 }
 
-my $HEADER = "<html><head><link href='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/css/global.css' media='screen' rel='stylesheet' type='text/css' /><link href='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/css/etv.css' rel='stylesheet' type='text/css' /><link href='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/css/etv-analytics-center.css' rel='stylesheet' type='text/css' /><script type='text/javascript' src='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/jslib/jquery-1.4.2.min.js'></script><script type='text/javascript' src='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/jslib/etv.js'></script><script type='text/javascript' src='$path_to_etv/stats-visualizer/vhosts/ldv-stats/public/jslib/etv-analytics-center.js'></script></head>";
-
-my $current_fname_new;
 # Create only list of unsafes
 foreach my $current_fname(sort keys %unsafe_list)
 {
@@ -171,11 +147,7 @@ print "General statistics is generated\n";
 
 foreach my $current_fname(sort keys %unsafe_list)
 {
-	$current_fname_new = $current_fname.".new";
-	`cat $tmp_trace_name $current_fname > $current_fname_new`;
-	die ("cat failed") if( $? == -1 ) ;
-	unlink $current_fname or die;
-	`etv -c $current_fname_new --reqs-out reqs`;
+	`etv -c $current_fname -i $cilpath --format "CPAchecker error trace v1.1" -r reqs`;
 	die ("etv failed") if( $? == -1 ) ;
 	open(my $reqs, ">>", "reqs") or die("Can't open file reqs for write");
 	print($reqs "\n");
@@ -191,16 +163,14 @@ foreach my $current_fname(sort keys %unsafe_list)
 	    die ("Can't cat srcs") if ($? == -1);
 	  }
 	}
-	$current_fname_new =~ m/(.+)\.tmp\.new/;
-	`etv -c $current_fname_new --src-files srcs -o $1.html.tmp`;
+	`etv -c $current_fname -i $cilpath --format "CPAchecker error trace v1.1" -s srcs -o $current_fname.tmp`;
 	die ("etv failed") if( $? == -1 ) ;
-	open(my $html_tmp, ">", "$1.html") or die("Can't open html-file for write");
-	print($html_tmp "$HEADER <body> <div id='SSHeader'><div id='SSHeaderLogo'>@{$unsafe_list{$current_fname}}</div></div>");
-	`cat $1.html.tmp >> $1.html && echo "</body></html>" >> $1.html`;
-	die ("Can't cat $1.html") if ($? == -1);
-	unlink "$1.html.tmp" or die;
-	unlink "$1.tmp.new" or die;
-	print "Generate ".$1."\n";
+	open(my $html_tmp, ">", "$current_fname.html") or die("Can't open html-file for write");
+	print($html_tmp "<html> <body> <div id='SSHeader'><div id='SSHeaderLogo'>@{$unsafe_list{$current_fname}}</div></div>");
+	`cat $current_fname.tmp >> $current_fname.html && echo "</body></html>" >> $current_fname.html`;
+	die ("Can't cat $current_fname.html") if ($? == -1);
+	unlink "$current_fname.tmp" or die;
+	print "Generate ".$current_fname."\n";
 }
 
 
