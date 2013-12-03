@@ -54,6 +54,7 @@ import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionReturnEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionSummaryEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionSummaryStatementEdge;
 import org.sosy_lab.cpachecker.core.ShutdownNotifier;
@@ -63,6 +64,7 @@ import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
+import org.sosy_lab.cpachecker.core.interfaces.WrapperPrecision;
 import org.sosy_lab.cpachecker.core.interfaces.pcc.ProofChecker;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSetFactory;
@@ -75,6 +77,7 @@ import org.sosy_lab.cpachecker.cpa.callstack.CallstackReducer;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackTransferRelation;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsCPA;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsPrecision;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsReducer;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
@@ -435,6 +438,7 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
           //the latter isn't supported yet, but in the the former case we can classically do the post operation
           if (BlockStack.size() == 0) {
             BlockStack.add(currentBlock);
+            setLockStatisticsPrecision(pElement, pPrecision);
           }
           logger.log(Level.FINER, "nextBlock = currentBlock, get successors");
           return attachAdditionalInfoToCallNodes(wrappedTransfer.getAbstractSuccessors(pElement, pPrecision, edge));
@@ -502,7 +506,6 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
         logger.log(Level.ALL, "Expanded results:", expandedResult);
 
         currentBlock = outerSubtree;
-        //System.out.println("Abm size of result1 = " + expandedResult.size());
         return attachAdditionalInfoToCallNodes(expandedResult);
       } else {
         List<AbstractState> result = new ArrayList<>();
@@ -518,13 +521,42 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
             break;
           }
           if (!(e instanceof CFunctionSummaryEdge)) {
-            result.addAll(getAbstractSuccessors0(pElement, pPrecision, e));
+            Collection<? extends AbstractState> tmpResult = getAbstractSuccessors0(pElement, pPrecision, e);
+            result.addAll(tmpResult);
+            if (e instanceof CFunctionReturnEdge && tmpResult.size() > 0) {
+              setLockStatisticsPrecision(tmpResult.iterator().next(), pPrecision);
+            }
           }
         }
         return attachAdditionalInfoToCallNodes(result);
       }
     } else {
       return attachAdditionalInfoToCallNodes(getAbstractSuccessors0(pElement, pPrecision, edge));
+    }
+  }
+
+  private void setLockStatisticsPrecision(AbstractState pOldState, Precision pPrecision) {
+    if (pPrecision instanceof WrapperPrecision) {
+      LockStatisticsPrecision lockPrecision = ((WrapperPrecision) pPrecision).retrieveWrappedPrecision(LockStatisticsPrecision.class);
+
+      if (lockPrecision != null) {
+        CallstackState state = AbstractStates.extractStateByType(pOldState, CallstackState.class);
+        try {
+          CallstackState fullState = restoreCallstack(state);
+          lockPrecision.setPreciseState(fullState);
+        } catch (HandleCodeException e) {
+          logger.log(Level.WARNING, "Can't restore callstack");
+        }
+      }
+    }
+  }
+
+  private void cleanLockStatisticsPrecision(Precision pPrecision) {
+    if (pPrecision instanceof WrapperPrecision) {
+      LockStatisticsPrecision lockPrecision = ((WrapperPrecision) pPrecision).retrieveWrappedPrecision(LockStatisticsPrecision.class);
+      if (lockPrecision != null) {
+        lockPrecision.setPreciseState(null);
+      }
     }
   }
 
@@ -583,6 +615,7 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
     try {
       AbstractState reducedInitialState = wrappedReducer.getVariableReducedState(initialState, currentBlock, node);
       Precision reducedInitialPrecision = wrappedReducer.getVariableReducedPrecision(initialPrecision, currentBlock);
+      cleanLockStatisticsPrecision(reducedInitialPrecision);
       Pair<ReachedSet, Collection<AbstractState>> pair =
           argCache.get(reducedInitialState, reducedInitialPrecision, currentBlock);
       ReachedSet reached = pair.getFirst();
@@ -590,6 +623,7 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
 
       abstractStateToReachedSet.put(initialState, reached);
 
+      setLockStatisticsPrecision(initialState, reducedInitialPrecision);
       if (returnElements != null) {
         assert reached != null;
         fullCacheHits++;
@@ -609,7 +643,9 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
         }
 
         reached = createInitialReachedSet(reducedInitialState, reducedInitialPrecision);
+        cleanLockStatisticsPrecision(reducedInitialPrecision);
         argCache.put(reducedInitialState, reducedInitialPrecision, currentBlock, reached);
+        setLockStatisticsPrecision(initialState, reducedInitialPrecision);
         abstractStateToReachedSet.put(initialState, reached);
       }
       algorithm.run(reached);
