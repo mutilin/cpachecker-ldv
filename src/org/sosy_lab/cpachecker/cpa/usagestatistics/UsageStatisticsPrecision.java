@@ -28,11 +28,12 @@ import java.util.Map;
 
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
+import org.sosy_lab.cpachecker.core.interfaces.WrapperPrecision;
 import org.sosy_lab.cpachecker.cpa.local.LocalState.DataType;
 import org.sosy_lab.cpachecker.util.identifiers.GeneralIdentifier;
 
 
-public class UsageStatisticsPrecision implements Precision {
+public class UsageStatisticsPrecision implements WrapperPrecision {
   private HashMap<CFANode, Map<GeneralIdentifier, DataType>> localStatistics;
   private final Precision wrappedPrecision;
 
@@ -121,5 +122,33 @@ public class UsageStatisticsPrecision implements Precision {
       sum += localStatistics.get(node).size();
     }
     return sum;
+  }
+
+  @Override
+  public <T extends Precision> T retrieveWrappedPrecision(Class<T> pType) {
+    if (pType.isAssignableFrom(getClass())) {
+      return pType.cast(this);
+    } else if (pType.isAssignableFrom(wrappedPrecision.getClass())) {
+      return pType.cast(wrappedPrecision);
+    } else if (wrappedPrecision instanceof WrapperPrecision) {
+      return ((WrapperPrecision) wrappedPrecision).retrieveWrappedPrecision(pType);
+    } else {
+      return null;
+    }
+  }
+
+  @Override
+  public Precision replaceWrappedPrecision(Precision newPrecision, Class<? extends Precision> replaceType) {
+
+    if (replaceType.equals(UsageStatisticsPrecision.class)) {
+      return newPrecision;
+    } else if (replaceType.equals(wrappedPrecision.getClass())) {
+      return new UsageStatisticsPrecision(newPrecision);
+    } else if (wrappedPrecision instanceof WrapperPrecision) {
+      return
+        new UsageStatisticsPrecision(((WrapperPrecision) wrappedPrecision).replaceWrappedPrecision(newPrecision, replaceType));
+    } else {
+      return null;
+    }
   }
 }
