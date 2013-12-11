@@ -130,7 +130,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       throws InterruptedException, CPATransferException {
 
     Collection<UsageStatisticsState> results;
-
+    statistics.transferRelationTimer.start();
     assert (pPrecision instanceof UsageStatisticsPrecision);
 
     if (pCfaEdge == null) {
@@ -147,6 +147,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       getAbstractSuccessorForEdge((UsageStatisticsState)pElement, (UsageStatisticsPrecision)pPrecision, pCfaEdge, results);
 
     }
+    statistics.transferRelationTimer.stop();
     return results;
   }
 

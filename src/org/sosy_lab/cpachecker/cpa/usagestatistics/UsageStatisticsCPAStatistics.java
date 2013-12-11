@@ -42,6 +42,7 @@ import java.util.logging.Level;
 import org.sosy_lab.common.Files;
 import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.Pair;
+import org.sosy_lab.common.Timer;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.FileOption;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
@@ -91,6 +92,10 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
   private final LogManager logger;
   private final Set<SingleIdentifier> unsafes = new HashSet<>();
+
+  public Timer transferRelationTimer = new Timer();
+  public Timer printStatisticsTimer = new Timer();
+
   /*Timer full = new Timer();
   Timer one = new Timer();
   Timer two = new Timer();
@@ -347,6 +352,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   @Override
   public void printStatistics(PrintStream out, Result result, ReachedSet reached) {
 		BufferedWriter writer = null;
+		printStatisticsTimer.start();
     try {
       writer = Files.openOutputFile(outputStatFileName);
       logger.log(Level.FINE, "Print statistics about unsafe cases");
@@ -366,7 +372,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       logger.log(Level.SEVERE, e.getMessage());
       return;
     }
-
+    out.println("Time for transfer relation:    " + transferRelationTimer);
+    printStatisticsTimer.stop();
+    out.println("Time for printing statistics:  " + printStatisticsTimer);
     /*System.out.println(" \t \t Global Local \t Structure");
     System.out.println("Assignment: \t " + counter[0][0] + " \t " + counter[1][0] + " \t " + counter[2][0]);
     System.out.println("Assumption: \t " + counter[0][1] +" \t " + counter[1][1] +" \t " + counter[2][1] );
