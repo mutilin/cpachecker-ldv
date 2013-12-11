@@ -213,7 +213,6 @@ class MainCPAStatistics implements Statistics {
       if (exportCoverage && outputCoverageFile != null) {
         printCoverageInfo(reached);
       }
-
     }
 
     out.println("CPAchecker general statistics");

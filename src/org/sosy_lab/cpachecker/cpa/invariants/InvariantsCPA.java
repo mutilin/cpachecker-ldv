@@ -32,6 +32,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Queue;
 import java.util.Set;
+import java.util.WeakHashMap;
 import java.util.logging.Level;
 
 import org.sosy_lab.common.LogManager;
@@ -116,6 +117,12 @@ public class InvariantsCPA extends AbstractCPA {
     @Option(description="the maximum number of variables to consider as interesting. -1 one disables the limit, but this is not recommended. 0 means that guessing interesting variables is disabled.")
     private int interestingVariableLimit = 2;
 
+    @Option(description="the maximum tree depth of a formula recorded in the environment.")
+    private int maximumFormulaDepth = 4;
+
+    @Option(description="whether or not to collect information about binary variable interrelations.")
+    private boolean useBinaryVariableInterrelations = true;
+
     @Option(description="whether or not to use a bit vector formula manager when extracting invariant approximations from states.")
     private boolean useBitvectors = false;
 
@@ -151,6 +158,8 @@ public class InvariantsCPA extends AbstractCPA {
    */
   private final CFA cfa;
 
+  private final WeakHashMap<CFANode, InvariantsPrecision> initialPrecisionMap = new WeakHashMap<>();
+
   /**
    * Gets a factory for creating InvariantCPAs.
    *
@@ -182,7 +191,7 @@ public class InvariantsCPA extends AbstractCPA {
   }
 
   @Override
-  public AbstractState getInitialState(CFANode pNode) {
+  public InvariantsState getInitialState(CFANode pNode) {
     Set<CFANode> relevantLocations = new LinkedHashSet<>();
     Set<CFANode> targetLocations = new LinkedHashSet<>();
 
@@ -305,12 +314,25 @@ public class InvariantsCPA extends AbstractCPA {
       }
     }
 
-    // Create the configured initial state
-    return new InvariantsState(options.useBitvectors,
-        variableSelection,
-        ImmutableSet.copyOf(relevantEdges),
+    InvariantsPrecision precision = new InvariantsPrecision(relevantEdges,
         ImmutableSet.copyOf(limit(interestingPredicates, options.interestingPredicatesLimit)),
-        ImmutableSet.copyOf(limit(interestingVariables, options.interestingVariableLimit)));
+        ImmutableSet.copyOf(limit(interestingVariables, options.interestingVariableLimit)),
+        options.maximumFormulaDepth,
+        options.useBinaryVariableInterrelations);
+
+    initialPrecisionMap.put(pNode, precision);
+
+    // Create the configured initial state
+    return new InvariantsState(options.useBitvectors, variableSelection, precision);
+  }
+
+  @Override
+  public InvariantsPrecision getInitialPrecision(CFANode pNode) {
+    InvariantsPrecision precision = initialPrecisionMap.get(pNode);
+    if (precision != null) {
+      return precision;
+    }
+    return getInitialState(pNode).getPrecision();
   }
 
   /**

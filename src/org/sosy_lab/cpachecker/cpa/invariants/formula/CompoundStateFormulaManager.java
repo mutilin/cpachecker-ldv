@@ -24,6 +24,7 @@
 package org.sosy_lab.cpachecker.cpa.invariants.formula;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -56,6 +57,8 @@ public enum CompoundStateFormulaManager {
   private static final InvariantsFormula<CompoundInterval> FALSE = InvariantsFormulaManager.INSTANCE.asConstant(CompoundInterval.logicalFalse());
 
   private static final InvariantsFormula<CompoundInterval> TRUE = InvariantsFormulaManager.INSTANCE.asConstant(CompoundInterval.logicalTrue());
+
+  private static final InvariantsFormula<CompoundInterval> MINUS_ONE = InvariantsFormulaManager.INSTANCE.asConstant(CompoundInterval.minusOne());
 
   private static final CollectVarsVisitor<CompoundInterval> COLLECT_VARS_VISITOR = new CollectVarsVisitor<>();
 
@@ -102,6 +105,21 @@ public enum CompoundStateFormulaManager {
       }
     } else {
       formulas = pFormulas;
+    }
+    for (InvariantsFormula<CompoundInterval> formula : formulas) {
+      Collection<InvariantsFormula<CompoundInterval>> disjunctions = formula.accept(SPLIT_DISJUNCTIONS_VISITOR);
+      if (disjunctions.size() > 1) {
+        ArrayList<InvariantsFormula<CompoundInterval>> newFormulas = new ArrayList<>(pFormulas);
+        newFormulas.remove(formula);
+        for (InvariantsFormula<CompoundInterval> disjunctivePart : disjunctions) {
+          newFormulas.add(disjunctivePart);
+          if (!definitelyImplies(newFormulas, pFormula)) {
+            return false;
+          }
+          newFormulas.remove(disjunctivePart);
+        }
+        return true;
+      }
     }
     Map<String, InvariantsFormula<CompoundInterval>> tmpEnvironment = pEnvironment;
     PushAssumptionToEnvironmentVisitor patev = new PushAssumptionToEnvironmentVisitor(FORMULA_EVALUATION_VISITOR, tmpEnvironment);
@@ -746,7 +764,17 @@ public enum CompoundStateFormulaManager {
     if (isDefinitelyTop(pToNegate)) {
       return TOP;
     }
-    return InvariantsFormulaManager.INSTANCE.negate(pToNegate);
+    if (pToNegate instanceof Multiply<?>) {
+      InvariantsFormula<CompoundInterval> factor1 = ((Multiply<CompoundInterval>) pToNegate).getFactor1();
+      InvariantsFormula<CompoundInterval> factor2 = ((Multiply<CompoundInterval>) pToNegate).getFactor2();
+      if (factor1.equals(MINUS_ONE)) {
+        return factor2;
+      }
+      if (factor2.equals(MINUS_ONE)) {
+        return factor1;
+      }
+    }
+    return InvariantsFormulaManager.INSTANCE.multiply(pToNegate, MINUS_ONE);
   }
 
   /**
@@ -765,7 +793,7 @@ public enum CompoundStateFormulaManager {
     if (isDefinitelyTop(pMinuend) || isDefinitelyTop(pSubtrahend)) {
       return TOP;
     }
-    return InvariantsFormulaManager.INSTANCE.subtract(pMinuend, pSubtrahend);
+    return InvariantsFormulaManager.INSTANCE.add(pMinuend, negate(pSubtrahend));
   }
 
   /**

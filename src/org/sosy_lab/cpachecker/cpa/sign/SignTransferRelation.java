@@ -24,6 +24,7 @@
 package org.sosy_lab.cpachecker.cpa.sign;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Deque;
 import java.util.HashSet;
@@ -34,6 +35,7 @@ import org.sosy_lab.common.LogManager;
 import org.sosy_lab.cpachecker.cfa.ast.AExpressionStatement;
 import org.sosy_lab.cpachecker.cfa.ast.AFunctionCall;
 import org.sosy_lab.cpachecker.cfa.ast.AFunctionCallAssignmentStatement;
+import org.sosy_lab.cpachecker.cfa.ast.AFunctionCallStatement;
 import org.sosy_lab.cpachecker.cfa.ast.AIdExpression;
 import org.sosy_lab.cpachecker.cfa.ast.AInitializerExpression;
 import org.sosy_lab.cpachecker.cfa.ast.AParameterDeclaration;
@@ -44,7 +46,10 @@ import org.sosy_lab.cpachecker.cfa.ast.IAInitializer;
 import org.sosy_lab.cpachecker.cfa.ast.IARightHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.IAStatement;
 import org.sosy_lab.cpachecker.cfa.ast.IAssignment;
+import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression.BinaryOperator;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
 import org.sosy_lab.cpachecker.cfa.model.ADeclarationEdge;
 import org.sosy_lab.cpachecker.cfa.model.AReturnStatementEdge;
@@ -61,6 +66,8 @@ import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCodeException;
+
+import com.google.common.base.Optional;
 
 
 public class SignTransferRelation extends ForwardingTransferRelation<SignState, SingletonPrecision> {
@@ -97,13 +104,6 @@ public class SignTransferRelation extends ForwardingTransferRelation<SignState, 
     }
     String assignedVar = getScopedVariableName(FUNC_RET_VAR, functionName);
     SignState result = handleAssignmentToVariable(state, assignedVar, pExpression);
-
-    // Clear stack
-    Set<String> localFunctionVars = stackVariables.pop();
-    for(String scopedVarIdent : localFunctionVars) {
-      result = result.removeSignAssumptionOfVariable(scopedVarIdent); // TODO performance
-    }
-
     return result;
   }
 
@@ -130,30 +130,183 @@ public class SignTransferRelation extends ForwardingTransferRelation<SignState, 
   @Override
   protected SignState handleFunctionReturnEdge(FunctionReturnEdge pCfaEdge, FunctionSummaryEdge pFnkCall,
       AFunctionCall pSummaryExpr, String pCallerFunctionName) throws CPATransferException {
-    if(!(pSummaryExpr instanceof AFunctionCallAssignmentStatement)) {
-      throw new UnrecognizedCodeException("Unsupported code found", pCfaEdge);
-    }
-    AFunctionCallAssignmentStatement assignStmt = (AFunctionCallAssignmentStatement)pSummaryExpr;
-    IAExpression leftSide = assignStmt.getLeftHandSide();
-    if(!(leftSide instanceof AIdExpression)) {
-      throw new UnrecognizedCodeException("Unsupported code found", pCfaEdge);
-    }
-    String returnVarName = getScopedVariableName(FUNC_RET_VAR, functionName);
-    String assignedVarName = getScopedVariableName(leftSide, pCallerFunctionName);
 
-    SignState result = state
-                        .assignSignToVariable(assignedVarName, state.getSignMap().getSignForVariable(returnVarName))
-                        .removeSignAssumptionOfVariable(returnVarName);
+    // x = fun();
+    if (pSummaryExpr instanceof AFunctionCallAssignmentStatement) {
+      AFunctionCallAssignmentStatement assignStmt = (AFunctionCallAssignmentStatement) pSummaryExpr;
+      IAExpression leftSide = assignStmt.getLeftHandSide();
+      if (!(leftSide instanceof AIdExpression)) { throw new UnrecognizedCodeException("Unsupported code found",
+          pCfaEdge); }
+      String returnVarName = getScopedVariableName(FUNC_RET_VAR, functionName);
+      String assignedVarName = getScopedVariableName(leftSide, pCallerFunctionName);
+
+      SignState result = state
+          .assignSignToVariable(assignedVarName, state.getSignMap().getSignForVariable(returnVarName))
+          .removeSignAssumptionOfVariable(returnVarName);
+
+
+      // Clear stack TODO move to handleFunctionReturnEdge otherwise these variables are not removed if no return statement exists
+      Set<String> localFunctionVars = stackVariables.pop();
+      for(String scopedVarIdent : localFunctionVars) {
+        result = result.removeSignAssumptionOfVariable(scopedVarIdent); // TODO performance
+      }
+
+      return result;
+    }
+
+    // fun()
+    if (pSummaryExpr instanceof AFunctionCallStatement) {
+      return state.removeSignAssumptionOfVariable(getScopedVariableName(FUNC_RET_VAR, functionName));
+    }
+
+    throw new UnrecognizedCodeException("Unsupported code found", pCfaEdge);
+  }
+
+  private static class IdentifierValuePair {
+    CIdExpression identifier;
+    SIGN value;
+    public IdentifierValuePair(CIdExpression pIdentifier, SIGN pValue) {
+      super();
+      identifier = pIdentifier;
+      value = pValue;
+    }
+  }
+
+  private BinaryOperator negateComparisonOperator(BinaryOperator pOp) {
+    switch(pOp) {
+    case LESS_THAN:
+      return BinaryOperator.GREATER_EQUAL;
+    case LESS_EQUAL:
+      return BinaryOperator.GREATER_THAN;
+    case GREATER_THAN:
+      return BinaryOperator.LESS_EQUAL;
+    case GREATER_EQUAL:
+      return BinaryOperator.LESS_THAN;
+    case EQUALS:
+      return BinaryOperator.NOT_EQUALS;
+    case NOT_EQUALS:
+      return BinaryOperator.EQUALS;
+     default:
+       throw new IllegalArgumentException("Cannot negate given operator");
+    }
+  }
+
+  private Optional<IdentifierValuePair> evaluateAssumption(CBinaryExpression pAssumeExp, boolean truthAssumption, CFAEdge pCFAEdge)  {
+    Optional<CIdExpression> optStrongestIdent = getStrongestIdentifier(pAssumeExp, pCFAEdge);
+    if(!optStrongestIdent.isPresent()) {
+      return Optional.absent(); // No refinement possible, since no strongest identifier was found
+    }
+    CIdExpression strongestIdent = optStrongestIdent.get();
+    CExpression refinementExpression = getRefinementExpression(strongestIdent, pAssumeExp);
+    BinaryOperator resultOp = !truthAssumption ? negateComparisonOperator(pAssumeExp.getOperator()) : pAssumeExp.getOperator();
+    SIGN resultSign;
+    try {
+      resultSign = refinementExpression.accept(new SignCExpressionVisitor(pCFAEdge, state, this));
+    } catch (UnrecognizedCodeException e) {
+      return Optional.absent();
+    }
+    Optional<IdentifierValuePair> result = evaluateAssumption(strongestIdent, resultOp, resultSign, pCFAEdge, isLeftOperand(strongestIdent, pAssumeExp));
     return result;
   }
 
+  private boolean isLeftOperand(CExpression pExp, CBinaryExpression  pBinExp) {
+    if(pExp == pBinExp.getOperand1()) {
+      return true;
+    } else if(pExp == pBinExp.getOperand2()) {
+      return false;
+    }
+    throw new IllegalArgumentException("Argument pExp is not part of pBinExp");
+  }
+
+  private Optional<IdentifierValuePair> evaluateAssumption(CIdExpression pIdExp, BinaryOperator pOp, SIGN pResultSign, CFAEdge pCFAEdge, boolean pIdentIsLeft) {
+    boolean equalZero = false;
+    switch(pOp) {
+    case GREATER_EQUAL:
+      equalZero = pResultSign == SIGN.ZERO;
+      //$FALL-THROUGH$
+    case GREATER_THAN:
+      if(pIdentIsLeft) {
+        if(SIGN.PLUS0.covers(pResultSign)) { // x > (0)+
+          return Optional.of(new IdentifierValuePair(pIdExp, equalZero ? SIGN.PLUS0 : SIGN.PLUS));
+        }
+      } else {
+        if(SIGN.MINUS0.covers(pResultSign)) { // (0)- > x
+          return Optional.of(new IdentifierValuePair(pIdExp, equalZero ? SIGN.MINUS0 : SIGN.MINUS));
+        }
+      }
+      break;
+    case LESS_EQUAL:
+      equalZero = pResultSign == SIGN.ZERO;
+      //$FALL-THROUGH$
+    case LESS_THAN:
+      if(pIdentIsLeft) { // x < (0)-
+        if(SIGN.MINUS0.covers(pResultSign)) {
+          return Optional.of(new IdentifierValuePair(pIdExp, equalZero ? SIGN.MINUS0 : SIGN.MINUS));
+        }
+      } else {
+        if(SIGN.PLUS0.covers(pResultSign)) { // (0)+ < x
+          return Optional.of(new IdentifierValuePair(pIdExp, equalZero ? SIGN.PLUS0 : SIGN.PLUS));
+        }
+      }
+      break;
+    case EQUALS:
+      return Optional.of(new IdentifierValuePair(pIdExp, pResultSign));
+    }
+    return Optional.absent();
+  }
+
+  private CExpression getRefinementExpression(CIdExpression pStrongestIdent, CBinaryExpression pBinExp) {
+    if(pStrongestIdent == pBinExp.getOperand1()) {
+      return pBinExp.getOperand2();
+    } else if(pStrongestIdent == pBinExp.getOperand2()) {
+      return pBinExp.getOperand1();
+    }
+    throw new IllegalArgumentException("Strongest identifier is not part of binary expression");
+  }
+
+  private List<CIdExpression> filterIdentifier(CBinaryExpression pAssumeExp) {
+    List<CIdExpression> result = new ArrayList<>();
+    if((pAssumeExp.getOperand1() instanceof CIdExpression)) {
+      result.add((CIdExpression)pAssumeExp.getOperand1());
+    }
+    if((pAssumeExp.getOperand2() instanceof CIdExpression)) {
+      result.add((CIdExpression)pAssumeExp.getOperand2());
+    }
+    return result;
+  }
+
+  private Optional<CIdExpression> getStrongestIdentifier(CBinaryExpression pAssumeExp, CFAEdge pCFAEdge) {
+    List<CIdExpression> result = filterIdentifier(pAssumeExp);
+    if(result.isEmpty()) {
+      return Optional.absent();
+    }
+    if(result.size() == 1) {
+      return Optional.of(result.get(0));
+    }
+    try {
+      SIGN leftResultSign = result.get(0).accept(new SignCExpressionVisitor(pCFAEdge, state, this));
+      SIGN rightResultSign = result.get(1).accept(new SignCExpressionVisitor(pCFAEdge, state, this));
+      if(leftResultSign.covers(rightResultSign)) {
+        return Optional.of(result.get(0));
+      } else {
+        return Optional.of(result.get(1));
+      }
+    } catch(UnrecognizedCodeException ex) {
+      return Optional.absent();
+    }
+  }
 
   @Override
-  protected SignState handleAssumption(CAssumeEdge cfaEdge, CExpression expression, boolean truthAssumption)
+  protected SignState handleAssumption(CAssumeEdge pCfaEdge, CExpression pExpression, boolean pTruthAssumption)
       throws CPATransferException {
-//    if(truthAssumption) {
-//      SIGN result = expression.accept(new SignCExpressionVisitor(cfaEdge, state, this));
-//    }
+    // Analyse only expressions of the form x op y
+    if(!(pExpression instanceof CBinaryExpression)) {
+      return state;
+    }
+    Optional<IdentifierValuePair> result = evaluateAssumption((CBinaryExpression)pExpression, pTruthAssumption, pCfaEdge);
+    if(result.isPresent()) {
+      return state.assignSignToVariable(result.get().identifier.getName(), result.get().value);
+    }
     return state;
   }
 
