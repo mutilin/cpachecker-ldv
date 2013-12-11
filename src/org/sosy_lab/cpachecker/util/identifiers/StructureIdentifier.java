@@ -139,11 +139,11 @@ public class StructureIdentifier extends SingleIdentifier{
 
   @Override
   public GeneralIdentifier getGeneralId() {
-    return new GeneralStructureFieldIdentifier(name, type.toASTString(""), getStructureType(), dereference);
+    return new GeneralStructureFieldIdentifier(name, type.toASTString(""), type, dereference);
   }
 
   public StructureFieldIdentifier toStructureFieldIdentifier() {
-    return new StructureFieldIdentifier(name, type.toASTString(""), getStructureType(), dereference);
+    return new StructureFieldIdentifier(name, type.toASTString(""), type, dereference);
   }
 
   /**
