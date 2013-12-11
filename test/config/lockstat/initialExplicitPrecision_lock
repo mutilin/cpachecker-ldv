@@ -1,0 +1,34 @@
+(declare-fun |mtxCheckSignal::code|() Real)
+(define-fun t1() Bool (= |mtxCheckSignal::code| 27))
+(declare-fun |global|() Real)
+(define-fun t2() Bool (= |global| 0))
+(declare-fun |ldv::ret|() Real)
+(define-fun t3() Bool (= |ldv::ret| 27))
+(declare-fun |mtxCheckSignal::tmp|() Real)
+(define-fun t4() Bool (= |mtxCheckSignal::tmp| 0))
+(declare-fun |mtxCheckSignal::__retval__|() Real)
+(define-fun t6() Bool (= |mtxCheckSignal::__retval__| 27))
+(declare-fun |objIdToAdrShared::__retval__|() Real)
+(define-fun t7() Bool (= |objIdToAdrShared::__retval__| 0))
+(declare-fun |mtxGetObject::__retval__|() Real)
+(define-fun t8() Bool (= |mtxGetObject::__retval__| 0))
+(declare-fun |mtxGetObject::tmp___0|() Real)
+(define-fun t9() Bool (= |mtxGetObject::tmp___0| 0))
+(declare-fun |mtxInitializer::__retval__|() Real)
+(define-fun t10() Bool (= |mtxInitializer::__retval__| 0))
+
+
+*:
+(assert t1)
+
+*:
+(assert t2)
+
+*:
+(assert t3)
+
+*:
+(assert t4)
+
+*:
+(assert t6)
