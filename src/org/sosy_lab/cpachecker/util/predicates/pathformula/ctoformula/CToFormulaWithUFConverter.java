@@ -306,6 +306,9 @@ public class CToFormulaWithUFConverter extends CtoFormulaConverter {
   }
 
   boolean isRelevantVariable(final String function, final String name) {
+    boolean a = variableClassification.isPresent();
+    boolean b = options.ignoreIrrelevantVariables();
+    boolean c = variableClassification.get().getRelevantVariables().containsEntry(function, name);
     return !variableClassification.isPresent() ||
            !options.ignoreIrrelevantVariables() ||
            variableClassification.get().getRelevantVariables().containsEntry(function, name);
@@ -1008,6 +1011,12 @@ public class CToFormulaWithUFConverter extends CtoFormulaConverter {
                                                                  // correctness of SSA indices without this trick!
 
     CType declarationType = PointerTargetSet.simplifyType(declaration.getType());
+
+    if (declaration.getName().equals("cputime_node")) {
+      System.out.println("cputime_node");
+    }
+    boolean b = isRelevantVariable(declaration.getQualifiedName());
+    boolean b2 = isAddressedVariable(declaration.getQualifiedName());
 
     if (!isRelevantVariable(declaration.getQualifiedName()) &&
         !isAddressedVariable(declaration.getQualifiedName())) {

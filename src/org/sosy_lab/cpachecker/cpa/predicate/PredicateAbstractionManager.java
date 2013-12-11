@@ -113,6 +113,14 @@ public class PredicateAbstractionManager {
     public int numEqualPathFormulae = 0;
     public int numSyntacticEntailedPathFormulae = 0;
     public int numSemanticEntailedPathFormulae = 0;
+    public Timer CacheTimer = new Timer();
+    public Timer getPredicates = new Timer();
+    public Timer makeFormula = new Timer();
+    public Timer Timer1 = new Timer();
+    public Timer Timer2 = new Timer();
+    public Timer Timer3 = new Timer();
+    public Timer Timer4 = new Timer();
+    public Timer Timer5 = new Timer();
   }
 
   final Stats stats = new Stats();
@@ -246,7 +254,7 @@ public class PredicateAbstractionManager {
       Collection<AbstractionPredicate> pPredicates) throws InterruptedException {
 
     stats.numCallsAbstraction++;
-
+    stats.getPredicates.start();
     logger.log(Level.FINEST, "Computing abstraction", stats.numCallsAbstraction, "with", pPredicates.size(), "predicates");
     logger.log(Level.ALL, "Old abstraction:", abstractionFormula.asFormula());
     logger.log(Level.ALL, "Path formula:", pathFormula);
@@ -258,7 +266,7 @@ public class PredicateAbstractionManager {
     final SSAMap ssa = pathFormula.getSsa();
 
     ImmutableSet<AbstractionPredicate> predicates = getRelevantPredicates(pPredicates, f, ssa);
-
+    stats.getPredicates.stop();
     // Try to reuse stored abstractions
     if (reuseAbstractionsFrom != null
         && !abstractionReuseDisabledBecauseOfAmbiguity) {
@@ -359,6 +367,8 @@ public class PredicateAbstractionManager {
     // caching
     Pair<BooleanFormula, ImmutableSet<AbstractionPredicate>> absKey = null;
     if (useCache) {
+      stats.CacheTimer.start();
+      try {
       absKey = Pair.of(f, predicates);
       AbstractionFormula result = abstractionCache.get(absKey);
 
@@ -387,6 +397,9 @@ public class PredicateAbstractionManager {
             bfmgr.makeBoolean(false), bfmgr.makeBoolean(false),
             pathFormula, noAbstractionReuse);
       }
+      } finally {
+        stats.CacheTimer.stop();
+      }
     }
 
 
@@ -410,7 +423,6 @@ public class PredicateAbstractionManager {
                      .toSet();
       stats.trivialPredicatesTime.stop();
     }
-
     try (ProverEnvironment thmProver = solver.newProverEnvironment()) {
       thmProver.push(f);
 
@@ -465,7 +477,7 @@ public class PredicateAbstractionManager {
         }
       }
     }
-
+    stats.makeFormula.start();
     AbstractionFormula result = makeAbstractionFormula(abs, ssa, pathFormula);
 
     if (useCache) {
@@ -480,7 +492,6 @@ public class PredicateAbstractionManager {
         + stats.abstractionEnumTime.getLengthOfLastOuterInterval();
     logger.log(Level.FINEST, "Computing abstraction took", abstractionTime, "ms");
     logger.log(Level.ALL, "Abstraction result is", result);
-
     if (dumpHardAbstractions && abstractionTime > 10000) {
       // we want to dump "hard" problems...
       File dumpFile;
@@ -498,7 +509,7 @@ public class PredicateAbstractionManager {
       dumpFile = fmgr.formatFormulaOutputFile("abstraction", stats.numCallsAbstraction, "result", 0);
       fmgr.dumpFormulaToFile(result.asInstantiatedFormula(), dumpFile);
     }
-
+    stats.makeFormula.stop();
     return result;
   }
 
@@ -520,26 +531,48 @@ public class PredicateAbstractionManager {
   public ImmutableSet<AbstractionPredicate> getRelevantPredicates(
       final Collection<AbstractionPredicate> pPredicates,
       final BooleanFormula f, final SSAMap ssa) {
-
     Set<String> variables = fmgr.extractVariables(f);
     ImmutableSet.Builder<AbstractionPredicate> predicateBuilder = ImmutableSet.builder();
     for (AbstractionPredicate predicate : pPredicates) {
+      stats.Timer1.start();
       BooleanFormula predicateTerm = predicate.getSymbolicAtom();
       if (bfmgr.isFalse(predicateTerm)) {
         // Ignore predicate "false", it means "check for satisfiability".
         // We do this implicitly.
         logger.log(Level.FINEST, "Ignoring predicate 'false'");
+        stats.Timer1.stop();
         continue;
       }
+      stats.Timer1.stop();
+      stats.Timer2.start();
 
       BooleanFormula instantiatedPredicate = fmgr.instantiate(predicateTerm, ssa);
+      stats.Timer2.stop();
+      stats.Timer3.start();
       Set<String> predVariables = fmgr.extractVariables(instantiatedPredicate);
+      stats.Timer3.stop();
 
+      stats.Timer4.start();
+      //for (String var : variables) {
+        /*for (String predVar : predVariables) {
+          if (var.contains(predVar)) {
+            predicateBuilder.add(predicate);
+            break top;
+          }
+        }*/
+        /*String tmpVar = var.substring(0, var.indexOf("@"));
+
+        if (predicateTerm.toString().contains(tmpVar)) {
+          predicateBuilder.add(predicate);
+          break;
+        }*/
+      //}
       if (!Sets.intersection(predVariables, variables).isEmpty()) {
         predicateBuilder.add(predicate);
       } else {
         logger.log(Level.FINEST, "Ignoring predicate about variables", predVariables);
       }
+      stats.Timer4.stop();
     }
     return predicateBuilder.build();
   }

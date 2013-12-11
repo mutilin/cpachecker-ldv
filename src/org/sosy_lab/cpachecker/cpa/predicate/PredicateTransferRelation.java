@@ -47,6 +47,7 @@ import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionReturnEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Targetable.ViolatedProperty;
@@ -123,13 +124,17 @@ public class PredicateTransferRelation implements TransferRelation {
     blk = pBlk;
   }
 
+  public Timer timer = new Timer();
+  public Timer formulaBuilding = new Timer();
+  public Timer getPredicates = new Timer();
+  public Timer makeAnd = new Timer();
+
   @Override
   public Collection<? extends AbstractState> getAbstractSuccessors(AbstractState pElement,
       Precision pPrecision, CFAEdge edge) throws CPATransferException, InterruptedException {
 
     postTimer.start();
     try {
-
       PredicateAbstractState element = (PredicateAbstractState) pElement;
       CFANode loc = edge.getSuccessor();
 
@@ -138,19 +143,29 @@ public class PredicateTransferRelation implements TransferRelation {
       if (element.getAbstractionFormula().isFalse()) { return Collections.emptySet(); }
 
       // calculate strongest post
-      /*PathFormula pathFormula = convertEdgeToPathFormula(element.getPathFormula(), edge);
+      PathFormula oldPathFormula = element.getPathFormula();//.clone(SSAMap.emptySSAMap());
+      Pair<PathFormula, ErrorConditions> edgeResult = convertEdgeToPathFormula(oldPathFormula, edge);
+      //timer.start();
+      PathFormula pathFormula = edgeResult.getFirst();
+      ErrorConditions conditions = edgeResult.getSecond();//new ErrorConditions(bfmgr);
+      //PathFormula pathFormula = convertEdgeToPathFormula(element.getPathFormula(), edge);
       Collection<AbstractionPredicate> tmpPredicates = ((PredicatePrecision) pPrecision).getPredicates(loc, 0);
       final SSAMap ssa = pathFormula.getSsa();
+      formulaBuilding.start();
       BooleanFormula formula = formulaManager.buildFormula(pathFormula.getFormula());
+      formulaBuilding.stop();
+      getPredicates.start();
       Set<AbstractionPredicate> relevantPredicates = formulaManager.getRelevantPredicates(tmpPredicates, formula, ssa);
-      if (relevantPredicates.size() == 0) {
-        pathFormula = pathFormulaManager.makeEmptyPathFormula().clone(ssa);
-      }*/
-      Pair<PathFormula, ErrorConditions> edgeResult = convertEdgeToPathFormula(element.getPathFormula(), edge);
-      PathFormula pathFormula = edgeResult.getFirst();
-      ErrorConditions conditions = edgeResult.getSecond();
+      getPredicates.stop();
+      if (relevantPredicates.size() == 0 && !bfmgr.isFalse(formula)) {
+        pathFormula = pathFormulaManager.makeEmptyPathFormula(oldPathFormula);
+      } else {
+        if (edge instanceof CFunctionReturnEdge) {
+          System.out.println("Return from " + edge.getPredecessor().getFunctionName() + ", path formula: " + pathFormula);
+        }
+      }
+      //System.out.println("Line " + edge.getLineNumber() + ", New path formula is" + pathFormula);
       logger.log(Level.ALL, "New path formula is", pathFormula);
-
       // check whether to do abstraction
       boolean doAbstraction = blk.isBlockEnd(edge, pathFormula);
 
@@ -170,9 +185,10 @@ public class PredicateTransferRelation implements TransferRelation {
 
       List<PredicateAbstractState> newStates = new ArrayList<>(2);
 
+      makeAnd.start();
       if (checkValidDeref && !bfmgr.isFalse(invalidDerefCondition)) {
         logger.log(Level.ALL, "Adding invalid-deref condition", invalidDerefCondition);
-        PathFormula targetPathFormula = pathFormulaManager.makeAnd(edgeResult.getFirst(), invalidDerefCondition);
+        PathFormula targetPathFormula = pathFormulaManager.makeAnd(pathFormula, invalidDerefCondition);
         newStates.addAll(createState(element, targetPathFormula, loc, doAbstraction,
             ViolatedProperty.VALID_DEREF));
 
@@ -182,7 +198,7 @@ public class PredicateTransferRelation implements TransferRelation {
 
       if (checkValidFree && !bfmgr.isFalse(invalidFreeCondition)) {
         logger.log(Level.ALL, "Adding invalid-free condition", invalidFreeCondition);
-        PathFormula targetPathFormula = pathFormulaManager.makeAnd(edgeResult.getFirst(), invalidFreeCondition);
+        PathFormula targetPathFormula = pathFormulaManager.makeAnd(pathFormula, invalidFreeCondition);
         newStates.addAll(createState(element, targetPathFormula, loc, doAbstraction,
             ViolatedProperty.VALID_FREE));
 
@@ -191,9 +207,12 @@ public class PredicateTransferRelation implements TransferRelation {
       }
 
       newStates.addAll(createState(element, pathFormula, loc, doAbstraction, null));
+      makeAnd.stop();
       return newStates;
     } finally {
       postTimer.stop();
+      //timer.stop();
+      //System.out.println("TransferRelation: " + postTimer.getSumTime() + ", " + timer.getSumTime());
     }
   }
 
@@ -257,6 +276,7 @@ public class PredicateTransferRelation implements TransferRelation {
       // compute new pathFormula with the operation on the edge
       return pathFormulaManager.makeAndWithErrorConditions(pathFormula, edge);
     } finally {
+      //System.out.println("convertEdge: " + pathFormulaTimer.getSumTime());
       pathFormulaTimer.stop();
     }
   }

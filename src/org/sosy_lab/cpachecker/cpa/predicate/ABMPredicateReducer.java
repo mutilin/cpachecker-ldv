@@ -310,9 +310,9 @@ public class ABMPredicateReducer implements Reducer {
 
     @Override
     public Set<AbstractionPredicate> getPredicates(CFANode loc, Integer locInstance) {
-      if (!context.getNodes().contains(loc)) {
+      /*if (!context.getNodes().contains(loc)) {
         logger.log(Level.WARNING, context, "was left in an unexpected way. Analysis might be unsound.");
-      }
+      }*/
 
       if (evaluatedPredicateMap != null) {
         Set<AbstractionPredicate> result = evaluatedPredicateMap.get(loc);

@@ -200,6 +200,18 @@ public class SSAMap implements Serializable {
         return ssa;
       }
 
+       /*ssa = new SSAMap(
+          PathCopyingPersistentTreeMap.<String, Integer>of(),
+          0,
+          ImmutableMultiset.<Pair<String, FormulaList>>of(),
+          PathCopyingPersistentTreeMap.<String, CType>of(),
+          ImmutableMap.<Pair<String, FormulaList>, CType>of());
+     PersistentSortedMap<String, Integer> tmpVars = vars;
+      for (String name : vars.keySet()) {
+        if (!name.equals("mtxCheckSignal::code")) {
+          tmpVars = tmpVars.removeAndCopy(name);
+        }
+      }*/
       ssa = new SSAMap(vars, varsHashCode,
                        Objects.firstNonNull(funcsBuilder, ssa.funcs),
                        varTypes,
