@@ -281,11 +281,12 @@ public class LockStatisticsLock {
    */
   public int norm() {
     int result = 0;
-    if (name.equals("")) {
+    if (name != null && name.equals("")) {
       result -= 10;
     }
     for (AccessPoint point : accessPoints) {
-      result += point.getCallstack().getDepth();
+      CallstackState state = (point == null ? null : point.getCallstack());
+      result += (state == null ? 0 : state.getDepth());
     }
     return result;
   }
