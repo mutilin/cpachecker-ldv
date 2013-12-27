@@ -375,7 +375,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
 
     if (d < lock.maxLock) {
       newElement.add(lock.lockName, lineNumber, callstack, reducedCallstack, variable, logger);
-    }/* else {
+    } else {
       List<AccessPoint> access = newElement.findLock(lock.lockName, variable).getAccessPoints();
       StringBuilder message = new StringBuilder();
       message.append("Try to lock " + lock.lockName + " more, than " + lock.maxLock + " in " + lineNumber + " line. Previous were in ");
@@ -384,7 +384,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
       }
       message.delete(message.length() - 2, message.length());
       logger.log(Level.WARNING, message.toString());
-    }*/
+    }
   }
 
   private void processSetLevel(LockStatisticsState newElement, LockStatisticsPrecision precision, CallstackState reducedCallstack, int lineNumber, int level, LockInfo lock) {

@@ -47,7 +47,7 @@ import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
-import org.sosy_lab.cpachecker.cfa.model.c.CFunctionReturnEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Targetable.ViolatedProperty;
@@ -149,6 +149,9 @@ public class PredicateTransferRelation implements TransferRelation {
       PathFormula pathFormula = edgeResult.getFirst();
       ErrorConditions conditions = edgeResult.getSecond();//new ErrorConditions(bfmgr);
       //PathFormula pathFormula = convertEdgeToPathFormula(element.getPathFormula(), edge);
+      if (edge instanceof CFunctionCallEdge && ((CFunctionCallEdge)edge).getSuccessor().getFunctionName().equals("lockreset")) {
+        pathFormula = pathFormulaManager.makeEmptyPathFormula();
+      }
       Collection<AbstractionPredicate> tmpPredicates = ((PredicatePrecision) pPrecision).getPredicates(loc, 0);
       final SSAMap ssa = pathFormula.getSsa();
       formulaBuilding.start();
@@ -160,9 +163,9 @@ public class PredicateTransferRelation implements TransferRelation {
       if (relevantPredicates.size() == 0 && !bfmgr.isFalse(formula)) {
         pathFormula = pathFormulaManager.makeEmptyPathFormula(oldPathFormula);
       } else {
-        if (edge instanceof CFunctionReturnEdge) {
+        /*if (edge instanceof CFunctionReturnEdge) {
           System.out.println("Return from " + edge.getPredecessor().getFunctionName() + ", path formula: " + pathFormula);
-        }
+        }*/
       }
       //System.out.println("Line " + edge.getLineNumber() + ", New path formula is" + pathFormula);
       logger.log(Level.ALL, "New path formula is", pathFormula);
