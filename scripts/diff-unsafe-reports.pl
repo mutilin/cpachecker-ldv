@@ -52,7 +52,11 @@ sub scan {
 			chomp($type);
 			chomp($dereference);
 			chomp($name);
-			push(@set, {'type' => $type, 'dereference' => $dereference, 'name' => $name});
+			if ($name =~ m/.+ \**\w((\w|_|\[|\])+)$/) {
+				push(@set, {'type' => $type, 'dereference' => $dereference, 'name' => $1, 'full_name' => $name});
+			} else {
+				push(@set, {'type' => $type, 'dereference' => $dereference, 'name' => $name, 'full_name' => $name});
+			}
 		}
 	}
 	return \@set;
@@ -111,9 +115,9 @@ foreach my $old_var (@$old_variables) {
 
 print "New unsafes:\n";
 foreach my $var (@new_unsafes) {
-	print "  $var->{'name'}\n";
+	print "  $var->{'full_name'}\n";
 }
 print "Deleted unsafes:\n";
 foreach my $var (@deleted_unsafes) {
-	print "  $var->{'name'}\n";
+	print "  $var->{'full_name'}\n";
 }
