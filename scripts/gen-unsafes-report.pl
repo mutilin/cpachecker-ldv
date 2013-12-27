@@ -109,22 +109,22 @@ while (<$visualize_fh>) {
 		$current_varname =~ s/\.\.//g;
 		if ($line =~ /^###/) {
 			if ( $pointer > 0) {
-				$current_fname = "pointer/$current_varname".$pointer.".tmp";
+				$current_fname = "pointer/$current_varname".$pointer;
 			} else {
-				$current_fname = "struct/$current_varname.tmp";
+				$current_fname = "struct/$current_varname";
 			}
 		} elsif ($line =~ /^##(.+)/) {
 			my $funcName = $1;
 			if ( $pointer > 0) {
-				$current_fname = "pointer/$current_varname".$pointer."_".$funcName.".tmp";
+				$current_fname = "pointer/$current_varname".$pointer."_".$funcName;
 			} else {
-				$current_fname = "local/$current_varname"."_".$funcName.".tmp";
+				$current_fname = "local/$current_varname"."_".$funcName;
 			}
 		} elsif ($line =~ /^#/) {
 			if ( $pointer > 0) {
-				$current_fname = "pointer/$current_varname".$pointer.".tmp";
+				$current_fname = "pointer/$current_varname".$pointer;
 			} else {
-				$current_fname = "global/$current_varname.tmp";
+				$current_fname = "global/$current_varname";
 			}
 		}
 		push(@{$unsafe_list{$current_fname}}, $current_varname_title);
@@ -137,8 +137,7 @@ while (<$visualize_fh>) {
 # Create only list of unsafes
 foreach my $current_fname(sort keys %unsafe_list)
 {
-	$current_fname =~ m/(.+)\.tmp/;
-	print ($html_result "<li><a href = \"$1.html\">$1</a></li>");
+	print ($html_result "<li><a href = \"$current_fname.html\">$current_fname</a></li>");
 }
 
 print "General statistics is generated\n";
