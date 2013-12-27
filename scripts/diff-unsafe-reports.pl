@@ -48,10 +48,10 @@ sub scan {
 		$type = $_;
 		if ($type =~ /^#/) {
 			$dereference = <$stream>;
-        	        $name = <$stream>;
-                	chomp($type);
-              		chomp($dereference);
-                	chomp($name);
+			$name = <$stream>;
+			chomp($type);
+			chomp($dereference);
+			chomp($name);
 			if ($name =~ m/.+ \**\w((\w|_|\[|\])+)$/) {
 				push(@set, {'type' => $type, 'dereference' => $dereference, 'name' => $1, 'full_name' => $name});
 			} else {
