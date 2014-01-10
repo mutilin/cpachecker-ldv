@@ -73,8 +73,8 @@ GetOptions(
         'new=s'=>\$new_file,
         ) or usage("Unrecognized options!");
 
-defined($old_file) or usage("Old unsafe_rawdata file was't defined");
-defined($new_file) or usage("New unsafe_rawdata file was't defined");
+defined($old_file) && ( -e $old_file) or usage("Old unsafe_rawdata was't found");
+defined($new_file) && ( -e $new_file) or usage("New unsafe_rawdata was't found");
 
 my $new_unsafes_output = $output."/new-unsafes";
 my $deleted_unsafes_output = $output."/deleted-unsafes";
