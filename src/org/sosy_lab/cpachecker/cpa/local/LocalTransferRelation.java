@@ -158,7 +158,7 @@ public class LocalTransferRelation implements TransferRelation {
     if (returnExpression != null) {
       int dereference = findDereference(returnExpression.getExpressionType());
       if (dereference > 0) {
-        AbstractIdentifier returnId = createId(returnExpression, 0);
+        AbstractIdentifier returnId = createId(returnExpression, dereference);
         DataType type = pSuccessor.getType(returnId);
         pSuccessor.set(ReturnIdentifier.getInstance(), type);
       }
@@ -197,7 +197,7 @@ public class LocalTransferRelation implements TransferRelation {
     String funcName = right.getFunctionNameExpression().toASTString();
     if (allocate != null && allocate.contains(funcName) && leftId != null) {
       if (!leftId.isGlobal()) {
-        pSuccessor.set(leftId, DataType.LOCAL);
+        pSuccessor.forceSetLocal(leftId);
       }
     }
   }
