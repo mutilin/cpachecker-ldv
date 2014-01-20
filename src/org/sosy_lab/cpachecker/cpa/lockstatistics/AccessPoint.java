@@ -50,7 +50,7 @@ public class AccessPoint {
 
   AccessPoint(LineInfo l, CallstackState stack, CallstackState reduced) {
     line = l;
-    callstack = stack;
+    callstack = (stack == null ? reduced : stack); //It can be, if ABM isn't include in configuration
     reducedCallstack = reduced;
     isNewPoint = true;
   }
