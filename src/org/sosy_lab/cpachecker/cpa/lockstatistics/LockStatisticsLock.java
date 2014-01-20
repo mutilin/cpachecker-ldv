@@ -276,14 +276,11 @@ public class LockStatisticsLock {
 
   /**
    * This function measures the norm of lock. It is useful to compare states, consists from variety of locks.
-   * But, strictly speaking, it isn't norm, it can be less than zero. So, it is only way to compare locks.
+   * Now it considers only depth of callstack.
    * @return result in some metric
    */
   public int norm() {
     int result = 0;
-    if (name != null && name.equals("")) {
-      result -= 10;
-    }
     for (AccessPoint point : accessPoints) {
       CallstackState state = (point == null ? null : point.getCallstack());
       result += (state == null ? 0 : state.getDepth());
