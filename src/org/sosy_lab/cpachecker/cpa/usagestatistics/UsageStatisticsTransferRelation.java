@@ -68,6 +68,7 @@ import org.sosy_lab.cpachecker.cpa.callstack.CallstackTransferRelation;
 import org.sosy_lab.cpachecker.cpa.local.LocalState;
 import org.sosy_lab.cpachecker.cpa.local.LocalState.DataType;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsPrecision;
+import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.BinderFunctionInfo.LinkerInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.EdgeInfo.EdgeType;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
@@ -162,6 +163,11 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       return;
     }
 
+    if (checkAbstraction(oldState)) {
+      logger.log(Level.FINEST, oldState + " is considered to be unreachable");
+      return;
+    }
+
     if (checkFunciton(pCfaEdge, skippedfunctions)) {
       callstackTransfer.setFlag();
       //Find right summary edge
@@ -185,6 +191,14 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
         results.add(newState);
       }
     }
+  }
+
+  private boolean checkAbstraction(UsageStatisticsState pOldState) {
+    PredicateAbstractState state = AbstractStates.extractStateByType(pOldState, PredicateAbstractState.class);
+    if (state != null) {
+      return state.getAbstractionFormula().isFalse();
+    }
+    return false;
   }
 
   private boolean checkFunciton(CFAEdge pCfaEdge, Set<String> functionSet) {
@@ -468,6 +482,10 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     }
 
     CallstackState fullCallstack = pPrecision.retrieveWrappedPrecision(LockStatisticsPrecision.class).getPreciseState();
+    if (fullCallstack == null) {
+      //No ABM, so get real callstack
+      fullCallstack = AbstractStates.extractStateByType(state, CallstackState.class);
+    }
     statistics.add(singleId, access, state, eType, line, fullCallstack);
   }
 
