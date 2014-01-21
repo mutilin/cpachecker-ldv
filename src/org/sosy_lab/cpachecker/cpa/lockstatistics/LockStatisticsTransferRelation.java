@@ -267,6 +267,9 @@ public class LockStatisticsTransferRelation implements TransferRelation
           if (lock != null) {
             processSetLevel(newElement, precision, state, expression.getFileLocation().getStartingLineNumber(), level, lock);
           }
+        } else {
+          logger.log(Level.WARNING, "Lock level isn't numeric constant: " + expression.toASTString()
+              + "(line " + expression.getFileLocation().getStartingLineNumber() + ")");
         }
       }
 
