@@ -155,7 +155,7 @@ public class CToFormulaWithUFConverter extends CtoFormulaConverter {
   }
 
   Formula makeBaseAddressOfTerm(final Formula address) {
-    return ffmgr.createFuncAndCall("*__BASE_ADDRESS_OF__", pointerType, ImmutableList.of(address));
+    return bfmgr.makeBoolean(true); //makecreateFuncAndCall("*__BASE_ADDRESS_OF__", pointerType, ImmutableList.of(address));
   }
 
   static String getReturnVarName() {
@@ -287,8 +287,8 @@ public class CToFormulaWithUFConverter extends CtoFormulaConverter {
                          final SSAMapBuilder ssa,
                          final ErrorConditions errorConditions,
                          final PointerTargetSetBuilder pts) {
-    errorConditions.addInvalidDerefCondition(fmgr.makeEqual(address, nullPointer));
-    errorConditions.addInvalidDerefCondition(fmgr.makeLessThan(address, makeBaseAddressOfTerm(address), false));
+   // errorConditions.addInvalidDerefCondition(fmgr.makeEqual(address, nullPointer));
+   // errorConditions.addInvalidDerefCondition(fmgr.makeLessThan(address, makeBaseAddressOfTerm(address), false));
     return makeDerefereceWithoutError(type, address, ssa, errorConditions, pts);
   }
 
@@ -887,9 +887,11 @@ public class CToFormulaWithUFConverter extends CtoFormulaConverter {
   }
 
   private Pair<PathFormula, ErrorConditions> makeAnd(final PathFormulaWithUF oldFormula, final CFAEdge edge) throws CPATransferException {
+    makeAnd.start();
     ErrorConditions errorConditions = new ErrorConditions(bfmgr);
 
     if (edge.getEdgeType() == CFAEdgeType.BlankEdge) {
+      makeAnd.stop();
       return Pair.<PathFormula, ErrorConditions>of(oldFormula, errorConditions);
     }
 
@@ -897,15 +899,20 @@ public class CToFormulaWithUFConverter extends CtoFormulaConverter {
     final SSAMapBuilder ssa = oldFormula.getSsa().builder();
     final Constraints constraints = new Constraints(bfmgr);
     final PointerTargetSetBuilder pts = oldFormula.getPointerTargetSet().builder();
-
+    Timer1.start();
     BooleanFormula edgeFormula = createFormulaForEdge(edge, function, ssa, constraints, errorConditions, pts);
+    Timer1.stop();
+    Timer2.start();
     edgeFormula = bfmgr.and(edgeFormula, constraints.get());
-
+    Timer2.stop();
     final SSAMap newSsa = ssa.build();
     final PointerTargetSet newPts = pts.build();
+    Timer3.start();
     final BooleanFormula newFormula = bfmgr.and(oldFormula.getFormula(), edgeFormula);
+    Timer3.stop();
     int newLength = oldFormula.getLength() + 1;
     PathFormula result = new PathFormulaWithUF(newFormula, newSsa, newPts, newLength);
+    makeAnd.stop();
     return Pair.of(result, errorConditions);
   }
 
@@ -1033,7 +1040,7 @@ public class CToFormulaWithUFConverter extends CtoFormulaConverter {
 
     Formula address = makeConstant(PointerTargetSet.getBaseName(declaration.getQualifiedName()),
                                    PointerTargetSet.getBaseType(declarationType), pts);
-    constraints.addConstraint(fmgr.makeEqual(makeBaseAddressOfTerm(address), address));
+    //constraints.addConstraint(fmgr.makeEqual(makeBaseAddressOfTerm(address), address));
 
     // if there is an initializer associated to this variable,
     // take it into account
@@ -1092,8 +1099,9 @@ public class CToFormulaWithUFConverter extends CtoFormulaConverter {
                                                                        initializer,
                                                                        !declaration.isGlobal());
       assert initializerList instanceof List : "Wrong initializer";
-      return statementVisitor.visitComplexInitialization(declaration,
-                                                         (List<?>) initializerList);
+      return bfmgr.makeBoolean(true);
+//      statementVisitor.visitComplexInitialization(declaration,
+//                                                         (List<?>) initializerList);
     } else {
       throw new UnrecognizedCCodeException("Unrecognized initializer", declarationEdge, initializer);
     }
@@ -1194,8 +1202,10 @@ public class CToFormulaWithUFConverter extends CtoFormulaConverter {
       final String function, final SSAMapBuilder ssa, final Constraints constraints,
       final ErrorConditions errorConditions,
       final PointerTargetSetBuilder pts) throws CPATransferException {
-
+    createEdge.start();
+    try {
     if (edge.getEdgeType() == CFAEdgeType.MultiEdge) {
+      Multi.start();
       List<BooleanFormula> multiEdgeFormulas = new ArrayList<>(((MultiEdge)edge).getEdges().size());
 
       // unroll the MultiEdge
@@ -1217,21 +1227,25 @@ public class CToFormulaWithUFConverter extends CtoFormulaConverter {
 
     switch (edge.getEdgeType()) {
     case StatementEdge: {
+      Statement.start();
       final CStatementEdge statementEdge = (CStatementEdge) edge;
       return statementEdge.getStatement().accept(statementVisitor);
     }
 
     case ReturnStatementEdge: {
+      ReturnStatement.start();
       final CReturnStatementEdge returnEdge = (CReturnStatementEdge) edge;
       return makeReturn(returnEdge.getExpression(), returnEdge, statementVisitor);
     }
 
     case DeclarationEdge: {
+      Declaration.start();
       final CDeclarationEdge declarationEdge = (CDeclarationEdge) edge;
       return makeDeclaration(declarationEdge, constraints, pts, statementVisitor);
     }
 
     case AssumeEdge: {
+      Assume.start();
       return makeAssume((CAssumeEdge) edge, statementVisitor);
     }
 
@@ -1241,10 +1255,12 @@ public class CToFormulaWithUFConverter extends CtoFormulaConverter {
     }
 
     case FunctionCallEdge: {
+      FunctionCall.start();
       return makeFunctionCall((CFunctionCallEdge) edge, statementVisitor);
     }
 
     case FunctionReturnEdge: {
+      FunctionReturn.start();
       // get the expression from the summary edge
       final CFunctionSummaryEdge summaryEdge = ((CFunctionReturnEdge) edge).getSummaryEdge();
       return makeExitFunction(summaryEdge, statementVisitor);
@@ -1252,6 +1268,16 @@ public class CToFormulaWithUFConverter extends CtoFormulaConverter {
 
     default:
       throw new UnrecognizedCFAEdgeException(edge);
+    }
+    } finally {
+      Statement.stop();
+      ReturnStatement.stop();
+      Declaration.stop();
+      Assume.stop();
+      FunctionCall.stop();
+      FunctionReturn.stop();
+      Multi.stop();
+      createEdge.stop();
     }
   }
 
