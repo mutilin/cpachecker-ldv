@@ -37,17 +37,20 @@ class UsageStatisticsState extends AbstractSingleWrapperState  {
   /* Boilerplate code to avoid serializing this class */
 
   private static final long serialVersionUID = -898577877284268426L;
+  private boolean target;
 
   private final Map<AbstractIdentifier, AbstractIdentifier> variableBindingRelation;
 
   public UsageStatisticsState(AbstractState pWrappedElement) {
     super(pWrappedElement);
     variableBindingRelation = new HashMap<>();
+    target = false;
   }
 
-  private UsageStatisticsState(AbstractState pWrappedElement, Map<AbstractIdentifier, AbstractIdentifier> map) {
+  private UsageStatisticsState(AbstractState pWrappedElement, Map<AbstractIdentifier, AbstractIdentifier> map, boolean pTarget) {
     super(pWrappedElement);
     variableBindingRelation = new HashMap<>(map);
+    target= pTarget;
   }
 
   public boolean containsLinks(AbstractIdentifier id) {
@@ -93,11 +96,11 @@ class UsageStatisticsState extends AbstractSingleWrapperState  {
 
   @Override
   public UsageStatisticsState clone() {
-    return new UsageStatisticsState(this.getWrappedState(), this.variableBindingRelation);
+    return new UsageStatisticsState(this.getWrappedState(), this.variableBindingRelation, this.target);
   }
 
   public UsageStatisticsState clone(AbstractState pWrappedState) {
-    return new UsageStatisticsState(pWrappedState, this.variableBindingRelation);
+    return new UsageStatisticsState(pWrappedState, this.variableBindingRelation, this.target);
   }
 
   @Override
@@ -161,6 +164,20 @@ class UsageStatisticsState extends AbstractSingleWrapperState  {
     }
 
     return true;
+  }
+
+  @Override
+  public boolean isTarget() {
+    return target;
+  }
+
+  public void setTarget() {
+    target = true;
+  }
+
+  @Override
+  public ViolatedProperty getViolatedProperty() throws IllegalStateException {
+    return ViolatedProperty.OTHER;
   }
 
 }

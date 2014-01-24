@@ -91,7 +91,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   private boolean printAllUnsafeUsages = false;
 
   private final LogManager logger;
-  private final Set<SingleIdentifier> unsafes = new HashSet<>();
+  public final Set<SingleIdentifier> unsafes = new HashSet<>();
 
   public Timer transferRelationTimer = new Timer();
   public Timer printStatisticsTimer = new Timer();

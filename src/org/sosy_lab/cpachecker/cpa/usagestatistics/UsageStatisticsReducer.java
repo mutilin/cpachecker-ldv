@@ -51,7 +51,11 @@ public class UsageStatisticsReducer implements Reducer {
     UsageStatisticsState funRootState = (UsageStatisticsState)pRootElement;
     UsageStatisticsState funReducedState = (UsageStatisticsState)pReducedElement;
     AbstractState exp = wrappedReducer.getVariableExpandedState(funRootState.getWrappedState(), pReducedContext, funReducedState.getWrappedState());
-    return funRootState.clone(exp);
+    UsageStatisticsState result = funRootState.clone(exp);
+    if (funReducedState.isTarget()) {
+      result.setTarget();
+    }
+    return result;
   }
 
   @Override

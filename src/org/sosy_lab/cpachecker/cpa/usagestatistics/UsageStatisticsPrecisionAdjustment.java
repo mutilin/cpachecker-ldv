@@ -38,9 +38,11 @@ import com.google.common.base.Preconditions;
 class UsageStatisticsPrecisionAdjustment implements PrecisionAdjustment {
 
   private final PrecisionAdjustment wrappedPrecAdjustment;
+  UsageStatisticsCPAStatistics statistics;
 
-  public UsageStatisticsPrecisionAdjustment(PrecisionAdjustment pWrappedPrecAdjustment) {
+  public UsageStatisticsPrecisionAdjustment(UsageStatisticsCPAStatistics pStatistics, PrecisionAdjustment pWrappedPrecAdjustment) {
     wrappedPrecAdjustment = pWrappedPrecAdjustment;
+    statistics = pStatistics;
   }
 
   @Override
@@ -68,9 +70,17 @@ class UsageStatisticsPrecisionAdjustment implements PrecisionAdjustment {
       return Triple.of(pElement, oldPrecision, action);
     }
 
-    AbstractState resultElement = new UsageStatisticsState(newElement);
+    UsageStatisticsState resultElement = new UsageStatisticsState(newElement);
 
+    if (!statistics.unsafes.isEmpty()) {
+      action = Action.BREAK;
+      resultElement.setTarget();
+      //statistics.unsafes.clear();
+      /*for (PredicateAbstractState state : PredicateTransferRelation.tmpList.keySet()) {
+        System.out.println(PredicateTransferRelation.tmpList.get(state));
+      }*/
+    }
     UsageStatisticsPrecision newPrecision = ((UsageStatisticsPrecision)oldPrecision).clone(newWrappedPrecision);
-    return Triple.of(resultElement, (Precision)newPrecision, action);
+    return Triple.of((AbstractState)resultElement, (Precision)newPrecision, action);
   }
 }

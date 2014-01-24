@@ -89,7 +89,8 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
     this.mergeOperator = initializeMergeOperator();
     this.stopOperator = initializeStopOperator();
 
-    this.precisionAdjustment = new UsageStatisticsPrecisionAdjustment(pCpa.getPrecisionAdjustment());
+    this.statistics = new UsageStatisticsCPAStatistics(pConfig, pLogger);
+    this.precisionAdjustment = new UsageStatisticsPrecisionAdjustment(statistics, pCpa.getPrecisionAdjustment());
     if (pCpa instanceof ConfigurableProgramAnalysisWithABM) {
       Reducer wrappedReducer = ((ConfigurableProgramAnalysisWithABM)pCpa).getReducer();
       if (wrappedReducer != null) {
@@ -100,7 +101,6 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
     } else {
       reducer = null;
     }
-    this.statistics = new UsageStatisticsCPAStatistics(pConfig, pLogger);
     this.transferRelation = new UsageStatisticsTransferRelation(pCpa.getTransferRelation(), pConfig, pLogger, statistics
         , (CallstackTransferRelation) (CPAs.retrieveCPA(this, CallstackCPA.class)).getTransferRelation());
 
