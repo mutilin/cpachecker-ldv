@@ -29,8 +29,6 @@ import static org.sosy_lab.cpachecker.util.statistics.StatisticsUtils.*;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.Writer;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.IdentityHashMap;
@@ -38,13 +36,15 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.logging.Level;
 
-import org.sosy_lab.common.Files;
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.Timer;
 import org.sosy_lab.common.configuration.FileOption;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
+import org.sosy_lab.common.io.Files;
+import org.sosy_lab.common.io.Path;
+import org.sosy_lab.common.io.Paths;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
@@ -226,7 +226,7 @@ class PredicateCPAStatistics extends AbstractStatistics {
 
       int allDistinctPreds = absmgr.getNumberOfPredicates();
 
-      if (result == Result.SAFE && exportInvariants && invariantsFile != null) {
+      if (result == Result.TRUE && exportInvariants && invariantsFile != null) {
         loopInvariantsWriter.exportLoopInvariants(invariantsFile, reached);
       }
 

@@ -27,8 +27,9 @@ import static com.google.common.base.Strings.isNullOrEmpty;
 
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+
+import org.sosy_lab.common.io.Path;
+import org.sosy_lab.common.io.Paths;
 
 /**
  * Helper class for loading native libraries.
@@ -144,6 +145,7 @@ public class NativeLibraries {
       } catch (URISyntaxException e) {
         throw new AssertionError(e);
       }
+
       nativePath = Paths.get(pathToJar).getParent().resolve(Paths.get("lib", "native", arch + "-" + os));
     }
     return nativePath;

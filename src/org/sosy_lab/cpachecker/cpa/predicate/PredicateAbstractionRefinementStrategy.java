@@ -28,19 +28,15 @@ import static org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState.getPr
 import static org.sosy_lab.cpachecker.cpa.predicate.PredicatePrecision.*;
 import static org.sosy_lab.cpachecker.util.AbstractStates.extractLocation;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.Writer;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Level;
 
-import org.sosy_lab.common.Files;
 import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.Configuration;
@@ -50,6 +46,9 @@ import org.sosy_lab.common.configuration.IntegerOption;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
+import org.sosy_lab.common.io.Files;
+import org.sosy_lab.common.io.Path;
+import org.sosy_lab.common.io.Paths;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
@@ -137,7 +136,7 @@ public class PredicateAbstractionRefinementStrategy extends RefinementStrategy {
   @Option(name="refinement.dumpPredicatesFile",
       description="File name for the predicates dumped after refinements.")
   @FileOption(Type.OUTPUT_FILE)
-  private File dumpPredicatesFile = new File("refinement%04d-predicates.prec");
+  private Path dumpPredicatesFile = Paths.get("refinement%04d-predicates.prec");
 
   private int refinementCount = 0; // this is modulo restartAfterRefinements
 
@@ -174,7 +173,7 @@ public class PredicateAbstractionRefinementStrategy extends RefinementStrategy {
   private class Stats implements Statistics {
     @Override
     public String getName() {
-      return "Predicate Abstraction Refiner";
+      return "Predicate-Abstraction Refiner";
     }
 
     @Override
