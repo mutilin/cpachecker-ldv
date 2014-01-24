@@ -318,6 +318,7 @@ public final class InterpolationManager {
 
     } finally {
       cexAnalysisTimer.stop();
+      System.out.println("Build Counterexample Trace: " + cexAnalysisTimer.getSumTime());
     }
   }
 
@@ -568,7 +569,7 @@ public final class InterpolationManager {
 //          entryPoints.pop();
 //        }
     }
-
+    System.out.println("Interpolant time: " + getInterpolantTimer.getSumTime() + ", " + itpGroupsIds.size() + " times");
     return interpolants;
   }
 
@@ -786,6 +787,7 @@ public final class InterpolationManager {
 
       } finally {
         satCheckTimer.stop();
+        System.out.println("Sat check: " + satCheckTimer.getSumTime());
       }
 
       logger.log(Level.FINEST, "Counterexample trace is", (spurious ? "infeasible" : "feasible"));
@@ -925,7 +927,6 @@ public final class InterpolationManager {
           }
         }
       }
-
       assert Iterables.elementsEqual(from(traceFormulas).transform(Pair.getProjectionToFirst()),
                                       from(currentlyAssertedFormulas).transform(Pair.getProjectionToFirst()));
 

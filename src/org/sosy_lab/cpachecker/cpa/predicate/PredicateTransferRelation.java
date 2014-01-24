@@ -32,7 +32,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.logging.Level;
 
 import javax.annotation.Nullable;
@@ -47,7 +46,6 @@ import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
-import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Targetable.ViolatedProperty;
@@ -59,14 +57,12 @@ import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCFAEdgeException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.predicates.AbstractionFormula;
-import org.sosy_lab.cpachecker.util.predicates.AbstractionPredicate;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.PathFormulaManager;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.view.BooleanFormulaManagerView;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.view.FormulaManagerView;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.ErrorConditions;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormula;
-import org.sosy_lab.cpachecker.util.predicates.pathformula.SSAMap;
 
 /**
  * Transfer relation for symbolic predicate abstraction. First it computes
@@ -149,7 +145,7 @@ public class PredicateTransferRelation implements TransferRelation {
       PathFormula pathFormula = edgeResult.getFirst();
       ErrorConditions conditions = edgeResult.getSecond();//new ErrorConditions(bfmgr);
       //PathFormula pathFormula = convertEdgeToPathFormula(element.getPathFormula(), edge);
-      if (edge instanceof CFunctionCallEdge && ((CFunctionCallEdge)edge).getSuccessor().getFunctionName().equals("lockreset")) {
+      /*if (edge instanceof CFunctionCallEdge && ((CFunctionCallEdge)edge).getSuccessor().getFunctionName().equals("lockreset")) {
         pathFormula = pathFormulaManager.makeEmptyPathFormula();
       }
       Collection<AbstractionPredicate> tmpPredicates = ((PredicatePrecision) pPrecision).getPredicates(loc, 0);
@@ -166,7 +162,7 @@ public class PredicateTransferRelation implements TransferRelation {
         /*if (edge instanceof CFunctionReturnEdge) {
           System.out.println("Return from " + edge.getPredecessor().getFunctionName() + ", path formula: " + pathFormula);
         }*/
-      }
+      //}
       //System.out.println("Line " + edge.getLineNumber() + ", New path formula is" + pathFormula);
       logger.log(Level.ALL, "New path formula is", pathFormula);
       // check whether to do abstraction

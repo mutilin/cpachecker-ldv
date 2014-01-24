@@ -40,6 +40,7 @@ import javax.annotation.Nullable;
 
 import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.Pair;
+import org.sosy_lab.common.Timer;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.FileOption;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
@@ -184,7 +185,11 @@ public class PredicateCPARefiner extends AbstractARGBasedRefiner implements Stat
     logger.log(Level.ALL, "Abstraction trace is", abstractionStatesTrace);
 
     // create list of formulas on path
+    Timer tmpTimer = new Timer();
+    tmpTimer.start();
     final List<BooleanFormula> formulas = getFormulasForPath(abstractionStatesTrace, allStatesTrace.getFirst().getFirst());
+    tmpTimer.stop();
+    System.out.println("Compute block formulas: " + tmpTimer.getSumTime());
     assert abstractionStatesTrace.size() == formulas.size();
 
     // build the counterexample
