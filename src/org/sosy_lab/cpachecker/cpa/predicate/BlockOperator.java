@@ -100,6 +100,10 @@ public class BlockOperator {
     CFANode succLoc = cfaEdge.getSuccessor();
     CFANode predLoc = cfaEdge.getPredecessor();
 
+    if (succLoc.getNumLeavingEdges() > 1 || succLoc.getNumEnteringEdges() > 1) {
+      return true;
+    }
+
     if (alwaysAndOnlyAtExplicitNodes) {
       assert (explicitAbstractionNodes != null);
       return explicitAbstractionNodes.contains(predLoc);
