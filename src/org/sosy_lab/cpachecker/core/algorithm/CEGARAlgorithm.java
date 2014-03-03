@@ -221,13 +221,13 @@ public class CEGARAlgorithm implements Algorithm, StatisticsProvider {
   public boolean run(ReachedSet reached) throws CPAException, InterruptedException {
     boolean isComplete        = true;
     int initialReachedSetSize = reached.size();
-    
+
     stats.totalTimer.start();
     try {
       boolean refinementSuccessful;
       do {
         refinementSuccessful = false;
-        
+
         // run algorithm
         isComplete &= algorithm.run(reached);
 
@@ -237,12 +237,18 @@ public class CEGARAlgorithm implements Algorithm, StatisticsProvider {
           refinementSuccessful = refine(reached);
 
           // assert that reached set is free of target states,
-          // if refinement was successful and initial reached set was empty (i.e. stopAfterError=true) 
+          // if refinement was successful and initial reached set was empty (i.e. stopAfterError=true)
           if (refinementSuccessful && initialReachedSetSize == 1) {
             assert !from(reached).anyMatch(IS_TARGET_STATE);
           }
         }
 
+          /*((ABMTransferRelation)(((CPAAlgorithm)algorithm).cpa).getTransferRelation()).clearCaches();
+          AbstractState firstState = reached.getFirstState();
+          Precision precision = reached.getPrecision(firstState);
+          Set<AbstractState> reachedStates = new HashSet<>(reached.asCollection());
+          reached.removeAll(reachedStates);
+          reached.add(firstState, precision);*/
       } while (refinementSuccessful);
 
     } finally {
