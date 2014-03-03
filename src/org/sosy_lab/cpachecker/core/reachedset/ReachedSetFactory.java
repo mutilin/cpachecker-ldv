@@ -33,12 +33,13 @@ import org.sosy_lab.cpachecker.core.waitlist.ExplicitSortedWaitlist;
 import org.sosy_lab.cpachecker.core.waitlist.ReversePostorderSortedWaitlist;
 import org.sosy_lab.cpachecker.core.waitlist.Waitlist;
 import org.sosy_lab.cpachecker.core.waitlist.Waitlist.WaitlistFactory;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.USReachedSet;
 
 @Options(prefix="analysis")
 public class ReachedSetFactory {
 
   private static enum ReachedSetType {
-    NORMAL, LOCATIONMAPPED, PARTITIONED
+    NORMAL, LOCATIONMAPPED, PARTITIONED, USAGESTATISTICS
   }
 
   @Option(name="traversal.order",
@@ -96,6 +97,9 @@ public class ReachedSetFactory {
 
     case LOCATIONMAPPED:
       return new LocationMappedReachedSet(waitlistFactory);
+
+    case USAGESTATISTICS:
+      return new USReachedSet(waitlistFactory);
 
     case NORMAL:
     default:
