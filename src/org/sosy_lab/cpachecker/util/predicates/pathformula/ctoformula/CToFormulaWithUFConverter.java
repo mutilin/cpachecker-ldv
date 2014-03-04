@@ -313,9 +313,6 @@ public class CToFormulaWithUFConverter extends CtoFormulaConverter {
   }
 
   boolean isRelevantVariable(final String function, final String name) {
-    boolean a = variableClassification.isPresent();
-    boolean b = options.ignoreIrrelevantVariables();
-    boolean c = variableClassification.get().getRelevantVariables().containsEntry(function, name);
     return !variableClassification.isPresent() ||
            !options.ignoreIrrelevantVariables() ||
            variableClassification.get().getRelevantVariables().containsEntry(function, name);
@@ -1272,12 +1269,6 @@ public class CToFormulaWithUFConverter extends CtoFormulaConverter {
 
     CType declarationType = PointerTargetSet.simplifyType(declaration.getType());
 
-    if (declaration.getName().equals("cputime_node")) {
-      System.out.println("cputime_node");
-    }
-    boolean b = isRelevantVariable(declaration.getQualifiedName());
-    boolean b2 = isAddressedVariable(declaration.getQualifiedName());
-
     if (!isRelevantVariable(declaration.getQualifiedName()) &&
         !isAddressedVariable(declaration.getQualifiedName())) {
       // The variable is unused
@@ -1333,7 +1324,7 @@ public class CToFormulaWithUFConverter extends CtoFormulaConverter {
       statementVisitor.declareSharedBase(declaration, false);
 
       final BooleanFormula result;
-      if (initializer != null) {
+      if (initializer != null && !declaration.isGlobal()) {
         final CExpressionAssignmentStatement assignment =
           new CExpressionAssignmentStatement(declaration.getFileLocation(),
                                              lhs,
@@ -1351,6 +1342,9 @@ public class CToFormulaWithUFConverter extends CtoFormulaConverter {
 
       return result;
     } else if (initializer instanceof CInitializerList) {
+      if (declaration.isGlobal()) {
+        return bfmgr.makeBoolean(true);
+      }
       /*final Object initializerList = statementVisitor.visitInitializer(declarationType,
                                                                        initializer,
                                                                        !declaration.isGlobal());
