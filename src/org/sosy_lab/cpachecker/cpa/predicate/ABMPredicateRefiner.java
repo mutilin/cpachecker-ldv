@@ -99,7 +99,7 @@ import com.google.common.collect.Lists;
  *
  * Here ^ means inheritance and -> means reference.
  */
-public final class ABMPredicateRefiner extends AbstractABMBasedRefiner implements StatisticsProvider {
+public class ABMPredicateRefiner extends AbstractABMBasedRefiner implements StatisticsProvider {
 
   private final ExtendedPredicateRefiner refiner;
 
@@ -200,7 +200,37 @@ public final class ABMPredicateRefiner extends AbstractABMBasedRefiner implement
         ssaRenamingTimer.stop();
       }
     }
+    /*private List<BooleanFormula> computeBlockFormulas(ARGState pRoot) throws CPATransferException {
 
+      Map<ARGState, PathFormula> formulas = new HashMap<>();
+      List<BooleanFormula> abstractionFormulas = Lists.newArrayList();
+     // Deque<ARGState> todo = new ArrayDeque<>();
+
+      // initialize
+      assert pRoot.getParents().isEmpty();
+      formulas.put(pRoot, pfmgr.makeEmptyPathFormula());
+      //todo.addAll(pRoot.getChildren());
+      ARGState current = pRoot, child;
+      PathFormula currentFormula = pfmgr.makeEmptyPathFormula();
+      // iterate over all elements in the ARG with BFS
+      while (current.getChildren().size() > 0) {
+        assert current.getChildren().size() == 1;
+        child = current.getChildren().iterator().next();
+
+        CFAEdge edge = current.getEdgeToChild(child);
+        currentFormula = pfmgr.makeAnd(currentFormula, edge);
+
+        current = child;
+        PredicateAbstractState predicateElement = extractStateByType(current, PredicateAbstractState.class);
+        if (predicateElement.isAbstractionState()) {
+          // abstraction element
+          abstractionFormulas.add(currentFormula.getFormula());
+          currentFormula = pfmgr.makeEmptyPathFormula(currentFormula);
+
+        }
+      }
+      return abstractionFormulas;
+    }*/
     private List<BooleanFormula> computeBlockFormulas(ARGState pRoot) throws CPATransferException {
 
       Map<ARGState, PathFormula> formulas = new HashMap<>();
