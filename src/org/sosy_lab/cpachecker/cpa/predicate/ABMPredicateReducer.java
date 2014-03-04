@@ -35,6 +35,7 @@ import org.sosy_lab.common.Timer;
 import org.sosy_lab.common.collect.PersistentMap;
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionEntryNode;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
@@ -49,8 +50,10 @@ import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormula;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.SSAMap;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.SSAMap.SSAMapBuilder;
 
+import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSetMultimap;
+import com.google.common.collect.Multimap;
 import com.google.common.collect.SetMultimap;
 
 
@@ -258,19 +261,19 @@ public class ABMPredicateReducer implements Reducer {
 
     private void computeView() {
       if (evaluatedPredicateMap == null) {
-        ReducedPredicatePrecision lExpandedPredicatePrecision = null;
+        /*ReducedPredicatePrecision lExpandedPredicatePrecision = null;
         if (expandedPredicatePrecision instanceof ReducedPredicatePrecision) {
           lExpandedPredicatePrecision = (ReducedPredicatePrecision) expandedPredicatePrecision;
-        }
+        }*/
 
         evaluatedGlobalPredicates =
             ImmutableSet.copyOf(relevantComputer.getRelevantPredicates(context,
                 rootPredicatePrecision.getGlobalPredicates()));
 
         ImmutableSetMultimap.Builder<CFANode, AbstractionPredicate> pmapBuilder = ImmutableSetMultimap.builder();
-        Set<CFANode> keySet =
-            lExpandedPredicatePrecision == null ? rootPredicatePrecision.getLocalPredicates().keySet()
-                : lExpandedPredicatePrecision.approximatePredicateMap().keySet();
+        Set<CFANode> keySet = rootPredicatePrecision.getLocalPredicates().keySet();
+           /* lExpandedPredicatePrecision == null ? rootPredicatePrecision.getLocalPredicates().keySet()
+                : lExpandedPredicatePrecision.approximatePredicateMap().keySet();*/
         for (CFANode node : keySet) {
           if (context.getNodes().contains(node)) {
             // TODO handle location-instance-specific predicates
@@ -300,12 +303,33 @@ public class ABMPredicateReducer implements Reducer {
     }
 
     @Override
+    public SetMultimap<String, AbstractionPredicate> getFunctionPredicates() {
+      return rootPredicatePrecision.getFunctionPredicates();
+    }
+
+    @Override
     public Set<AbstractionPredicate> getGlobalPredicates() {
       if (evaluatedGlobalPredicates != null) {
         return evaluatedGlobalPredicates;
       } else {
         return relevantComputer.getRelevantPredicates(context, rootPredicatePrecision.getGlobalPredicates());
       }
+    }
+
+    @Override
+    public PredicatePrecision addLocalPredicates(Multimap<CFANode, AbstractionPredicate> newPredicates) {
+      Multimap<CFANode, AbstractionPredicate> predicates = ArrayListMultimap.create(getLocalPredicates());
+      predicates.putAll(rootPredicatePrecision.getLocalPredicates());
+      predicates.putAll(newPredicates);
+      return super.addLocalPredicates(predicates);
+    }
+
+    @Override
+    public PredicatePrecision addFunctionPredicates(Multimap<String, AbstractionPredicate> newPredicates) {
+      Multimap<String, AbstractionPredicate> predicates = ArrayListMultimap.create(getFunctionPredicates());
+      predicates.putAll(rootPredicatePrecision.getFunctionPredicates());
+      predicates.putAll(newPredicates);
+      return super.addFunctionPredicates(predicates);
     }
 
     @Override
@@ -322,10 +346,16 @@ public class ABMPredicateReducer implements Reducer {
         String funcName = context.getCallNode().getFunctionName();
         result = new HashSet<>(result); //This is ImmutableSet
         result.addAll(rootPredicatePrecision.getFunctionPredicates().get(funcName));
+        if (loc instanceof CFunctionEntryNode) {
+          //Evaluated map skips predicates, which is relevant to next function
+          result.addAll(rootPredicatePrecision.getLocalPredicates().get(loc));
+          result.addAll(rootPredicatePrecision.getFunctionPredicates().get(loc.getFunctionName()));
+        }
         return result;
       } else {
         Set<AbstractionPredicate> result =
-            relevantComputer.getRelevantPredicates(context, rootPredicatePrecision.getPredicates(loc, locInstance));
+            //relevantComputer.getRelevantPredicates(context, rootPredicatePrecision.getPredicates(loc, locInstance));
+            rootPredicatePrecision.getPredicates(loc, locInstance);
         if (result.isEmpty()) {
           result = relevantComputer.getRelevantPredicates(context, rootPredicatePrecision.getGlobalPredicates());
         }
