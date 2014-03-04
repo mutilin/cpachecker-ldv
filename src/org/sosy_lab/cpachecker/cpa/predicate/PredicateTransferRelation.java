@@ -30,8 +30,10 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.logging.Level;
 
 import javax.annotation.Nullable;
@@ -57,12 +59,16 @@ import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCFAEdgeException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.predicates.AbstractionFormula;
+import org.sosy_lab.cpachecker.util.predicates.AbstractionPredicate;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.PathFormulaManager;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.view.BooleanFormulaManagerView;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.view.FormulaManagerView;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.ErrorConditions;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormula;
+import org.sosy_lab.cpachecker.util.predicates.pathformula.SSAMap;
+
+import com.google.common.collect.Multimap;
 
 /**
  * Transfer relation for symbolic predicate abstraction. First it computes
@@ -76,6 +82,9 @@ public class PredicateTransferRelation implements TransferRelation {
       description = "maximum blocksize before a satisfiability check is done\n"
           + "(non-negative number, 0 means never, if positive should be smaller than blocksize)")
   private int satCheckBlockSize = 0;
+
+  @Option(description = "use filtration of path formulas by relevat predicates")
+  private boolean usePathFiltration = false;
 
   @Option(description = "check satisfiability when a target state has been found (should be true)")
   private boolean targetStateSatCheck = true;
@@ -143,27 +152,25 @@ public class PredicateTransferRelation implements TransferRelation {
       Pair<PathFormula, ErrorConditions> edgeResult = convertEdgeToPathFormula(oldPathFormula, edge);
       //timer.start();
       PathFormula pathFormula = edgeResult.getFirst();
-      ErrorConditions conditions = edgeResult.getSecond();//new ErrorConditions(bfmgr);
-      //PathFormula pathFormula = convertEdgeToPathFormula(element.getPathFormula(), edge);
-      /*if (edge instanceof CFunctionCallEdge && ((CFunctionCallEdge)edge).getSuccessor().getFunctionName().equals("lockreset")) {
-        pathFormula = pathFormulaManager.makeEmptyPathFormula();
+      ErrorConditions conditions = edgeResult.getSecond();
+      if (usePathFiltration) {
+        Multimap<String, AbstractionPredicate> allPredicates = ((PredicatePrecision) pPrecision).getFunctionPredicates();
+        Collection<AbstractionPredicate> tmpPredicates = new HashSet<>();
+
+        for (String function : allPredicates.keySet()) {
+          tmpPredicates.addAll(allPredicates.get(function));
+        }
+        final SSAMap ssa = pathFormula.getSsa();
+        formulaBuilding.start();
+        BooleanFormula formula = formulaManager.buildFormula(pathFormula.getFormula());
+        formulaBuilding.stop();
+        getPredicates.start();
+        Set<AbstractionPredicate> relevantPredicates = formulaManager.getRelevantPredicates(tmpPredicates, formula, ssa);
+        getPredicates.stop();
+        if (relevantPredicates.size() == 0 && !bfmgr.isFalse(formula)) {
+          pathFormula = pathFormulaManager.makeEmptyPathFormula(oldPathFormula);
+        }
       }
-      Collection<AbstractionPredicate> tmpPredicates = ((PredicatePrecision) pPrecision).getPredicates(loc, 0);
-      final SSAMap ssa = pathFormula.getSsa();
-      formulaBuilding.start();
-      BooleanFormula formula = formulaManager.buildFormula(pathFormula.getFormula());
-      formulaBuilding.stop();
-      getPredicates.start();
-      Set<AbstractionPredicate> relevantPredicates = formulaManager.getRelevantPredicates(tmpPredicates, formula, ssa);
-      getPredicates.stop();
-      if (relevantPredicates.size() == 0 && !bfmgr.isFalse(formula)) {
-        pathFormula = pathFormulaManager.makeEmptyPathFormula(oldPathFormula);
-      } else {
-        /*if (edge instanceof CFunctionReturnEdge) {
-          System.out.println("Return from " + edge.getPredecessor().getFunctionName() + ", path formula: " + pathFormula);
-        }*/
-      //}
-      //System.out.println("Line " + edge.getLineNumber() + ", New path formula is" + pathFormula);
       logger.log(Level.ALL, "New path formula is", pathFormula);
       // check whether to do abstraction
       boolean doAbstraction = blk.isBlockEnd(edge, pathFormula);
