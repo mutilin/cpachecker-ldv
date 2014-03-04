@@ -145,7 +145,6 @@ public class PredicatePrecisionAdjustment implements PrecisionAdjustment {
     try {
       newAbstractionFormula = formulaManager.buildAbstraction(
           loc, abstractionFormula, pathFormula, preds);
-      //System.out.println("New abstraction is " + newAbstractionFormula + " = " + newAbstractionFormula.asFormula());
     } finally {
       computingAbstractionTime.stop();
     }
