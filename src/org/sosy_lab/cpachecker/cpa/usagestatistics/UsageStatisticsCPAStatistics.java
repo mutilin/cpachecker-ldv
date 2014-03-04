@@ -27,19 +27,13 @@ import java.io.BufferedWriter;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.PrintStream;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.logging.Level;
 
-import org.sosy_lab.common.Files;
 import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.Timer;
@@ -48,6 +42,9 @@ import org.sosy_lab.common.configuration.FileOption;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
+import org.sosy_lab.common.io.Files;
+import org.sosy_lab.common.io.Path;
+import org.sosy_lab.common.io.Paths;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
@@ -55,21 +52,17 @@ import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.AccessPoint;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsLock;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.EdgeInfo.EdgeType;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
-import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.GlobalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.LocalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.StructureFieldIdentifier;
-import org.sosy_lab.cpachecker.util.identifiers.StructureIdentifier;
 
 @Options(prefix="cpa.usagestatistics")
 public class UsageStatisticsCPAStatistics implements Statistics {
 
-  private Map<SingleIdentifier, List<UsageInfo>> Stat;
+  public Map<SingleIdentifier, List<UsageInfo>> Stat;
 
   private UnsafeDetector unsafeDetector = null;
 
@@ -80,18 +73,18 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   @FileOption(FileOption.Type.OUTPUT_FILE)
   private Path outputStatFileName = Paths.get("unsafe_rawdata");
 
-  @Option(description = "variables, which will not be saved in statistics")
+  /*@Option(description = "variables, which will not be saved in statistics")
   private Set<String> skippedvariables = null;
 
   @Option(values={"PAIR", "SETDIFF"},toUppercase=true,
       description="which data process we should use")
-  private String unsafeDetectorType = "PAIR";
+  private String unsafeDetectorType = "PAIR";*/
 
   @Option(description="print all unsafe cases in report")
   private boolean printAllUnsafeUsages = false;
 
   private final LogManager logger;
-  public final Set<SingleIdentifier> unsafes = new HashSet<>();
+  //public final Set<SingleIdentifier> unsafes = new HashSet<>();
 
   public Timer transferRelationTimer = new Timer();
   public Timer printStatisticsTimer = new Timer();
@@ -133,20 +126,85 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   }*/
 
   public UsageStatisticsCPAStatistics(Configuration config, LogManager pLogger) throws InvalidConfigurationException{
-    Stat = new HashMap<>();
+    //Stat = new HashMap<>();
     config.inject(this);
+    unsafeDetector = new PairwiseUnsafeDetector(config);
+    /*if (unsafeDetectorType.equals("PAIR")) {
 
-    if (unsafeDetectorType.equals("PAIR")) {
-      unsafeDetector = new PairwiseUnsafeDetector(config);
-    }/* else if (unsafeDetectorType.equals("SETDIFF")) {
+    } else if (unsafeDetectorType.equals("SETDIFF")) {
       unsafeDetector = new SetDifferenceUnsafeDetector(config);
-    } */else {
+    } else {
       throw new InvalidConfigurationException("Unknown data procession " + unsafeDetectorType);
-    }
+    }*/
     logger = pLogger;
   }
 
-  public void add(SingleIdentifier id, Access access, UsageStatisticsState state, EdgeType type, int line, CallstackState callstackState) throws HandleCodeException {
+  /*public void add(Pair<SingleIdentifier, Pair<UsageInfo, UsageInfo>> unsafe) throws HandleCodeException {
+    SingleIdentifier id = unsafe.getFirst();
+
+    if (skippedvariables != null && skippedvariables.contains(id.getName())) {
+      return;
+    } else if (skippedvariables != null && id instanceof StructureIdentifier) {
+      AbstractIdentifier owner = id;
+      while (owner instanceof StructureIdentifier) {
+        owner = ((StructureIdentifier)owner).getOwner();
+        if (owner instanceof SingleIdentifier && skippedvariables.contains(((SingleIdentifier)owner).getName())) {
+          return;
+        }
+      }
+    }
+    List<UsageInfo> uset;
+
+    if (unsafes.keySet().contains(id)) {
+      return;
+    }
+
+    if (!Stat.containsKey(id)) {
+      uset = new LinkedList<>();
+      Stat.put(id, uset);
+    } else {
+      uset = Stat.get(id);
+    }
+    uset.add(unsafe.getSecond().getFirst());
+    uset.add(unsafe.getSecond().getSecond());
+    System.out.println("Add unsafe: " + id + ", " + unsafes.size());
+    unsafes.add(id);
+  }*/
+
+  /*public void add(SingleIdentifier id, UsageInfo usage) throws HandleCodeException {
+
+    if (skippedvariables != null && skippedvariables.contains(id.getName())) {
+      return;
+    } else if (skippedvariables != null && id instanceof StructureIdentifier) {
+      AbstractIdentifier owner = id;
+      while (owner instanceof StructureIdentifier) {
+        owner = ((StructureIdentifier)owner).getOwner();
+        if (owner instanceof SingleIdentifier && skippedvariables.contains(((SingleIdentifier)owner).getName())) {
+          return;
+        }
+      }
+    }
+    List<UsageInfo> uset;
+
+    if (unsafes.contains(id)) {
+      return;
+    }
+
+    if (!Stat.containsKey(id)) {
+      uset = new LinkedList<>();
+      Stat.put(id, uset);
+    } else {
+      uset = Stat.get(id);
+      if (unsafeDetector.isUnsafeCase(uset, usage)) {
+        unsafes.add(id);
+      }
+    }
+    uset.add(usage);
+    //System.out.println("Add unsafe: " + id + ", " + unsafes.size());
+    //unsafes.add(id);
+  }*/
+
+  /*public void add(SingleIdentifier id, Access access, UsageStatisticsState state, EdgeType type, int line, CallstackState callstackState) throws HandleCodeException {
     if (state.containsLinks(id)) {
       id = (SingleIdentifier) state.getLinks(id);
     }
@@ -172,9 +230,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     if (id instanceof StructureIdentifier) {
       id = ((StructureIdentifier)id).toStructureFieldIdentifier();
     }
-    /*if (!printAllUnsafeUsages && unsafes.contains(id)) {
+    if (!printAllUnsafeUsages && unsafes.contains(id)) {
       return;
-    }*/
+    }
     logger.log(Level.FINE, "Add id " + id + " to unsafe statistics");
     List<UsageInfo> uset;
     LockStatisticsState lockState = AbstractStates.extractStateByType(state, LockStatisticsState.class);
@@ -196,7 +254,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       }
     }
     uset.add(usage);
-  }
+  }*/
 
   private List<LockStatisticsLock> findAllLocks() {
     List<LockStatisticsLock> locks = new LinkedList<>();
@@ -353,6 +411,10 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   public void printStatistics(PrintStream out, Result result, ReachedSet reached) {
 		BufferedWriter writer = null;
 		printStatisticsTimer.start();
+		UsageContainer container = AbstractStates.extractStateByType(reached.getFirstState(), UsageStatisticsState.class)
+		    .getContainer();
+		Stat = container.getStatistics();
+		Collection<SingleIdentifier> unsafes = container.getUnsafes();
     try {
       writer = Files.openOutputFile(outputStatFileName);
       logger.log(Level.FINE, "Print statistics about unsafe cases");
@@ -375,6 +437,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     out.println("Time for transfer relation:    " + transferRelationTimer);
     printStatisticsTimer.stop();
     out.println("Time for printing statistics:  " + printStatisticsTimer);
+    //out.println("Time for adding to reached state:  " + USReachedSet.addTimer);
     /*System.out.println(" \t \t Global Local \t Structure");
     System.out.println("Assignment: \t " + counter[0][0] + " \t " + counter[1][0] + " \t " + counter[2][0]);
     System.out.println("Assumption: \t " + counter[0][1] +" \t " + counter[1][1] +" \t " + counter[2][1] );
@@ -434,7 +497,24 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     return "UsageStatisticsCPA";
   }
 
-  public void addSkippedVariables(Set<String> vars) {
+  /*public void addSkippedVariables(Set<String> vars) {
     skippedvariables.addAll(vars);
-  }
+  }*/
+
+  /*public void removeState(UsageStatisticsState pUstate) {
+    List<UsageInfo> uset;
+    Set<Pair<List<UsageInfo>, UsageInfo>> toDelete = new HashSet<>();
+    for (SingleIdentifier id : Stat.keySet()) {
+      uset = Stat.get(id);
+      for (UsageInfo uinfo : uset) {
+        if (uinfo.getKeyState().equals(pUstate)) {
+          toDelete.add(Pair.of(uset, uinfo));
+        }
+      }
+    }
+
+    for (Pair<List<UsageInfo>, UsageInfo> pair : toDelete) {
+      pair.getFirst().remove(pair.getSecond());
+    }
+  }*/
 }

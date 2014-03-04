@@ -64,6 +64,7 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
   private final PrecisionAdjustment precisionAdjustment;
   private final Reducer reducer;
   private final UsageStatisticsCPAStatistics statistics;
+  private final UsageContainer container;
   private UsageStatisticsPrecision precision;
   private final CFA cfa;
 
@@ -90,7 +91,8 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
     this.stopOperator = initializeStopOperator();
 
     this.statistics = new UsageStatisticsCPAStatistics(pConfig, pLogger);
-    this.precisionAdjustment = new UsageStatisticsPrecisionAdjustment(statistics, pCpa.getPrecisionAdjustment());
+    this.container = new UsageContainer(pConfig);
+    this.precisionAdjustment = new UsageStatisticsPrecisionAdjustment(pCpa.getPrecisionAdjustment());
     if (pCpa instanceof ConfigurableProgramAnalysisWithABM) {
       Reducer wrappedReducer = ((ConfigurableProgramAnalysisWithABM)pCpa).getReducer();
       if (wrappedReducer != null) {
@@ -164,7 +166,7 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
 
   @Override
   public AbstractState getInitialState(CFANode pNode) {
-    return new UsageStatisticsState(getWrappedCpa().getInitialState(pNode));
+    return new UsageStatisticsState(getWrappedCpa().getInitialState(pNode), container);
   }
 
   @Override

@@ -30,7 +30,9 @@ import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustment;
 import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
 import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSetView;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
+import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
+import org.sosy_lab.cpachecker.util.AbstractStates;
 
 import com.google.common.base.Functions;
 import com.google.common.base.Preconditions;
@@ -38,11 +40,9 @@ import com.google.common.base.Preconditions;
 class UsageStatisticsPrecisionAdjustment implements PrecisionAdjustment {
 
   private final PrecisionAdjustment wrappedPrecAdjustment;
-  UsageStatisticsCPAStatistics statistics;
 
-  public UsageStatisticsPrecisionAdjustment(UsageStatisticsCPAStatistics pStatistics, PrecisionAdjustment pWrappedPrecAdjustment) {
+  public UsageStatisticsPrecisionAdjustment(PrecisionAdjustment pWrappedPrecAdjustment) {
     wrappedPrecAdjustment = pWrappedPrecAdjustment;
-    statistics = pStatistics;
   }
 
   @Override
@@ -65,21 +65,19 @@ class UsageStatisticsPrecisionAdjustment implements PrecisionAdjustment {
     Precision newWrappedPrecision = unwrappedResult.getSecond();
     Action action = unwrappedResult.getThird();
 
+    PredicateAbstractState state = AbstractStates.extractStateByType(newElement, PredicateAbstractState.class);
+    if (state == null || !state.getAbstractionFormula().isFalse() && state.isAbstractionState()) {
+      element.saveUnsafesInContainer();
+      if (element.isTarget()) {
+        action = Action.BREAK;
+      }
+    }
+
     if ((oldElement == newElement) && (oldWrappedPrecision == newWrappedPrecision)) {
       // nothing has changed
       return Triple.of(pElement, oldPrecision, action);
     }
-
-    UsageStatisticsState resultElement = new UsageStatisticsState(newElement);
-
-    if (!statistics.unsafes.isEmpty()) {
-      action = Action.BREAK;
-      resultElement.setTarget();
-      //statistics.unsafes.clear();
-      /*for (PredicateAbstractState state : PredicateTransferRelation.tmpList.keySet()) {
-        System.out.println(PredicateTransferRelation.tmpList.get(state));
-      }*/
-    }
+    UsageStatisticsState resultElement = element.clone(newElement);
     UsageStatisticsPrecision newPrecision = ((UsageStatisticsPrecision)oldPrecision).clone(newWrappedPrecision);
     return Triple.of((AbstractState)resultElement, (Precision)newPrecision, action);
   }

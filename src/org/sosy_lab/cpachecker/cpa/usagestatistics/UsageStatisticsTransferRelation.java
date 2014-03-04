@@ -68,6 +68,7 @@ import org.sosy_lab.cpachecker.cpa.callstack.CallstackTransferRelation;
 import org.sosy_lab.cpachecker.cpa.local.LocalState;
 import org.sosy_lab.cpachecker.cpa.local.LocalState.DataType;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsPrecision;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.BinderFunctionInfo.LinkerInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.EdgeInfo.EdgeType;
@@ -79,7 +80,9 @@ import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.GeneralIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.IdentifierCreator;
+import org.sosy_lab.cpachecker.util.identifiers.LocalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
+import org.sosy_lab.cpachecker.util.identifiers.StructureIdentifier;
 
 @Options(prefix="cpa.usagestatistics")
 public class UsageStatisticsTransferRelation implements TransferRelation {
@@ -163,10 +166,10 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       return;
     }
 
-    if (checkAbstraction(oldState)) {
+    /*if (checkAbstraction(oldState)) {
       logger.log(Level.FINEST, oldState + " is considered to be unreachable");
       return;
-    }
+    }*/
 
     if (checkFunciton(pCfaEdge, skippedfunctions)) {
       callstackTransfer.setFlag();
@@ -183,12 +186,13 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     }
 
     AbstractState oldWrappedState = oldState.getWrappedState();
-    oldState = handleEdge(pPrecision, oldState, pCfaEdge);
+    UsageStatisticsState newState = oldState.clone();
+    newState = handleEdge(pPrecision, newState, pCfaEdge);
     Collection<? extends AbstractState> newWrappedStates = wrappedTransfer.getAbstractSuccessors(oldWrappedState, pPrecision.getWrappedPrecision(), currentEdge);
     for (AbstractState newWrappedState : newWrappedStates) {
-      UsageStatisticsState newState = oldState.clone(newWrappedState);
-      if (newState != null) {
-        results.add(newState);
+      UsageStatisticsState resultState = newState.clone(newWrappedState);
+      if (resultState != null) {
+        results.add(resultState);
       }
     }
   }
@@ -477,7 +481,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
           System.out.println(id.toString());
         System.out.println(globalAdress + " : " + localAdress + " : " + structAdress);
       }*/
-      logger.log(Level.FINE, singleId + " is considered to be local, so it wasn't add to statistics");
+      logger.log(Level.FINER, singleId + " is considered to be local, so it wasn't add to statistics");
       return;
     }
 
@@ -486,7 +490,35 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       //No ABM, so get real callstack
       fullCallstack = AbstractStates.extractStateByType(state, CallstackState.class);
     }
-    statistics.add(singleId, access, state, eType, line, fullCallstack);
+
+    if (state.containsLinks(singleId)) {
+      singleId = (SingleIdentifier) state.getLinks(id);
+    }
+    if (singleId instanceof LocalVariableIdentifier && singleId.getDereference() <= 0) {
+      //we don't save in statistics ordinary local variables
+      return;
+    }
+    if (singleId instanceof StructureIdentifier && !singleId.isGlobal() && !singleId.isPointer()) {
+      //skips such cases, as 'a.b'
+      return;
+    }
+    if (singleId instanceof StructureIdentifier) {
+      singleId = ((StructureIdentifier)singleId).toStructureFieldIdentifier();
+    }
+    /*if (!printAllUnsafeUsages && unsafes.contains(id)) {
+      return;
+    }*/
+    logger.log(Level.FINER, "Add id " + singleId + " to unsafe statistics");
+    LockStatisticsState lockState = AbstractStates.extractStateByType(state, LockStatisticsState.class);
+    logger.log(Level.FINEST, "Its locks are: " + lockState);
+
+    //We can't get line from location, because it is old state
+    LineInfo lineInfo = new LineInfo(line);
+    EdgeInfo info = new EdgeInfo(eType);
+
+    UsageInfo usage = new UsageInfo(access, lineInfo, info, lockState, fullCallstack);
+
+    state.addUsage(singleId, usage);
   }
 
   @Override

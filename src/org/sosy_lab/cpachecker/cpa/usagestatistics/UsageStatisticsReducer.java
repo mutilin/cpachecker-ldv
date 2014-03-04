@@ -41,7 +41,7 @@ public class UsageStatisticsReducer implements Reducer {
                                           Block pContext, CFANode pLocation) {
     UsageStatisticsState funElement = (UsageStatisticsState)pExpandedElement;
     AbstractState red = wrappedReducer.getVariableReducedState(funElement.getWrappedState(), pContext, pLocation);
-    return new UsageStatisticsState(red);
+    return funElement.clone(red);
 
   }
 
@@ -51,11 +51,7 @@ public class UsageStatisticsReducer implements Reducer {
     UsageStatisticsState funRootState = (UsageStatisticsState)pRootElement;
     UsageStatisticsState funReducedState = (UsageStatisticsState)pReducedElement;
     AbstractState exp = wrappedReducer.getVariableExpandedState(funRootState.getWrappedState(), pReducedContext, funReducedState.getWrappedState());
-    UsageStatisticsState result = funRootState.clone(exp);
-    if (funReducedState.isTarget()) {
-      result.setTarget();
-    }
-    return result;
+    return funReducedState.expand(funRootState, exp);
   }
 
   @Override
