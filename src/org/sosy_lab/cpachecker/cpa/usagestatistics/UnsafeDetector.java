@@ -57,4 +57,5 @@ public interface UnsafeDetector {
 		throws HandleCodeException;
 
   public boolean isUnsafeCase(List<UsageInfo> pList, UsageInfo uInfo);
+  public boolean containsUnsafe(List<UsageInfo> pList, boolean checkAll);
 }

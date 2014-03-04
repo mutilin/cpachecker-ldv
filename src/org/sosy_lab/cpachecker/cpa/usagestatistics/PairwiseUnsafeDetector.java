@@ -31,7 +31,6 @@ import java.util.Map;
 
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.Configuration;
-import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
@@ -47,7 +46,7 @@ public class PairwiseUnsafeDetector implements UnsafeDetector {
   /*@Option(description = "variables, which will be unsafes even only with read access (they can be changed invisibly)")
   private Set<String> detectByReadAccess;*/
 
-  public PairwiseUnsafeDetector(Configuration config) throws InvalidConfigurationException {
+  public PairwiseUnsafeDetector(Configuration config)  {
 	  //config.inject(this);
   }
 
@@ -78,7 +77,7 @@ public class PairwiseUnsafeDetector implements UnsafeDetector {
     throw new HandleCodeException("Can't find example of unsafe cases");
   }
 
-  private boolean isUnsafeId(List<UsageInfo> uset) {
+  public boolean isUnsafeId(List<UsageInfo> uset) {
     for (UsageInfo uinfo : uset) {
       for (UsageInfo uinfo2 : uset) {
         if (!uinfo.intersect(uinfo2)) {
@@ -99,6 +98,21 @@ public class PairwiseUnsafeDetector implements UnsafeDetector {
     for (UsageInfo old : oldUsages) {
       if (!newUsage.intersect(old)) {
         return true;
+      }
+    }
+    return false;
+  }
+
+  @Override
+  public boolean containsUnsafe(List<UsageInfo> pList, boolean pCheckAll) {
+    for (UsageInfo uinfo : pList) {
+      for (UsageInfo uinfo2 : pList) {
+        if (uinfo2.isRefined() && !pCheckAll) {
+          continue;
+        }
+        if (!uinfo.intersect(uinfo2)) {
+          return true;
+        }
       }
     }
     return false;
