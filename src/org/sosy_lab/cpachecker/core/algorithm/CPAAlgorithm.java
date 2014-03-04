@@ -55,7 +55,11 @@ import org.sosy_lab.cpachecker.core.interfaces.StopOperator;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGMergeJoinPredicatedAnalysis;
+import org.sosy_lab.cpachecker.cpa.arg.ARGState;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.USReachedSet;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsState;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
+import org.sosy_lab.cpachecker.util.AbstractStates;
 
 import com.google.common.collect.Iterables;
 
@@ -325,6 +329,11 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
           logger.log(Level.FINER,
               "Successor is covered or unreachable, not adding to waitlist");
           stats.countStop++;
+
+          if (reachedSet instanceof USReachedSet) {
+            UsageStatisticsState USstate = AbstractStates.extractStateByType(successor, UsageStatisticsState.class);
+            USstate.updateKeyState(((ARGState)successor).getCoveringState());
+          }
 
         } else {
           logger.log(Level.FINER,
