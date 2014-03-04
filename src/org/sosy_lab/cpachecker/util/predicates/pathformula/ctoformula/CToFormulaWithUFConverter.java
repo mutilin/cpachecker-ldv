@@ -1330,7 +1330,7 @@ public class CToFormulaWithUFConverter extends CtoFormulaConverter {
                                              lhs,
                                              ((CInitializerExpression) initializer).getExpression());
         result = assignment.accept(statementVisitor);
-      } else if (isRelevantVariable(declaration.getQualifiedName())) {
+      } else if (isRelevantVariable(declaration.getQualifiedName()) && !declaration.isGlobal()) {
         result = statementVisitor.handleAssignment(lhs, null, false, null);
       } else {
         result = bfmgr.makeBoolean(true);
