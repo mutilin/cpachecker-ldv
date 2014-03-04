@@ -82,7 +82,7 @@ public abstract class AbstractARGBasedRefiner implements Refiner {
   };
 
   @Override
-  public final boolean performRefinement(ReachedSet pReached) throws CPAException, InterruptedException {
+  public boolean performRefinement(ReachedSet pReached) throws CPAException, InterruptedException {
     return performRefinementWithInfo(pReached).isSpurious();
   }
 
