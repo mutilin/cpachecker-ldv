@@ -39,7 +39,6 @@ import javax.annotation.Nullable;
 
 import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.Pair;
-import org.sosy_lab.common.Timer;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.FileOption;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
@@ -60,6 +59,7 @@ import org.sosy_lab.cpachecker.cpa.arg.ARGUtils;
 import org.sosy_lab.cpachecker.cpa.arg.AbstractARGBasedRefiner;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
+import org.sosy_lab.cpachecker.util.Precisions;
 import org.sosy_lab.cpachecker.util.predicates.PathChecker;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.PathFormulaManager;
@@ -193,16 +193,15 @@ public class PredicateCPARefiner extends AbstractARGBasedRefiner implements Stat
     logger.log(Level.ALL, "Abstraction trace is", abstractionStatesTrace);
 
     // create list of formulas on path
-    Timer tmpTimer = new Timer();
-    tmpTimer.start();
     final List<BooleanFormula> formulas = getFormulasForPath(abstractionStatesTrace, allStatesTrace.getFirst().getFirst());
-    tmpTimer.stop();
-    System.out.println("Compute block formulas: " + tmpTimer.getSumTime());
+    //System.out.println("Compute block formulas: " + tmpTimer.getSumTime());
     assert abstractionStatesTrace.size() == formulas.size();
 
 
     // build the counterexample
     buildCounterexampeTraceTime.start();
+    //System.out.println("Total number of allSat: " + PredicateAbstractionManager.counter);
+    PredicateAbstractionManager.counter = 0;
     final CounterexampleTraceInfo counterexample = formulaManager.buildCounterexampleTrace(formulas, elementsOnPath, strategy.needsInterpolants());
     buildCounterexampeTraceTime.stop();
 
@@ -215,6 +214,9 @@ public class PredicateCPARefiner extends AbstractARGBasedRefiner implements Stat
 
       strategy.performRefinement(pReached, abstractionStatesTrace, counterexample.getInterpolants(), repeatedCounterexample);
 
+      System.out.println("Total number of predicates: "
+        + Precisions.extractPrecisionByType(pReached.asReachedSet().getPrecision(pReached.asReachedSet().getFirstState()),
+             PredicatePrecision.class).getLocalPredicates().size());
       totalRefinement.stop();
       return CounterexampleInfo.spurious();
 
@@ -224,7 +226,7 @@ public class PredicateCPARefiner extends AbstractARGBasedRefiner implements Stat
       final ARGPath targetPath;
       final CounterexampleTraceInfo preciseCounterexample;
 
-      preciseCouterexampleTime.start();
+     /* preciseCouterexampleTime.start();
       if (branchingOccurred) {
         Pair<ARGPath, CounterexampleTraceInfo> preciseInfo = findPreciseErrorPath(allStatesTrace, counterexample);
 
@@ -249,6 +251,10 @@ public class PredicateCPARefiner extends AbstractARGBasedRefiner implements Stat
 
       CounterexampleInfo cex = CounterexampleInfo.feasible(targetPath, preciseCounterexample.getModel());
       cex.addFurtherInformation(formulaManager.dumpCounterexample(preciseCounterexample),
+          dumpCounterexampleFile);*/
+
+      CounterexampleInfo cex = CounterexampleInfo.feasible(allStatesTrace, counterexample.getModel());
+      cex.addFurtherInformation(formulaManager.dumpCounterexample(counterexample),
           dumpCounterexampleFile);
 
       totalRefinement.stop();
@@ -273,7 +279,7 @@ public class PredicateCPARefiner extends AbstractARGBasedRefiner implements Stat
       }
     });
 
-    assert pPath.getLast().getFirst() == result.get(result.size()-1);
+    //assert pPath.getLast().getFirst() == result.get(result.size()-1);
     return result;
   }
 
