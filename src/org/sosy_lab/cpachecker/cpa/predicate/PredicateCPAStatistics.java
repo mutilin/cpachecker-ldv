@@ -371,13 +371,16 @@ class PredicateCPAStatistics extends AbstractStatistics {
         out.println("      Timer2:                        " + as.Timer2);
         out.println("      Timer3:                        " + as.Timer3);
         out.println("      Timer4:                        " + as.Timer4);
-        out.println("      Timer5:                        " + as.Timer5);
+        //out.println("      Timer5:                        " + as.Timer5);
         out.println("    Cache time:                      " + as.CacheTimer);
         out.println("    makeFormula time:                " + as.makeFormula);
         out.println("    Solving time:                    " + as.abstractionSolveTime + " (Max: " + as.abstractionSolveTime.printMaxTime() + ")");
         out.println("    Model enumeration time:          " + as.abstractionEnumTime.printOuterSumTime());
         out.println("    Time for BDD construction:       " + as.abstractionEnumTime.printInnerSumTime()   + " (Max: " + as.abstractionEnumTime.printInnerMaxTime() + ")");
-      }
+        out.println("    allSat check:                    " + as.Timer5);
+        out.println("      First unsat check:             " + as.Timer6);
+        out.println("      Second unsat check:            " + as.Timer7);
+        }
 
       MergeOperator merge = cpa.getMergeOperator();
       if (merge instanceof PredicateMergeOperator) {
