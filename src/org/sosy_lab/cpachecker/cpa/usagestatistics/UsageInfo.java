@@ -26,6 +26,7 @@ package org.sosy_lab.cpachecker.cpa.usagestatistics;
 import java.util.Comparator;
 
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.EdgeInfo.EdgeType;
@@ -87,7 +88,9 @@ public class UsageInfo {
   private final EdgeInfo info;
   private final LockStatisticsState locks;
   private final CallstackState callstack;
+  private AbstractState keyState;
   private final Access accessType;
+  private boolean isRefined;
 
   public UsageInfo(Access atype, LineInfo l, EdgeInfo t, LockStatisticsState lock, CallstackState call) {
     line = l;
@@ -95,6 +98,8 @@ public class UsageInfo {
     locks = lock;
     callstack = call;
     accessType = atype;
+    keyState = null;
+    isRefined = false;
   }
 
   public LockStatisticsState getLockState() {
@@ -217,5 +222,21 @@ public class UsageInfo {
       name = id.getType().toASTString(name);
     }
     return name;
+  }
+
+  public void setKeyState(AbstractState state) {
+    keyState = state;
+  }
+
+  public AbstractState getKeyState() {
+    return keyState;
+  }
+
+  public void setRefineFlag() {
+    isRefined = true;
+  }
+
+  public boolean isRefined() {
+    return isRefined;
   }
 }
