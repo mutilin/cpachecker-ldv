@@ -40,6 +40,7 @@ import org.sosy_lab.cpachecker.cpa.arg.ARGReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.RefinementFailedException;
+import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Precisions;
 import org.sosy_lab.cpachecker.util.predicates.Solver;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
@@ -132,7 +133,7 @@ public abstract class RefinementStrategy {
 
     // The last state along the path is the target (error) state
     ARGState lastElement = abstractionStatesTrace.get(abstractionStatesTrace.size()-1);
-    assert lastElement.isTarget();
+    //assert lastElement.isTarget();
 
     // Skip the last element of the path, itp is always false there
     abstractionStatesTrace = abstractionStatesTrace.subList(0, abstractionStatesTrace.size()-1);
@@ -189,6 +190,8 @@ public abstract class RefinementStrategy {
           differentNontrivialItps++;
         }
       }
+      System.out.println("State: " + AbstractStates.extractLocation(w) + "(" +
+          AbstractStates.extractLocation(w).getLineNumber() + ")" + " <-> " + itp);
       lastItp = itp;
 
       nonTrivialStates++;
