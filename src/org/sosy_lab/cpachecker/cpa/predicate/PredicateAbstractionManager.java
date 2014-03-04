@@ -120,6 +120,8 @@ public class PredicateAbstractionManager {
     public Timer Timer3 = new Timer();
     public Timer Timer4 = new Timer();
     public Timer Timer5 = new Timer();
+    public Timer Timer6 = new Timer();
+    public Timer Timer7 = new Timer();
   }
 
   final Stats stats = new Stats();
@@ -360,6 +362,12 @@ public class PredicateAbstractionManager {
     if (pPredicates.isEmpty()) {
       logger.log(Level.FINEST, "Abstraction", stats.numCallsAbstraction, "with empty precision is true");
       stats.numSymbolicAbstractions++;
+      boolean unsat = unsat(abstractionFormula, pathFormula);
+      if (unsat) {
+        return new AbstractionFormula(fmgr, rmgr.makeFalse(),
+            bfmgr.makeBoolean(false), bfmgr.makeBoolean(false),
+            pathFormula, noAbstractionReuse);
+      }
       return makeTrueAbstractionFormula(pathFormula);
     }
 
@@ -568,6 +576,8 @@ public class PredicateAbstractionManager {
       //}
       if (!Sets.intersection(predVariables, variables).isEmpty()) {
         predicateBuilder.add(predicate);
+      } else if (predicateTerm.toString().contains("(*")) {
+        predicateBuilder.add(predicate);
       } else {
         logger.log(Level.FINEST, "Ignoring predicate about variables", predVariables);
       }
@@ -709,11 +719,13 @@ public class PredicateAbstractionManager {
       // check whether each of the predicate is implied in the next state...
 
       for (AbstractionPredicate p : predicates) {
+        stats.Timer5.start();
         Pair<BooleanFormula, AbstractionPredicate> cacheKey = Pair.of(f, p);
         if (useCache && cartesianAbstractionCache.containsKey(cacheKey)) {
           byte predVal = cartesianAbstractionCache.get(cacheKey);
           stats.numCartesianAbsPredicatesCached++;
 
+          stats.Timer5.stop();
           stats.abstractionEnumTime.getInnerTimer().start();
           Region v = p.getAbstractVariable();
           if (predVal == -1) { // pred is false
@@ -729,6 +741,8 @@ public class PredicateAbstractionManager {
           stats.abstractionEnumTime.getInnerTimer().stop();
 
         } else {
+          stats.Timer5.stop();
+          stats.Timer6.start();
           logger.log(Level.ALL, "DEBUG_1",
               "CHECKING VALUE OF PREDICATE: ", p.getSymbolicAtom());
 
@@ -744,6 +758,7 @@ public class PredicateAbstractionManager {
           boolean isTrue = thmProver.isUnsat();
           thmProver.pop();
 
+          stats.Timer6.stop();
           if (isTrue) {
             stats.numCartesianAbsPredicates++;
             stats.abstractionEnumTime.getInnerTimer().start();
@@ -754,10 +769,12 @@ public class PredicateAbstractionManager {
             predVal = 1;
           } else {
             // check whether it's false...
+            stats.Timer7.start();
             thmProver.push(predTrue);
             boolean isFalse = thmProver.isUnsat();
             thmProver.pop();
 
+            stats.Timer7.stop();
             if (isFalse) {
               stats.numCartesianAbsPredicates++;
               stats.abstractionEnumTime.getInnerTimer().start();
@@ -797,6 +814,8 @@ public class PredicateAbstractionManager {
     return symbFormula;
   }
 
+  public static int counter = 0;
+
   private Region buildBooleanAbstraction(SSAMap ssa,
       ProverEnvironment thmProver, Collection<AbstractionPredicate> predicates) throws InterruptedException {
 
@@ -822,9 +841,11 @@ public class PredicateAbstractionManager {
 
     // the formula is (abstractionFormula & pathFormula & predDef)
     thmProver.push(predDef);
+    stats.Timer5.start();
+    counter++;
     AllSatResult allSatResult = thmProver.allSat(predVars, rmgr,
         stats.abstractionSolveTime, stats.abstractionEnumTime);
-
+    stats.Timer5.stop();
     // pop() is actually costly sometimes, and we delete the environment anyway
     // thmProver.pop();
 
