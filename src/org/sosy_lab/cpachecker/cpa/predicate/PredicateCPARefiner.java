@@ -245,6 +245,7 @@ public class PredicateCPARefiner extends AbstractARGBasedRefiner implements Stat
         }
       } else {
         targetPath = allStatesTrace;
+    pPath.remove(pPath.size() - 1);//last edge leads from error state and it shouldn't be in formula
         preciseCounterexample = pathChecker.checkPath(targetPath.asEdgesList());
       }
       preciseCouterexampleTime.stop();
