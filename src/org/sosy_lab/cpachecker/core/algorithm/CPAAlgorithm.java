@@ -127,7 +127,7 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
 
   protected final CPAStatistics               stats = new CPAStatistics();
 
-  private final ConfigurableProgramAnalysis cpa;
+  public final ConfigurableProgramAnalysis cpa;
 
   private final LogManager                  logger;
 

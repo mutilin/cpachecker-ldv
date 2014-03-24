@@ -314,12 +314,19 @@ public class RestartLockAlgorithm implements Algorithm, StatisticsProvider {
   private Algorithm createAlgorithm(final ConfigurableProgramAnalysis cpa, Configuration pConfig, ShutdownNotifier pShutdownNotifier,
       boolean isFirst) throws InvalidConfigurationException, CPAException {
     logger.log(Level.FINE, "Creating algorithms");
+    Algorithm algorithm;
+
 
     if (isFirst) {
-      return new CPALocalSaveAlgorithm(cpa, logger, pConfig, pShutdownNotifier);
+      algorithm =  new CPALocalSaveAlgorithm(cpa, logger, pConfig, pShutdownNotifier);
     } else {
-      return new CPAAlgorithm(cpa, logger, pConfig, pShutdownNotifier);
+      algorithm =  new CPAAlgorithm(cpa, logger, pConfig, pShutdownNotifier);
     }
+    String cegar = pConfig.getProperty("analysis.algorithm.CEGAR");
+    if (cegar != null && cegar.equals("true")) {
+      algorithm = new CEGARAlgorithm(algorithm, cpa, pConfig, logger);
+    }
+    return algorithm;
   }
 
   private void printReachedSet(Map<CFANode, LocalState> reachedStatistics) {
