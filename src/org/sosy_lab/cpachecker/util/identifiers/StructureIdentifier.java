@@ -25,15 +25,75 @@ package org.sosy_lab.cpachecker.util.identifiers;
 
 import java.util.Collection;
 
+import org.sosy_lab.cpachecker.cfa.types.c.CArrayType;
 import org.sosy_lab.cpachecker.cfa.types.c.CBasicType;
+import org.sosy_lab.cpachecker.cfa.types.c.CCompositeType;
+import org.sosy_lab.cpachecker.cfa.types.c.CElaboratedType;
+import org.sosy_lab.cpachecker.cfa.types.c.CEnumType;
+import org.sosy_lab.cpachecker.cfa.types.c.CFunctionType;
+import org.sosy_lab.cpachecker.cfa.types.c.CPointerType;
 import org.sosy_lab.cpachecker.cfa.types.c.CProblemType;
 import org.sosy_lab.cpachecker.cfa.types.c.CSimpleType;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
+import org.sosy_lab.cpachecker.cfa.types.c.CTypeVisitor;
+import org.sosy_lab.cpachecker.cfa.types.c.CTypedefType;
 import org.sosy_lab.cpachecker.cpa.local.LocalTransferRelation;
+import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 
 
 
 public class StructureIdentifier extends SingleIdentifier{
+  private class TypedefConverter implements CTypeVisitor<CType, HandleCodeException> {
+
+    @Override
+    public CType visit(CArrayType pArrayType) throws HandleCodeException {
+      return pArrayType;
+    }
+
+    @Override
+    public CType visit(CCompositeType pCompositeType) throws HandleCodeException {
+      //This is need to avoid all members of structure in report
+      return new CElaboratedType(pCompositeType.isConst(), pCompositeType.isVolatile(), pCompositeType.getKind(), pCompositeType.getQualifiedName(), pCompositeType);
+    }
+
+    @Override
+    public CType visit(CElaboratedType pElaboratedType) throws HandleCodeException {
+      return pElaboratedType.getRealType().accept(this);
+    }
+
+    @Override
+    public CType visit(CEnumType pEnumType) throws HandleCodeException {
+      return pEnumType;
+    }
+
+    @Override
+    public CType visit(CFunctionType pFunctionType) throws HandleCodeException {
+      return pFunctionType;
+    }
+
+    @Override
+    public CType visit(CPointerType pPointerType) throws HandleCodeException {
+      return new CPointerType(pPointerType.isConst(), pPointerType.isVolatile(), pPointerType.getType().accept(this));
+    }
+
+    @Override
+    public CType visit(CProblemType pProblemType) throws HandleCodeException {
+      return pProblemType;
+    }
+
+    @Override
+    public CType visit(CSimpleType pSimpleType) throws HandleCodeException {
+      return pSimpleType;
+    }
+
+    @Override
+    public CType visit(CTypedefType pTypedefType) throws HandleCodeException {
+      //This is strange, but some typedefs are typedefs itself
+      return pTypedefType.getRealType().accept(this);
+    }
+
+  }
+
   protected AbstractIdentifier owner;
 
   public StructureIdentifier(String pNm, CType pTp, int dereference, AbstractIdentifier own) {
@@ -126,7 +186,12 @@ public class StructureIdentifier extends SingleIdentifier{
 
   private CType getStructureType() {
     if (owner instanceof SingleIdentifier) {
-      return ((SingleIdentifier)owner).type;
+      try {
+        TypedefConverter visitor = new TypedefConverter();
+        return ((SingleIdentifier)owner).type.accept(visitor);
+      } catch (HandleCodeException e) {
+        return new CProblemType("Complex_typedef");
+      }
     } else if (owner instanceof ConstantIdentifier) {
       return new CSimpleType(false, false, CBasicType.INT, false, false, false, false, false, false, false);
     } else if (owner instanceof BinaryIdentifier) {

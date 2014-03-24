@@ -25,7 +25,9 @@ package org.sosy_lab.cpachecker.cpa.local;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.sosy_lab.common.configuration.Configuration;
@@ -38,6 +40,7 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCall;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallAssignmentStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CParameterDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
@@ -76,10 +79,13 @@ public class LocalTransferRelation implements TransferRelation {
   @Option(name="allocatefunctions", description = "functions, which allocate new free memory")
   private Set<String> allocate;
 
+  private Map<String, Integer> allocateInfo;
+
   private final IdentifierCreator idCreator;
 
   public LocalTransferRelation(Configuration config) throws InvalidConfigurationException {
     config.inject(this);
+    parseAllocatedFunctions(config);
     idCreator = new IdentifierCreator();
   }
   @Override
@@ -153,12 +159,25 @@ public class LocalTransferRelation implements TransferRelation {
     return newState;
   }
 
+  private void parseAllocatedFunctions(Configuration config) {
+    String num;
+    allocateInfo = new HashMap<>();
+    for (String funcName : allocate) {
+      num = config.getProperty(funcName + ".parameter");
+      if (num == null) {
+        allocateInfo.put(funcName, 0);
+      } else {
+        allocateInfo.put(funcName, Integer.parseInt(num));
+      }
+    }
+  }
+
   private void handleReturnStatementEdge(LocalState pSuccessor, CReturnStatementEdge pCfaEdge) throws HandleCodeException {
     CExpression returnExpression = pCfaEdge.getExpression();
     if (returnExpression != null) {
       int dereference = findDereference(returnExpression.getExpressionType());
       if (dereference > 0) {
-        AbstractIdentifier returnId = createId(returnExpression, 0);
+        AbstractIdentifier returnId = createId(returnExpression, dereference);
         DataType type = pSuccessor.getType(returnId);
         pSuccessor.set(ReturnIdentifier.getInstance(), type);
       }
@@ -171,33 +190,50 @@ public class LocalTransferRelation implements TransferRelation {
     LocalState newElement           = pSuccessor.getPreviousState().clone();
 
     if (exprOnSummary instanceof CFunctionCallAssignmentStatement) {
-      if (returnType != null) {
+      CFunctionCallAssignmentStatement assignExp = ((CFunctionCallAssignmentStatement)exprOnSummary);
+      String funcName = assignExp.getRightHandSide().getFunctionNameExpression().toASTString();
+      boolean isAllocatedFunction = allocate.contains(funcName);
 
-        CFunctionCallAssignmentStatement assignExp = ((CFunctionCallAssignmentStatement)exprOnSummary);
+      if (returnType != null || isAllocatedFunction) {
         CExpression op1 = assignExp.getLeftHandSide();
         CType type = op1.getExpressionType();
         //find type in old state...
         int dereference = findDereference(type);
-        if (dereference > 0) {
-          //We don't store simple types, like 'int'
-          AbstractIdentifier returnId = createId(op1, dereference);
-          //check, if it
+        AbstractIdentifier returnId = createId(op1, dereference);
+
+        if (isAllocatedFunction) {
+          int num = allocateInfo.get(funcName);
+          if (num == 0) {
+            //local data are returned from function
+            if (!returnId.isGlobal()) {
+              pSuccessor.forceSetLocal(returnId);
+            }
+          } else if (num > 0) {
+            handleFunctionCallExpression(pSuccessor, assignExp.getRightHandSide());
+          }
+        } else {
           newElement.set(returnId, returnType);
-          handleFunctionCallExpression(newElement, returnId, assignExp.getRightHandSide());
         }
-      } else {
-        //we don't know type
-        //set(newElement, op1, returnType, dereference);
+      }
+    } else if (exprOnSummary instanceof CFunctionCallStatement) {
+      String funcName = exprOnSummary.getFunctionCallExpression().toASTString();
+      if (allocate != null && allocate.contains(funcName)) {
+        handleFunctionCallExpression(newElement, exprOnSummary.getFunctionCallExpression());
       }
     }
     return newElement;
   }
 
-  private void handleFunctionCallExpression(LocalState pSuccessor, AbstractIdentifier leftId, CFunctionCallExpression right) throws HandleCodeException {
+  private void handleFunctionCallExpression(LocalState pSuccessor, CFunctionCallExpression right) throws HandleCodeException {
     String funcName = right.getFunctionNameExpression().toASTString();
-    if (allocate != null && allocate.contains(funcName) && leftId != null) {
-      if (!leftId.isGlobal()) {
-        pSuccessor.set(leftId, DataType.LOCAL);
+    int num = allocateInfo.get(funcName);
+    if (num > 0) {
+      //local data are transmitted, as function parameters. F.e., allocate(&pointer);
+      CExpression parameter = right.getParameterExpressions().get(num - 1);
+      int dereference = findDereference(parameter.getExpressionType());
+      AbstractIdentifier rightId = createId(parameter, dereference);
+      if (!rightId.isGlobal()) {
+        pSuccessor.forceSetLocal(rightId);
       }
     }
   }
@@ -255,13 +291,13 @@ public class LocalTransferRelation implements TransferRelation {
             DataType type = pSuccessor.getType(rightId);
             pSuccessor.set(leftId, type);
           }
-        } else if (right instanceof CFunctionCallExpression) {
+        }/* else if (right instanceof CFunctionCallExpression) {
           if (pSuccessor.getType(leftId) == DataType.LOCAL) {
             //reset it
             pSuccessor.set(leftId, null);
           }
           handleFunctionCallExpression(pSuccessor, leftId, (CFunctionCallExpression)assignment.getRightHandSide());
-        }
+        }*/
       }
     }
   }

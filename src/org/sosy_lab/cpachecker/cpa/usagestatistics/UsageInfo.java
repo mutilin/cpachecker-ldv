@@ -39,7 +39,6 @@ public class UsageInfo {
 
     @Override
     public int compare(UsageInfo pO1, UsageInfo pO2) {
-      int result = 0;
 
       if (pO1 == null && pO2 == null) {
         return 0;
@@ -53,15 +52,7 @@ public class UsageInfo {
         return 20;
       }
 
-      if (pO1.locks.getSize() == 0) {
-        result -= 50;
-      }
-      if (pO2.locks.getSize() == 0) {
-        result += 50;
-      }
-
-      result += pO1.locks.diff(pO2.locks);
-      return result;
+      return pO1.locks.diff(pO2.locks);
     }
   }
 

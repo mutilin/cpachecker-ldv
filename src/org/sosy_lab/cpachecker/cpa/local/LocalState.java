@@ -84,6 +84,10 @@ public class LocalState implements AbstractState {
     return previousState;
   }
 
+  public void forceSetLocal(AbstractIdentifier name) {
+    DataInfo.put(name, DataType.LOCAL);
+  }
+
   public void set(AbstractIdentifier name, DataType type) {
     if (LocalCPA.localVariables.contains(name.toString())) {
       DataInfo.put(name, DataType.LOCAL);

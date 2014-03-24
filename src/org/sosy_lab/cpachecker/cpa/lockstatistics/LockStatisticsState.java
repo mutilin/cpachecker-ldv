@@ -403,12 +403,19 @@ public class LockStatisticsState implements AbstractState, Serializable {
 
   /**
    * This method find the difference between two states in some metric.
-   * It is useful for comparators.
+   * It is useful for comparators. lock1.diff(lock2) <=> lock1 - lock2.
    * @param other The other LockStatisticsState
    * @return Difference between two states
    */
   public int diff(LockStatisticsState other) {
     int result = 0;
+
+    result = this.getSize() - other.getSize();
+
+    if (result != 0) {
+      return result;
+    }
+
     for (LockStatisticsLock lock : this.locks) {
       result += lock.norm();
     }
