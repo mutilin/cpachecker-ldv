@@ -288,6 +288,17 @@ public class ABMPredicateReducer implements Reducer {
       }
     }
 
+    @Override
+    public ReducedPredicatePrecision mergeWith(PredicatePrecision other) {
+      PredicatePrecision merged;
+      if (other instanceof ReducedPredicatePrecision) {
+        merged = ((ReducedPredicatePrecision) other).getRootPredicatePrecision().mergeWith(this.getRootPredicatePrecision());
+      } else {
+        merged = other.mergeWith(this.getRootPredicatePrecision());
+      }
+      return new ReducedPredicatePrecision(merged, context);
+    }
+
     private SetMultimap<CFANode, AbstractionPredicate> approximatePredicateMap() {
       if (evaluatedPredicateMap == null) {
         return rootPredicatePrecision.getLocalPredicates();
