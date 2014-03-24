@@ -62,7 +62,7 @@ import org.sosy_lab.cpachecker.util.identifiers.StructureFieldIdentifier;
 @Options(prefix="cpa.usagestatistics")
 public class UsageStatisticsCPAStatistics implements Statistics {
 
-  public Map<SingleIdentifier, List<UsageInfo>> Stat;
+  public Map<SingleIdentifier, UsageSet> Stat;
 
   private UnsafeDetector unsafeDetector = null;
 
@@ -372,7 +372,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   }
 
   private void createVisualization(SingleIdentifier id, BufferedWriter writer) throws IOException {
-    List<UsageInfo> uinfo = Stat.get(id);
+    UsageSet uinfo = Stat.get(id);
 
     if (uinfo == null || uinfo.size() == 0) {
       return;
@@ -388,6 +388,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
     writer.append(id.getDereference() + "\n");
     writer.append(id.getType().toASTString(id.getName()) + "\n");
+    if (uinfo.isTrueUnsafe()) {
+      writer.append("Line 0:     N0 -{/*Is true unsafe:*/}-> N0" + "\n");
+    }
     writer.append("Line 0:     N0 -{/*Number of usages:" + uinfo.size() + "*/}-> N0" + "\n");
     writer.append("Line 0:     N0 -{/*Two examples:*/}-> N0" + "\n");
     try {

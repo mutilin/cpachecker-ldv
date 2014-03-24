@@ -91,6 +91,9 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
   private final UsageStatisticsCPAStatistics statistics;
   private final ExpressionHandler handler;
 
+  @Option(description = "variables, which will not be saved in statistics")
+  private Set<String> skippedvariables = null;
+
   @Option(description = "functions, which we don't analize")
   private Set<String> skippedfunctions = null;
 
@@ -494,6 +497,19 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     if (state.containsLinks(singleId)) {
       singleId = (SingleIdentifier) state.getLinks(id);
     }
+
+    if (skippedvariables != null && skippedvariables.contains(singleId.getName())) {
+      return;
+    } else if (skippedvariables != null && singleId instanceof StructureIdentifier) {
+      AbstractIdentifier owner = singleId;
+      while (owner instanceof StructureIdentifier) {
+        owner = ((StructureIdentifier)owner).getOwner();
+        if (owner instanceof SingleIdentifier && skippedvariables.contains(((SingleIdentifier)owner).getName())) {
+          return;
+        }
+      }
+    }
+
     if (singleId instanceof LocalVariableIdentifier && singleId.getDereference() <= 0) {
       //we don't save in statistics ordinary local variables
       return;

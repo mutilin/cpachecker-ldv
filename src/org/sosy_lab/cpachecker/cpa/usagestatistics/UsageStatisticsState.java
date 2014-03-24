@@ -117,7 +117,7 @@ public class UsageStatisticsState extends AbstractSingleWrapperState  {
 
   @Override
   public UsageStatisticsState clone() {
-    return new UsageStatisticsState(this.getWrappedState(), this);
+    return clone(this.getWrappedState());
   }
 
   public UsageStatisticsState clone(AbstractState pWrappedState) {

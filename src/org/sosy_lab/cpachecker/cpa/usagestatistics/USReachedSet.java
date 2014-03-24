@@ -40,10 +40,6 @@ public class USReachedSet extends PartitionedReachedSet {
   public void remove(AbstractState pState) {
     super.remove(pState);
     //System.out.println("Remove " + pState);
-
-    /*if (AbstractStates.extractLocation(pState).getLineNumber() == 48242) {
-      System.out.println("Clearing that reached set from state " + pState);
-    }*/
     UsageStatisticsState ustate = AbstractStates.extractStateByType(pState, UsageStatisticsState.class);
     ustate.getContainer().removeState(ustate);
 

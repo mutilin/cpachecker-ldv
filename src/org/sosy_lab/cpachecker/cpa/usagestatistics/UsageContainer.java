@@ -34,29 +34,26 @@ import java.util.Set;
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
-import org.sosy_lab.common.configuration.Option;
-import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.UnsafeDetector.SearchMode;
 import org.sosy_lab.cpachecker.util.AbstractStates;
-import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
-import org.sosy_lab.cpachecker.util.identifiers.StructureIdentifier;
 
-@Options(prefix="cpa.usagestatistics")
+//@Options(prefix="cpa.usagestatistics")
 public class UsageContainer {
 
-  @Option(description = "variables, which will not be saved in statistics")
-  private Set<String> skippedvariables = null;
+  private PairwiseUnsafeDetector unsafeDetector = null;
 
-  private UnsafeDetector unsafeDetector = null;
-
-  private Map<SingleIdentifier, List<UsageInfo>> Stat;
+  private Map<SingleIdentifier, UsageSet> Stat;
   private boolean containsUnrefinedUnsafes;
 
-  public final Set<SingleIdentifier> unsafes = new HashSet<>();
+  public Collection<SingleIdentifier> unsafes = null;
+
+  int totalUsages = 0;
+  int totalIds = 0;
 
   public UsageContainer(Configuration config) throws InvalidConfigurationException {
-    config.inject(this);
+    //config.inject(this);
     unsafeDetector = new PairwiseUnsafeDetector(config);
     Stat = new HashMap<>();
     containsUnrefinedUnsafes = false;
@@ -64,18 +61,13 @@ public class UsageContainer {
 
   public void add(SingleIdentifier id, UsageInfo usage) {
 
-    if (skippedvariables != null && skippedvariables.contains(id.getName())) {
-      return;
-    } else if (skippedvariables != null && id instanceof StructureIdentifier) {
-      AbstractIdentifier owner = id;
-      while (owner instanceof StructureIdentifier) {
-        owner = ((StructureIdentifier)owner).getOwner();
-        if (owner instanceof SingleIdentifier && skippedvariables.contains(((SingleIdentifier)owner).getName())) {
-          return;
-        }
-      }
-    }
-    List<UsageInfo> uset;
+
+    UsageSet uset;
+
+
+    /*if (id instanceof StructureIdentifier) {
+      id = ((StructureIdentifier)id).toStructureFieldIdentifier();
+    }*/
 
     /*if (usage.getLine().getLine() == 163213) {
       System.out.println("Add line 163213");
@@ -86,15 +78,21 @@ public class UsageContainer {
     }*/
 
     if (!Stat.containsKey(id)) {
-      uset = new LinkedList<>();
+      uset = new UsageSet();
       Stat.put(id, uset);
     } else {
       uset = Stat.get(id);
-      if (uset.contains(usage)) {
-        /*if (uset.get(uset.indexOf(usage)).isRefined()) {
-          System.out.println("Try to replace refined usage");
-        }*/
+      if (uset.isTrueUnsafe()) {
+        //don't spend time
         return;
+      }
+      if (uset.contains(usage)) {
+        UsageInfo oldUsage = uset.get(uset.indexOf(usage));
+        if (oldUsage.isRefined()) {
+          return;
+        } else {
+          uset.remove(oldUsage);
+        }
       }
       if (unsafeDetector.isUnsafeCase(uset, usage)) {
         //unsafes.add(id);
@@ -107,21 +105,56 @@ public class UsageContainer {
   }
 
   public boolean isTarget() {
-    //return false;
-    return containsUnrefinedUnsafes;
+    return false;
+    //return containsUnrefinedUnsafes;
   }
 
-  public Map<SingleIdentifier, List<UsageInfo>> getStatistics() {
+  public Map<SingleIdentifier, UsageSet> getStatistics() {
     return Stat;
   }
 
   public Collection<SingleIdentifier> getUnsafes() {
-    return  unsafeDetector.getUnsafes(Stat);
+    if (unsafes == null) {
+      totalIds = 0;
+      totalUsages = 0;
+      unsafes = unsafeDetector.getUnsafes(Stat);
+      for (SingleIdentifier id : Stat.keySet()) {
+        totalUsages += Stat.get(id).size();
+        totalIds++;
+      }
+    }
+    return unsafes;
+  }
+
+  public void resetUnsafes() {
+    unsafes = null;
+    Set<UsageInfo> toDelete = new HashSet<>();
+    Set<SingleIdentifier> idToDelete = new HashSet<>();
+
+    for (SingleIdentifier id : Stat.keySet()) {
+      UsageSet uset = Stat.get(id);
+      if (uset.isTrueUnsafe()) {
+        for (UsageInfo uinfo : uset) {
+          if (uinfo.isRefined()) {
+            uinfo.setKeyState(null);
+          } else {
+            toDelete.add(uinfo);
+          }
+        }
+        uset.removeAll(toDelete);
+        toDelete.clear();
+      } else {
+        idToDelete.add(id);
+      }
+    }
+    for (SingleIdentifier id : idToDelete) {
+      Stat.remove(id);
+    }
   }
 
   public void removeState(UsageStatisticsState pUstate) {
     List<UsageInfo> uset;
-    Set<Pair<List<UsageInfo>, UsageInfo>> toDelete = new HashSet<>();
+    List<Pair<List<UsageInfo>, UsageInfo>> toDelete = new LinkedList<>(); //Not set! Some usages and sets can be equals but referes to different ids
     //try {
     for (SingleIdentifier id : Stat.keySet()) {
       uset = Stat.get(id);
@@ -135,9 +168,6 @@ public class UsageContainer {
           //System.out.println("Delete " + uinfo + " due to null");
         } else if (AbstractStates.extractStateByType(keyState, UsageStatisticsState.class).equals(pUstate)) {
           //System.out.println("Delete " + uinfo + " due to keyState");
-          /*if (uinfo.getLine().getLine() == 168219) {
-            System.out.println("Remove 168219 line");
-          }*/
           if (!uinfo.isRefined()) {
             toDelete.add(Pair.of(uset, uinfo));
           }
@@ -153,23 +183,47 @@ public class UsageContainer {
     }
   }
 
-  public boolean check() {
-    List<UsageInfo> uset;
-    boolean result;
+  public SingleIdentifier check(SingleIdentifier refinementId) {
+
+    UsageSet uset;
+    int skippedIds = 0;
+    int skippedUsages = 0;
+    int unsafesSize = unsafes.size();
     for (SingleIdentifier id : Stat.keySet()) {
       uset = Stat.get(id);
-      result = unsafeDetector.containsUnsafe(uset, false);
-      if (result) {
-        containsUnrefinedUnsafes = true;
-        return true;
+      if (uset.isTrueUnsafe()) {
+        skippedUsages += uset.size();
+        skippedIds++;
       }
-
     }
-    containsUnrefinedUnsafes = false;
-    return false;
+
+    System.out.println("Skip " + skippedIds + "/" + unsafesSize + " (" + totalIds + ") vars, " + skippedUsages + "(" + totalUsages
+        + ") usages as true unsafes");
+
+    uset = Stat.get(refinementId);
+    if (uset.isTrueUnsafe() || !unsafeDetector.containsUnsafe(uset, SearchMode.FALSE)) {
+      if (!unsafeDetector.containsUnsafe(uset, SearchMode.TRUE)) {
+        unsafes.remove(refinementId);
+        //TODO May be remove only empty
+        Stat.remove(refinementId);
+      } else {
+        uset.setUnsafe();
+      }
+      for (SingleIdentifier id : unsafes) {
+        uset = Stat.get(id);
+        if (uset.isTrueUnsafe()) {
+         continue;
+        }
+        return id;
+      }
+      containsUnrefinedUnsafes = false;
+      return null;
+    } else {
+      return refinementId;
+    }
   }
 
-  public void reset() {
+  /*public void reset() {
     List<UsageInfo> uset;
     Set<UsageInfo> toDelete = new HashSet<>();
     Set<SingleIdentifier> idToDelete = new HashSet<>();
@@ -189,5 +243,5 @@ public class UsageContainer {
     for (SingleIdentifier id : idToDelete) {
       Stat.remove(id);
     }
-  }
+  }*/
 }

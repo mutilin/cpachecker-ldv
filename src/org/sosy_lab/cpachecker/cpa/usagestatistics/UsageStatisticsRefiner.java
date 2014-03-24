@@ -25,8 +25,8 @@ package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
 import java.io.PrintStream;
 import java.util.Collection;
-import java.util.LinkedList;
-import java.util.List;
+import java.util.HashSet;
+import java.util.Set;
 
 import org.sosy_lab.common.Timer;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
@@ -54,12 +54,14 @@ public class UsageStatisticsRefiner extends ABMPredicateRefiner implements Stati
     public Timer DetectUnsafeCases = new Timer();
     public Timer ComputePath = new Timer();
     public Timer Refinement = new Timer();
+    public Timer UnsafeCheck = new Timer();
 
     @Override
     public void printStatistics(PrintStream pOut, Result pResult, ReachedSet pReached) {
       pOut.println("Time for detect unsafe cases        " + DetectUnsafeCases);
       pOut.println("Time for computing path             " + ComputePath);
       pOut.println("Time for refinement                 " + Refinement);
+      pOut.println("Time for checks of unsafes          " + UnsafeCheck);
 
     }
 
@@ -86,47 +88,103 @@ public class UsageStatisticsRefiner extends ABMPredicateRefiner implements Stati
   @Override
   public boolean performRefinement(ReachedSet pReached) throws CPAException, InterruptedException {
     //System.out.println("Run USRefiner");
+    //Set<CallstackState> refinedPaths = new HashSet<>();
+    Set<String> cachedResult = new HashSet<>();
+    Set<Integer> cachedResult2 = new HashSet<>();
+    Set<UsageInfo> toDelete = new HashSet<>();
     UsageContainer container =
         AbstractStates.extractStateByType(pReached.getFirstState(), UsageStatisticsState.class).getContainer();
+    Collection<SingleIdentifier> unsafes = container.getUnsafes();
 
+    SingleIdentifier refinementId = unsafes.isEmpty() ? null : unsafes.iterator().next();
     PairwiseUnsafeDetector detector = new PairwiseUnsafeDetector(null);
 
     System.out.println("Perform US refinement: " + i++);
+    int originSize = 0;
     boolean refinementFinish = false;
-    if (i > 305) {
+    for (SingleIdentifier id : container.getStatistics().keySet()) {
+      UsageSet uset = container.getStatistics().get(id);
+      if (uset.isTrueUnsafe()) {
+        continue;
+      }
+      for (UsageInfo uinfo : uset) {
+        if (detector.isUnsafeCase(uset, uinfo) && !uinfo.isRefined()) {
+          originSize++;
+        }
+      }
+    }
+    System.out.println("Before refinement: " + unsafes.size() + " unsafes");
+    if (i == 5) {
+      //System.out.println("This refinement: " + i);
       return false;
     }
-    //int iterationNum = 0;
-top:while (container.check()) {
+    int iterationNum = 0;
+    pStat.UnsafeCheck.start();
+top:while ((refinementId = container.check(refinementId)) != null) {
+      pStat.UnsafeCheck.stop();
+      pathStateToReachedState.clear();
       //System.out.println("  Iteration " + iterationNum);
       pStat.DetectUnsafeCases.start();
       refinementFinish = true;
-      List<UsageInfo> toRefine = new LinkedList<>();
-      for (SingleIdentifier id : container.getStatistics().keySet()) {
-        List<UsageInfo> uset = container.getStatistics().get(id);
-        for (UsageInfo uinfo : uset) {
-          if (detector.isUnsafeCase(uset, uinfo) && !uinfo.isRefined()) {
-            /*if (uinfo.getLine().getLine() == 163213) {
-              System.out.println("Invisible line");
-            }*/
-            toRefine.add(uinfo);
-          }
-          /*if (uinfo.isRefined()) {
-            System.out.println("Skip " + uinfo + " as refined");
+      //Stack<UsageInfo> toRefine = new Stack<>();
+      UsageInfo target = null;
+
+      //uset.removeAll(toDelete);
+     /* if (target != null) {
+        break;
+      }*/
+      UsageSet uset = container.getStatistics().get(refinementId);
+      for (UsageInfo uinfo : uset) {
+        if (detector.isUnsafeCase(uset, uinfo) && !uinfo.isRefined()
+            && !cachedResult.contains(uinfo.getCallStack().getCurrentFunction())
+            //!cachedResult2.contains(uinfo.getLine().getLine())
+            ) {
+          /*if (refinedPaths.contains(uinfo.getCallStack())) {
+            toDelete.add(uinfo);
+            continue;
           }*/
+          target = uinfo;
+          break;
+        } else if (cachedResult.contains(uinfo.getCallStack().getCurrentFunction())
+            //cachedResult2.contains(uinfo.getLine().getLine())
+            ) {
+          toDelete.add(uinfo);
         }
+        /*if (uinfo.isRefined()) {
+          System.out.println("Skip " + uinfo + " as refined");
+        }*/
+      }
+      if (toDelete.size() > 0) {
+        //for (UsageInfo uinfo : toDelete) {
+          uset.removeAll(toDelete);
+          //container.removeState(AbstractStates.extractStateByType(uinfo.getKeyState(), UsageStatisticsState.class));
+          //System.out.println(uinfo + " is considered to be false, as cached");
+        //}
+        toDelete.clear();
       }
       pStat.DetectUnsafeCases.stop();
-      for (UsageInfo target : toRefine) {
-        //System.out.println("Refine " + target);
+      if (target == null) {
+        continue;
+      }
+      /*if (iterationNum == 20000) {
+        pStat.UnsafeCheck.stop();
+        return false;
+      }*/
+      iterationNum++;
+     // while (!toRefine.empty()) {
+     //   target = toRefine.pop();
+      System.out.println("Refine " + refinementId);
+        System.out.println("Refine " + iterationNum + " from " + originSize);
         ARGReachedSet ARGset = new ARGReachedSet(pReached);
         pStat.ComputePath.start();
         ARGPath pPath = computePath((ARGState)target.getKeyState(), ARGset);
         pStat.ComputePath.stop();
         if (pPath == null) {
           container.removeState(AbstractStates.extractStateByType(target.getKeyState(), UsageStatisticsState.class));
+          //refinedPaths.add(target.getCallStack());
           System.out.println(target + " isn't found");
-          continue top;
+          pStat.UnsafeCheck.start();
+          continue;
         }
 
         pStat.Refinement.start();
@@ -138,25 +196,27 @@ top:while (container.check()) {
         } else {
           container.removeState(AbstractStates.extractStateByType(target.getKeyState(), UsageStatisticsState.class));
           System.out.println(target + " is false");
+          //refinedPaths.add(target.getCallStack());
           //container.check();
-          continue top;
+          cachedResult.add(target.getCallStack().getCurrentFunction());
+          //cachedResult2.add(target.getLine().getLine());
         }
-      }
+        pStat.UnsafeCheck.start();
+   //   }
     }
-    return true;
+    pStat.UnsafeCheck.stop();
+    return refinementFinish;
   }
 
 
   @Override
   protected ARGPath computePath(ARGState pLastElement, ARGReachedSet pReachedSet) throws InterruptedException, CPATransferException {
     //assert pLastElement.isTarget();
-    if (pLastElement == null) {
+    if (pLastElement == null || pLastElement.isDestroyed()) {
       //we delete this state from other unsafe
       return null;
     }
     int startId = new ARGState(pLastElement, null).getStateId();
-    //System.out.println("ARGs in analysis: " + (startId - lastArg));
-    //lastArg = startId;
     ARGState subgraph = transfer.findPath(pLastElement, pReachedSet, pathStateToReachedState);
     if (subgraph == null) {
       return null;
