@@ -81,7 +81,6 @@ import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsPrecision;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsReducer;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsState;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
@@ -282,6 +281,7 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
       preciseReachedCache.clear();
       unpreciseReachedCache.clear();
       returnCache.clear();
+      blockARGCache.clear();
     }
 
     public void clearCache(AbstractState predicateKey, Precision precisionKey, Block context) {
@@ -338,7 +338,6 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
 
   private final Map<AbstractState, ReachedSet> abstractStateToReachedSet = new HashMap<>();
   private final Map<AbstractState, AbstractState> expandedToReducedCache = new HashMap<>();
-  private final Map<AbstractState, AbstractState> reducedToExpandedCache = new HashMap<>();
 
   private Block currentBlock;
   private LinkedList<Block> BlockStack = new LinkedList<>();
@@ -621,9 +620,6 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
       Precision initialPrecision, CFANode node) throws InterruptedException, RecursiveAnalysisFailedException {
     try {
       AbstractState reducedInitialState = wrappedReducer.getVariableReducedState(initialState, currentBlock, node);
-      if (!reducedToExpandedCache.containsKey(reducedInitialState)) {
-        reducedToExpandedCache.put(reducedInitialState, initialState);
-      }
       Precision reducedInitialPrecision = wrappedReducer.getVariableReducedPrecision(initialPrecision, currentBlock);
       cleanLockStatisticsPrecision(reducedInitialPrecision);
       Pair<ReachedSet, Collection<AbstractState>> pair =
@@ -868,7 +864,6 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
     }
 
     mainReachedSet.updatePrecisionGlobally(pNewPrecisions.get(0), pNewPrecisionTypes.get(0));
-    AbstractStates.extractStateByType(mainReachedSet.asReachedSet().getFirstState(), UsageStatisticsState.class).getContainer().reset();
     removeSubtreeTimer.stop();
   }
 
@@ -1234,7 +1229,19 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
         }
       }
       if (currentElement.getParents().isEmpty()) {
-        ARGState expandedState = (ARGState) reducedToExpandedCache.get(currentElement);
+        ARGState expandedState = null;
+        ReachedSet tmpReachedSet;
+        for (AbstractState tmpExpanded : abstractStateToReachedSet.keySet()) {
+          tmpReachedSet = abstractStateToReachedSet.get(tmpExpanded);
+          if (tmpReachedSet.getFirstState().equals(currentElement)) {
+            expandedState = (ARGState) tmpExpanded;
+            break;
+          }
+        }
+        if (currentElement.isDestroyed()) {
+          //It means, that we delete some part of path
+          return null;
+        }
         if (expandedState == null) {
           root = elementsMap.get(currentElement);
           break;
@@ -1351,6 +1358,8 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
   public void clearCaches() {
     argCache.clear();
     abstractStateToReachedSet.clear();
+    expandedToReducedCache.clear();
+    BlockStack.clear();
   }
 
   Pair<Block, ReachedSet> getCachedReachedSet(ARGState root, Precision rootPrecision) {
