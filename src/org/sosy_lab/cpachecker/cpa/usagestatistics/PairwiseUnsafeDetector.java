@@ -26,7 +26,6 @@ package org.sosy_lab.cpachecker.cpa.usagestatistics;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 
 import org.sosy_lab.common.Pair;
@@ -51,12 +50,12 @@ public class PairwiseUnsafeDetector implements UnsafeDetector {
   }
 
   @Override
-  public Collection<SingleIdentifier> getUnsafes(Map<SingleIdentifier, List<UsageInfo>> stat) {
+  public Collection<SingleIdentifier> getUnsafes(Map<SingleIdentifier, UsageSet> stat) {
     Collection<SingleIdentifier> unsafe = new HashSet<>();
 
     for (SingleIdentifier id : stat.keySet()) {
-      List<UsageInfo> uset = stat.get(id);
-      if (isUnsafeId(uset) && !unsafe.contains(id)) {
+      UsageSet uset = stat.get(id);
+      if (containsUnsafe(uset, SearchMode.ALL) && !unsafe.contains(id)) {
         unsafe.add(id);
       }
     }
@@ -64,7 +63,7 @@ public class PairwiseUnsafeDetector implements UnsafeDetector {
   }
 
   @Override
-  public Pair<UsageInfo, UsageInfo> getUnsafePair(List<UsageInfo> uinfo) throws HandleCodeException {
+  public Pair<UsageInfo, UsageInfo> getUnsafePair(UsageSet uinfo) throws HandleCodeException {
     Collections.sort(uinfo, new UsageInfo.UsageComparator());
 
     for (UsageInfo info1 : uinfo) {
@@ -77,24 +76,13 @@ public class PairwiseUnsafeDetector implements UnsafeDetector {
     throw new HandleCodeException("Can't find example of unsafe cases");
   }
 
-  public boolean isUnsafeId(List<UsageInfo> uset) {
-    for (UsageInfo uinfo : uset) {
-      for (UsageInfo uinfo2 : uset) {
-        if (!uinfo.intersect(uinfo2)) {
-          return true;
-        }
-      }
-    }
-    return false;
-  }
-
   @Override
   public String getDescription() {
     return "All lines with different mutexes were printed";
   }
 
   @Override
-  public boolean isUnsafeCase(List<UsageInfo> oldUsages, UsageInfo newUsage) {
+  public boolean isUnsafeCase(UsageSet oldUsages, UsageInfo newUsage) {
     for (UsageInfo old : oldUsages) {
       if (!newUsage.intersect(old)) {
         return true;
@@ -104,13 +92,28 @@ public class PairwiseUnsafeDetector implements UnsafeDetector {
   }
 
   @Override
-  public boolean containsUnsafe(List<UsageInfo> pList, boolean pCheckAll) {
-    for (UsageInfo uinfo : pList) {
-      for (UsageInfo uinfo2 : pList) {
-        if (uinfo2.isRefined() && !pCheckAll) {
+  public boolean containsUnsafe(UsageSet pList, SearchMode mode) {
+    if (pList.isTrueUnsafe()) {
+      return true;
+    }
+    UsageInfo uinfo, uinfo2;
+    for (int i = 0; i < pList.size(); i++) {
+      uinfo = pList.get(i);
+      if (!uinfo.isRefined() && mode == SearchMode.TRUE) {
+        continue;
+      }
+      for (int j = i + 1; j < pList.size(); j++) {
+        uinfo2 = pList.get(j);
+        if (uinfo2.isRefined() && mode == SearchMode.FALSE) {
+          continue;
+        }
+        if (!uinfo2.isRefined() && mode == SearchMode.TRUE) {
           continue;
         }
         if (!uinfo.intersect(uinfo2)) {
+          if (uinfo.isRefined() && uinfo2.isRefined()) {
+            pList.setUnsafe();
+          }
           return true;
         }
       }
