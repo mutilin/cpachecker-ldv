@@ -23,9 +23,9 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
-import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 
 import org.sosy_lab.common.Pair;
@@ -50,8 +50,8 @@ public class PairwiseUnsafeDetector implements UnsafeDetector {
   }
 
   @Override
-  public Collection<SingleIdentifier> getUnsafes(Map<SingleIdentifier, UsageSet> stat) {
-    Collection<SingleIdentifier> unsafe = new HashSet<>();
+  public List<SingleIdentifier> getUnsafes(Map<SingleIdentifier, UsageSet> stat) {
+    List<SingleIdentifier> unsafe = new LinkedList<>();
 
     for (SingleIdentifier id : stat.keySet()) {
       UsageSet uset = stat.get(id);

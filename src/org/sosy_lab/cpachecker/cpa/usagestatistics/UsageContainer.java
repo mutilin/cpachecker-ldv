@@ -23,13 +23,12 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
-import java.util.Collection;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.Configuration;
@@ -47,7 +46,7 @@ public class UsageContainer {
   private Map<SingleIdentifier, UsageSet> Stat;
   private boolean containsUnrefinedUnsafes;
 
-  public Collection<SingleIdentifier> unsafes = null;
+  public List<SingleIdentifier> unsafes = null;
 
   int totalUsages = 0;
   int totalIds = 0;
@@ -55,7 +54,7 @@ public class UsageContainer {
   public UsageContainer(Configuration config) throws InvalidConfigurationException {
     //config.inject(this);
     unsafeDetector = new PairwiseUnsafeDetector(config);
-    Stat = new HashMap<>();
+    Stat = new TreeMap<>();
     containsUnrefinedUnsafes = false;
   }
 
@@ -113,7 +112,7 @@ public class UsageContainer {
     return Stat;
   }
 
-  public Collection<SingleIdentifier> getUnsafes() {
+  public List<SingleIdentifier> getUnsafes() {
     if (unsafes == null) {
       totalIds = 0;
       totalUsages = 0;
@@ -185,6 +184,9 @@ public class UsageContainer {
 
   public SingleIdentifier check(SingleIdentifier refinementId) {
 
+    if (refinementId == null) {
+      return null;
+    }
     UsageSet uset;
     int skippedIds = 0;
     int skippedUsages = 0;
