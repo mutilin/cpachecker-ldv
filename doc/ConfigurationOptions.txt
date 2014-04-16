@@ -126,7 +126,7 @@ analysis.programNames = no default value
 # locations cannot be merged)
 # PARTITIONED: partitioning depending on CPAs (e.g Location, Callstack etc.)
 analysis.reachedSet = PARTITIONED
-  enum:     [NORMAL, LOCATIONMAPPED, PARTITIONED]
+  enum:     [NORMAL, LOCATIONMAPPED, PARTITIONED, USAGESTATISTICS]
 
 # restart the analysis using a different configuration after unknown result
 analysis.restartAfterUnknown = false
@@ -354,6 +354,9 @@ counterexample.removeInfeasibleErrors = false
 # print coverage info to file
 coverage.export = true
 coverage.file = "coverage.info"
+
+# print information about coverage
+coverage.output = "coverage.info"
 
 # CPA to use (see doc/Configuration.txt for more documentation on this)
 cpa = CompositeCPA.class.getCanonicalName()
@@ -718,6 +721,18 @@ cpa.invariants.maximumFormulaDepth = 4
 cpa.invariants.merge = "JOIN"
   allowed values: [JOIN, SEP]
 
+# whether or not to use abstract evaluation to ensure termination when the
+# merge operator is SEP or the limit for interesting variables or predicates
+# is positive.
+cpa.invariants.useAbstractEvaluation = true
+
+# whether or not to collect information about binary variable interrelations.
+cpa.invariants.useBinaryVariableInterrelations = true
+
+# whether or not to use a bit vector formula manager when extracting
+# invariant approximations from states.
+cpa.invariants.useBitvectors = false
+
 # functions, which allocate new free memory
 cpa.local.allocatefunctions = no default value
 
@@ -737,17 +752,6 @@ cpa.lockStatistics.lockinfo = no default value
 
 # function to reset state
 cpa.lockStatistics.lockreset = no default value
-# whether or not to use abstract evaluation to ensure termination when the
-# merge operator is SEP or the limit for interesting variables or predicates
-# is positive.
-cpa.invariants.useAbstractEvaluation = true
-
-# whether or not to collect information about binary variable interrelations.
-cpa.invariants.useBinaryVariableInterrelations = true
-
-# whether or not to use a bit vector formula manager when extracting
-# invariant approximations from states.
-cpa.invariants.useBitvectors = false
 
 # threshold for unrolling loops of the program (0 is infinite)
 # works only if assumption storage CPA is enabled, because otherwise it would
@@ -1174,6 +1178,9 @@ cpa.predicate.useInvariantsForAbstraction = false
 # add special information to formulas about non-deterministic functions
 cpa.predicate.useNondetFlags = false
 
+# use filtration of path formulas by relevat predicates
+cpa.predicate.usePathFiltration = false
+
 # Qualified name for class which checks that the computed abstraction adheres
 # to the desired property.
 cpa.propertychecker.className = "org.sosy_lab.cpachecker.pcc.propertychecker.DefaultPropertyChecker"
@@ -1267,9 +1274,6 @@ cpa.usagestatistics.abortfunctions = no default value
 # to list variable)
 cpa.usagestatistics.binderFunctions = no default value
 
-# do we need to collect statistics to generate file for Lcov
-cpa.usagestatistics.covering = false
-
 # should we use local analysis?
 cpa.usagestatistics.localanalysis = false
 
@@ -1278,7 +1282,10 @@ cpa.usagestatistics.merge = "SEP"
   allowed values: [SEP, JOIN]
 
 # path to write results
-cpa.usagestatistics.output = "test/rawstat"
+cpa.usagestatistics.output = "unsafe_rawdata"
+
+# print all unsafe cases in report
+cpa.usagestatistics.printAllUnsafeUsages = false
 
 # functions, which we don't analize
 cpa.usagestatistics.skippedfunctions = no default value
@@ -1289,14 +1296,6 @@ cpa.usagestatistics.skippedvariables = no default value
 # which stop operator to use for LockStatisticsCPA
 cpa.usagestatistics.stop = "SEP"
   allowed values: [SEP, JOIN, NEVER]
-
-# which data process we should use
-cpa.usagestatistics.unsafeDetectorType = "PAIR"
-  allowed values: [PAIR, SETDIFF]
-
-# variables, which will be unsafes even only with read access (they can be
-# changed invisibly)
-cpa.usagestatistics.unsafedetector.detectByReadAccess = no default value
 
 # enable the Forced Covering optimization
 impact.useForcedCovering = true
@@ -1390,6 +1389,7 @@ reachedSet.file = "reached.txt"
 # finished correctly
 restartAlgorithm.alwaysrun = false
 
+# list of files with configurations to use
 # List of files with configurations to use. A filename can be suffixed with
 # :if-interrupted, :if-failed, and :if-terminated which means that this
 # configuration will only be used if the previous configuration ended with a
