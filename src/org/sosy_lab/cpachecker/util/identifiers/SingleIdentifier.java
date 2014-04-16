@@ -132,4 +132,21 @@ public abstract class SingleIdentifier implements AbstractIdentifier{
       return null;
     }
   }
+
+  @Override
+  public int compareTo(AbstractIdentifier pO) {
+    if (! (pO instanceof SingleIdentifier)) {
+      return 1;
+    } else {
+      int result = this.name.compareTo(((SingleIdentifier)pO).name);
+      if (result != 0) {
+        return result;
+      }
+      result = this.type.toASTString("").compareTo(((SingleIdentifier)pO).type.toASTString(""));
+      if (result != 0) {
+        return result;
+      }
+      return this.dereference - ((SingleIdentifier)pO).dereference;
+    }
+  }
 }

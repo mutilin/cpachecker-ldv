@@ -109,4 +109,13 @@ public class StructureFieldIdentifier extends SingleIdentifier {
   public GeneralIdentifier getGeneralId() {
     return new GeneralStructureFieldIdentifier(name, fieldType, type, dereference);
   }
+
+  @Override
+  public int compareTo(AbstractIdentifier pO) {
+    if (pO instanceof GlobalVariableIdentifier || pO instanceof LocalVariableIdentifier) {
+      return -1;
+    } else {
+      return super.compareTo(pO);
+    }
+  }
 }
