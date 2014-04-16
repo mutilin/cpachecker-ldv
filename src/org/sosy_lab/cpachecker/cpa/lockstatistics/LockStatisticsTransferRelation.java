@@ -261,15 +261,15 @@ public class LockStatisticsTransferRelation implements TransferRelation
          */
         CLeftHandSide leftSide = ((CAssignment) expression).getLeftHandSide();
         CRightHandSide rightSide = ((CAssignment) expression).getRightHandSide();
-        if (rightSide instanceof CIntegerLiteralExpression) {
-          int level = ((CIntegerLiteralExpression)rightSide).getValue().intValue();
-          LockInfo lock = findLockByVariable(leftSide.toASTString());
-          if (lock != null) {
+        LockInfo lock = findLockByVariable(leftSide.toASTString());
+        if (lock != null) {
+          if (rightSide instanceof CIntegerLiteralExpression) {
+            int level = ((CIntegerLiteralExpression)rightSide).getValue().intValue();
             processSetLevel(newElement, precision, state, expression.getFileLocation().getStartingLineNumber(), level, lock);
+          } else {
+            logger.log(Level.WARNING, "Lock level isn't numeric constant: " + expression.toASTString()
+                + "(line " + expression.getFileLocation().getStartingLineNumber() + ")");
           }
-        } else {
-          logger.log(Level.WARNING, "Lock level isn't numeric constant: " + expression.toASTString()
-              + "(line " + expression.getFileLocation().getStartingLineNumber() + ")");
         }
       }
 

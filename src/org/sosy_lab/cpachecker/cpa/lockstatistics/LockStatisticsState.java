@@ -27,6 +27,7 @@ import java.io.Serializable;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.logging.Level;
 
 import org.sosy_lab.common.LogManager;
@@ -36,19 +37,18 @@ import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.abm.ABMRestoreStack;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackReducer;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsLock.LockType;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier.LockType;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.LineInfo;
 
 public class LockStatisticsState implements AbstractState, Serializable {
   private static final long serialVersionUID = -3152134511524554357L;
 
   private final Set<LockStatisticsLock> locks;
+  private LockStatisticsState toRestore;
   //if we need restore state, we save it here
   //Used for function annotations like annotate.function_name.restore
-  private LockStatisticsState toRestore;
-
   public LockStatisticsState() {
-    locks  = new HashSet<>();
+    locks  = new TreeSet<>();
     toRestore = null;
   }
 
@@ -167,7 +167,9 @@ public class LockStatisticsState implements AbstractState, Serializable {
 
   public void reset(String lockName, String var, LogManager logger) {
     LockStatisticsLock lock = findLock(lockName, var);
-    reset(lock, logger);
+    if (lock != null) {
+      reset(lock, logger);
+    }
   }
 
   private void reset(LockStatisticsLock lock, LogManager logger) {
@@ -208,7 +210,8 @@ public class LockStatisticsState implements AbstractState, Serializable {
       }
     } else if (num > 0) {
       newLock = new LockStatisticsLock(lockName, line, LockType.GLOBAL_LOCK, state, reduced, variable);
-      newLock = newLock.addRecursiveAccessPointer(num, new AccessPoint(new LineInfo(line), state, reduced));
+      newLock = newLock.addRecursiveAccessPointer(num - 1, new AccessPoint(new LineInfo(line), state, reduced));
+      // num - 1, because one of them is line above (new lock)
       if (newLock != null) {
         locks.add(newLock);
       }
@@ -277,7 +280,7 @@ public class LockStatisticsState implements AbstractState, Serializable {
    * @return a new element representing the join of this element and the other element
    */
   public LockStatisticsState join(LockStatisticsState other) {
-    Set<LockStatisticsLock> newLocks = new HashSet<>();
+    Set<LockStatisticsLock> newLocks = new TreeSet<>();
 
     for (LockStatisticsLock otherLock : other.locks) {
 
@@ -319,17 +322,25 @@ public class LockStatisticsState implements AbstractState, Serializable {
 
   @Override
   public LockStatisticsState clone() {
-    LockStatisticsState result = new LockStatisticsState();
-    result.toRestore = this.toRestore;
-    for (LockStatisticsLock lock : this.locks) {
-      result.locks.add(lock.clone());
-    }
-    return result;
+    return new LockStatisticsState(new TreeSet<>(this.locks), this.toRestore);
+    //result.toRestore = ;
+    /*for (LockStatisticsLock lock : this.locks) {
+    result.loc = new LockStatisticsState(gLocks, state)t.locks = new LockStatisticsState(gLocks, state)
+    return result;*/
   }
 
   public void markOldLocks() {
+    LockStatisticsLock tmpLock;
+    Set<Pair<LockStatisticsLock, LockStatisticsLock>> toChange = new HashSet<>();
     for (LockStatisticsLock lock : locks) {
-      lock.markOldPoints();
+      tmpLock = lock.markOldPoints();
+      if (lock != tmpLock) {
+        toChange.add(Pair.of(lock, tmpLock));
+      }
+    }
+    for (Pair<LockStatisticsLock, LockStatisticsLock> pair : toChange) {
+      locks.remove(pair.getFirst());
+      locks.add(pair.getSecond());
     }
   }
 
