@@ -417,7 +417,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 		UsageContainer container = AbstractStates.extractStateByType(reached.getFirstState(), UsageStatisticsState.class)
 		    .getContainer();
 		Stat = container.getStatistics();
-		Collection<SingleIdentifier> unsafes = container.getUnsafes();
+		List<SingleIdentifier> unsafes = container.getUnsafes();
     try {
       writer = Files.openOutputFile(outputStatFileName);
       logger.log(Level.FINE, "Print statistics about unsafe cases");
@@ -450,7 +450,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   private void printLockStatistics(BufferedWriter writer) throws IOException {
     List<LockStatisticsLock> mutexes = findAllLocks();
 
-    Collections.sort(mutexes, new LockStatisticsLock.LockComparator());
+    Collections.sort(mutexes);
     writer.append(mutexes.size() + "\n");
     for (LockStatisticsLock lock : mutexes) {
       writer.append(lock.toString() + "\n");
