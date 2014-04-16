@@ -1162,8 +1162,8 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
     return Pair.of(callNodes, returnNodes);
   }
 
-  public ARGState findPath(ARGState target, ARGReachedSet reachedSet,
-      Map<ARGState, ARGState> pPathElementToReachedState) throws InterruptedException, RecursiveAnalysisFailedException {
+  public ARGState findPath(ARGState target,
+      Map<ARGState, ARGState> pPathElementToReachedState, final CallstackState stack) throws InterruptedException, RecursiveAnalysisFailedException {
 
     //start by creating ARGElements for each node needed in the tree
     Map<ARGState, BackwardARGState> elementsMap = new HashMap<>();
@@ -1229,13 +1229,48 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
         }
       }
       if (currentElement.getParents().isEmpty()) {
+        if (stack.getPreviousState() == null) {
+          root = elementsMap.get(currentElement);
+          break;
+        }
+        //stack = stack.getPreviousState();
         ARGState expandedState = null;
         ReachedSet tmpReachedSet;
+        //Set<AbstractState> potentialNodes = new HashSet<>();
         for (AbstractState tmpExpanded : abstractStateToReachedSet.keySet()) {
           tmpReachedSet = abstractStateToReachedSet.get(tmpExpanded);
           if (tmpReachedSet.getFirstState().equals(currentElement)) {
+            CallstackState expandedCallstack = AbstractStates.extractStateByType(tmpExpanded, CallstackState.class);
+            if (!(expandedCallstack.getPreviousState().getCurrentFunction()
+                .equals(stack.getPreviousState().getCurrentFunction()))) {
+              continue;
+            }
             expandedState = (ARGState) tmpExpanded;
-            break;
+            ARGState tmpRoot = findPath(expandedState, pPathElementToReachedState, stack.getPreviousState());
+            //int endId = new ARGState(tmpExpanded, null).getStateId();
+            //endId = endId - elementsMap.get(currentElement).getStateId();
+            if (tmpRoot != null) {
+              BackwardARGState newExpandedState = null;
+              for (ARGState tmp : pPathElementToReachedState.keySet()) {
+                if (pPathElementToReachedState.get(tmp).equals(expandedState) && tmp.getChildren().size() == 0) {
+                  newExpandedState = (BackwardARGState) tmp;
+                  break;
+                }
+              }
+              assert newExpandedState != null;
+              elementsMap.put(expandedState, newExpandedState);
+              //pPathElementToReachedState.get(newExpandedState).removeFromARG();
+              pPathElementToReachedState.put(newExpandedState, expandedState);
+              //openElements.push(expandedState);
+              for (ARGState child : elementsMap.get(currentElement).getChildren()) {
+                child.addParent(newExpandedState);
+              }
+              elementsMap.get(currentElement).removeFromARG();
+              newExpandedState.updateDecreaseId();
+              return tmpRoot;
+            }
+            //System.out.println("Add " + endId + " false states");
+           // break;
           }
         }
         if (currentElement.isDestroyed()) {
@@ -1243,22 +1278,11 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
           return null;
         }
         if (expandedState == null) {
-          root = elementsMap.get(currentElement);
-          break;
-        } else {
-          BackwardARGState newExpandedState = new BackwardARGState(expandedState.getWrappedState(), null);
-          elementsMap.put(expandedState, newExpandedState);
-          pPathElementToReachedState.put(newExpandedState, expandedState);
-          openElements.push(expandedState);
-          for (ARGState child : elementsMap.get(currentElement).getChildren()) {
-            child.addParent(newExpandedState);
-          }
-          elementsMap.get(currentElement).removeFromARG();
-          newExpandedState.updateDecreaseId();
+          return null;
         }
       }
     }
-    assert root != null;
+    //assert root != null;
     return root;
   }
 
