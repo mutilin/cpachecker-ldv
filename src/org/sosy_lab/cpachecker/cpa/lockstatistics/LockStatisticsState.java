@@ -421,17 +421,17 @@ public class LockStatisticsState implements AbstractState, Serializable {
   public int diff(LockStatisticsState other) {
     int result = 0;
 
-    result = this.getSize() - other.getSize();
+    result = other.getSize() - this.getSize(); //decreasing queue
 
     if (result != 0) {
       return result;
     }
 
     for (LockStatisticsLock lock : this.locks) {
-      result += lock.norm();
+      result -= lock.norm();
     }
     for (LockStatisticsLock lock : other.locks) {
-      result -= lock.norm();
+      result += lock.norm();
     }
     return result;
   }
