@@ -55,8 +55,6 @@ import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.abm.ABMTransferRelation;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.USReachedSet;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageContainer;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsState;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.InvalidComponentException;
 import org.sosy_lab.cpachecker.exceptions.RefinementFailedException;
@@ -252,8 +250,6 @@ public class CEGARAlgorithm implements Algorithm, StatisticsProvider {
             ARGState firstState = (ARGState) reached.getFirstState();
             CFANode firstNode = AbstractStates.extractLocation(firstState);
             Precision precision = reached.getPrecision(firstState);
-            UsageContainer container = AbstractStates.extractStateByType(firstState, UsageStatisticsState.class).getContainer();
-            container.resetUnsafes();
             ((USReachedSet)reached).clear();
             reached.add((((CPAAlgorithm)algorithm).cpa).getInitialState(firstNode), precision);
           }
