@@ -40,6 +40,7 @@ import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
 import org.sosy_lab.cpachecker.cpa.arg.ARGReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
+import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.predicate.ABMPredicateRefiner;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
@@ -84,13 +85,10 @@ public class UsageStatisticsRefiner extends ABMPredicateRefiner implements Stati
   }
 
   int i = 0;
-  int lastArg = 0;
+  int findUnknown = 0;
   @Override
   public boolean performRefinement(ReachedSet pReached) throws CPAException, InterruptedException {
-    //System.out.println("Run USRefiner");
-    //Set<CallstackState> refinedPaths = new HashSet<>();
-    Set<String> cachedResult = new HashSet<>();
-    Set<Integer> cachedResult2 = new HashSet<>();
+    UsageCache cache = new UsageCallstackCache();
     Set<UsageInfo> toDelete = new HashSet<>();
     UsageContainer container =
         AbstractStates.extractStateByType(pReached.getFirstState(), UsageStatisticsState.class).getContainer();
@@ -99,10 +97,10 @@ public class UsageStatisticsRefiner extends ABMPredicateRefiner implements Stati
     SingleIdentifier refinementId = unsafes.isEmpty() ? null : unsafes.iterator().next();
     PairwiseUnsafeDetector detector = new PairwiseUnsafeDetector(null);
 
-    System.out.println("Perform US refinement: " + i++);
-    int originSize = 0;
+    System.out.println("Perform US refinement: " + i);
+    //int originSize = 0;
     boolean refinementFinish = false;
-    for (SingleIdentifier id : container.getStatistics().keySet()) {
+    /*for (SingleIdentifier id : container.getStatistics().keySet()) {
       UsageSet uset = container.getStatistics().get(id);
       if (uset.isTrueUnsafe()) {
         continue;
@@ -112,112 +110,87 @@ public class UsageStatisticsRefiner extends ABMPredicateRefiner implements Stati
           originSize++;
         }
       }
-    }
-    System.out.println("Before refinement: " + unsafes.size() + " unsafes");
-    if (i == 5) {
+    }*/
+    //System.out.println("Before refinement: " + unsafes.size() + " unsafes");
+    if (i++ == 50) {
       //System.out.println("This refinement: " + i);
       return false;
     }
-    int iterationNum = 0;
+    //int iterationNum = 0;
     pStat.UnsafeCheck.start();
-top:while ((refinementId = container.check(refinementId)) != null) {
+    while ((refinementId = container.check(refinementId)) != null) {
       pStat.UnsafeCheck.stop();
       pathStateToReachedState.clear();
-      //System.out.println("  Iteration " + iterationNum);
       pStat.DetectUnsafeCases.start();
       refinementFinish = true;
-      //Stack<UsageInfo> toRefine = new Stack<>();
       UsageInfo target = null;
 
-      //uset.removeAll(toDelete);
-     /* if (target != null) {
-        break;
-      }*/
       UsageSet uset = container.getStatistics().get(refinementId);
       for (UsageInfo uinfo : uset) {
-        if (detector.isUnsafeCase(uset, uinfo) && !uinfo.isRefined()
-            && !cachedResult.contains(uinfo.getCallStack().getCurrentFunction())
-            //!cachedResult2.contains(uinfo.getLine().getLine())
-            ) {
-          /*if (refinedPaths.contains(uinfo.getCallStack())) {
+        if (detector.isUnsafeCase(uset, uinfo) && !uinfo.isRefined()) {
+          if (cache.contains(uinfo)) {
             toDelete.add(uinfo);
-            continue;
-          }*/
-          target = uinfo;
-          break;
-        } else if (cachedResult.contains(uinfo.getCallStack().getCurrentFunction())
-            //cachedResult2.contains(uinfo.getLine().getLine())
-            ) {
-          toDelete.add(uinfo);
+          } else {
+            target = uinfo;
+            break;
+          }
         }
-        /*if (uinfo.isRefined()) {
-          System.out.println("Skip " + uinfo + " as refined");
-        }*/
       }
       if (toDelete.size() > 0) {
-        //for (UsageInfo uinfo : toDelete) {
-          uset.removeAll(toDelete);
-          //container.removeState(AbstractStates.extractStateByType(uinfo.getKeyState(), UsageStatisticsState.class));
-          //System.out.println(uinfo + " is considered to be false, as cached");
-        //}
+        uset.removeAll(toDelete);
         toDelete.clear();
       }
       pStat.DetectUnsafeCases.stop();
       if (target == null) {
         continue;
       }
-      /*if (iterationNum == 20000) {
-        pStat.UnsafeCheck.stop();
-        return false;
-      }*/
-      iterationNum++;
-     // while (!toRefine.empty()) {
-     //   target = toRefine.pop();
+      //iterationNum++;
       System.out.println("Refine " + refinementId);
-        System.out.println("Refine " + iterationNum + " from " + originSize);
-        ARGReachedSet ARGset = new ARGReachedSet(pReached);
-        pStat.ComputePath.start();
-        ARGPath pPath = computePath((ARGState)target.getKeyState(), ARGset);
-        pStat.ComputePath.stop();
-        if (pPath == null) {
-          container.removeState(AbstractStates.extractStateByType(target.getKeyState(), UsageStatisticsState.class));
-          //refinedPaths.add(target.getCallStack());
-          System.out.println(target + " isn't found");
-          pStat.UnsafeCheck.start();
-          continue;
-        }
-
+      //System.out.println("Refine " + iterationNum + " from " + originSize);
+      pStat.ComputePath.start();
+      ARGPath pPath = computePath((ARGState)target.getKeyState(), target.getCallStack());
+      pStat.ComputePath.stop();
+      if (pPath == null) {
+        container.removeState(AbstractStates.extractStateByType(target.getKeyState(), UsageStatisticsState.class));
+        System.out.println(target + " isn't found");
+        pStat.UnsafeCheck.start();
+        continue;
+      }
+      try {
         pStat.Refinement.start();
-        CounterexampleInfo counterexample = super.performRefinement0(new ABMReachedSet(transfer, ARGset, pPath, pathStateToReachedState), pPath);
-        pStat.Refinement.stop();
+        CounterexampleInfo counterexample = super.performRefinement0(
+            new ABMReachedSet(transfer, new ARGReachedSet(pReached), pPath, pathStateToReachedState), pPath);
         if (!counterexample.isSpurious()) {
-          System.out.println(target + " is true");
+          //System.out.println(target + " is true");
           target.setRefineFlag();
         } else {
           container.removeState(AbstractStates.extractStateByType(target.getKeyState(), UsageStatisticsState.class));
-          System.out.println(target + " is false");
-          //refinedPaths.add(target.getCallStack());
-          //container.check();
-          cachedResult.add(target.getCallStack().getCurrentFunction());
-          //cachedResult2.add(target.getLine().getLine());
+          //System.out.println(target + " is false");
+          cache.add(target);
         }
-        pStat.UnsafeCheck.start();
-   //   }
+      } catch (IllegalStateException e) {
+        //msat_solver return -1 <=> unknown
+        //consider its as true;
+        System.out.println(target + " is " + (findUnknown++) + " unknown");
+        target.setRefineFlag();
+      } finally {
+        pStat.Refinement.stop();
+      }
+
+      pStat.UnsafeCheck.start();
     }
     pStat.UnsafeCheck.stop();
     return refinementFinish;
   }
 
 
-  @Override
-  protected ARGPath computePath(ARGState pLastElement, ARGReachedSet pReachedSet) throws InterruptedException, CPATransferException {
-    //assert pLastElement.isTarget();
+
+  protected ARGPath computePath(ARGState pLastElement, CallstackState stack) throws InterruptedException, CPATransferException {
     if (pLastElement == null || pLastElement.isDestroyed()) {
       //we delete this state from other unsafe
       return null;
     }
-    int startId = new ARGState(pLastElement, null).getStateId();
-    ARGState subgraph = transfer.findPath(pLastElement, pReachedSet, pathStateToReachedState);
+    ARGState subgraph = transfer.findPath(pLastElement, pathStateToReachedState, stack);
     if (subgraph == null) {
       return null;
     }

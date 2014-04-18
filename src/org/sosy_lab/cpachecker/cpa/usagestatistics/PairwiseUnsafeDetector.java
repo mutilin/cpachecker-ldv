@@ -68,7 +68,7 @@ public class PairwiseUnsafeDetector implements UnsafeDetector {
 
     for (UsageInfo info1 : uinfo) {
       for (UsageInfo info2 : uinfo) {
-        if (!info1.intersect(info2)) {
+        if (!info1.intersect(info2) && !info1.equals(info2)) {
           return Pair.of(info1, info2);
         }
       }

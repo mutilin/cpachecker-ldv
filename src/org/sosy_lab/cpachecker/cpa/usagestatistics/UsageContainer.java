@@ -187,22 +187,7 @@ public class UsageContainer {
     if (refinementId == null) {
       return null;
     }
-    UsageSet uset;
-    int skippedIds = 0;
-    int skippedUsages = 0;
-    int unsafesSize = unsafes.size();
-    for (SingleIdentifier id : Stat.keySet()) {
-      uset = Stat.get(id);
-      if (uset.isTrueUnsafe()) {
-        skippedUsages += uset.size();
-        skippedIds++;
-      }
-    }
-
-    System.out.println("Skip " + skippedIds + "/" + unsafesSize + " (" + totalIds + ") vars, " + skippedUsages + "(" + totalUsages
-        + ") usages as true unsafes");
-
-    uset = Stat.get(refinementId);
+    UsageSet uset = Stat.get(refinementId);
     if (uset.isTrueUnsafe() || !unsafeDetector.containsUnsafe(uset, SearchMode.FALSE)) {
       if (!unsafeDetector.containsUnsafe(uset, SearchMode.TRUE)) {
         unsafes.remove(refinementId);
