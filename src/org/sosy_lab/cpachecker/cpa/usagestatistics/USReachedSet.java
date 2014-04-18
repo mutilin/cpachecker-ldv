@@ -39,11 +39,8 @@ public class USReachedSet extends PartitionedReachedSet {
   @Override
   public void remove(AbstractState pState) {
     super.remove(pState);
-    //System.out.println("Remove " + pState);
     UsageStatisticsState ustate = AbstractStates.extractStateByType(pState, UsageStatisticsState.class);
     ustate.getContainer().removeState(ustate);
-
-    //((ARGState)pState).removeFromARG();
   }
 
   @Override
@@ -53,5 +50,11 @@ public class USReachedSet extends PartitionedReachedSet {
     UsageStatisticsState USstate = AbstractStates.extractStateByType(pState, UsageStatisticsState.class);
     USstate.updateKeyState(pState);
     USstate.clearUsagesIfNeed();
+  }
+
+  @Override
+  public void clear() {
+    AbstractStates.extractStateByType(getFirstState(), UsageStatisticsState.class).getContainer().resetUnsafes();
+    super.clear();
   }
 }
