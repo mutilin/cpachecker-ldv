@@ -24,7 +24,6 @@
 package org.sosy_lab.cpachecker.cpa.predicate;
 
 import static com.google.common.collect.FluentIterable.from;
-import static com.google.common.collect.Iterables.getOnlyElement;
 import static org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState.getPredicateState;
 import static org.sosy_lab.cpachecker.util.AbstractStates.*;
 
@@ -33,7 +32,6 @@ import java.util.ArrayDeque;
 import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -200,7 +198,7 @@ public class ABMPredicateRefiner extends AbstractABMBasedRefiner implements Stat
         ssaRenamingTimer.stop();
       }
     }
-    /*private List<BooleanFormula> computeBlockFormulas(ARGState pRoot) throws CPATransferException {
+    private List<BooleanFormula> computeBlockFormulas(ARGState pRoot) throws CPATransferException {
 
       Map<ARGState, PathFormula> formulas = new HashMap<>();
       List<BooleanFormula> abstractionFormulas = Lists.newArrayList();
@@ -230,8 +228,8 @@ public class ABMPredicateRefiner extends AbstractABMBasedRefiner implements Stat
         }
       }
       return abstractionFormulas;
-    }*/
-    private List<BooleanFormula> computeBlockFormulas(ARGState pRoot) throws CPATransferException {
+    }
+    /*private List<BooleanFormula> computeBlockFormulas(ARGState pRoot) throws CPATransferException {
 
       Map<ARGState, PathFormula> formulas = new HashMap<>();
       List<BooleanFormula> abstractionFormulas = Lists.newArrayList();
@@ -292,7 +290,7 @@ public class ABMPredicateRefiner extends AbstractABMBasedRefiner implements Stat
         todo.addAll(currentElement.getChildren());
       }
       return abstractionFormulas;
-    }
+    }*/
 
     @Override
     public void collectStatistics(Collection<Statistics> pStatsCollection) {
