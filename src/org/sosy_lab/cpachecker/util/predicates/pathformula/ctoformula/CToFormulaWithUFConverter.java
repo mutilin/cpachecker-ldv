@@ -868,6 +868,11 @@ public class CToFormulaWithUFConverter extends CtoFormulaConverter {
       final CCompositeType lvalueCompositeType = (CCompositeType) lvalueType;
       assert lvalueCompositeType.getKind() != ComplexTypeKind.ENUM : "Enums are not composite: " + lvalueCompositeType;
       // There are two cases of assignment to a structure/union
+      /*if (rvalue.isValue() && rvalue.asValue().getValue() != null) {
+        if (rvalue.asValue().getValue().toString().contains("UNDET_VAR")) {
+          rvalueType = lvalueType;
+        }
+      }*/
       Preconditions.checkArgument(
           // Initialization with a value (possibly nondet), useful for stack declarations and memset implementation
           rvalue.isValue() && isSimpleType(rvalueType) ||
@@ -942,6 +947,11 @@ public class CToFormulaWithUFConverter extends CtoFormulaConverter {
   throws UnrecognizedCCodeException {
     lvalueType = PointerTargetSet.simplifyType(lvalueType);
     rvalueType = PointerTargetSet.simplifyType(rvalueType);
+    /*if (rvalue.isValue() && rvalue.asValue().getValue() != null) {
+      if (rvalue.asValue().getValue().toString().contains("UNDET_VAR")) {
+        rvalueType = lvalueType;
+      }
+    }*/
     rvalueType = implicitCastToPointer(rvalueType); // Arrays and functions are implicitly converted to pointers
 
     Preconditions.checkArgument(isSimpleType(lvalueType),
@@ -1270,7 +1280,7 @@ public class CToFormulaWithUFConverter extends CtoFormulaConverter {
     CType declarationType = PointerTargetSet.simplifyType(declaration.getType());
 
     if (!isRelevantVariable(declaration.getQualifiedName()) &&
-        !isAddressedVariable(declaration.getQualifiedName())) {
+        !isAddressedVariable(declaration.getQualifiedName()) || declaration.isGlobal()) {
       // The variable is unused
       logDebug("Ignoring declaration of unused variable", declarationEdge);
       return bfmgr.makeBoolean(true);
@@ -1320,17 +1330,18 @@ public class CToFormulaWithUFConverter extends CtoFormulaConverter {
     // Special handling for string literal initializers -- convert them into character arrays
     final CIdExpression lhs =
         new CIdExpression(declaration.getFileLocation(), declarationType, declaration.getName(), declaration);
+
     if (initializer instanceof CInitializerExpression || initializer == null) {
       statementVisitor.declareSharedBase(declaration, false);
 
       final BooleanFormula result;
-      if (initializer != null && !declaration.isGlobal()) {
+      if (initializer != null) {
         final CExpressionAssignmentStatement assignment =
           new CExpressionAssignmentStatement(declaration.getFileLocation(),
                                              lhs,
                                              ((CInitializerExpression) initializer).getExpression());
         result = assignment.accept(statementVisitor);
-      } else if (isRelevantVariable(declaration.getQualifiedName()) && !declaration.isGlobal()) {
+      } else if (isRelevantVariable(declaration.getQualifiedName())) {
         result = statementVisitor.handleAssignment(lhs, null, false, null);
       } else {
         result = bfmgr.makeBoolean(true);
@@ -1342,9 +1353,6 @@ public class CToFormulaWithUFConverter extends CtoFormulaConverter {
 
       return result;
     } else if (initializer instanceof CInitializerList) {
-      if (declaration.isGlobal()) {
-        return bfmgr.makeBoolean(true);
-      }
       /*final Object initializerList = statementVisitor.visitInitializer(declarationType,
                                                                        initializer,
                                                                        !declaration.isGlobal());
