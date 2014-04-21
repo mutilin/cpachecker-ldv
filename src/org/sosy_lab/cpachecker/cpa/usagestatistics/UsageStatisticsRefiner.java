@@ -88,7 +88,7 @@ public class UsageStatisticsRefiner extends ABMPredicateRefiner implements Stati
   int findUnknown = 0;
   @Override
   public boolean performRefinement(ReachedSet pReached) throws CPAException, InterruptedException {
-    UsageCache cache = new UsageCallstackCache();
+    UsageCache cache = new UsageFunctionCache();
     Set<UsageInfo> toDelete = new HashSet<>();
     UsageContainer container =
         AbstractStates.extractStateByType(pReached.getFirstState(), UsageStatisticsState.class).getContainer();
@@ -111,8 +111,8 @@ public class UsageStatisticsRefiner extends ABMPredicateRefiner implements Stati
         }
       }
     }*/
-    //System.out.println("Before refinement: " + unsafes.size() + " unsafes");
-    if (i++ == 50) {
+    System.out.println("Before refinement: " + unsafes.size() + " unsafes");
+    if (i++ == 11) {
       //System.out.println("This refinement: " + i);
       return false;
     }
