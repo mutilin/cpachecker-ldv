@@ -42,12 +42,14 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CAssignment;
 import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression.BinaryOperator;
 import org.sosy_lab.cpachecker.cfa.ast.c.CCastExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CCharLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CComplexCastExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpressionAssignmentStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpressionStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFieldReference;
+import org.sosy_lab.cpachecker.cfa.ast.c.CFloatLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallAssignmentStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallStatement;
@@ -59,7 +61,9 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CParameterDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CPointerExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSideVisitor;
+import org.sosy_lab.cpachecker.cfa.ast.c.CSimpleDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatementVisitor;
+import org.sosy_lab.cpachecker.cfa.ast.c.CStringLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CTypeIdExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CTypeIdExpression.TypeIdOperator;
 import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
@@ -471,7 +475,14 @@ public class StatementToFormulaWithUFVisitor extends ExpressionToFormulaWithUFVi
 
     @Override
     public Boolean visit(final CCastExpression e) {
-      return e.getOperand().accept(this);
+      CType resultType = e.getExpressionType();
+      CExpression operand = e.getOperand();
+      if (resultType instanceof CPointerType && operand instanceof CIntegerLiteralExpression &&
+          ((CIntegerLiteralExpression)operand).asLong() != 0) {
+        return false;
+      } else {
+        return operand.accept(this);
+      }
     }
 
     @Override
@@ -481,6 +492,9 @@ public class StatementToFormulaWithUFVisitor extends ExpressionToFormulaWithUFVi
 
     @Override
     public Boolean visit(final CFieldReference e) {
+      if (!e.getFieldOwner().accept(this)) {
+        return false;
+      }
       CType fieldOwnerType = PointerTargetSet.simplifyType(e.getFieldOwner().getExpressionType());
       if (fieldOwnerType instanceof CPointerType) {
         fieldOwnerType = ((CPointerType) fieldOwnerType).getType();
@@ -491,12 +505,54 @@ public class StatementToFormulaWithUFVisitor extends ExpressionToFormulaWithUFVi
 
     @Override
     public Boolean visit(final CIdExpression e) {
+      CSimpleDeclaration sDecl = e.getDeclaration();
+      if (sDecl instanceof CVariableDeclaration) {
+        if (((CVariableDeclaration)sDecl).isGlobal()) {
+          return false;
+        }
+      }
       return conv.isRelevantVariable(e.getDeclaration().getQualifiedName());
     }
 
     @Override
     public Boolean visit(CPointerExpression e) {
+      return e.getOperand().accept(this);
+    }
+
+    @Override
+    public Boolean visit(CBinaryExpression e) {
+      return e.getOperand1().accept(this) && e.getOperand2().accept(this);
+    }
+
+    @Override
+    public Boolean visit(CIntegerLiteralExpression e) {
       return true;
+    }
+
+    @Override
+    public Boolean visit(CStringLiteralExpression e) {
+      return true;
+    }
+
+    @Override
+    public Boolean visit(CCharLiteralExpression e) {
+      return true;
+    }
+
+
+    @Override
+    public Boolean visit(CFloatLiteralExpression e) {
+      return true;
+    }
+
+    @Override
+    public Boolean visit(CTypeIdExpression e) {
+      return true;
+    }
+
+    @Override
+    public Boolean visit(CUnaryExpression e) {
+      return e.getOperand().accept(this);
     }
 
     @Override
@@ -509,7 +565,7 @@ public class StatementToFormulaWithUFVisitor extends ExpressionToFormulaWithUFVi
     final CLeftHandSide lhs = e.getLeftHandSide();
 
     // Optimization for unused variables and fields
-    if (lhs.accept(isRelevantLhsVisitor)) {
+    if (lhs.accept(isRelevantLhsVisitor) && (!(e.getRightHandSide() instanceof CExpression) || ((CExpression)e.getRightHandSide()).accept(isRelevantLhsVisitor))) {
       return handleAssignment(lhs, e.getRightHandSide(), false, null);
     } else {
       return conv.bfmgr.makeBoolean(true);
@@ -546,15 +602,20 @@ public class StatementToFormulaWithUFVisitor extends ExpressionToFormulaWithUFVi
     reset();
 
     final CType expressionType = PointerTargetSet.simplifyType(e.getExpressionType());
-    BooleanFormula result = conv.toBooleanFormula(asValueFormula(e.accept(this),
+    BooleanFormula result;
+    if (e.accept(isRelevantLhsVisitor)) {
+      result = conv.toBooleanFormula(asValueFormula(e.accept(this),
                                                                  expressionType));
+
+      if (!truthAssumtion) {
+        result = conv.bfmgr.not(result);
+      }
+    } else {
+      result = conv.bfmgr.makeBoolean(true);
+    }
 
     if (conv.options.deferUntypedAllocations()) {
       handleDeferredAllocationsInAssume(e, getUsedDeferredAllocationPointers());
-    }
-
-    if (!truthAssumtion) {
-      result = conv.bfmgr.not(result);
     }
 
   /*public Object visitInitializer(CType type, CInitializer topInitializer, final boolean isAutomatic)
