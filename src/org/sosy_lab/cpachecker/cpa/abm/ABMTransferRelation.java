@@ -284,11 +284,6 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
       blockARGCache.clear();
     }
 
-    public void clearCache(AbstractState predicateKey, Precision precisionKey, Block context) {
-      AbstractStateHash hash = getHashCode(predicateKey, precisionKey, context);
-      preciseReachedCache.remove(hash);
-    }
-
     private boolean containsPreciseKey(AbstractState predicateKey, Precision precisionKey, Block context) {
       AbstractStateHash hash = getHashCode(predicateKey, precisionKey, context);
       return preciseReachedCache.containsKey(hash);
@@ -796,7 +791,6 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
 
     Set<Pair<ARGReachedSet, ARGState>> neededRemoveSubtreeCalls = new LinkedHashSet<>();
     Set<Pair<ARGState, ARGState>> neededRemoveCachedSubtreeCalls = new LinkedHashSet<>();
-    Set<ARGState> neededRemoveCachedSubtrees = getAllRelevantNodes(path);
 
     ARGState lastElement = null;
     //iterate from root to element and remove all subtrees for subgraph calls
@@ -823,38 +817,12 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
           neededRemoveCachedSubtreeCalls);
     }
 
-    /*for (ARGState removedState : neededRemoveCachedSubtrees) {
-      CFANode elementNode = extractLocation(removedState);
-      Block elementSubtree = partitioning.getBlockForCallNode(elementNode);
-      AbstractState reducedState = wrappedReducer.getVariableReducedState(removedState, elementSubtree, elementNode);
-      ReachedSet reachedSet = abstractStateToReachedSet.get(pPathElementToReachedState.get(removedState));
-      Precision reducedRootPrecision;
-      if (reachedSet == null) {
-        reducedRootPrecision = mainReachedSet.asReachedSet().getPrecision(mainReachedSet.asReachedSet().getFirstState());
-      } else {
-        reducedRootPrecision = reachedSet.getPrecision(reachedSet.getFirstState());
-        //Collection<AbstractState> toRemove = new HashSet<>(reachedSet.asCollection());
-        //reachedSet.removeAll(toRemove);
-      }
-      reducedRootPrecision = wrappedReducer.getVariableReducedPrecision(reducedRootPrecision, elementSubtree);
-      argCache.clearCache(reducedState, reducedRootPrecision, elementSubtree);
-    }*/
-    argCache.clear();
-
-    /*for (ARGState removedState : neededRemoveCachedSubtrees) {
-      ReachedSet reachedSet = abstractStateToReachedSet.get(pPathElementToReachedState.get(removedState));
-      if (reachedSet != null) {
-        Collection<AbstractState> toRemove = new HashSet<>(reachedSet.asCollection());
-        reachedSet.removeAll(toRemove);
-      }
-    }*/
-
     for (Pair<ARGReachedSet, ARGState> removeSubtreeArguments : neededRemoveSubtreeCalls) {
       removeSubtree(removeSubtreeArguments.getFirst(), removeSubtreeArguments.getSecond());
     }
 
     for (Pair<ARGState, ARGState> removeCachedSubtreeArguments : neededRemoveCachedSubtreeCalls) {
-      removeCachedSubtree(removeCachedSubtreeArguments.getFirst(), removeCachedSubtreeArguments.getSecond(), pNewPrecisions, pNewPrecisionTypes);
+      removeCachedSubtree(removeCachedSubtreeArguments.getFirst(), removeCachedSubtreeArguments.getSecond(), null, pNewPrecisionTypes);
     }
 
     if (lastElement == null) {
@@ -863,7 +831,6 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
       removeCachedSubtree(lastElement, pPathElementToReachedState.get(element), pNewPrecisions, pNewPrecisionTypes);
     }
 
-    mainReachedSet.updatePrecisionGlobally(pNewPrecisions.get(0), pNewPrecisionTypes.get(0));
     removeSubtreeTimer.stop();
   }
 
@@ -1058,29 +1025,6 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
     throw new IllegalArgumentException("Element " + pElement + " could not be found in path " + pPath + ".");
   }
 
-  private Set<ARGState> getAllRelevantNodes(List<ARGState> path) {
-    Deque<ARGState> openCallElements = new ArrayDeque<>();
-
-    ARGState prevElement = path.get(1);
-    for (ARGState currentElement : Iterables.skip(path, 2)) {
-      CFANode prevNode = extractLocation(prevElement);
-      if (partitioning.isCallNode(prevNode)) {
-        if (!(isHeadOfMainFunction(prevNode))) {
-          openCallElements.push(prevElement);
-        }
-
-      }
-      prevElement = currentElement;
-    }
-
-    ARGState lastElement = path.get(path.size() - 1);
-    if (partitioning.isCallNode(extractLocation(lastElement))) {
-      openCallElements.push(lastElement);
-    }
-
-    return new HashSet<>(openCallElements);
-  }
-
   private Set<ARGState> getRelevantDefinitionNodes(List<ARGState> path) {
     Deque<ARGState> openCallElements = new ArrayDeque<>();
     Deque<Block> openSubtrees = new ArrayDeque<>();
@@ -1165,11 +1109,9 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
   public ARGState findPath(ARGState target,
       Map<ARGState, ARGState> pPathElementToReachedState, final CallstackState stack) throws InterruptedException, RecursiveAnalysisFailedException {
 
-    //start by creating ARGElements for each node needed in the tree
     Map<ARGState, BackwardARGState> elementsMap = new HashMap<>();
     Stack<ARGState> openElements = new Stack<>();
     ARGState root = null;
-
 
     BackwardARGState newTreeTarget = new BackwardARGState(target.getWrappedState(), null);
     pPathElementToReachedState.put(newTreeTarget, target);
@@ -1179,7 +1121,7 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
     //Find path to nearest abstraction state
     PredicateAbstractState pState = AbstractStates.extractStateByType(currentState, PredicateAbstractState.class);
     while (!pState.isAbstractionState()) {
-      assert currentState.getChildren().size() == 1;
+      //assert currentState.getChildren().size() == 1;
       tmpChild = currentState.getChildren().iterator().next();
       BackwardARGState newState = new BackwardARGState(tmpChild.getWrappedState(), elementsMap.get(currentState));
       elementsMap.put(tmpChild, newState);
@@ -1191,8 +1133,6 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
     openElements.push(target);
     while (!openElements.empty()) {
       ARGState currentElement = openElements.pop();
-
-      //assert reachedSet.asReachedSet().contains(currentElement);
 
       for (ARGState parent : currentElement.getParents()) {
         if (!elementsMap.containsKey(parent)) {
@@ -1209,12 +1149,10 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
           //we have the transfer function to handle this case, as our reachSet is wrong
           //(we have to use the cached ones)
           ReachedSet newReachedSet = abstractStateToReachedSet.get(parent);
-          //AbstractState parent
           ARGState innerTree =
               computeCounterexampleSubgraph(parent, newReachedSet.getPrecision(newReachedSet.getFirstState()),
                   elementsMap.get(currentElement), pPathElementToReachedState);
           if (innerTree == null) {
-            //removeSubtree(reachedSet, parent);
             return null;
           }
           for (ARGState child : innerTree.getChildren()) {
@@ -1233,10 +1171,12 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
           root = elementsMap.get(currentElement);
           break;
         }
-        //stack = stack.getPreviousState();
         ARGState expandedState = null;
+        BackwardARGState lastNewExpandedState = null;
+        ARGState lastExpandedState = null;
         ReachedSet tmpReachedSet;
-        //Set<AbstractState> potentialNodes = new HashSet<>();
+        Set<ARGState> removedStates = new HashSet<>();
+        //Find correct expanded state
         for (AbstractState tmpExpanded : abstractStateToReachedSet.keySet()) {
           tmpReachedSet = abstractStateToReachedSet.get(tmpExpanded);
           if (tmpReachedSet.getFirstState().equals(currentElement)) {
@@ -1246,43 +1186,50 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
               continue;
             }
             expandedState = (ARGState) tmpExpanded;
+            if (lastExpandedState != null && expandedState.isOlderThan(lastExpandedState)) {
+              continue;
+            }
+            //Try to find path.
+            //It may be null, if somewhere callstack becomes different (now we don't understand this)
             ARGState tmpRoot = findPath(expandedState, pPathElementToReachedState, stack.getPreviousState());
-            //int endId = new ARGState(tmpExpanded, null).getStateId();
-            //endId = endId - elementsMap.get(currentElement).getStateId();
             if (tmpRoot != null) {
               BackwardARGState newExpandedState = null;
               for (ARGState tmp : pPathElementToReachedState.keySet()) {
+                if (tmp.isDestroyed()) {
+                  continue;
+                }
                 if (pPathElementToReachedState.get(tmp).equals(expandedState) && tmp.getChildren().size() == 0) {
                   newExpandedState = (BackwardARGState) tmp;
                   break;
                 }
               }
-              assert newExpandedState != null;
-              elementsMap.put(expandedState, newExpandedState);
-              //pPathElementToReachedState.get(newExpandedState).removeFromARG();
-              pPathElementToReachedState.put(newExpandedState, expandedState);
-              //openElements.push(expandedState);
-              for (ARGState child : elementsMap.get(currentElement).getChildren()) {
-                child.addParent(newExpandedState);
+              root = tmpRoot;
+              if (lastNewExpandedState != null) {
+                removedStates.add(lastNewExpandedState);
               }
-              elementsMap.get(currentElement).removeFromARG();
-              newExpandedState.updateDecreaseId();
-              return tmpRoot;
+              lastNewExpandedState = newExpandedState;
+              lastExpandedState = expandedState;
             }
-            //System.out.println("Add " + endId + " false states");
-           // break;
           }
         }
-        if (currentElement.isDestroyed()) {
-          //It means, that we delete some part of path
+        if (lastNewExpandedState == null || root == null) {
           return null;
         }
-        if (expandedState == null) {
-          return null;
+        elementsMap.put(expandedState, lastNewExpandedState);
+        pPathElementToReachedState.put(lastNewExpandedState, expandedState);
+        for (ARGState child : elementsMap.get(currentElement).getChildren()) {
+          child.addParent(lastNewExpandedState);
+        }
+        removedStates.add(elementsMap.get(currentElement));
+        for (ARGState toRemove : removedStates) {
+          toRemove.removeFromARG();
         }
       }
+      if (currentElement.isDestroyed()) {
+        //It means, that we delete some part of path
+        return null;
+      }
     }
-    //assert root != null;
     return root;
   }
 
@@ -1291,7 +1238,7 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
   //in the constructed subtree that represents target
   ARGState computeCounterexampleSubgraph(ARGState target, ARGReachedSet reachedSet, BackwardARGState newTreeTarget,
       Map<ARGState, ARGState> pPathElementToReachedState) throws InterruptedException, RecursiveAnalysisFailedException {
-    //assert reachedSet.asReachedSet().contains(target);
+    assert reachedSet.asReachedSet().contains(target);
 
     //start by creating ARGElements for each node needed in the tree
     Map<ARGState, BackwardARGState> elementsMap = new HashMap<>();
@@ -1304,7 +1251,7 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
     while (!openElements.empty()) {
       ARGState currentElement = openElements.pop();
 
-      //assert reachedSet.asReachedSet().contains(currentElement);
+      assert reachedSet.asReachedSet().contains(currentElement);
 
       for (ARGState parent : currentElement.getParents()) {
         if (!elementsMap.containsKey(parent)) {
