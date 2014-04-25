@@ -73,10 +73,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   @FileOption(FileOption.Type.OUTPUT_FILE)
   private Path outputStatFileName = Paths.get("unsafe_rawdata");
 
-  /*@Option(description = "variables, which will not be saved in statistics")
-  private Set<String> skippedvariables = null;
-
-  @Option(values={"PAIR", "SETDIFF"},toUppercase=true,
+  /*@Option(values={"PAIR", "SETDIFF"},toUppercase=true,
       description="which data process we should use")
   private String unsafeDetectorType = "PAIR";*/
 
@@ -84,49 +81,11 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   private boolean printAllUnsafeUsages = false;
 
   private final LogManager logger;
-  //public final Set<SingleIdentifier> unsafes = new HashSet<>();
 
   public Timer transferRelationTimer = new Timer();
   public Timer printStatisticsTimer = new Timer();
 
-  /*Timer full = new Timer();
-  Timer one = new Timer();
-  Timer two = new Timer();
-
-  public void addTmp(SingleIdentifier id, EdgeInfo.EdgeType e, int line) {
-    int i, j;
-    if (id instanceof GlobalVariableIdentifier) {
-      i = 0;
-    } else if (id instanceof LocalVariableIdentifier) {
-      i = 1;
-    } else if (id instanceof StructureIdentifier) {
-      i = 2;
-    } else {
-      System.err.println("What is the type of identifier: " + id.toString());
-      return;
-    }
-    switch (e) {
-      case ASSIGNMENT:
-        j = 0;
-        break;
-      case ASSUMPTION:
-        j = 1;
-        break;
-      case FUNCTION_CALL:
-        j = 2;
-        break;
-      default:
-        System.err.println("What is the type of usage: " + e);
-        return;
-    }
-    if (i == 1 && j == 0) {
-      System.out.println(line);
-    }
-    counter[i][j]++;
-  }*/
-
   public UsageStatisticsCPAStatistics(Configuration config, LogManager pLogger) throws InvalidConfigurationException{
-    //Stat = new HashMap<>();
     config.inject(this);
     unsafeDetector = new PairwiseUnsafeDetector(config);
     /*if (unsafeDetectorType.equals("PAIR")) {
@@ -138,123 +97,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }*/
     logger = pLogger;
   }
-
-  /*public void add(Pair<SingleIdentifier, Pair<UsageInfo, UsageInfo>> unsafe) throws HandleCodeException {
-    SingleIdentifier id = unsafe.getFirst();
-
-    if (skippedvariables != null && skippedvariables.contains(id.getName())) {
-      return;
-    } else if (skippedvariables != null && id instanceof StructureIdentifier) {
-      AbstractIdentifier owner = id;
-      while (owner instanceof StructureIdentifier) {
-        owner = ((StructureIdentifier)owner).getOwner();
-        if (owner instanceof SingleIdentifier && skippedvariables.contains(((SingleIdentifier)owner).getName())) {
-          return;
-        }
-      }
-    }
-    List<UsageInfo> uset;
-
-    if (unsafes.keySet().contains(id)) {
-      return;
-    }
-
-    if (!Stat.containsKey(id)) {
-      uset = new LinkedList<>();
-      Stat.put(id, uset);
-    } else {
-      uset = Stat.get(id);
-    }
-    uset.add(unsafe.getSecond().getFirst());
-    uset.add(unsafe.getSecond().getSecond());
-    System.out.println("Add unsafe: " + id + ", " + unsafes.size());
-    unsafes.add(id);
-  }*/
-
-  /*public void add(SingleIdentifier id, UsageInfo usage) throws HandleCodeException {
-
-    if (skippedvariables != null && skippedvariables.contains(id.getName())) {
-      return;
-    } else if (skippedvariables != null && id instanceof StructureIdentifier) {
-      AbstractIdentifier owner = id;
-      while (owner instanceof StructureIdentifier) {
-        owner = ((StructureIdentifier)owner).getOwner();
-        if (owner instanceof SingleIdentifier && skippedvariables.contains(((SingleIdentifier)owner).getName())) {
-          return;
-        }
-      }
-    }
-    List<UsageInfo> uset;
-
-    if (unsafes.contains(id)) {
-      return;
-    }
-
-    if (!Stat.containsKey(id)) {
-      uset = new LinkedList<>();
-      Stat.put(id, uset);
-    } else {
-      uset = Stat.get(id);
-      if (unsafeDetector.isUnsafeCase(uset, usage)) {
-        unsafes.add(id);
-      }
-    }
-    uset.add(usage);
-    //System.out.println("Add unsafe: " + id + ", " + unsafes.size());
-    //unsafes.add(id);
-  }*/
-
-  /*public void add(SingleIdentifier id, Access access, UsageStatisticsState state, EdgeType type, int line, CallstackState callstackState) throws HandleCodeException {
-    if (state.containsLinks(id)) {
-      id = (SingleIdentifier) state.getLinks(id);
-    }
-    if (skippedvariables != null && skippedvariables.contains(id.getName())) {
-      return;
-    } else if (skippedvariables != null && id instanceof StructureIdentifier) {
-      AbstractIdentifier owner = id;
-      while (owner instanceof StructureIdentifier) {
-        owner = ((StructureIdentifier)owner).getOwner();
-        if (owner instanceof SingleIdentifier && skippedvariables.contains(((SingleIdentifier)owner).getName())) {
-          return;
-        }
-      }
-    }
-    if (id instanceof LocalVariableIdentifier && id.getDereference() <= 0) {
-      //we don't save in statistics ordinary local variables
-      return;
-    }
-    if (id instanceof StructureIdentifier && !id.isGlobal() && !id.isPointer()) {
-      //skips such cases, as 'a.b'
-      return;
-    }
-    if (id instanceof StructureIdentifier) {
-      id = ((StructureIdentifier)id).toStructureFieldIdentifier();
-    }
-    if (!printAllUnsafeUsages && unsafes.contains(id)) {
-      return;
-    }
-    logger.log(Level.FINE, "Add id " + id + " to unsafe statistics");
-    List<UsageInfo> uset;
-    LockStatisticsState lockState = AbstractStates.extractStateByType(state, LockStatisticsState.class);
-    logger.log(Level.FINEST, "Its locks are: " + lockState);
-
-    //We can't get line from location, because it is old state
-    LineInfo lineInfo = new LineInfo(line);
-    EdgeInfo info = new EdgeInfo(type);
-
-    UsageInfo usage = new UsageInfo(access, lineInfo, info, lockState, callstackState);
-
-    if (!Stat.containsKey(id)) {
-      uset = new LinkedList<>();
-      Stat.put(id, uset);
-    } else {
-      uset = Stat.get(id);
-      if (!unsafes.contains(id) && unsafeDetector.isUnsafeCase(Stat.get(id), usage)) {
-        unsafes.add(id);
-      }
-    }
-    uset.add(usage);
-  }*/
 
   private List<LockStatisticsLock> findAllLocks() {
     List<LockStatisticsLock> locks = new LinkedList<>();
@@ -440,11 +282,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     out.println("Time for transfer relation:    " + transferRelationTimer);
     printStatisticsTimer.stop();
     out.println("Time for printing statistics:  " + printStatisticsTimer);
-    //out.println("Time for adding to reached state:  " + USReachedSet.addTimer);
-    /*System.out.println(" \t \t Global Local \t Structure");
-    System.out.println("Assignment: \t " + counter[0][0] + " \t " + counter[1][0] + " \t " + counter[2][0]);
-    System.out.println("Assumption: \t " + counter[0][1] +" \t " + counter[1][1] +" \t " + counter[2][1] );
-    System.out.println("Function call: \t " + counter[0][2] +" \t " + counter[1][2] +" \t " + counter[2][2]);*/
   }
 
   private void printLockStatistics(BufferedWriter writer) throws IOException {
@@ -484,7 +321,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         }
       }
     }
-    //writer.println(counter);
     writer.append(global + "\n");
     writer.append(globalPointer + "\n");
     writer.append(local + "\n");
@@ -499,25 +335,4 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   public String getName() {
     return "UsageStatisticsCPA";
   }
-
-  /*public void addSkippedVariables(Set<String> vars) {
-    skippedvariables.addAll(vars);
-  }*/
-
-  /*public void removeState(UsageStatisticsState pUstate) {
-    List<UsageInfo> uset;
-    Set<Pair<List<UsageInfo>, UsageInfo>> toDelete = new HashSet<>();
-    for (SingleIdentifier id : Stat.keySet()) {
-      uset = Stat.get(id);
-      for (UsageInfo uinfo : uset) {
-        if (uinfo.getKeyState().equals(pUstate)) {
-          toDelete.add(Pair.of(uset, uinfo));
-        }
-      }
-    }
-
-    for (Pair<List<UsageInfo>, UsageInfo> pair : toDelete) {
-      pair.getFirst().remove(pair.getSecond());
-    }
-  }*/
 }

@@ -29,7 +29,6 @@ import java.util.Map;
 
 import org.sosy_lab.cpachecker.core.defaults.AbstractSingleWrapperState;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
-import org.sosy_lab.cpachecker.core.interfaces.Targetable;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
@@ -205,20 +204,6 @@ public class UsageStatisticsState extends AbstractSingleWrapperState  {
     if (state == null || !state.getAbstractionFormula().isFalse() && state.isAbstractionState()) {
       recentUsages.clear();
     }
-  }
-
-  @Override
-  public boolean isTarget() {
-    boolean result = container.isTarget();
-    if (getWrappedState() instanceof Targetable) {
-      result = result || ((Targetable)getWrappedState()).isTarget();
-    }
-    return result;
-  }
-
-  @Override
-  public ViolatedProperty getViolatedProperty() throws IllegalStateException {
-    return ViolatedProperty.OTHER;
   }
 
   public UsageStatisticsState expand(UsageStatisticsState root, AbstractState wrappedState) {

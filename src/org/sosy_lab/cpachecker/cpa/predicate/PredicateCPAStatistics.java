@@ -60,8 +60,6 @@ import org.sosy_lab.cpachecker.util.predicates.AbstractionPredicate;
 import org.sosy_lab.cpachecker.util.predicates.Solver;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.RegionManager;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.CachingPathFormulaManager;
-import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormulaManagerImpl;
-import org.sosy_lab.cpachecker.util.predicates.pathformula.ctoformula.CtoFormulaConverter;
 import org.sosy_lab.cpachecker.util.statistics.AbstractStatistics;
 
 import com.google.common.base.Preconditions;
@@ -322,23 +320,7 @@ class PredicateCPAStatistics extends AbstractStatistics {
       out.println("  Time for path formula creation:    " + trans.pathFormulaTimer);
       if (pfMgr != null) {
         out.println("    Actual computation:              " + pfMgr.pathFormulaComputationTimer);
-        CtoFormulaConverter converter = ((PathFormulaManagerImpl)pfMgr.delegate).converter;
-        out.println("      MakeAnd time:                  " + converter.makeAnd);
-        out.println("        Timer1:                      " + converter.Timer1);
-        out.println("        Timer2:                      " + converter.Timer2);
-        out.println("        Timer3:                      " + converter.Timer3);
-        out.println("        Create edge time:            " + converter.createEdge);
-        out.println("        --Statement edge:            " + converter.Statement);
-        out.println("        --ReturnStatement edge:      " + converter.ReturnStatement);
-        out.println("        --Declaration edge:          " + converter.Declaration);
-        out.println("        --Assume edge:               " + converter.Assume);
-        out.println("        --FunctionCall edge:         " + converter.FunctionCall);
-        out.println("        --FunctionReturn edge:       " + converter.FunctionReturn);
-        out.println("        --Multi edge:                " + converter.Multi);
       }
-      out.println("  Time for boolean formula building: " + trans.formulaBuilding);
-      out.println("  Time for get relevant predicates:  " + trans.getPredicates);
-      out.println("  Time for make and:                 " + trans.makeAnd);
       if (trans.satCheckTimer.getNumberOfIntervals() > 0) {
         out.println("  Time for satisfiability checks:    " + trans.satCheckTimer);
       }
@@ -366,20 +348,9 @@ class PredicateCPAStatistics extends AbstractStatistics {
           out.println("    Abstraction reuse:              " + as.abstractionReuseTime);
           out.println("    Abstraction reuse implication:  " + as.abstractionReuseImplicationTime);
         }
-        out.println("    getPredicates time:              " + as.getPredicates);
-        out.println("      Timer1:                        " + as.Timer1);
-        out.println("      Timer2:                        " + as.Timer2);
-        out.println("      Timer3:                        " + as.Timer3);
-        out.println("      Timer4:                        " + as.Timer4);
-        //out.println("      Timer5:                        " + as.Timer5);
-        out.println("    Cache time:                      " + as.CacheTimer);
-        out.println("    makeFormula time:                " + as.makeFormula);
         out.println("    Solving time:                    " + as.abstractionSolveTime + " (Max: " + as.abstractionSolveTime.printMaxTime() + ")");
         out.println("    Model enumeration time:          " + as.abstractionEnumTime.printOuterSumTime());
         out.println("    Time for BDD construction:       " + as.abstractionEnumTime.printInnerSumTime()   + " (Max: " + as.abstractionEnumTime.printInnerMaxTime() + ")");
-        out.println("    allSat check:                    " + as.Timer5);
-        out.println("      First unsat check:             " + as.Timer6);
-        out.println("      Second unsat check:            " + as.Timer7);
         }
 
       MergeOperator merge = cpa.getMergeOperator();

@@ -69,7 +69,6 @@ import org.sosy_lab.cpachecker.cpa.local.LocalState;
 import org.sosy_lab.cpachecker.cpa.local.LocalState.DataType;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsPrecision;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
-import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.BinderFunctionInfo.LinkerInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.EdgeInfo.EdgeType;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
@@ -107,10 +106,6 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
   private Map<String, BinderFunctionInfo> binderFunctionInfo;
   private final LogManager logger;
-
-  /*int globalAdress = 0;
-  int localAdress = 0;
-  int structAdress = 0;*/
 
   public UsageStatisticsTransferRelation(TransferRelation pWrappedTransfer,
       Configuration config, LogManager pLogger, UsageStatisticsCPAStatistics s, CallstackTransferRelation transfer) throws InvalidConfigurationException {
@@ -169,11 +164,6 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       return;
     }
 
-    /*if (checkAbstraction(oldState)) {
-      logger.log(Level.FINEST, oldState + " is considered to be unreachable");
-      return;
-    }*/
-
     if (checkFunciton(pCfaEdge, skippedfunctions)) {
       callstackTransfer.setFlag();
       //Find right summary edge
@@ -198,14 +188,6 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
         results.add(resultState);
       }
     }
-  }
-
-  private boolean checkAbstraction(UsageStatisticsState pOldState) {
-    PredicateAbstractState state = AbstractStates.extractStateByType(pOldState, PredicateAbstractState.class);
-    if (state != null) {
-      return state.getAbstractionFormula().isFalse();
-    }
-    return false;
   }
 
   private boolean checkFunciton(CFAEdge pCfaEdge, Set<String> functionSet) {
@@ -270,6 +252,9 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       , UsageStatisticsPrecision pPrecision, CFunctionCallEdge edge) throws HandleCodeException {
     CStatement statement = edge.getRawAST().get();
     String functionName = edge.getSuccessor().getFunctionName();
+    /*if (functionName.equals("sync")) {
+      System.out.println("sync function");
+    }*/
     if (abortfunctions != null && abortfunctions.contains(functionName)) {
       pNewState = null;
       logger.log(Level.FINEST, functionName + " is abort function and was skipped");
@@ -473,22 +458,12 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     Map<GeneralIdentifier, DataType> localInfo = pPrecision.get(node);
 
     if (localInfo != null && LocalState.getType(localInfo, singleId) == DataType.LOCAL) {
-      /*if (id.toString().contains("&")) {
-        if (id instanceof GlobalVariableIdentifier)
-          globalAdress++;
-        else if (id instanceof LocalVariableIdentifier)
-          localAdress++;
-        else if (id instanceof StructureIdentifier)
-          structAdress++;
-        else
-          System.out.println(id.toString());
-        System.out.println(globalAdress + " : " + localAdress + " : " + structAdress);
-      }*/
       logger.log(Level.FINER, singleId + " is considered to be local, so it wasn't add to statistics");
       return;
     }
 
     CallstackState fullCallstack = pPrecision.retrieveWrappedPrecision(LockStatisticsPrecision.class).getPreciseState();
+
     if (fullCallstack == null) {
       //No ABM, so get real callstack
       fullCallstack = AbstractStates.extractStateByType(state, CallstackState.class);
@@ -521,9 +496,6 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     if (singleId instanceof StructureIdentifier) {
       singleId = ((StructureIdentifier)singleId).toStructureFieldIdentifier();
     }
-    /*if (!printAllUnsafeUsages && unsafes.contains(id)) {
-      return;
-    }*/
     logger.log(Level.FINER, "Add id " + singleId + " to unsafe statistics");
     LockStatisticsState lockState = AbstractStates.extractStateByType(state, LockStatisticsState.class);
     logger.log(Level.FINEST, "Its locks are: " + lockState);

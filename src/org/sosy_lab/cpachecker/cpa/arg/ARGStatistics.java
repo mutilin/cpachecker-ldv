@@ -230,9 +230,9 @@ public class ARGStatistics implements Statistics {
       }
     }
 
-    /*if (exportARG) {
+    if (exportARG) {
       exportARG(rootState, Predicates.in(allTargetPathEdges));
-    }*/
+    }
   }
 
   private void exportCounterexample(ReachedSet pReached,

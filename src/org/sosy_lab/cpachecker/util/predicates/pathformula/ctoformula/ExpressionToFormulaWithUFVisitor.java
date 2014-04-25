@@ -202,10 +202,6 @@ public class ExpressionToFormulaWithUFVisitor
     final CType resultType = PointerTargetSet.simplifyType(e.getExpressionType());
     final CExpression operand = conv.makeCastFromArrayToPointerIfNecessary(e.getOperand(), resultType);
 
-    /*if (resultType instanceof CPointerType && operand instanceof CIntegerLiteralExpression && ((CIntegerLiteralExpression)operand).asLong() != 0) {
-      return Value.ofValue(conv.makeFreshVariable("UNDET_VAR_"+resultType.toString(), resultType, ssa, pts));
-    }*/
-
     final Expression result = operand.accept(this);
 
     // TODO: is the second isUnaliasedLocation() check really needed?
@@ -237,12 +233,6 @@ public class ExpressionToFormulaWithUFVisitor
 
     if (variable != null) {
       if (!(e.getDeclaration() instanceof CFunctionDeclaration)) {
-        /*if ( e.getDeclaration() instanceof CVariableDeclaration) {
-          CVariableDeclaration vDecl = (CVariableDeclaration)e.getDeclaration();
-          if (vDecl.isGlobal()) {
-            return Value.ofValue(conv.makeFreshVariable("UNDET_VAR_" + resultType.toString(), resultType, ssa, pts));
-          }
-        }*/
         final String variableName = variable.getName();
         if (pts.isDeferredAllocationPointer(variableName)) {
           usedDeferredAllocationPointers.put(variableName, CPointerType.POINTER_TO_VOID);

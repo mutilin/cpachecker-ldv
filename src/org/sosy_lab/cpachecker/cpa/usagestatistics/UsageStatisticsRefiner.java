@@ -147,6 +147,9 @@ public class UsageStatisticsRefiner extends ABMPredicateRefiner implements Stati
       //iterationNum++;
       System.out.println("Refine " + refinementId);
       //System.out.println("Refine " + iterationNum + " from " + originSize);
+      /*if (target.getLine().getLine() == 24374) {
+         System.out.println("That line");
+      }*/
       pStat.ComputePath.start();
       ARGPath pPath = computePath((ARGState)target.getKeyState(), target.getCallStack());
       pStat.ComputePath.stop();
@@ -161,13 +164,18 @@ public class UsageStatisticsRefiner extends ABMPredicateRefiner implements Stati
         CounterexampleInfo counterexample = super.performRefinement0(
             new ABMReachedSet(transfer, new ARGReachedSet(pReached), pPath, pathStateToReachedState), pPath);
         if (!counterexample.isSpurious()) {
-          //System.out.println(target + " is true");
+          System.out.println(target + " is true");
           target.setRefineFlag();
         } else {
           container.removeState(AbstractStates.extractStateByType(target.getKeyState(), UsageStatisticsState.class));
-          //System.out.println(target + " is false");
+          System.out.println(target + " is false");
           cache.add(target);
         }
+
+        /*if (target.getLine().getLine() == 139541) {
+          System.out.println(pPath);
+          throw new InterruptedException();
+        }*/
       } catch (IllegalStateException e) {
         //msat_solver return -1 <=> unknown
         //consider its as true;

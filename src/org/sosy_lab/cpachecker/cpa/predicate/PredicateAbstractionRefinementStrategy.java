@@ -373,7 +373,7 @@ public class PredicateAbstractionRefinementStrategy extends RefinementStrategy {
 
     // get previous precision
     UnmodifiableReachedSet reached = pReached.asReachedSet();
-    PredicatePrecision targetStatePrecision = PredicatePrecision.empty();//extractPredicatePrecision(reached.getPrecision(reached.getLastState()));
+    PredicatePrecision targetStatePrecision = extractPredicatePrecision(reached.getPrecision(reached.getLastState()));
 
     ARGState refinementRoot = getRefinementRoot(pAffectedStates, targetStatePrecision, pRepeatedCounterexample);
 

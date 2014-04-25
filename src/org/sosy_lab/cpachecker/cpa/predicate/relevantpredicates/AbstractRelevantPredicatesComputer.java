@@ -68,10 +68,11 @@ public abstract class AbstractRelevantPredicatesComputer<T> implements RelevantP
     } else if (predicateString.contains("(*")) {
       //TODO This is quick fix of bug in struct representation
       result = true;
-    } else {
+    }
+    else {
       //result = isRelevant(pPrecomputeResult, pPredicate);
       result = true;
-      //This is quick fix; predicate can be set on inner function, which isn't recursively in the same context
+
     }
 
     relevantPredicates.put(key, result);

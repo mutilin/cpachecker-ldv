@@ -44,7 +44,6 @@ public class UsageContainer {
   private PairwiseUnsafeDetector unsafeDetector = null;
 
   private Map<SingleIdentifier, UsageSet> Stat;
-  private boolean containsUnrefinedUnsafes;
 
   public List<SingleIdentifier> unsafes = null;
 
@@ -55,26 +54,10 @@ public class UsageContainer {
     //config.inject(this);
     unsafeDetector = new PairwiseUnsafeDetector(config);
     Stat = new TreeMap<>();
-    containsUnrefinedUnsafes = false;
   }
 
   public void add(SingleIdentifier id, UsageInfo usage) {
-
-
     UsageSet uset;
-
-
-    /*if (id instanceof StructureIdentifier) {
-      id = ((StructureIdentifier)id).toStructureFieldIdentifier();
-    }*/
-
-    /*if (usage.getLine().getLine() == 163213) {
-      System.out.println("Add line 163213");
-    }*/
-
-    /*if (unsafes.contains(id)) {
-      return;
-    }*/
 
     if (!Stat.containsKey(id)) {
       uset = new UsageSet();
@@ -93,19 +76,8 @@ public class UsageContainer {
           uset.remove(oldUsage);
         }
       }
-      if (unsafeDetector.isUnsafeCase(uset, usage)) {
-        //unsafes.add(id);
-        containsUnrefinedUnsafes = true;
-      }
     }
     uset.add(usage);
-    //System.out.println("Add unsafe: " + id + ", " + unsafes.size());
-    //unsafes.add(id);
-  }
-
-  public boolean isTarget() {
-    return false;
-    //return containsUnrefinedUnsafes;
   }
 
   public Map<SingleIdentifier, UsageSet> getStatistics() {
@@ -154,7 +126,6 @@ public class UsageContainer {
   public void removeState(UsageStatisticsState pUstate) {
     List<UsageInfo> uset;
     List<Pair<List<UsageInfo>, UsageInfo>> toDelete = new LinkedList<>(); //Not set! Some usages and sets can be equals but referes to different ids
-    //try {
     for (SingleIdentifier id : Stat.keySet()) {
       uset = Stat.get(id);
       for (UsageInfo uinfo : uset) {
@@ -164,18 +135,13 @@ public class UsageContainer {
           if (!uinfo.isRefined()) {
             toDelete.add(Pair.of(uset, uinfo));
           }
-          //System.out.println("Delete " + uinfo + " due to null");
         } else if (AbstractStates.extractStateByType(keyState, UsageStatisticsState.class).equals(pUstate)) {
-          //System.out.println("Delete " + uinfo + " due to keyState");
           if (!uinfo.isRefined()) {
             toDelete.add(Pair.of(uset, uinfo));
           }
         }
       }
     }
-    /*} catch (NullPointerException e) {
-      System.out.println("Null!");
-    }*/
 
     for (Pair<List<UsageInfo>, UsageInfo> pair : toDelete) {
       pair.getFirst().remove(pair.getSecond());
@@ -203,32 +169,9 @@ public class UsageContainer {
         }
         return id;
       }
-      containsUnrefinedUnsafes = false;
       return null;
     } else {
       return refinementId;
     }
   }
-
-  /*public void reset() {
-    List<UsageInfo> uset;
-    Set<UsageInfo> toDelete = new HashSet<>();
-    Set<SingleIdentifier> idToDelete = new HashSet<>();
-    for (SingleIdentifier id : Stat.keySet()) {
-      uset = Stat.get(id);
-      for (UsageInfo uinfo : uset) {
-        if (!uinfo.isRefined()) {
-          toDelete.add(uinfo);
-        }
-      }
-      uset.removeAll(toDelete);
-      if (uset.size() == 0) {
-        idToDelete.add(id);
-      }
-      toDelete.clear();
-    }
-    for (SingleIdentifier id : idToDelete) {
-      Stat.remove(id);
-    }
-  }*/
 }

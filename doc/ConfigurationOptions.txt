@@ -1178,9 +1178,6 @@ cpa.predicate.useInvariantsForAbstraction = false
 # add special information to formulas about non-deterministic functions
 cpa.predicate.useNondetFlags = false
 
-# use filtration of path formulas by relevat predicates
-cpa.predicate.usePathFiltration = false
-
 # Qualified name for class which checks that the computed abstraction adheres
 # to the desired property.
 cpa.propertychecker.className = "org.sosy_lab.cpachecker.pcc.propertychecker.DefaultPropertyChecker"

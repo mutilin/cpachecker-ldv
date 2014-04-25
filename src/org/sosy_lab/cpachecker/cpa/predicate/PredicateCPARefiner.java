@@ -172,9 +172,7 @@ public class PredicateCPARefiner extends AbstractARGBasedRefiner implements Stat
   public final CounterexampleInfo performRefinement(final ARGReachedSet pReached, final ARGPath allStatesTrace) throws CPAException, InterruptedException {
     totalRefinement.start();
 
-
     Set<ARGState> elementsOnPath = ARGUtils.getAllStatesOnPathsTo(allStatesTrace.getLast().getFirst());
-
 
     boolean branchingOccurred = true;
     if (elementsOnPath.size() == allStatesTrace.size()) {
@@ -185,6 +183,7 @@ public class PredicateCPARefiner extends AbstractARGBasedRefiner implements Stat
     }
 
     logger.log(Level.FINEST, "Starting interpolation-based refinement");
+
     // create path with all abstraction location elements (excluding the initial element)
     // the last element is the element corresponding to the error location
     final List<ARGState> abstractionStatesTrace = transformPath(allStatesTrace);
@@ -194,14 +193,10 @@ public class PredicateCPARefiner extends AbstractARGBasedRefiner implements Stat
 
     // create list of formulas on path
     final List<BooleanFormula> formulas = getFormulasForPath(abstractionStatesTrace, allStatesTrace.getFirst().getFirst());
-    //System.out.println("Compute block formulas: " + tmpTimer.getSumTime());
     assert abstractionStatesTrace.size() == formulas.size();
-
 
     // build the counterexample
     buildCounterexampeTraceTime.start();
-    //System.out.println("Total number of allSat: " + PredicateAbstractionManager.counter);
-    PredicateAbstractionManager.counter = 0;
     final CounterexampleTraceInfo counterexample = formulaManager.buildCounterexampleTrace(formulas, elementsOnPath, strategy.needsInterpolants());
     buildCounterexampeTraceTime.stop();
 
@@ -226,7 +221,7 @@ public class PredicateCPARefiner extends AbstractARGBasedRefiner implements Stat
       final ARGPath targetPath;
       final CounterexampleTraceInfo preciseCounterexample;
 
-     /* preciseCouterexampleTime.start();
+      /*preciseCouterexampleTime.start();
       if (branchingOccurred) {
         Pair<ARGPath, CounterexampleTraceInfo> preciseInfo = findPreciseErrorPath(allStatesTrace, counterexample);
 
@@ -245,7 +240,7 @@ public class PredicateCPARefiner extends AbstractARGBasedRefiner implements Stat
         }
       } else {
         targetPath = allStatesTrace;
-    pPath.remove(pPath.size() - 1);//last edge leads from error state and it shouldn't be in formula
+        targetPath.remove(targetPath.size() - 1);//last edge leads from error state and it shouldn't be in formula
         preciseCounterexample = pathChecker.checkPath(targetPath.asEdgesList());
       }
       preciseCouterexampleTime.stop();
@@ -280,7 +275,7 @@ public class PredicateCPARefiner extends AbstractARGBasedRefiner implements Stat
       }
     });
 
-    //assert pPath.getLast().getFirst() == result.get(result.size()-1);
+    assert pPath.getLast().getFirst() == result.get(result.size()-1);
     return result;
   }
 

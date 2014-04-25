@@ -35,7 +35,6 @@ import java.util.logging.Level;
 
 import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.Pair;
-import org.sosy_lab.common.Timer;
 import org.sosy_lab.common.Triple;
 import org.sosy_lab.common.log.LogManagerWithoutDuplicates;
 import org.sosy_lab.cpachecker.cfa.ast.IAstNode;
@@ -823,26 +822,11 @@ public class CtoFormulaConverter {
     return t;
   }
 
-  public Timer makeAnd = new Timer();
-  public Timer Timer1 = new Timer();
-  public Timer Timer2 = new Timer();
-  public Timer Timer3 = new Timer();
-  public Timer createEdge = new Timer();
-  public Timer Statement = new Timer();
-  public Timer ReturnStatement = new Timer();
-  public Timer Declaration = new Timer();
-  public Timer Assume = new Timer();
-  public Timer FunctionCall = new Timer();
-  public Timer FunctionReturn = new Timer();
-  public Timer Multi = new Timer();
-
 //  @Override
   public Pair<PathFormula, ErrorConditions> makeAnd(PathFormula oldFormula, CFAEdge edge)
       throws CPATransferException {
     // this is where the "meat" is... We have to parse the statement
     // attached to the edge, and convert it to the appropriate formula
-    makeAnd.start();
-    try{
       ErrorConditions errorConditions = new ErrorConditions(bfmgr);
 
       if (edge.getEdgeType() == CFAEdgeType.BlankEdge) {
@@ -857,28 +841,17 @@ public class CtoFormulaConverter {
       SSAMapBuilder ssa = oldFormula.getSsa().builder();
       Constraints constraints = new Constraints(bfmgr);
       BooleanFormula edgeFormula = createFormulaForEdge(edge, function, ssa, constraints);
-      Timer1.start();
       edgeFormula = bfmgr.and(edgeFormula, constraints.get());
-      Timer1.stop();
-      Timer2.start();
       SSAMap newSsa = ssa.build();
-      Timer2.stop();
       if (bfmgr.isTrue(edgeFormula) && (newSsa == oldFormula.getSsa())) {
         // formula is just "true" and SSAMap is identical
         // i.e. no writes to SSAMap, no branching and length should stay the same
         return Pair.of(oldFormula, errorConditions);
       }
-      Timer3.start();
 
       BooleanFormula newFormula = bfmgr.and(oldFormula.getFormula(), edgeFormula);
       int newLength = oldFormula.getLength() + 1;
       return Pair.of(new PathFormula(newFormula, newSsa, newLength), errorConditions);
-    } finally {
-      makeAnd.stop();
-      Timer3.stop();
-      //System.out.println("MakeAnd: " + tmpTimer.getSumTime() + " ~ " + tmpTimer2.getSumTime());
-      //System.out.println("MakeAnd: " + tmpTimer.getSumTime() + " = " + tmpTimer2.getSumTime() + " + " + tmpTimer3.getSumTime());
-    }
   }
 
   /**
@@ -892,54 +865,44 @@ public class CtoFormulaConverter {
    * @throws CPATransferException
    */
   private BooleanFormula createFormulaForEdge(CFAEdge edge, String function, SSAMapBuilder ssa, Constraints constraints) throws CPATransferException {
-    createEdge.start();
-    try {
     switch (edge.getEdgeType()) {
     case StatementEdge: {
-      Statement.start();
       CStatementEdge statementEdge = (CStatementEdge) edge;
       StatementToFormulaVisitor v = getStatementVisitor(edge, function, ssa, constraints);
       return statementEdge.getStatement().accept(v);
     }
 
     case ReturnStatementEdge: {
-      ReturnStatement.start();
       CReturnStatementEdge returnEdge = (CReturnStatementEdge)edge;
       return makeReturn(returnEdge.getExpression(), returnEdge, function, ssa, constraints);
     }
 
     case DeclarationEdge: {
-      Declaration.start();
       CDeclarationEdge d = (CDeclarationEdge)edge;
       //return bfmgr.makeBoolean(true);
       return makeDeclaration(d, function, ssa, constraints);
     }
 
     case AssumeEdge: {
-      Assume.start();
       return makeAssume((CAssumeEdge)edge, function, ssa, constraints);
     }
 
     case BlankEdge: {
-      //tmpTimer3.start();
       assert false : "Handled above";
       return bfmgr.makeBoolean(true);
     }
 
     case FunctionCallEdge: {
-      FunctionCall.start();
       return makeFunctionCall((CFunctionCallEdge)edge, function, ssa, constraints);
     }
 
     case FunctionReturnEdge: {
-      FunctionReturn.start();
       // get the expression from the summary edge
       CFunctionSummaryEdge ce = ((CFunctionReturnEdge)edge).getSummaryEdge();
       return makeExitFunction(ce, function, ssa, constraints);
     }
 
     case MultiEdge: {
-      Multi.start();
       List<BooleanFormula> multiEdgeFormulas = new ArrayList<>(((MultiEdge)edge).getEdges().size());
 
       // unroll the MultiEdge
@@ -955,17 +918,6 @@ public class CtoFormulaConverter {
 
     default:
       throw new UnrecognizedCFAEdgeException(edge);
-    }
-    } finally {
-      createEdge.stop();
-      Statement.stop();
-      ReturnStatement.stop();
-      Declaration.stop();
-      Assume.stop();
-      FunctionCall.stop();
-      FunctionReturn.stop();
-      Multi.stop();
-      //System.out.println("MakeAnd: " + tmpTimer.getSumTime() + " ~ " + tmpTimer2.getSumTime());
     }
   }
 

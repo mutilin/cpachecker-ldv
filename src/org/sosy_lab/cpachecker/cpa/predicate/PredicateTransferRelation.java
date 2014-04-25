@@ -30,10 +30,8 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.logging.Level;
 
 import javax.annotation.Nullable;
@@ -59,16 +57,12 @@ import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCFAEdgeException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.predicates.AbstractionFormula;
-import org.sosy_lab.cpachecker.util.predicates.AbstractionPredicate;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.PathFormulaManager;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.view.BooleanFormulaManagerView;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.view.FormulaManagerView;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.ErrorConditions;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormula;
-import org.sosy_lab.cpachecker.util.predicates.pathformula.SSAMap;
-
-import com.google.common.collect.Multimap;
 
 /**
  * Transfer relation for symbolic predicate abstraction. First it computes
@@ -82,9 +76,6 @@ public class PredicateTransferRelation implements TransferRelation {
       description = "maximum blocksize before a satisfiability check is done\n"
           + "(non-negative number, 0 means never, if positive should be smaller than blocksize)")
   private int satCheckBlockSize = 0;
-
-  @Option(description = "use filtration of path formulas by relevat predicates")
-  private boolean usePathFiltration = false;
 
   @Option(description = "check satisfiability when a target state has been found (should be true)")
   private boolean targetStateSatCheck = true;
@@ -129,11 +120,6 @@ public class PredicateTransferRelation implements TransferRelation {
     blk = pBlk;
   }
 
-  public Timer timer = new Timer();
-  public Timer formulaBuilding = new Timer();
-  public Timer getPredicates = new Timer();
-  public Timer makeAnd = new Timer();
-
   @Override
   public Collection<? extends AbstractState> getAbstractSuccessors(AbstractState pElement,
       Precision pPrecision, CFAEdge edge) throws CPATransferException, InterruptedException {
@@ -148,29 +134,9 @@ public class PredicateTransferRelation implements TransferRelation {
       if (element.getAbstractionFormula().isFalse()) { return Collections.emptySet(); }
 
       // calculate strongest post
-      PathFormula oldPathFormula = element.getPathFormula();//.clone(SSAMap.emptySSAMap());
-      Pair<PathFormula, ErrorConditions> edgeResult = convertEdgeToPathFormula(oldPathFormula, edge);
-      //timer.start();
+      Pair<PathFormula, ErrorConditions> edgeResult = convertEdgeToPathFormula(element.getPathFormula(), edge);
       PathFormula pathFormula = edgeResult.getFirst();
       ErrorConditions conditions = edgeResult.getSecond();
-      if (usePathFiltration) {
-        Multimap<String, AbstractionPredicate> allPredicates = ((PredicatePrecision) pPrecision).getFunctionPredicates();
-        Collection<AbstractionPredicate> tmpPredicates = new HashSet<>();
-
-        for (String function : allPredicates.keySet()) {
-          tmpPredicates.addAll(allPredicates.get(function));
-        }
-        final SSAMap ssa = pathFormula.getSsa();
-        formulaBuilding.start();
-        BooleanFormula formula = formulaManager.buildFormula(pathFormula.getFormula());
-        formulaBuilding.stop();
-        getPredicates.start();
-        Set<AbstractionPredicate> relevantPredicates = formulaManager.getRelevantPredicates(tmpPredicates, formula, ssa);
-        getPredicates.stop();
-        if (relevantPredicates.size() == 0 && !bfmgr.isFalse(formula)) {
-          pathFormula = pathFormulaManager.makeEmptyPathFormula(oldPathFormula);
-        }
-      }
       logger.log(Level.ALL, "New path formula is", pathFormula);
       // check whether to do abstraction
       boolean doAbstraction = blk.isBlockEnd(edge, pathFormula);
@@ -191,7 +157,6 @@ public class PredicateTransferRelation implements TransferRelation {
 
       List<PredicateAbstractState> newStates = new ArrayList<>(2);
 
-      makeAnd.start();
       if (checkValidDeref && !bfmgr.isFalse(invalidDerefCondition)) {
         logger.log(Level.ALL, "Adding invalid-deref condition", invalidDerefCondition);
         PathFormula targetPathFormula = pathFormulaManager.makeAnd(pathFormula, invalidDerefCondition);
@@ -213,12 +178,9 @@ public class PredicateTransferRelation implements TransferRelation {
       }
 
       newStates.addAll(createState(element, pathFormula, loc, doAbstraction, null));
-      makeAnd.stop();
       return newStates;
     } finally {
       postTimer.stop();
-      //timer.stop();
-      //System.out.println("TransferRelation: " + postTimer.getSumTime() + ", " + timer.getSumTime());
     }
   }
 
@@ -282,7 +244,6 @@ public class PredicateTransferRelation implements TransferRelation {
       // compute new pathFormula with the operation on the edge
       return pathFormulaManager.makeAndWithErrorConditions(pathFormula, edge);
     } finally {
-      //System.out.println("convertEdge: " + pathFormulaTimer.getSumTime());
       pathFormulaTimer.stop();
     }
   }

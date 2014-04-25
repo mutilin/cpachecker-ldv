@@ -107,7 +107,6 @@ public class PredicatePrecisionAdjustment implements PrecisionAdjustment {
 
     } finally {
       totalPrecTime.stop();
-      //System.out.println("Precision ajustment: " + totalPrecTime.getAvgTime());
     }
   }
 

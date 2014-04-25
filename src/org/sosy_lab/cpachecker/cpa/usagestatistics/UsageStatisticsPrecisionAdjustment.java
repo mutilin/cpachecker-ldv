@@ -68,17 +68,14 @@ class UsageStatisticsPrecisionAdjustment implements PrecisionAdjustment {
     PredicateAbstractState state = AbstractStates.extractStateByType(newElement, PredicateAbstractState.class);
     if (state == null || !state.getAbstractionFormula().isFalse() && state.isAbstractionState()) {
       element.saveUnsafesInContainer();
-      if (element.isTarget()) {
-        action = Action.BREAK;
-      }
     }
 
     if ((oldElement == newElement) && (oldWrappedPrecision == newWrappedPrecision)) {
       // nothing has changed
       return Triple.of(pElement, oldPrecision, action);
     }
-    UsageStatisticsState resultElement = element.clone(newElement);
+    AbstractState resultElement = element.clone(newElement);
     UsageStatisticsPrecision newPrecision = ((UsageStatisticsPrecision)oldPrecision).clone(newWrappedPrecision);
-    return Triple.of((AbstractState)resultElement, (Precision)newPrecision, action);
+    return Triple.of(resultElement, (Precision)newPrecision, action);
   }
 }

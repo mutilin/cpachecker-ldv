@@ -112,7 +112,7 @@ public class PathFormulaManagerImpl implements PathFormulaManager {
   private final FormulaManagerView fmgr;
   private final BooleanFormulaManagerView bfmgr;
   private final FunctionFormulaManagerView ffmgr;
-  public final CtoFormulaConverter converter;
+  private final CtoFormulaConverter converter;
   private final LogManager logger;
 
   @Option(description="add special information to formulas about non-deterministic functions")

@@ -209,7 +209,7 @@ public class ARGReachedSet {
    * @param pNewPrecision New precision.
    * @return The adapted precision.
    */
-  public Precision adaptPrecision(Precision pOldPrecision, Precision pNewPrecision,
+  private Precision adaptPrecision(Precision pOldPrecision, Precision pNewPrecision,
       Class<? extends Precision> pPrecisionType) {
     PredicatePrecision old = Precisions.extractPrecisionByType(pOldPrecision, PredicatePrecision.class);
     if (old != null) {

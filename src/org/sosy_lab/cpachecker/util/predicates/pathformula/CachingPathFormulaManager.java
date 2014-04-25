@@ -45,7 +45,7 @@ public class CachingPathFormulaManager implements PathFormulaManager {
   public final Timer pathFormulaComputationTimer = new Timer();
   public int pathFormulaCacheHits = 0;
 
-  public final PathFormulaManager delegate;
+  private final PathFormulaManager delegate;
 
   private final Map<Pair<CFAEdge, PathFormula>, Pair<PathFormula, ErrorConditions>> andFormulaCache
             = new HashMap<>();
@@ -73,7 +73,6 @@ public class CachingPathFormulaManager implements PathFormulaManager {
       // compute new pathFormula with the operation on the edge
       result = delegate.makeAndWithErrorConditions(pOldFormula, pEdge);
       pathFormulaComputationTimer.stop();
-      //System.out.println("MakeAndWithErrorConditions " + pathFormulaComputationTimer.getSumTime());
       andFormulaCache.put(formulaCacheKey, result);
 
     } else {

@@ -64,6 +64,7 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
   private final PrecisionAdjustment precisionAdjustment;
   private final Reducer reducer;
   private final UsageStatisticsCPAStatistics statistics;
+  //Do not remove container from CPA - we clean all states while refinement
   private final UsageContainer container;
   private UsageStatisticsPrecision precision;
   private final CFA cfa;

@@ -429,7 +429,6 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
     if (edge == null) {
 
       CFANode node = extractLocation(pElement);
-
       if (partitioning.isCallNode(node)) {
         //we have to start a recursive analysis
         nextBlock = partitioning.getBlockForCallNode(node);
@@ -589,14 +588,14 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
 
     CFANode currentNode = edge.getPredecessor();
 
-    Block currentNodeBlock = partitioning.getBlockForReturnNode(currentNode);
+    /*Block currentNodeBlock = partitioning.getBlockForReturnNode(currentNode);
     if (currentNodeBlock != null && !currentBlock.equals(currentNodeBlock)
         && currentNodeBlock.getNodes().contains(edge.getSuccessor())) {
       // we are not analyzing the block corresponding to currentNode (currentNodeBlock) but the currentNodeBlock is inside of this block
       // avoid a reanalysis
       //return wrappedTransfer.getAbstractSuccessors(pElement, pPrecision, edge);
       return Collections.emptySet();
-    }
+    }*/
 
     if (currentBlock.isReturnNode(currentNode) && !currentBlock.getNodes().contains(edge.getSuccessor())) {
       // do not perform analysis beyond the current block
