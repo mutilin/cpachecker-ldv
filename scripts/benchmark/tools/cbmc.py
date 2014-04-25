@@ -25,13 +25,13 @@ class Tool(benchmark.tools.template.BaseTool):
         return 'CBMC'
 
 
-    def getCmdline(self, executable, options, sourcefile):
+    def getCmdline(self, executable, options, sourcefiles, propertyfile):
         if ("--xml-ui" not in options):
             options = options + ["--xml-ui"]
 
         self.options = options
 
-        return [executable] + options + [sourcefile]
+        return [executable] + options + sourcefiles
 
 
     def getStatus(self, returncode, returnsignal, output, isTimeout):
@@ -67,7 +67,7 @@ class Tool(benchmark.tools.template.BaseTool):
                     if 'unwinding assertion' in reason:
                         status = result.STR_UNKNOWN
                     else:
-                        status = result.STR_FALSE_LABEL
+                        status = result.STR_FALSE_REACH
 
                 elif status == "SUCCESS":
                     assert returncode == 0

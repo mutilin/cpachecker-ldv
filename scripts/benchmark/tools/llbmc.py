@@ -23,7 +23,9 @@ class Tool(benchmark.tools.template.BaseTool):
         return 'LLBMC'
 
 
-    def getCmdline(self, executable, options, sourcefile):
+    def getCmdline(self, executable, options, sourcefiles, propertyfile):
+        assert len(sourcefiles) == 1, "only one sourcefile supported"
+        sourcefile = sourcefiles[0]
         # compile sourcefile with clang
         self.prepSourcefile = self._prepareSourcefile(sourcefile)
 
@@ -58,7 +60,7 @@ class Tool(benchmark.tools.template.BaseTool):
 
         for line in output.splitlines():
             if 'Error detected.' in line:
-                status = result.STR_FALSE_LABEL
+                status = result.STR_FALSE_REACH
             elif 'No error detected.' in line:
                 status = result.STR_TRUE
 

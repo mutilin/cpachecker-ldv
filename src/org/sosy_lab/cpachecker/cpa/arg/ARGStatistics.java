@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2013  Dirk Beyer
+ *  Copyright (C) 2007-2014  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -137,17 +137,24 @@ public class ARGStatistics implements Statistics {
   @Option(name="errorPath.graphml",
       description="export error path to file as an automaton to a graphml file")
   @FileOption(FileOption.Type.OUTPUT_FILE)
-  private Path errorPathAutomatonGraphmlFile = Paths.get("ErrorPath.%d.graphml");
+  private Path errorPathAutomatonGraphmlFile = null;
+
+  @Option(name="errorPath.exportImmediately",
+      description="export error paths to files immediately after they were found")
+  private boolean dumpErrorPathImmediately = false;
 
   private final ARGCPA cpa;
 
   private Writer refinementGraphUnderlyingWriter = null;
   private ARGToDotWriter refinementGraphWriter = null;
+  private ARGPathExport witnessExporter = null;
 
   public ARGStatistics(Configuration config, ARGCPA cpa) throws InvalidConfigurationException {
+    this.cpa = cpa;
+
     config.inject(this);
 
-    this.cpa = cpa;
+    witnessExporter = new ARGPathExport(config);
 
     if (argFile == null && simplifiedArgFile == null && refinementGraphFile == null) {
       exportARG = false;
@@ -212,26 +219,38 @@ public class ARGStatistics implements Statistics {
       return;
     }
 
-    final ARGState rootState = (ARGState)pReached.getFirstState();
     final Set<Pair<ARGState, ARGState>> allTargetPathEdges = new HashSet<>();
     int cexIndex = 0;
 
     for (Map.Entry<ARGState, CounterexampleInfo> cex : getAllCounterexamples(pReached).entrySet()) {
-      final ARGState targetState = checkNotNull(cex.getKey());
-      @Nullable final CounterexampleInfo counterexample = cex.getValue();
-      final ARGPath targetPath = checkNotNull(getTargetPath(targetState, counterexample));
-
-      final Set<Pair<ARGState, ARGState>> targetPathEdges = getEdgesOfPath(targetPath);
-      allTargetPathEdges.addAll(targetPathEdges);
-
-      if (exportErrorPath && counterexample != null) {
-        exportCounterexample(pReached, rootState, cexIndex++, counterexample,
-            targetPath, Predicates.in(targetPathEdges));
-      }
+      exportCounterexample(pReached, cex.getKey(), cex.getValue(), cexIndex++, allTargetPathEdges,
+          !shouldDumpErrorPathImmediately());
     }
 
     if (exportARG) {
+      final ARGState rootState = (ARGState)pReached.getFirstState();
       exportARG(rootState, Predicates.in(allTargetPathEdges));
+    }
+  }
+
+  // Print error trace and increment counter cexIndex.
+  void exportCounterexample(ReachedSet pReached, ARGState pTargetState,
+      @Nullable final CounterexampleInfo pCounterexampleInfo,
+      int cexIndex, @Nullable final Set<Pair<ARGState, ARGState>> allTargetPathEdges,
+      boolean reallyWriteToDisk) {
+    checkNotNull(pTargetState);
+
+    final ARGState rootState = (ARGState)pReached.getFirstState();
+    final ARGPath targetPath = checkNotNull(getTargetPath(pTargetState, pCounterexampleInfo));
+
+    final Set<Pair<ARGState, ARGState>> targetPathEdges = getEdgesOfPath(targetPath);
+    if (allTargetPathEdges != null) {
+      allTargetPathEdges.addAll(targetPathEdges);
+    }
+
+    if (reallyWriteToDisk && exportErrorPath && pCounterexampleInfo != null) {
+      exportCounterexample(pReached, rootState, cexIndex, pCounterexampleInfo,
+          targetPath, Predicates.in(targetPathEdges));
     }
   }
 
@@ -308,17 +327,6 @@ public class ARGStatistics implements Statistics {
       }
     });
 
-    writeErrorPathFile(errorPathAutomatonGraphmlFile, cexIndex, new Appender() {
-      @Override
-      public void appendTo(Appendable pAppendable) throws IOException {
-        ARGPathExport exporter = new ARGPathExport();
-        exporter.writePath(pAppendable, rootState,
-            ARGUtils.CHILDREN_OF_STATE,
-            Predicates.in(pathElements),
-            isTargetPathEdge);
-      }
-    });
-
     if (counterexample != null) {
       if (counterexample.getTargetPathModel() != null) {
         writeErrorPathFile(errorPathAssignment, cexIndex, counterexample.getTargetPathModel());
@@ -330,11 +338,22 @@ public class ARGStatistics implements Statistics {
         }
       }
     }
+
+    writeErrorPathFile(errorPathAutomatonGraphmlFile, cexIndex, new Appender() {
+      @Override
+      public void appendTo(Appendable pAppendable) throws IOException {
+        witnessExporter.writePath(pAppendable, rootState,
+            ARGUtils.CHILDREN_OF_STATE,
+            Predicates.in(pathElements),
+            isTargetPathEdge,
+            counterexample);
+      }
+    });
   }
 
   private Appender createErrorPathWithVariableAssignmentInformation(
       final ARGPath targetPath, final CounterexampleInfo counterexample) {
-    final Model model = counterexample.getTargetPathModel();
+    final Model model = counterexample == null ? null : counterexample.getTargetPathModel();
     return new Appender() {
       @Override
       public void appendTo(Appendable out) throws IOException {
@@ -498,5 +517,9 @@ public class ARGStatistics implements Statistics {
       lastElement = currentElement;
     }
     return result;
+  }
+
+  boolean shouldDumpErrorPathImmediately() {
+    return dumpErrorPathImmediately;
   }
 }

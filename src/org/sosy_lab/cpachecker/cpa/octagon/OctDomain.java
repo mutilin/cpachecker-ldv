@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2012  Dirk Beyer
+ *  Copyright (C) 2007-2014  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,21 +28,21 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-import org.sosy_lab.common.LogManager;
+import org.sosy_lab.common.Pair;
+import org.sosy_lab.common.configuration.Configuration;
+import org.sosy_lab.common.configuration.InvalidConfigurationException;
+import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractDomain;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.util.octagon.Octagon;
 import org.sosy_lab.cpachecker.util.octagon.OctagonManager;
-
-import com.google.common.collect.BiMap;
 
 class OctDomain implements AbstractDomain {
 
   private static long totaltime = 0;
   private LogManager logger;
 
-
-  public OctDomain(LogManager log) {
+  public OctDomain(LogManager log, Configuration config) throws InvalidConfigurationException {
     logger = log;
   }
 
@@ -85,16 +85,47 @@ class OctDomain implements AbstractDomain {
   }
 
   @Override
-  public AbstractState join(AbstractState element1, AbstractState element2) {
-    OctState octEl1 = (OctState) element1;
-    OctState octEl2 = (OctState) element2;
-    Octagon newOctagon = OctagonManager.union(octEl1.getOctagon(), octEl2.getOctagon());
-    BiMap<String, Integer> newMap =
-      octEl1.sizeOfVariables() > octEl2.sizeOfVariables()? octEl1.getVariableToIndexMap() : octEl2.getVariableToIndexMap();
+  public AbstractState join(AbstractState successor, AbstractState reached) {
+    Pair<OctState, OctState> shrinkedStates = getShrinkedStates((OctState)successor, (OctState)reached);
+    Octagon newOctagon = OctagonManager.union(shrinkedStates.getFirst().getOctagon(), shrinkedStates.getSecond().getOctagon());
 
-      // TODO should it be null
-      return new OctState(newOctagon, newMap, logger);
-      // TODO add widening
-      //    return LibraryAccess.widening(octEl1, octEl2);
+    OctState newState = new OctState(newOctagon, shrinkedStates.getFirst().getVariableToIndexMap(), ((OctState)successor).getBlock(), logger);
+    if (newState.equals(reached)) {
+      return reached;
+    } else if (newState.equals(successor)) {
+      return successor;
+    } else {
+      return newState;
+    }
+  }
+
+  public AbstractState joinWidening(OctState successorOct, OctState reachedOct) {
+    Pair<OctState, OctState> shrinkedStates = getShrinkedStates(successorOct, reachedOct);
+    successorOct = shrinkedStates.getFirst();
+    reachedOct = shrinkedStates.getSecond();
+
+    Octagon newOctagon = OctagonManager.widening(reachedOct.getOctagon(), successorOct.getOctagon());
+
+    OctState newState = new OctState(newOctagon, successorOct.getVariableToIndexMap(), successorOct.getBlock(), logger);
+    if (newState.equals(successorOct)) {
+      return successorOct;
+    } else if (newState.equals(reachedOct)) {
+      return reachedOct;
+    } else {
+      return newState;
+    }
+  }
+
+  private Pair<OctState, OctState> getShrinkedStates(OctState succ, OctState reached) {
+    if (succ.sizeOfVariables() > reached.sizeOfVariables()) {
+      Pair<OctState, OctState> tmp = succ.shrinkToFittingSize(reached);
+      succ = tmp.getFirst();
+      reached = tmp.getSecond();
+    } else {
+      Pair<OctState, OctState> tmp = reached.shrinkToFittingSize(succ);
+      succ = tmp.getSecond();
+      reached = tmp.getFirst();
+    }
+    return Pair.of(succ, reached);
   }
 }

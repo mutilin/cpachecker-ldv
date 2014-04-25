@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2013  Dirk Beyer
+ *  Copyright (C) 2007-2014  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,9 +28,10 @@ import static org.sosy_lab.cpachecker.util.predicates.z3.Z3NativeApi.*;
 import static org.sosy_lab.cpachecker.util.predicates.z3.Z3NativeApiConstants.*;
 
 import java.util.Collection;
+import java.util.List;
 
-import org.sosy_lab.common.NestedTimer;
-import org.sosy_lab.common.Timer;
+import org.sosy_lab.common.time.NestedTimer;
+import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.core.Model;
 import org.sosy_lab.cpachecker.core.ShutdownNotifier;
 import org.sosy_lab.cpachecker.exceptions.SolverException;
@@ -52,7 +53,7 @@ public class Z3TheoremProver implements ProverEnvironment {
 
   public Z3TheoremProver(Z3FormulaManager mgr) {
     this.mgr = mgr;
-    this.z3context = mgr.getContext();
+    this.z3context = mgr.getEnvironment();
     this.z3solver = mk_solver(z3context);
     solver_inc_ref(z3context, z3solver);
     this.smtLogger = mgr.getSmtLogger();
@@ -102,6 +103,11 @@ public class Z3TheoremProver implements ProverEnvironment {
     Z3Model model = new Z3Model(mgr, z3context, z3solver);
     Model m = model.createZ3Model();
     return m;
+  }
+
+  @Override
+  public List<BooleanFormula> getUnsatCore() {
+    throw new UnsupportedOperationException();
   }
 
   @Override
@@ -231,7 +237,7 @@ public class Z3TheoremProver implements ProverEnvironment {
       if (count == 0) {
         solveTime.stop();
         enumTime.startOuter();
-        regionTime = enumTime.getInnerTimer();
+        regionTime = enumTime.getCurentInnerTimer();
       }
 
       regionTime.start();

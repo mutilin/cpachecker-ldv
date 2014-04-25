@@ -32,10 +32,10 @@ class Tool(benchmark.tools.template.BaseTool):
                                 stderr=subprocess.STDOUT).communicate()[0][6:11]
 
 
-    def getCmdline(self, blastExe, options, sourcefile):
+    def getCmdline(self, blastExe, options, sourcefiles, propertyfile):
         workingDir = self.getWorkingDirectory(blastExe)
         ocamlExe = Util.findExecutable('ocamltune')
-        return [os.path.relpath(ocamlExe, start=workingDir), os.path.relpath(blastExe, start=workingDir)] + options + [sourcefile]
+        return [os.path.relpath(ocamlExe, start=workingDir), os.path.relpath(blastExe, start=workingDir)] + options + sourcefiles
 
 
     def getName(self):
@@ -46,7 +46,7 @@ class Tool(benchmark.tools.template.BaseTool):
         status = result.STR_UNKNOWN
         for line in output.splitlines():
             if line.startswith('Error found! The system is unsafe :-('):
-                status = result.STR_FALSE_LABEL
+                status = result.STR_FALSE_REACH
             elif line.startswith('No error found.  The system is safe :-)'):
                 status = result.STR_TRUE
             elif line.startswith('Fatal error: exception Out_of_memory'):

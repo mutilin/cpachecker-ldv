@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2013  Dirk Beyer
+ *  Copyright (C) 2007-2014  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -37,16 +37,17 @@ import java.util.logging.Level;
 
 import javax.annotation.Nullable;
 
-import org.sosy_lab.common.LogManager;
-import org.sosy_lab.common.Timer;
 import org.sosy_lab.common.Triple;
 import org.sosy_lab.common.configuration.Configuration;
+import org.sosy_lab.common.configuration.ConfigurationBuilder;
 import org.sosy_lab.common.configuration.FileOption;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.io.Path;
 import org.sosy_lab.common.io.Paths;
+import org.sosy_lab.common.log.LogManager;
+import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.CPABuilder;
@@ -73,7 +74,7 @@ import com.google.common.collect.PeekingIterator;
 @Options(prefix="restartAlgorithm")
 public class RestartAlgorithm implements Algorithm, StatisticsProvider {
 
-  private static final Splitter CONFIG_FILE_CONDITION_SPLITTER = Splitter.on(':').trimResults().limit(2);
+  private static final Splitter CONFIG_FILE_CONDITION_SPLITTER = Splitter.on("::").trimResults().limit(2);
 
   private static class RestartAlgorithmStatistics implements Statistics {
 
@@ -208,10 +209,10 @@ public class RestartAlgorithm implements Algorithm, StatisticsProvider {
           currentCpa = currentAlg.getSecond();
           currentReached = currentAlg.getThird();
         } catch (InvalidConfigurationException e) {
-          logger.logUserException(Level.WARNING, e, "Skipping one analysis because its configuration is invalid");
+          logger.logUserException(Level.WARNING, e, "Skipping one analysis because the configuration file " + singleConfigFileName.toString() + " is invalid");
           continue;
         } catch (IOException e) {
-          logger.logUserException(Level.WARNING, e, "Skipping one analysis due to unreadable configuration file");
+          logger.logUserException(Level.WARNING, e, "Skipping one analysis because the configuration file " + singleConfigFileName.toString() + " could not be read");
           continue;
         }
 
@@ -350,6 +351,10 @@ public class RestartAlgorithm implements Algorithm, StatisticsProvider {
     @Option(name="analysis.saveLocalResults",
         description="Save results of local analysis")
         private boolean saveLocalResults = false;
+    @Option(name="analysis.unknownIfUnrestrictedProgram",
+        description="stop the analysis with the result unknown if the program does not satisfies certain restrictions.")
+    private boolean unknownIfUnrestrictedProgram = false;
+
 
   }
 
@@ -359,7 +364,7 @@ public class RestartAlgorithm implements Algorithm, StatisticsProvider {
     ConfigurableProgramAnalysis cpa;
     Algorithm algorithm;
 
-    Configuration.Builder singleConfigBuilder = Configuration.builder();
+    ConfigurationBuilder singleConfigBuilder = Configuration.builder();
     singleConfigBuilder.copyFrom(globalConfig);
     singleConfigBuilder.clearOption("restartAlgorithm.configFiles");
     singleConfigBuilder.clearOption("analysis.restartAfterUnknown");
@@ -423,7 +428,7 @@ public class RestartAlgorithm implements Algorithm, StatisticsProvider {
   throws InvalidConfigurationException, CPAException {
     logger.log(Level.FINE, "Creating algorithms");
 
-    Algorithm algorithm = new CPAAlgorithm(cpa, logger, pConfig, singleShutdownNotifier);
+    Algorithm algorithm = CPAAlgorithm.create(cpa, logger, pConfig, singleShutdownNotifier);
 
     if (pOptions.useCEGAR) {
       algorithm = new CEGARAlgorithm(algorithm, cpa, pConfig, logger);
@@ -439,6 +444,10 @@ public class RestartAlgorithm implements Algorithm, StatisticsProvider {
 
     if (pOptions.collectAssumptions) {
       algorithm = new AssumptionCollectorAlgorithm(algorithm, cpa, pConfig, logger);
+    }
+
+    if (pOptions.unknownIfUnrestrictedProgram) {
+      algorithm = new RestrictedProgramDomainAlgorithm(algorithm, cpa, cfa, logger, pConfig, shutdownNotifier);
     }
 
     return algorithm;

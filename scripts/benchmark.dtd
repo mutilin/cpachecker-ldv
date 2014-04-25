@@ -1,16 +1,18 @@
-<!ELEMENT benchmark ((rundefinition | option | sourcefiles | requiredfiles | resultfiles | require )*, columns?)>
-<!ELEMENT rundefinition (sourcefiles | option)*>
+<!ELEMENT benchmark ((rundefinition | option | propertyfile | sourcefiles | requiredfiles | resultfiles | require )*, columns?)>
+<!ELEMENT rundefinition (sourcefiles | option | propertyfile)*>
 
-<!ELEMENT sourcefiles (include | includesfile | exclude | option)*>
+<!ELEMENT sourcefiles (include | includesfile | exclude | option | propertyfile)*>
 <!ELEMENT include (#PCDATA)>
 <!ELEMENT includesfile (#PCDATA)>
 <!ELEMENT exclude (#PCDATA)>
+<!ELEMENT append (#PCDATA)>
 
 <!ELEMENT requiredfiles (#PCDATA)>
 <!ELEMENT resultfiles (#PCDATA)>
 <!ELEMENT require>
 
 <!ELEMENT option (#PCDATA)>
+<!ELEMENT propertyfile (#PCDATA)>
 <!ELEMENT columns (column*)>
 <!ELEMENT column (#PCDATA)>
 

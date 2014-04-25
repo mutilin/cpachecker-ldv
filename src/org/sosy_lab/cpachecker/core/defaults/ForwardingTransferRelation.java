@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2013  Dirk Beyer
+ *  Copyright (C) 2007-2014  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -251,8 +251,10 @@ public abstract class ForwardingTransferRelation<S extends AbstractState, P exte
   /** This method just forwards the handling to every inner edge. */
   protected S handleMultiEdge(MultiEdge cfaEdge) throws CPATransferException {
     for (final CFAEdge innerEdge : cfaEdge) {
+      edge = innerEdge;
       state = handleSimpleEdge(innerEdge);
     }
+    edge = cfaEdge; // reset edge
     return state;
   }
 

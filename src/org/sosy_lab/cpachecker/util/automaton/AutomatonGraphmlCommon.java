@@ -24,7 +24,8 @@
 package org.sosy_lab.cpachecker.util.automaton;
 
 import java.io.IOException;
-import java.io.StringWriter;
+import java.io.Writer;
+import java.util.Map;
 
 import javax.annotation.Nullable;
 import javax.xml.parsers.DocumentBuilder;
@@ -42,6 +43,8 @@ import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.Maps;
+import com.google.common.io.CharStreams;
 
 
 public class AutomatonGraphmlCommon {
@@ -49,17 +52,29 @@ public class AutomatonGraphmlCommon {
   public final static String SINK_NODE_ID = "sink";
 
   public enum KeyDef {
-    ASSUMPTION("assumption", "node", "assumption", "string"),
     INVARIANT("invariant", "node", "invariant", "string"),
     NAMED("named", "node", "namedValue", "string"),
+
     NODETYPE("nodetype", "node", "nodeType", "string"),
 
-    ENTRYNODE("entrynode", "graph", "entryNodeId", "string"),
+    ISFRONTIERNODE("frontier","node","isFrontierNode","boolean"),
+    ISVIOLATIONNODE("violation","node","isViolationNode","boolean"),
+    ISENTRYNODE("entry","node","isEntryNode","boolean"),
+    ISSINKNODE("sink","node","isSinkNode","boolean"),
+
     SOURCECODELANGUAGE("sourcecodelang", "graph", "sourcecodeLanguage", "string"),
 
     SOURCECODE("sourcecode", "edge", "sourcecode", "string"),
     TOKENS("tokens", "edge", "tokenSet", "string"),
-    TOKENSNEGATED("negated", "edge", "tokensNegated", "string");
+    ORIGINTOKENS("origintokens", "edge", "originTokenSet", "string"),
+    ORIGINLINE("originline", "edge", "lineNumberInOrigin", "int"),
+    ORIGINFILE("originfile", "edge", "originFileName", "string"),
+    LINECOLS("lineCols", "edge", "lineColSet", "string"),
+    TOKENSNEGATED("negated", "edge", "negativeCase", "string"),
+    ASSUMPTION("assumption", "edge", "assumption", "string"),
+
+    FUNCTIONENTRY("enterFunction", "edge", "enterFunction", "string"),
+    FUNCTIONEXIT("returnFrom", "edge", "returnFromFunction", "string");
 
     public final String id;
     public final String keyFor;
@@ -79,9 +94,35 @@ public class AutomatonGraphmlCommon {
     }
   }
 
+  public enum NodeFlag {
+    ISFRONTIER(KeyDef.ISFRONTIERNODE),
+    ISVIOLATION(KeyDef.ISVIOLATIONNODE),
+    ISENTRY(KeyDef.ISENTRYNODE),
+    ISSINKNODE(KeyDef.ISSINKNODE);
+
+    public final KeyDef key;
+
+    private NodeFlag(KeyDef key) {
+      this.key = key;
+    }
+
+    private final static Map<String, NodeFlag> stringToFlagMap = Maps.newHashMap();
+
+    static {
+      for (NodeFlag f: NodeFlag.values()) {
+        stringToFlagMap.put(f.key.id, f);
+      }
+    }
+
+
+    public static NodeFlag getNodeFlagByKey(final String key) {
+      return stringToFlagMap.get(key);
+    }
+  }
+
   public enum GraphType {
-    PROGRAMPATH("path"),
-    CONDITION("condition");
+    PROGRAMPATH("traces automaton"),
+    CONDITION("assumptions automaton");
 
     public final String text;
 
@@ -97,8 +138,7 @@ public class AutomatonGraphmlCommon {
 
   public enum NodeType {
     ANNOTATION("annotation"),
-    ONPATH("pathnode"),
-    SINKNODE("sinknode");
+    ONPATH("path");
 
     public final String text;
 
@@ -110,7 +150,18 @@ public class AutomatonGraphmlCommon {
     public String toString() {
       return text;
     }
+
+    public static NodeType fromString(String nodeTypeString) {
+      for (NodeType t: NodeType.values()) {
+        if (t.text.equalsIgnoreCase(nodeTypeString.trim())) {
+          return t;
+        }
+      }
+      throw new RuntimeException(String.format("String '%s' does not descripe a node type!", nodeTypeString));
+    }
   }
+
+  public static final NodeType defaultNodeType = NodeType.ONPATH;
 
   public enum GraphMlTag {
     NODE("node"),
@@ -135,14 +186,14 @@ public class AutomatonGraphmlCommon {
   public static class GraphMlBuilder {
 
     private final Document doc;
-    private final Appendable target;
+    private final Writer target;
 
     public GraphMlBuilder(Appendable target) throws ParserConfigurationException {
       DocumentBuilderFactory docFactory = DocumentBuilderFactory.newInstance();
       DocumentBuilder docBuilder = docFactory.newDocumentBuilder();
 
       this.doc = docBuilder.newDocument();
-      this.target = target;
+      this.target = CharStreams.asWriter(target);
     }
 
     public Element createElement(GraphMlTag tag) {
@@ -192,11 +243,19 @@ public class AutomatonGraphmlCommon {
       return result;
     }
 
-    public void appendNewNode(String nodeId, NodeType nodeType) throws IOException {
+    public Element createNodeElement(String nodeId, NodeType nodeType) throws IOException {
       Element result = createElement(GraphMlTag.NODE);
       result.setAttribute("id", nodeId);
-      result.setAttribute("type", nodeType.toString());
 
+      if (nodeType != defaultNodeType) {
+        addDataElementChild(result, KeyDef.NODETYPE, nodeType.toString());
+      }
+
+      return result;
+    }
+
+    public void appendNewNode(String nodeId, NodeType nodeType) throws IOException {
+      Element result = createNodeElement(nodeId, nodeType);
       appendToAppendable(result);
     }
 
@@ -216,9 +275,8 @@ public class AutomatonGraphmlCommon {
       target.append("<graphml xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns=\"http://graphml.graphdrawing.org/xmlns\">\n");
     }
 
-    public void appendGraphHeader(GraphType pGraphType, String pEntryStateNodeId, String pSourceLanguage) throws IOException {
-      target.append(String.format("<graph edgedefault=\"directed\">", pEntryStateNodeId));
-      appendDataElement(KeyDef.ENTRYNODE, pEntryStateNodeId);
+    public void appendGraphHeader(GraphType pGraphType, String pSourceLanguage) throws IOException {
+      target.append("<graph edgedefault=\"directed\">");
       appendDataElement(KeyDef.SOURCECODELANGUAGE, pSourceLanguage);
     }
 
@@ -228,7 +286,6 @@ public class AutomatonGraphmlCommon {
 
     public void appendToAppendable(Node n) {
       try {
-        StringWriter sw = new StringWriter();
         TransformerFactory tf = TransformerFactory.newInstance();
         Transformer transformer = tf.newTransformer();
         transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
@@ -236,9 +293,8 @@ public class AutomatonGraphmlCommon {
         transformer.setOutputProperty(OutputKeys.INDENT, "yes");
         transformer.setOutputProperty(OutputKeys.ENCODING, "UTF-8");
 
-        transformer.transform(new DOMSource(n), new StreamResult(sw));
-        target.append(sw.toString());
-      } catch (TransformerException | IOException ex) {
+        transformer.transform(new DOMSource(n), new StreamResult(target));
+      } catch (TransformerException ex) {
           throw new RuntimeException("Error while dumping program path", ex);
       }
     }

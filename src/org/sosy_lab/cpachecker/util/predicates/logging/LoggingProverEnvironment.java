@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2013  Dirk Beyer
+ *  Copyright (C) 2007-2014  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,11 +24,12 @@
 package org.sosy_lab.cpachecker.util.predicates.logging;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.logging.Level;
 
-import org.sosy_lab.common.LogManager;
-import org.sosy_lab.common.NestedTimer;
-import org.sosy_lab.common.Timer;
+import org.sosy_lab.common.log.LogManager;
+import org.sosy_lab.common.time.NestedTimer;
+import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.core.Model;
 import org.sosy_lab.cpachecker.exceptions.SolverException;
 import org.sosy_lab.cpachecker.util.predicates.AbstractionManager.RegionCreator;
@@ -72,6 +73,13 @@ public class LoggingProverEnvironment implements ProverEnvironment {
     Model m = wrapped.getModel();
     logger.log(Level.FINE, "model", m);
     return m;
+  }
+
+  @Override
+  public List<BooleanFormula> getUnsatCore() {
+    List<BooleanFormula> unsatCore = wrapped.getUnsatCore();
+    logger.log(Level.FINE, "unsat-core", unsatCore);
+    return unsatCore;
   }
 
   @Override

@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2012  Dirk Beyer
+ *  Copyright (C) 2007-2014  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,8 +23,6 @@
  */
 package org.sosy_lab.cpachecker.util.predicates.interfaces;
 
-import java.util.Collections;
-import java.util.LinkedList;
 import java.util.List;
 
 import com.google.common.base.Joiner;
@@ -43,8 +41,7 @@ public class FunctionFormulaTypeImpl<T extends Formula> extends FunctionFormulaT
 
   public FunctionFormulaTypeImpl(FormulaType<T> returnType, List<FormulaType<?>> argumentTypes) {
     this.returnType = returnType;
-    this.argumentTypes =
-        Collections.unmodifiableList(new LinkedList<>(argumentTypes));
+    this.argumentTypes = ImmutableList.copyOf(argumentTypes);
   }
 
   @Override

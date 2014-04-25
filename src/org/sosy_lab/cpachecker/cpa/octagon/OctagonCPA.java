@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2012  Dirk Beyer
+ *  Copyright (C) 2007-2014  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,16 +23,16 @@
  */
 package org.sosy_lab.cpachecker.cpa.octagon;
 
-import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
+import org.sosy_lab.common.log.LogManager;
+import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.core.ShutdownNotifier;
 import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
-import org.sosy_lab.cpachecker.core.defaults.MergeJoinOperator;
 import org.sosy_lab.cpachecker.core.defaults.MergeSepOperator;
-import org.sosy_lab.cpachecker.core.defaults.SingletonPrecision;
 import org.sosy_lab.cpachecker.core.defaults.StaticPrecisionAdjustment;
 import org.sosy_lab.cpachecker.core.defaults.StopSepOperator;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractDomain;
@@ -44,10 +44,11 @@ import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustment;
 import org.sosy_lab.cpachecker.core.interfaces.StopOperator;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
+import org.sosy_lab.cpachecker.exceptions.InvalidCFAException;
 import org.sosy_lab.cpachecker.util.octagon.OctagonManager;
 
 @Options(prefix="cpa.octagon")
-public class OctagonCPA implements ConfigurableProgramAnalysis {
+public final class OctagonCPA implements ConfigurableProgramAnalysis {
 
   public static CPAFactory factory() {
     return AutomaticCPAFactory.forType(OctagonCPA.class);
@@ -63,19 +64,25 @@ public class OctagonCPA implements ConfigurableProgramAnalysis {
   private final StopOperator stopOperator;
   private final PrecisionAdjustment precisionAdjustment;
   private final LogManager logger;
+  private final Precision precision;
+  private final Configuration config;
+  private final ShutdownNotifier shutdownNotifier;
+  private final CFA cfa;
 
-  private OctagonCPA(Configuration config, LogManager log) throws InvalidConfigurationException {
+  private OctagonCPA(Configuration config, LogManager log,
+                     ShutdownNotifier shutdownNotifier, CFA cfa)
+                     throws InvalidConfigurationException, InvalidCFAException {
     config.inject(this);
     logger = log;
-    OctDomain octagonDomain = new OctDomain(logger);
+    OctDomain octagonDomain = new OctDomain(logger, config);
 
-    this.transferRelation = new OctTransferRelation(logger);
+    this.transferRelation = new OctTransferRelation(logger, cfa);
 
     MergeOperator octagonMergeOp = null;
-    if (mergeType.equals("sep")) {
+    if (mergeType.equals("SEP")) {
       octagonMergeOp = MergeSepOperator.getInstance();
-    } else if (mergeType.equals("join")) {
-      octagonMergeOp = new MergeJoinOperator(octagonDomain);
+    } else if (mergeType.equals("JOIN")) {
+      octagonMergeOp = new OctMergeJoinOperator(octagonDomain, config);
     } else {
       // default is sep
       octagonMergeOp = MergeSepOperator.getInstance();
@@ -87,8 +94,12 @@ public class OctagonCPA implements ConfigurableProgramAnalysis {
     this.mergeOperator = octagonMergeOp;
     this.stopOperator = octagonStopOp;
     this.precisionAdjustment = StaticPrecisionAdjustment.getInstance();
+    this.config = config;
+    this.shutdownNotifier = shutdownNotifier;
+    this.cfa = cfa;
+    precision = new OctPrecision(config);
 
-    assert (OctagonManager.init());
+    assert OctagonManager.init();
   }
 
   @Override
@@ -123,6 +134,22 @@ public class OctagonCPA implements ConfigurableProgramAnalysis {
 
   @Override
   public Precision getInitialPrecision(CFANode pNode) {
-    return SingletonPrecision.getInstance();
+    return precision;
+  }
+
+  public Configuration getConfiguration() {
+    return config;
+  }
+
+  public LogManager getLogger() {
+    return logger;
+  }
+
+  public ShutdownNotifier getShutdownNotifier() {
+    return shutdownNotifier;
+  }
+
+  public CFA getCFA() {
+    return cfa;
   }
 }

@@ -55,7 +55,7 @@ if [ ! -e "$PATH_TO_CPACHECKER/bin/org/sosy_lab/cpachecker/cmdline/CPAMain.class
   fi
 fi
 
-export CLASSPATH="$CLASSPATH:$PATH_TO_CPACHECKER/bin:$PATH_TO_CPACHECKER/cpachecker.jar:$PATH_TO_CPACHECKER/lib/*:$PATH_TO_CPACHECKER/lib/java/runtime/*:$PATH_TO_CPACHECKER/lib/JavaParser/*"
+export CLASSPATH="$CLASSPATH:$PATH_TO_CPACHECKER/bin:$PATH_TO_CPACHECKER/cpachecker.jar:$PATH_TO_CPACHECKER/lib/*:$PATH_TO_CPACHECKER/lib/java/runtime/*"
 
 # loop over all input parameters and parse them
 declare -a OPTIONS
@@ -81,6 +81,12 @@ while [ $# -gt 0 ]; do
   shift
 done
 
+if [ -n "$TEMP" ]; then
+  JAVA_VM_ARGUMENTS="$JAVA_VM_ARGUMENTS -Djava.io.tmpdir=$TEMP"
+elif [ -n "$TMP" ]; then
+  JAVA_VM_ARGUMENTS="$JAVA_VM_ARGUMENTS -Djava.io.tmpdir=$TMP"
+fi
+
 if [ -n "$JAVA_HEAP_SIZE" ]; then
   echo "Running JavaVM with special heap size: $JAVA_HEAP_SIZE"
 fi
@@ -94,4 +100,5 @@ if [ ! -z "$CPACHECKER_ARGUMENTS" ]; then
 fi
 
 # run CPAchecker
-exec "$JAVA" $JAVA_VM_ARGUMENTS -Xmx${JAVA_HEAP_SIZE:-$DEFAULT_HEAP_SIZE} $JAVA_ASSERTIONS org.sosy_lab.cpachecker.cmdline.CPAMain "${OPTIONS[@]}" $CPACHECKER_ARGUMENTS
+# stack size is set because on some systems it is too small for recursive algorithms and very large programs
+exec "$JAVA" $JAVA_VM_ARGUMENTS -Xmx${JAVA_HEAP_SIZE:-$DEFAULT_HEAP_SIZE} -Xss1024k $JAVA_ASSERTIONS org.sosy_lab.cpachecker.cmdline.CPAMain "${OPTIONS[@]}" $CPACHECKER_ARGUMENTS

@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2013  Dirk Beyer
+ *  Copyright (C) 2007-2014  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,6 +26,7 @@ package org.sosy_lab.cpachecker.cpa.smg;
 import java.math.BigInteger;
 import java.util.ArrayList;
 
+import org.sosy_lab.cpachecker.cfa.ast.FileLocation;
 import org.sosy_lab.cpachecker.cfa.ast.c.CIntegerLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.types.c.CArrayType;
 import org.sosy_lab.cpachecker.cfa.types.c.CBasicType;
@@ -46,7 +47,7 @@ public class AnonymousTypes {
   }
 
   public static CType createTypeWithLength(long pSizeInBytes) {
-    CIntegerLiteralExpression arrayLen = new CIntegerLiteralExpression(null, AnonymousTypes.dummyInt, BigInteger.valueOf(pSizeInBytes));
+    CIntegerLiteralExpression arrayLen = new CIntegerLiteralExpression(FileLocation.DUMMY, AnonymousTypes.dummyInt, BigInteger.valueOf(pSizeInBytes));
     return new CArrayType(false, false, AnonymousTypes.dummyChar, arrayLen);
   }
 }

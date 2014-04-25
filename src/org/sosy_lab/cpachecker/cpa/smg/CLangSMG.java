@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2013  Dirk Beyer
+ *  Copyright (C) 2007-2014  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -34,7 +34,7 @@ import java.util.logging.Level;
 
 import javax.annotation.Nullable;
 
-import org.sosy_lab.common.LogManager;
+import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionDeclaration;
 import org.sosy_lab.cpachecker.cfa.types.MachineModel;
 import org.sosy_lab.cpachecker.cpa.smg.objects.SMGObject;
@@ -618,8 +618,11 @@ class CLangSMGConsistencyVerifier {
    * @return True if {@link pSmg} is consistent w.r.t. this criteria. False otherwise.
    */
   static private boolean verifyGlobalNamespace(LogManager pLogger, CLangSMG pSmg) {
+    Map<String, SMGRegion> globals = pSmg.getGlobalObjects();
+
     for (String label: pSmg.getGlobalObjects().keySet()) {
-      if (pSmg.getGlobalObjects().get(label).getLabel() != label) {
+      String globalLabel = globals.get(label).getLabel();
+      if (! globalLabel.equals(label)) {
         pLogger.log(Level.SEVERE,  "CLangSMG inconsistent: label [" + label + "] points to an object with label [" + pSmg.getGlobalObjects().get(label).getLabel() + "]");
         return false;
       }

@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2012  Dirk Beyer
+ *  Copyright (C) 2007-2014  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,12 +28,12 @@ import java.util.logging.Level;
 
 import javax.annotation.Nullable;
 
-import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.collect.PathCopyingPersistentTreeMap;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
+import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
@@ -144,7 +144,7 @@ public class PredicateCPA implements ConfigurableProgramAnalysis, StatisticsProv
     formulaManager = new FormulaManagerView(realFormulaManager, config, logger);
     String libraries = formulaManager.getVersion();
 
-    PathFormulaManager pfMgr = new PathFormulaManagerImpl(formulaManager, config, logger, cfa);
+    PathFormulaManager pfMgr = new PathFormulaManagerImpl(formulaManager, config, logger, pShutdownNotifier, cfa);
     if (useCache) {
       pfMgr = new CachingPathFormulaManager(pfMgr);
     }
@@ -165,7 +165,7 @@ public class PredicateCPA implements ConfigurableProgramAnalysis, StatisticsProv
     AbstractionManager abstractionManager = new AbstractionManager(regionManager, formulaManager, config, logger);
 
     predicateManager = new PredicateAbstractionManager(abstractionManager, formulaManager, pathFormulaManager, solver, config, logger);
-    transfer = new PredicateTransferRelation(this, blk);
+    transfer = new PredicateTransferRelation(this, blk, config);
 
     topState = PredicateAbstractState.mkAbstractionState(
         formulaManager.getBooleanFormulaManager(),
@@ -173,7 +173,7 @@ public class PredicateCPA implements ConfigurableProgramAnalysis, StatisticsProv
         predicateManager.makeTrueAbstractionFormula(null),
         PathCopyingPersistentTreeMap.<CFANode, Integer>of(),
         null);
-    domain = new PredicateAbstractDomain(this);
+    domain = new PredicateAbstractDomain(this, config);
 
     if (mergeType.equals("SEP")) {
       merge = MergeSepOperator.getInstance();
@@ -205,7 +205,7 @@ public class PredicateCPA implements ConfigurableProgramAnalysis, StatisticsProv
     logger.log(Level.FINEST, "Initial precision is", initialPrecision);
 
     stats = new PredicateCPAStatistics(this, blk, regionManager, abstractionManager,
-        cfa, invariantGenerator.getTimeOfExecution());
+        cfa, invariantGenerator.getTimeOfExecution(), config);
 
     GlobalInfo.getInstance().storeFormulaManager(formulaManager);
   }

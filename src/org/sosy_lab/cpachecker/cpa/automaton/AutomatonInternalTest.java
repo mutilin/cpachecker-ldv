@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2013  Dirk Beyer
+ *  Copyright (C) 2007-2014  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -35,14 +35,14 @@ import java_cup.runtime.Symbol;
 
 import org.junit.Assert;
 import org.junit.Test;
-import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.FileOption;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.converters.FileTypeConverter;
 import org.sosy_lab.common.io.Path;
 import org.sosy_lab.common.io.Paths;
-import org.sosy_lab.common.log.BasicLogManager;
+import org.sosy_lab.common.log.LogManager;
+import org.sosy_lab.common.log.TestLogManager;
 import org.sosy_lab.cpachecker.cfa.CParser;
 import org.sosy_lab.cpachecker.cfa.CParser.ParserOptions;
 import org.sosy_lab.cpachecker.cfa.ast.c.CAstNode;
@@ -68,7 +68,7 @@ public class AutomatonInternalTest {
     config = Configuration.builder()
         .addConverter(FileOption.class, new FileTypeConverter(Configuration.defaultConfiguration()))
         .build();
-    logger = new BasicLogManager(config);
+    logger = TestLogManager.getInstance();
 
     ParserOptions options = CParser.Factory.getDefaultOptions();
     parser = CParser.Factory.getParser(config, logger, options, MachineModel.LINUX32);
@@ -106,7 +106,7 @@ public class AutomatonInternalTest {
     AutomatonBoolExpr cannot = new AutomatonBoolExpr.CPAQuery("none", "none");
     Map<String, AutomatonVariable> vars = Collections.emptyMap();
     List<AbstractState> elements = Collections.emptyList();
-    AutomatonExpressionArguments args = new AutomatonExpressionArguments(vars, elements, null, null);
+    AutomatonExpressionArguments args = new AutomatonExpressionArguments(null, vars, elements, null, null);
     AutomatonBoolExpr ex;
     AutomatonBoolExpr myTrue= AutomatonBoolExpr.TRUE;
     AutomatonBoolExpr myFalse= AutomatonBoolExpr.FALSE;
@@ -205,7 +205,7 @@ public class AutomatonInternalTest {
     // tests the replacement of Joker expressions in the AST comparison
     ASTMatcher patternAST = AutomatonASTComparator.generatePatternAST("$20 = $5($1, $?);", parser);
     CAstNode sourceAST  = AutomatonASTComparator.generateSourceAST("var1 = function(var2, egal);", parser);
-    AutomatonExpressionArguments args = new AutomatonExpressionArguments(null, null, null, null);
+    AutomatonExpressionArguments args = new AutomatonExpressionArguments(null, null, null, null, null);
 
     boolean result = patternAST.matches(sourceAST, args);
     Assert.assertTrue(result);
@@ -216,7 +216,7 @@ public class AutomatonInternalTest {
 
   @Test
   public void transitionVariableReplacement() throws Exception {
-    AutomatonExpressionArguments args = new AutomatonExpressionArguments(null, null, null, logger);
+    AutomatonExpressionArguments args = new AutomatonExpressionArguments(null, null, null, null, logger);
     args.putTransitionVariable(1, "hi");
     args.putTransitionVariable(2, "hello");
     // actual test
@@ -268,7 +268,7 @@ public class AutomatonInternalTest {
    * @throws InvalidConfigurationException
    */
   public void testAST(String src, String pattern, boolean result) throws InvalidAutomatonException, InvalidConfigurationException {
-    AutomatonExpressionArguments args = new AutomatonExpressionArguments(null, null, null, null);
+    AutomatonExpressionArguments args = new AutomatonExpressionArguments(null, null, null, null, null);
     CAstNode sourceAST  = AutomatonASTComparator.generateSourceAST(src, parser);
     ASTMatcher patternAST = AutomatonASTComparator.generatePatternAST(pattern, parser);
 

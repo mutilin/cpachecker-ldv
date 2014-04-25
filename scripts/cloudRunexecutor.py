@@ -3,9 +3,11 @@
 # prepare for Python 3
 from __future__ import absolute_import, print_function, unicode_literals
 
+import sys
+sys.dont_write_bytecode = True # prevent creation of .pyc files
+
 import os
 import signal
-import sys
 import logging
 import benchmark.runexecutor as runexecutor
 from benchmark.runexecutor import RunExecutor
@@ -13,6 +15,13 @@ from benchmark.runexecutor import RunExecutor
 MEMLIMIT = runexecutor.MEMLIMIT
 TIMELIMIT = runexecutor.TIMELIMIT
 CORELIMIT = runexecutor.CORELIMIT
+
+WALLTIME_STR    = "wallTime"
+CPUTIME_STR     = "cpuTime"
+MEMORYUSAGE_STR = "memoryUsage"
+RETURNVALUE_STR = "returnvalue"
+ENERGY_STR      = "energy"
+
 
 def main(argv=None):
     if argv is None:
@@ -79,17 +88,21 @@ def main(argv=None):
 
         logging.debug("runExecutor.executeRun() started.")
 
-        (wallTime, cpuTime, memUsage, returnvalue, output) = \
+        (wallTime, cpuTime, memUsage, returnvalue, output, energy) = \
             runExecutor.executeRun(args, rlimits, outputFileName, environments=env, maxLogfileSize=logfileSize);
 
         logging.debug("runExecutor.executeRun() ended.")
 
-        print("Walltime: " + str(wallTime))
-        print("CpuTime: " + str(cpuTime))
-        print("MemoryUsage: " + str(memUsage))
-        print("Returnvalue: " + str(returnvalue))
+        out = {WALLTIME_STR    : wallTime,
+               CPUTIME_STR     : cpuTime,
+               MEMORYUSAGE_STR : memUsage,
+               RETURNVALUE_STR : returnvalue,
+               ENERGY_STR      : energy,
+              }
 
-        return returnvalue
+        # this line dumps the result to the stdout-file.
+        # the stdout-file is automatically copied back to VCloud-client.
+        print(repr(out))
 
     else:
         sys.exit("Wrong number of arguments, expected exactly 4 or 5: <command> <memlimit in MB> <timelimit in s> <output file name> <core limit(optional)>")

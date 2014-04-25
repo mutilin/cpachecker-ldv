@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2013  Dirk Beyer
+ *  Copyright (C) 2007-2014  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,24 +23,32 @@
  */
 package org.sosy_lab.cpachecker.cpa.octagon;
 
+import static com.google.common.base.Predicates.*;
+import static com.google.common.collect.Iterables.filter;
+
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.logging.Level;
 
 import javax.annotation.Nullable;
 
-import org.sosy_lab.common.LogManager;
+import org.sosy_lab.common.Pair;
+import org.sosy_lab.common.log.LogManager;
+import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.ast.c.CArraySubscriptExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CAssignment;
 import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression.BinaryOperator;
 import org.sosy_lab.cpachecker.cfa.ast.c.CCastExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CCharLiteralExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CComplexCastExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpressionStatement;
@@ -52,7 +60,6 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CImaginaryLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CInitializer;
 import org.sosy_lab.cpachecker.cfa.ast.c.CInitializerExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CInitializerList;
@@ -66,9 +73,8 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSideVisitor;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStringLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CTypeDeclaration;
-import org.sosy_lab.cpachecker.cfa.ast.c.CTypeIdExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CTypeIdInitializerExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression.UnaryOperator;
 import org.sosy_lab.cpachecker.cfa.ast.c.CVariableDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.DefaultCExpressionVisitor;
 import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
@@ -94,17 +100,24 @@ import org.sosy_lab.cpachecker.cfa.types.c.CTypedefType;
 import org.sosy_lab.cpachecker.core.defaults.ForwardingTransferRelation;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
+import org.sosy_lab.cpachecker.cpa.octagon.coefficients.IOctCoefficients;
+import org.sosy_lab.cpachecker.cpa.octagon.coefficients.OctEmptyCoefficients;
+import org.sosy_lab.cpachecker.cpa.octagon.coefficients.OctIntervalCoefficients;
+import org.sosy_lab.cpachecker.cpa.octagon.coefficients.OctSimpleCoefficients;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
+import org.sosy_lab.cpachecker.exceptions.InvalidCFAException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCCodeException;
 import org.sosy_lab.cpachecker.exceptions.UnsupportedCCodeException;
+import org.sosy_lab.cpachecker.util.CFAUtils.Loop;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Multimap;
 
 
-public class OctTransferRelation extends ForwardingTransferRelation<OctState, Precision> {
+public class OctTransferRelation extends ForwardingTransferRelation<OctState, OctPrecision> {
 
-  private static final String TEMP_BOOLEAN_VAR_NAME = "___cpa_temp_bool_var_";
   private static final String FUNCTION_RETURN_VAR = "___cpa_temp_result_var_";
+  private static final String TEMP_VAR_PREFIX = "___cpa_temp_var_";
 
   /**
    * counter for temporary variables which should be increased after every
@@ -123,11 +136,32 @@ public class OctTransferRelation extends ForwardingTransferRelation<OctState, Pr
 
   private final LogManager logger;
 
+  private final Map<CFAEdge, Loop> loopEntryEdges;
+
   /**
    * Class constructor.
+   * @throws InvalidCFAException
    */
-  public OctTransferRelation(LogManager log) {
+  public OctTransferRelation(LogManager log, CFA cfa) throws InvalidCFAException {
     logger = log;
+
+    if (!cfa.getLoopStructure().isPresent()) {
+      throw new InvalidCFAException("OctagonCPA does not work without loop information!");
+    }
+
+    Multimap<String, Loop> loops = cfa.getLoopStructure().get();
+    Map<CFAEdge, Loop> entryEdges = new HashMap<>();
+
+    for (Loop l : loops.values()) {
+      // function edges do not count as incoming/outgoing edges
+      Iterable<CFAEdge> incomingEdges = filter(l.getIncomingEdges(),
+                                               not(instanceOf(CFunctionReturnEdge.class)));
+
+      for (CFAEdge e : incomingEdges) {
+          entryEdges.put(e, l);
+      }
+    }
+    loopEntryEdges = Collections.unmodifiableMap(entryEdges);
   }
 
   @Override
@@ -189,15 +223,28 @@ public class OctTransferRelation extends ForwardingTransferRelation<OctState, Pr
       }
     }
 
+    Set<OctState> cleanedUpStates = new HashSet<>();
+    // TODO overapproximation here, we should not need to remove those vars
+    // instead it would be much better if we could omit creating them, p.e. through
+    // creating the temporary vars in the cfa, before analyzing the program
     for (OctState st : successors) {
-      postProcessing(st);
+      cleanedUpStates.add(st.removeTempVars(functionName, TEMP_VAR_PREFIX));
+    }
+
+    if (loopEntryEdges.get(cfaEdge) != null) {
+      Set<OctState> newStates = new HashSet<>();
+      for (OctState s : cleanedUpStates) {
+        newStates.add(new OctState(s.getOctagon(), s.getVariableToIndexMap(), new OctState.Block(), logger));
+      }
+      cleanedUpStates = newStates;
     }
 
     resetInfo();
 
-    return successors;
+    return cleanedUpStates;
   }
 
+  @SuppressWarnings("deprecation")
   @Override
   protected OctState handleAssumption(CAssumeEdge cfaEdge, CExpression expression, boolean truthAssumption)
       throws CPATransferException {
@@ -211,13 +258,8 @@ public class OctTransferRelation extends ForwardingTransferRelation<OctState, Pr
       CUnaryExpression unaryExp = ((CUnaryExpression) expression);
 
       switch (unaryExp.getOperator()) {
-      // invert truth assumption
-      case NOT:
-        return handleAssumption(cfaEdge, unaryExp.getOperand(), !truthAssumption);
-
-        // do not change anything besides the expression, plus and minus have no effect
+        // do not change anything besides the expression, minus has no effect
         // on the == 0 equality check
-      case PLUS:
       case MINUS:
         return handleAssumption(cfaEdge, unaryExp.getOperand(), truthAssumption);
 
@@ -235,10 +277,7 @@ public class OctTransferRelation extends ForwardingTransferRelation<OctState, Pr
         || expression instanceof CFieldReference
         || (expression instanceof CPointerExpression && ((CPointerExpression) expression).getOperand() instanceof CIdExpression)) {
       if (isHandleableVariable(expression)) {
-        String varName = expression.toASTString();
-        if (expression instanceof CPointerExpression) {
-          varName = ((CPointerExpression) expression).getOperand().toASTString();
-        }
+        String varName = buildVarName((CLeftHandSide) expression, functionName);
         return handleSingleBooleanExpression(varName, truthAssumption, state);
       } else {
         return state;
@@ -303,6 +342,9 @@ public class OctTransferRelation extends ForwardingTransferRelation<OctState, Pr
     case BINARY_XOR:
     case SHIFT_LEFT:
     case SHIFT_RIGHT:
+    case DIVIDE:
+    case MODULO:
+    case MULTIPLY:
       return state;
 
     // for the following cases we first create a temporary variable where
@@ -310,13 +352,13 @@ public class OctTransferRelation extends ForwardingTransferRelation<OctState, Pr
     // is checked
     case MINUS:
     case PLUS:
-    case DIVIDE:
-    case MODULO:
-    case MULTIPLY:
-      String tempVarName = buildVarName(functionName, TEMP_BOOLEAN_VAR_NAME + temporaryVariableCounter + "_");
+      String tempVarName = buildVarName(functionName, TEMP_VAR_PREFIX + temporaryVariableCounter + "_");
       temporaryVariableCounter++;
-      state = state.declareVariable(tempVarName, binExp.accept(new COctagonCoefficientVisitor(state, state.sizeOfVariables()+1)));
-      return handleSingleBooleanExpression(tempVarName, truthAssumption, state);
+      Set<IOctCoefficients> coeffsList = binExp.accept(new COctagonCoefficientVisitor());
+      for (IOctCoefficients coeffs : coeffsList) {
+        possibleStates.add(handleSingleBooleanExpression(tempVarName, truthAssumption, state.declareVariable(tempVarName).makeAssignment(tempVarName, coeffs)));
+      }
+      return null;
 
       // in the following cases we have to check left and right part of the binary
       // expression, when they are not single variables but contain for example
@@ -358,7 +400,7 @@ public class OctTransferRelation extends ForwardingTransferRelation<OctState, Pr
     // we cannot cope with string literals so we do not know anything about the assumption
     // => just return the previous state
     if (left instanceof CStringLiteralExpression || right instanceof CStringLiteralExpression
-        || left instanceof CFloatLiteralExpression || left instanceof CFloatLiteralExpression) { return state; }
+        || left instanceof CFloatLiteralExpression || right instanceof CFloatLiteralExpression) { return state; }
 
     // both are literals
     if (left instanceof CLiteralExpression && right instanceof CLiteralExpression) {
@@ -430,22 +472,29 @@ public class OctTransferRelation extends ForwardingTransferRelation<OctState, Pr
     }
 
     String leftVarName = null;
+    List<OctState> states = new ArrayList<>();
+    states.add(state);
+
     // check left side
     if (left instanceof CIdExpression || left instanceof CFieldReference) {
       leftVarName = buildVarName((CLeftHandSide) left, functionName);
 
       // create a temp var for the left side of the expression
     } else {
-      String tempLeft = buildVarName(functionName, TEMP_BOOLEAN_VAR_NAME + temporaryVariableCounter + "_");
-      OctCoefficients coeffsLeft = left.accept(new COctagonCoefficientVisitor(state, state.sizeOfVariables()+1));
+      Set<IOctCoefficients> coeffsLeft = left.accept(new COctagonCoefficientVisitor());
 
       // we cannot do any comparison with an unknown value, so just quit here
-      // TODO remove if check???
-      if (coeffsLeft == null) {
+      if (coeffsLeft.isEmpty()) {
         return state;
       } else {
+        String tempLeft = buildVarName(functionName, TEMP_VAR_PREFIX + temporaryVariableCounter + "_");
         temporaryVariableCounter++;
-        state = state.declareVariable(tempLeft, coeffsLeft);
+        List<OctState> tmpList = new ArrayList<>();
+        for (IOctCoefficients coeffs : coeffsLeft) {
+          OctState tmpState = state.declareVariable(tempLeft);
+          tmpList.add(tmpState.makeAssignment(tempLeft, coeffs.expandToSize(tmpState.sizeOfVariables(), tmpState)));
+        }
+        states = tmpList;
         leftVarName = tempLeft;
       }
     }
@@ -457,55 +506,62 @@ public class OctTransferRelation extends ForwardingTransferRelation<OctState, Pr
       rightVal = ((CCharLiteralExpression) right).getCharacter();
     }
 
-    switch (op) {
-    case EQUALS:
-      if (truthAssumption) {
-        return state.addEqConstraint(leftVarName, rightVal);
-      } else {
-        possibleStates.addAll(state.addIneqConstraint(leftVarName, rightVal));
-        return null;
-      }
+    for (OctState actState : states) {
+      switch (op) {
+      case EQUALS:
+        if (truthAssumption) {
+          possibleStates.add(actState.addEqConstraint(leftVarName, rightVal));
+        } else {
+          possibleStates.addAll(actState.addIneqConstraint(leftVarName, rightVal));
+        }
+        break;
 
-    case NOT_EQUALS:
-      if (truthAssumption) {
-        possibleStates.addAll(state.addIneqConstraint(leftVarName, rightVal));
-        return null;
-      } else {
-        return state.addEqConstraint(leftVarName, rightVal);
-      }
+      case NOT_EQUALS:
+        if (truthAssumption) {
+          possibleStates.addAll(actState.addIneqConstraint(leftVarName, rightVal));
+        } else {
+          possibleStates.add(actState.addEqConstraint(leftVarName, rightVal));
+        }
+        break;
 
-    case LESS_EQUAL:
-      if (truthAssumption) {
-        return state.addSmallerEqConstraint(leftVarName, rightVal);
-      } else {
-        return state.addGreaterConstraint(leftVarName, rightVal);
-      }
+      case LESS_EQUAL:
+        if (truthAssumption) {
+          possibleStates.add(actState.addSmallerEqConstraint(leftVarName, rightVal));
+        } else {
+          possibleStates.add(actState.addGreaterConstraint(leftVarName, rightVal));
+        }
+        break;
 
-    case LESS_THAN:
-      if (truthAssumption) {
-        return state.addSmallerConstraint(leftVarName, rightVal);
-      } else {
-        return state.addGreaterEqConstraint(leftVarName, rightVal);
-      }
+      case LESS_THAN:
+        if (truthAssumption) {
+          possibleStates.add(actState.addSmallerConstraint(leftVarName, rightVal));
+        } else {
+          possibleStates.add(actState.addGreaterEqConstraint(leftVarName, rightVal));
+        }
+        break;
 
-    case GREATER_EQUAL:
-      if (truthAssumption) {
-        return state.addGreaterEqConstraint(leftVarName, rightVal);
-      } else {
-        return state.addSmallerConstraint(leftVarName, rightVal);
-      }
+      case GREATER_EQUAL:
+        if (truthAssumption) {
+          possibleStates.add(actState.addGreaterEqConstraint(leftVarName, rightVal));
+        } else {
+          possibleStates.add(actState.addSmallerConstraint(leftVarName, rightVal));
+        }
+        break;
 
-    case GREATER_THAN:
-      if (truthAssumption) {
-        return state.addGreaterConstraint(leftVarName, rightVal);
-      } else {
-        return state.addSmallerEqConstraint(leftVarName, rightVal);
-      }
+      case GREATER_THAN:
+        if (truthAssumption) {
+          possibleStates.add(actState.addGreaterConstraint(leftVarName, rightVal));
+        } else {
+          possibleStates.add(actState.addSmallerEqConstraint(leftVarName, rightVal));
+        }
+        break;
 
-    default:
-      throw new CPATransferException("Unhandled case statement: " + op);
+      default:
+        throw new CPATransferException("Unhandled case statement: " + op);
+      }
     }
 
+    return null;
   }
 
   /**
@@ -630,11 +686,15 @@ public class OctTransferRelation extends ForwardingTransferRelation<OctState, Pr
     String rightVarName = null;
 
     // we cannot handle pointers, so just ignore them
+    // TODO make program unsafe?
     if (left.getExpressionType() instanceof CPointerType || right.getExpressionType() instanceof CPointerType
         || (left instanceof CFieldReference && ((CFieldReference) left).isPointerDereference())
         || (right instanceof CFieldReference && ((CFieldReference) right).isPointerDereference())) {
       return state;
     }
+
+    List<OctState> states = new ArrayList<>();
+    states.add(state);
 
     // check left side
     if (left instanceof CIdExpression || left instanceof CFieldReference) {
@@ -642,11 +702,21 @@ public class OctTransferRelation extends ForwardingTransferRelation<OctState, Pr
 
       // create a temp var for the left side of the expression
     } else {
-      String tempLeft = buildVarName(functionName, TEMP_BOOLEAN_VAR_NAME + temporaryVariableCounter + "_");
-      temporaryVariableCounter++;
-      state = state.declareVariable(tempLeft, left.accept(new COctagonCoefficientVisitor(state, state.sizeOfVariables()+1)));
-
-      leftVarName = tempLeft;
+      // we cannot do any comparison with an unknown value, so just quit here
+      Set<IOctCoefficients> coeffsLeft = left.accept(new COctagonCoefficientVisitor());
+      if (coeffsLeft.isEmpty()) {
+        return state;
+      } else {
+        String tempLeft = buildVarName(functionName, TEMP_VAR_PREFIX + temporaryVariableCounter + "_");
+        temporaryVariableCounter++;
+        List<OctState> tmpList = new ArrayList<>();
+        for (IOctCoefficients coeffs : coeffsLeft) {
+          OctState tmp = state.declareVariable(tempLeft);
+          tmpList.add(tmp.makeAssignment(tempLeft, coeffs.expandToSize(tmp.sizeOfVariables(), tmp)));
+        }
+        states = tmpList;
+        leftVarName = tempLeft;
+      }
     }
 
     // check right side
@@ -655,61 +725,82 @@ public class OctTransferRelation extends ForwardingTransferRelation<OctState, Pr
 
       // create a temp var for the right side of the expression
     } else {
-      String tempRight = buildVarName(functionName, TEMP_BOOLEAN_VAR_NAME + temporaryVariableCounter + "_");
-      temporaryVariableCounter++;
-      state = state.declareVariable(tempRight, right.accept(new COctagonCoefficientVisitor(state, state.sizeOfVariables()+1)));
-      rightVarName = tempRight;
+      // we cannot do any comparison with an unknown value, so just quit here
+      Set<IOctCoefficients> coeffsRight = right.accept(new COctagonCoefficientVisitor());
+      if (coeffsRight.isEmpty()) {
+        return state;
+      } else {
+        String tempRight = buildVarName(functionName, TEMP_VAR_PREFIX + temporaryVariableCounter + "_");
+        temporaryVariableCounter++;
+        List<OctState> tmpList = new ArrayList<>();
+        for (OctState st : states) {
+          for (IOctCoefficients coeffs : coeffsRight) {
+            OctState tmp = st.declareVariable(tempRight);
+            tmpList.add(tmp.makeAssignment(tempRight, coeffs.expandToSize(tmp.sizeOfVariables(), tmp)));
+          }
+        }
+        states = tmpList;
+        rightVarName = tempRight;
+      }
     }
 
-    // Comparison part, left and right are now definitly availbable
-    switch (op) {
-    case EQUALS:
-      if (truthAssumption) {
-        return state.addEqConstraint(rightVarName, leftVarName);
-      } else {
-        possibleStates.addAll(state.addIneqConstraint(rightVarName, leftVarName));
-        return null;
-      }
+    // Comparison part, left and right are now definitely available
+    for (OctState actState : states) {
+      switch (op) {
+      case EQUALS:
+        if (truthAssumption) {
+          possibleStates.add(actState.addEqConstraint(rightVarName, leftVarName));
+        } else {
+          possibleStates.addAll(actState.addIneqConstraint(rightVarName, leftVarName));
+        }
+        break;
 
-    case GREATER_EQUAL:
-      if (truthAssumption) {
-        return state.addGreaterEqConstraint(rightVarName, leftVarName);
-      } else {
-        return state.addSmallerConstraint(rightVarName, leftVarName);
-      }
+      case GREATER_EQUAL:
+        if (truthAssumption) {
+          possibleStates.add(actState.addGreaterEqConstraint(rightVarName, leftVarName));
+        } else {
+          possibleStates.add(actState.addSmallerConstraint(rightVarName, leftVarName));
+        }
+        break;
 
-    case GREATER_THAN:
-      if (truthAssumption) {
-        return state.addGreaterConstraint(rightVarName, leftVarName);
-      } else {
-        return state.addSmallerEqConstraint(rightVarName, leftVarName);
-      }
+      case GREATER_THAN:
+        if (truthAssumption) {
+          possibleStates.add(actState.addGreaterConstraint(rightVarName, leftVarName));
+        } else {
+          possibleStates.add(actState.addSmallerEqConstraint(rightVarName, leftVarName));
+        }
+        break;
 
-    case LESS_EQUAL:
-      if (truthAssumption) {
-        return state.addSmallerEqConstraint(rightVarName, leftVarName);
-      } else {
-        return state.addGreaterConstraint(rightVarName, leftVarName);
-      }
+      case LESS_EQUAL:
+        if (truthAssumption) {
+          possibleStates.add(actState.addSmallerEqConstraint(rightVarName, leftVarName));
+        } else {
+          possibleStates.add(actState.addGreaterConstraint(rightVarName, leftVarName));
+        }
+        break;
 
-    case LESS_THAN:
-      if (truthAssumption) {
-        return state.addSmallerConstraint(rightVarName, leftVarName);
-      } else {
-        return state.addGreaterEqConstraint(rightVarName, leftVarName);
-      }
+      case LESS_THAN:
+        if (truthAssumption) {
+          possibleStates.add(actState.addSmallerConstraint(rightVarName, leftVarName));
+        } else {
+          possibleStates.add(actState.addGreaterEqConstraint(rightVarName, leftVarName));
+        }
+        break;
 
-    case NOT_EQUALS:
-      if (truthAssumption) {
-        possibleStates.addAll(state.addIneqConstraint(rightVarName, leftVarName));
-        return null;
-      } else {
-        return state.addEqConstraint(rightVarName, leftVarName);
-      }
+      case NOT_EQUALS:
+        if (truthAssumption) {
+          possibleStates.addAll(actState.addIneqConstraint(rightVarName, leftVarName));
+        } else {
+          possibleStates.add(actState.addEqConstraint(rightVarName, leftVarName));
+        }
+        break;
 
-    default:
-      throw new CPATransferException("Unhandled case: " + binExp.getOperator());
+      default:
+        throw new CPATransferException("Unhandled case: " + binExp.getOperator());
+      }
     }
+
+    return null;
   }
 
   /**
@@ -738,10 +829,13 @@ public class OctTransferRelation extends ForwardingTransferRelation<OctState, Pr
     List<String> paramNames = functionEntryNode.getFunctionParameterNames();
 
     if (!cfaEdge.getSuccessor().getFunctionDefinition().getType().takesVarArgs()) {
-      assert (parameters.size() == arguments.size());
+      assert parameters.size() == arguments.size();
     } else {
-      assert (parameters.size() <= arguments.size());
+      assert parameters.size() <= arguments.size();
     }
+
+    List<OctState> statesList = new ArrayList<>();
+    statesList.add(state.declareVariable(buildVarName(calledFunctionName, FUNCTION_RETURN_VAR)));
 
     // declare all parameters as variables
     for (int i = 0; i < parameters.size(); i++) {
@@ -753,10 +847,23 @@ public class OctTransferRelation extends ForwardingTransferRelation<OctState, Pr
       String nameOfParam = paramNames.get(i);
       String formalParamName = buildVarName(calledFunctionName, nameOfParam);
 
-      state = state.declareVariable(formalParamName, arg.accept(new COctagonCoefficientVisitor(state, state.sizeOfVariables()+1)));
+      Set<IOctCoefficients> coeffsList = arg.accept(new COctagonCoefficientVisitor());
+
+      List<OctState> newStatesList = new ArrayList<>();
+      for (OctState st : statesList) {
+        for (IOctCoefficients coeffs : coeffsList) {
+          OctState tmpState = st.declareVariable(formalParamName);
+          tmpState = tmpState.makeAssignment(formalParamName, coeffs.expandToSize(tmpState.sizeOfVariables(), tmpState));
+          newStatesList.add(tmpState);
+        }
+      }
+
+      statesList = newStatesList;
     }
 
-    return state.declareVariable(buildVarName(calledFunctionName, FUNCTION_RETURN_VAR), null);
+    possibleStates.addAll(statesList);
+
+    return null;
   }
 
   @Override
@@ -781,7 +888,7 @@ public class OctTransferRelation extends ForwardingTransferRelation<OctState, Pr
       String returnVarName = buildVarName(calledFunctionName, FUNCTION_RETURN_VAR);
 
       String assignedVarName = buildVarName(op1, callerFunctionName);
-      OctCoefficients right = new OctCoefficients(state.sizeOfVariables(), state.getVariableIndexFor(returnVarName), 1);
+      IOctCoefficients right = new OctSimpleCoefficients(state.sizeOfVariables(), state.getVariableIndexFor(returnVarName), 1, state);
 
       state = state.makeAssignment(assignedVarName, right);
 
@@ -815,31 +922,31 @@ public class OctTransferRelation extends ForwardingTransferRelation<OctState, Pr
         variableName = buildVarName(functionName, variableName);
       }
 
+      if (!precision.isTracked(variableName)) {
+        return state;
+      }
+
+      Set<IOctCoefficients> initCoeffs = new HashSet<>();
+
+      CInitializer init = declaration.getInitializer();
+
       // for global declarations, there may be forwards declarations, so we do
       // not need to declarate them a second time, but if there is an initializer
       // we assign it to the before declared variable
-      // another case where a variablename already exists, is if it is declarated
-      // inside a loop
-      boolean isDeclarationNecessary = !state.existsVariable(variableName);
+      if (!state.existsVariable(variableName) && (init == null || init instanceof CInitializerExpression)) {
+        state = state.declareVariable(variableName);
+      }
 
-
-      OctCoefficients initCoeffs = null;
-
-      CInitializer init = declaration.getInitializer();
       if (init != null) {
         if (init instanceof CInitializerExpression) {
           CExpression exp = ((CInitializerExpression) init).getExpression();
 
-          initCoeffs = exp.accept(new COctagonCoefficientVisitor(state, isDeclarationNecessary ? state.sizeOfVariables()+1 : state.sizeOfVariables()));
+          initCoeffs = exp.accept(new COctagonCoefficientVisitor());
 
           // if there is an initializerlist, the variable is either an array or a struct/union
           // we cannot handle them, so simply return the previous state
         } else if (init instanceof CInitializerList) {
-          if (isDeclarationNecessary) {
-            return state.declareVariable(variableName, null);
-          } else {
             return state;
-          }
 
         } else {
           throw new AssertionError("Unhandled Expression Type: " + init.getClass());
@@ -847,17 +954,17 @@ public class OctTransferRelation extends ForwardingTransferRelation<OctState, Pr
 
 
         // global variables without initializer are set to 0 in C
-      } else if (decl.isGlobal()) {
-        initCoeffs = new OctCoefficients(state.sizeOfVariables() + 1);
+      } else if (decl.isGlobal() && initCoeffs.isEmpty()) {
+        initCoeffs.add(new OctSimpleCoefficients(state.sizeOfVariables(), state));
       }
 
-      if (isDeclarationNecessary) {
-        return state.declareVariable(variableName, initCoeffs);
-      } else if (initCoeffs != null) {
-        return state.makeAssignment(variableName, initCoeffs);
-      } else {
-        return state.forget(variableName);
+      for (IOctCoefficients coeffs : initCoeffs) {
+        possibleStates.add(state.makeAssignment(variableName, coeffs.expandToSize(state.sizeOfVariables(), state)));
       }
+      if (possibleStates.isEmpty()) {
+        return state;
+      }
+      return null;
 
     } else if (cfaEdge.getDeclaration() instanceof CTypeDeclaration
         || cfaEdge.getDeclaration() instanceof CFunctionDeclaration) { return state; }
@@ -868,7 +975,6 @@ public class OctTransferRelation extends ForwardingTransferRelation<OctState, Pr
   @Override
   protected OctState handleStatementEdge(CStatementEdge cfaEdge, CStatement statement)
       throws CPATransferException {
-
     // check if there are functioncalls we cannot handle
     if (statement instanceof CFunctionCall) {
       CExpression fn = ((CFunctionCall)statement).getFunctionCallExpression().getFunctionNameExpression();
@@ -885,9 +991,6 @@ public class OctTransferRelation extends ForwardingTransferRelation<OctState, Pr
       CLeftHandSide left = ((CAssignment) statement).getLeftHandSide();
       CRightHandSide right = ((CAssignment) statement).getRightHandSide();
 
-      OctCoefficients coeffs = right.accept(new COctagonCoefficientVisitor(state, state.sizeOfVariables()));
-
-
       String variableName = buildVarName(left, functionName);
 
       // as pointers do not get declarated in the beginning we can just
@@ -896,26 +999,29 @@ public class OctTransferRelation extends ForwardingTransferRelation<OctState, Pr
         assert !state.existsVariable(variableName) : "variablename '" + variableName + "' is in map although it can not be handled";
         return state;
       } else {
-        // if we cannot determine coefficients, we cannot make any assumptions about
-        // the value of the assigned varible and reset its value to unknown
-        if (coeffs == null) {
-          return state.forget(variableName);
-        } else {
-          // TODO is assignment to field valid?
-          return state.makeAssignment(variableName, coeffs);
+        Set<IOctCoefficients> coeffsList = right.accept(new COctagonCoefficientVisitor());
+
+        for (IOctCoefficients coeffs : coeffsList) {
+          // if we cannot determine coefficients, we cannot make any assumptions about
+          // the value of the assigned variable and reset its value to unknown
+          if (coeffs == OctEmptyCoefficients.INSTANCE) {
+            possibleStates.add(state.forget(variableName));
+          } else {
+            possibleStates.add(state.makeAssignment(variableName, coeffs.expandToSize(state.sizeOfVariables(), state)));
+          }
         }
       }
+      return null;
 
       // external function call, or p.e. a;
       // => do nothing
     } else if (statement instanceof CFunctionCallStatement
         || statement instanceof CExpressionStatement) {
+      return state;
 
-    } else {
-      throw new UnrecognizedCCodeException("unknown statement", cfaEdge, statement);
     }
 
-    return state;
+    throw new UnrecognizedCCodeException("unknown statement", cfaEdge, statement);
   }
 
   private String buildVarName(CLeftHandSide left, String functionName) {
@@ -963,7 +1069,6 @@ public class OctTransferRelation extends ForwardingTransferRelation<OctState, Pr
     }
 
     String tempVarName = buildVarName(cfaEdge.getPredecessor().getFunctionName(), FUNCTION_RETURN_VAR);
-    OctCoefficients coeffs = expression.accept(new COctagonCoefficientVisitor(state, state.sizeOfVariables()));
 
     // main function has no __cpa_temp_result_var as the result of the main function
     // is not important for us, we skip here
@@ -971,11 +1076,16 @@ public class OctTransferRelation extends ForwardingTransferRelation<OctState, Pr
       return state;
     }
 
-    if (coeffs == null) {
-      return state.forget(tempVarName);
-    } else {
-      return state.makeAssignment(tempVarName, coeffs);
+
+    Set<IOctCoefficients> coeffsList = expression.accept(new COctagonCoefficientVisitor());
+    for (IOctCoefficients coeffs : coeffsList) {
+      if (coeffs == OctEmptyCoefficients.INSTANCE) {
+        possibleStates.add(state.forget(tempVarName));
+      } else {
+        possibleStates.add(state.makeAssignment(tempVarName, coeffs.expandToSize(state.sizeOfVariables(), state)));
+      }
     }
+    return null;
   }
 
   /**
@@ -993,11 +1103,8 @@ public class OctTransferRelation extends ForwardingTransferRelation<OctState, Pr
     return null;
   }
 
-  class COctagonCoefficientVisitor extends DefaultCExpressionVisitor<OctCoefficients, CPATransferException>
-      implements CRightHandSideVisitor<OctCoefficients, CPATransferException> {
-
-    private OctState coeffState;
-    private int nofVariables;
+  class COctagonCoefficientVisitor extends DefaultCExpressionVisitor<Set<IOctCoefficients>, CPATransferException>
+      implements CRightHandSideVisitor<Set<IOctCoefficients>, CPATransferException> {
 
     /**
      * This method creates the Visitor, which evaluates all coefficients for a given
@@ -1005,67 +1112,152 @@ public class OctTransferRelation extends ForwardingTransferRelation<OctState, Pr
      *
      * @param state
      */
-    public COctagonCoefficientVisitor(OctState state, int nofVariables) {
-      this.coeffState = state;
-      this.nofVariables = nofVariables;
+    public COctagonCoefficientVisitor() {
     }
 
 
     @Override
-    protected OctCoefficients visitDefault(CExpression pExp) throws CPATransferException {
-      return null;
+    protected Set<IOctCoefficients> visitDefault(CExpression pExp) throws CPATransferException {
+      return Collections.singleton((IOctCoefficients)OctEmptyCoefficients.INSTANCE);
     }
 
     @Override
-    public OctCoefficients visit(CArraySubscriptExpression e) throws CPATransferException {
-      // TODO check if we can handle array expressions
-      return null;
-    }
+    public Set<IOctCoefficients> visit(CBinaryExpression e) throws CPATransferException {
+      Set<IOctCoefficients> left = e.getOperand1().accept(this);
+      Set<IOctCoefficients> right = e.getOperand2().accept(this);
 
-    @Override
-    public OctCoefficients visit(CBinaryExpression e) throws CPATransferException {
-      OctCoefficients left = e.getOperand1().accept(this);
-      OctCoefficients right = e.getOperand2().accept(this);
-
-      if (left == null || right == null) { return null; }
+      if (left.isEmpty() || right.isEmpty()) { return Collections.singleton((IOctCoefficients)OctEmptyCoefficients.INSTANCE); }
 
       switch (e.getOperator()) {
       case BINARY_AND:
       case BINARY_OR:
       case BINARY_XOR:
+      case SHIFT_LEFT:
+      case SHIFT_RIGHT:
+      case MODULO:
+      case DIVIDE:
+      case MULTIPLY:
+        return Collections.singleton((IOctCoefficients)OctEmptyCoefficients.INSTANCE);
       case EQUALS:
       case GREATER_EQUAL:
       case GREATER_THAN:
       case LESS_EQUAL:
       case LESS_THAN:
-      case NOT_EQUALS:
-      case SHIFT_LEFT:
-      case SHIFT_RIGHT:
-      case MODULO:
-        return null;
-      case MINUS:
-        return left.sub(right);
-      case PLUS:
-        return left.add(right);
-      case DIVIDE:
-        if (right.hasOnlyConstantValue()) {
-          return left.div(right.get(nofVariables));
-        } else {
-          // within a division the divisor has to be a constant value, any other
-          // divisions are not possible
-          return null;
+      case NOT_EQUALS: {
+        Set<IOctCoefficients> returnCoefficients = new HashSet<>(2);
+        for (IOctCoefficients leftCoeffs : left) {
+          for (IOctCoefficients rightCoeffs : right) {
+            // return values can only be zero and one, so we can abort this for loop if we have
+            // already both values in our returnSet
+            if (returnCoefficients.size() == 2) {
+              return returnCoefficients;
+            }
+            String tempVarLeft = buildVarName(functionName, TEMP_VAR_PREFIX + temporaryVariableCounter + "_");
+            temporaryVariableCounter++;
+            state = state.declareVariable(tempVarLeft);
+            state = state.makeAssignment(tempVarLeft, leftCoeffs.expandToSize(state.sizeOfVariables(), state));
+
+            rightCoeffs = rightCoeffs.expandToSize(state.sizeOfVariables(), state);
+            OctState tmpState;
+            switch (e.getOperator()) {
+            case EQUALS:
+              tmpState = state.addEqConstraint(tempVarLeft, rightCoeffs);
+              if (tmpState.isEmpty()) {
+                returnCoefficients.add(OctSimpleCoefficients.getBoolFALSECoeffs(state.sizeOfVariables(), state));
+              } else {
+                returnCoefficients.add(OctSimpleCoefficients.getBoolTRUECoeffs(state.sizeOfVariables(), state));
+
+                if (!state.addSmallerConstraint(tempVarLeft, rightCoeffs).isEmpty() || !state.addGreaterConstraint(tempVarLeft, rightCoeffs).isEmpty()) {
+                  returnCoefficients.add(OctSimpleCoefficients.getBoolFALSECoeffs(state.sizeOfVariables(), state));
+                }
+              }
+              break;
+            case GREATER_EQUAL:
+              tmpState = state.addGreaterEqConstraint(tempVarLeft, rightCoeffs);
+              if (tmpState.isEmpty()) {
+                returnCoefficients.add(OctSimpleCoefficients.getBoolFALSECoeffs(state.sizeOfVariables(), state));
+              } else {
+                returnCoefficients.add(OctSimpleCoefficients.getBoolTRUECoeffs(state.sizeOfVariables(), state));
+
+                if (!state.addSmallerConstraint(tempVarLeft, rightCoeffs).isEmpty()) {
+                  returnCoefficients.add(OctSimpleCoefficients.getBoolFALSECoeffs(state.sizeOfVariables(), state));
+                }
+              }
+              break;
+            case GREATER_THAN:
+              tmpState = state.addGreaterConstraint(tempVarLeft, rightCoeffs);
+              if (tmpState.isEmpty()) {
+                returnCoefficients.add(OctSimpleCoefficients.getBoolFALSECoeffs(state.sizeOfVariables(), state));
+              } else {
+                returnCoefficients.add(OctSimpleCoefficients.getBoolTRUECoeffs(state.sizeOfVariables(), state));
+
+                if (!state.addSmallerEqConstraint(tempVarLeft, rightCoeffs).isEmpty()) {
+                  returnCoefficients.add(OctSimpleCoefficients.getBoolFALSECoeffs(state.sizeOfVariables(), state));
+                }
+              }
+              break;
+            case LESS_EQUAL:
+              tmpState = state.addSmallerEqConstraint(tempVarLeft, rightCoeffs);
+              if (tmpState.isEmpty()) {
+                returnCoefficients.add(OctSimpleCoefficients.getBoolFALSECoeffs(state.sizeOfVariables(), state));
+              } else {
+                returnCoefficients.add(OctSimpleCoefficients.getBoolTRUECoeffs(state.sizeOfVariables(), state));
+
+                if (!state.addGreaterConstraint(tempVarLeft, rightCoeffs).isEmpty()) {
+                  returnCoefficients.add(OctSimpleCoefficients.getBoolFALSECoeffs(state.sizeOfVariables(), state));
+                }
+              }
+              break;
+            case LESS_THAN:
+              tmpState = state.addSmallerConstraint(tempVarLeft, rightCoeffs);
+              if (tmpState.isEmpty()) {
+                returnCoefficients.add(OctSimpleCoefficients.getBoolFALSECoeffs(state.sizeOfVariables(), state));
+              } else {
+                returnCoefficients.add(OctSimpleCoefficients.getBoolTRUECoeffs(state.sizeOfVariables(), state));
+
+                if (!state.addGreaterEqConstraint(tempVarLeft, rightCoeffs).isEmpty()) {
+                  returnCoefficients.add(OctSimpleCoefficients.getBoolFALSECoeffs(state.sizeOfVariables(), state));
+                }
+              }
+              break;
+            case NOT_EQUALS:
+              OctState smaller = state.addSmallerConstraint(tempVarLeft, rightCoeffs);
+              OctState bigger = state.addGreaterConstraint(tempVarLeft, rightCoeffs);
+              OctState equal = state.addEqConstraint(tempVarLeft, rightCoeffs);
+              if ((!smaller.isEmpty() || !bigger.isEmpty()) && equal.isEmpty()) {
+                returnCoefficients.add(OctSimpleCoefficients.getBoolTRUECoeffs(state.sizeOfVariables(), state));
+              } else if ((!smaller.isEmpty() || !bigger.isEmpty()) && !equal.isEmpty()) {
+                returnCoefficients.add(OctSimpleCoefficients.getBoolTRUECoeffs(state.sizeOfVariables(), state));
+                returnCoefficients.add(OctSimpleCoefficients.getBoolFALSECoeffs(state.sizeOfVariables(), state));
+              } else {
+                returnCoefficients.add(OctSimpleCoefficients.getBoolFALSECoeffs(state.sizeOfVariables(), state));
+              }
+              break;
+            }
+          }
         }
-      case MULTIPLY:
-        if (left.hasOnlyConstantValue()) {
-          return right.mult(left.get(nofVariables));
-        } else if (right.hasOnlyConstantValue()) {
-          return left.mult(right.get(nofVariables));
-        } else {
-          // both operands have coefficients for variables, multiplying such
-          // is not possible
-          return null;
+        return returnCoefficients;
+      }
+      case MINUS:
+      case PLUS: {
+        Set<IOctCoefficients> returnCoefficients = new HashSet<>();
+        for (IOctCoefficients leftCoeffs : left) {
+          for (IOctCoefficients rightCoeffs : right) {
+            if (leftCoeffs.size() < rightCoeffs.size()) {
+              leftCoeffs = leftCoeffs.expandToSize(rightCoeffs.size(), state);
+            } else {
+              rightCoeffs = rightCoeffs.expandToSize(leftCoeffs.size(), state);
+            }
+            if (e.getOperator() == BinaryOperator.MINUS) {
+              returnCoefficients.add(leftCoeffs.sub(rightCoeffs));
+            } else if (e.getOperator() ==BinaryOperator.PLUS) {
+              returnCoefficients.add(leftCoeffs.add(rightCoeffs));
+            }
+          }
         }
 
+        return returnCoefficients;
+      }
       default:
         throw new AssertionError("Unhandled case statement");
       }
@@ -1075,108 +1267,107 @@ public class OctTransferRelation extends ForwardingTransferRelation<OctState, Pr
      * Only unpack the cast and continue with the casts operand
      */
     @Override
-    public OctCoefficients visit(CCastExpression e) throws CPATransferException {
+    public Set<IOctCoefficients> visit(CCastExpression e) throws CPATransferException {
       return e.getOperand().accept(this);
     }
 
-    /**
-     * Ignore complex casts
-     */
     @Override
-    public OctCoefficients visit(CComplexCastExpression e) throws CPATransferException {
-      return null;
-    }
-
-    @Override
-    public OctCoefficients visit(CFieldReference e) throws CPATransferException {
-      return null;
-    }
-
-    @Override
-    public OctCoefficients visit(CIdExpression e) throws CPATransferException {
+    public Set<IOctCoefficients> visit(CIdExpression e) throws CPATransferException {
       String varName = buildVarName(e, functionName);
-      Integer varIndex = coeffState.getVariableIndexFor(varName);
-      if (varIndex == null) { return null; }
-      return new OctCoefficients(nofVariables + 1, varIndex, 1);
+      Integer varIndex = state.getVariableIndexFor(varName);
+      if (varIndex == -1) { return Collections.singleton((IOctCoefficients)OctEmptyCoefficients.INSTANCE); }
+      return Collections.singleton((IOctCoefficients)new OctSimpleCoefficients(state.sizeOfVariables(), varIndex, 1, state));
     }
 
     @Override
-    public OctCoefficients visit(CCharLiteralExpression e) throws CPATransferException {
-      return new OctCoefficients(nofVariables + 1, nofVariables, e.getValue());
-    }
-
-    /**
-     * Ignore ImaginaryExpressions
-     */
-    @Override
-    public OctCoefficients visit(CImaginaryLiteralExpression e) throws CPATransferException {
-      return null;
+    public Set<IOctCoefficients> visit(CCharLiteralExpression e) throws CPATransferException {
+      return Collections.singleton((IOctCoefficients)new OctSimpleCoefficients(state.sizeOfVariables(), e.getValue(), state));
     }
 
     /**
      * Floats can currently not be handled
      */
     @Override
-    public OctCoefficients visit(CFloatLiteralExpression e) throws CPATransferException {
+    public Set<IOctCoefficients> visit(CFloatLiteralExpression e) throws CPATransferException {
       // TODO check if we can handle floats, too
-      return null;
+      return Collections.singleton((IOctCoefficients)OctEmptyCoefficients.INSTANCE);
     }
 
     @Override
-    public OctCoefficients visit(CIntegerLiteralExpression e) throws CPATransferException {
-      return new OctCoefficients(nofVariables + 1, nofVariables, (int) e.asLong());
+    public Set<IOctCoefficients> visit(CIntegerLiteralExpression e) throws CPATransferException {
+      return Collections.singleton((IOctCoefficients)new OctSimpleCoefficients(state.sizeOfVariables(), (int) e.asLong(), state));
     }
 
-    /**
-     * Strings cannot be handled
-     */
+    @SuppressWarnings("deprecation")
     @Override
-    public OctCoefficients visit(CStringLiteralExpression e) throws CPATransferException {
-      return null;
-    }
+    public Set<IOctCoefficients> visit(CUnaryExpression e) throws CPATransferException {
+      Set<IOctCoefficients> operand = e.getOperand().accept(this);
 
-
-    @Override
-    public OctCoefficients visit(CTypeIdExpression e) throws CPATransferException {
-      return null;
-    }
-
-    @Override
-    public OctCoefficients visit(CTypeIdInitializerExpression e) throws CPATransferException {
-      return null;
-    }
-
-    @Override
-    public OctCoefficients visit(CUnaryExpression e) throws CPATransferException {
-      OctCoefficients operand = e.getOperand().accept(this);
-
-      if (operand == null) { return null; }
+      if (operand.isEmpty()) { Collections.singleton((IOctCoefficients)OctEmptyCoefficients.INSTANCE); }
 
       switch (e.getOperator()) {
       case AMPER:
-      case NOT:
       case SIZEOF:
       case TILDE:
-        return null;
-      case PLUS:
-        return operand;
+        return Collections.singleton((IOctCoefficients)OctEmptyCoefficients.INSTANCE);
       case MINUS:
-        return operand.mult(-1);
+        Set<IOctCoefficients> returnCoefficients = new HashSet<>();
+        for (IOctCoefficients coeffs : operand) {
+          if (coeffs.hasOnlyConstantValue()) {
+            if (coeffs instanceof OctSimpleCoefficients) {
+              returnCoefficients.add(new OctSimpleCoefficients(coeffs.size(), ((OctSimpleCoefficients) coeffs).getConstantValue().longValue()*-1, state));
+              continue;
+            } else if (coeffs instanceof OctIntervalCoefficients) {
+              Pair<Pair<BigInteger, Boolean>, Pair<BigInteger, Boolean>> bounds = ((OctIntervalCoefficients) coeffs).getConstantValue();
+              returnCoefficients.add(new OctIntervalCoefficients(coeffs.size(),
+                                                                 bounds.getSecond().getFirst().longValue()*-1,
+                                                                 bounds.getFirst().getFirst().longValue()*-1,
+                                                                 bounds.getSecond().getSecond(),
+                                                                 bounds.getFirst().getSecond(),
+                                                                 state));
+              continue;
+            }
+          }
+          String tempVar = buildVarName(functionName, TEMP_VAR_PREFIX + temporaryVariableCounter + "_");
+          temporaryVariableCounter++;
+          state = state.declareVariable(tempVar).makeAssignment(tempVar, coeffs.expandToSize(state.sizeOfVariables()+1, state));
+
+          if (e.getOperator() == UnaryOperator.MINUS) {
+            returnCoefficients.add(new OctSimpleCoefficients(state.sizeOfVariables(), state.getVariableIndexFor(tempVar), -1, state));
+          } else {
+
+            OctState tmpState = state.addEqConstraint(tempVar, 0);
+            if (tmpState.isEmpty()) {
+              returnCoefficients.add(OctSimpleCoefficients.getBoolFALSECoeffs(state.sizeOfVariables(), state));
+            } else {
+              // just because we know the value may be zero, it does not
+              // have to be zero, so we need to check on smaller/greater zero
+              // and eventually return more states
+              // TODO loss of information as we do not save the state with the assignment
+              returnCoefficients.add(OctSimpleCoefficients.getBoolTRUECoeffs(state.sizeOfVariables(), state));
+              if (!state.addSmallerConstraint(tempVar, 0).isEmpty() || !state.addGreaterConstraint(tempVar, 0).isEmpty()) {
+                returnCoefficients.add(OctSimpleCoefficients.getBoolFALSECoeffs(state.sizeOfVariables(), state));
+              }
+            }
+          }
+        }
+        return returnCoefficients;
       default:
         throw new AssertionError("Unhandled case in switch clause.");
       }
     }
 
     @Override
-    public OctCoefficients visit(CPointerExpression e) throws CPATransferException {
-      return e.getOperand().accept(this);
-    }
-
-
-    @Override
-    public OctCoefficients visit(CFunctionCallExpression pIastFunctionCallExpression) throws CPATransferException {
-      //TODO check what to do when function call appears
-      return null;
+    public Set<IOctCoefficients> visit(CFunctionCallExpression e) throws CPATransferException {
+      if (e.getFunctionNameExpression() instanceof CIdExpression) {
+        String functionName = ((CIdExpression)e.getFunctionNameExpression()).getName();
+        if (functionName.equals("__VERIFIER_nondet_uint")) {
+          return Collections.singleton((IOctCoefficients)OctIntervalCoefficients.getNondetUIntCoeffs(state.sizeOfVariables(), state));
+        } else if (functionName.equals("__VERIFIER_nondet_bool")) {
+          return Collections.singleton((IOctCoefficients)OctIntervalCoefficients.getNondetBoolCoeffs(state.sizeOfVariables(), state));
+        }
+      }
+      return Collections.singleton((IOctCoefficients)OctEmptyCoefficients.INSTANCE);
     }
   }
 }

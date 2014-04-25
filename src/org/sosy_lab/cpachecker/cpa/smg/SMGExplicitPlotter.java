@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2013  Dirk Beyer
+ *  Copyright (C) 2007-2014  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -31,11 +31,12 @@ import java.util.Set;
 
 import javax.annotation.Nullable;
 
-import org.sosy_lab.cpachecker.cpa.explicit.ExplicitState;
-import org.sosy_lab.cpachecker.cpa.explicit.ExplicitState.MemoryLocation;
 import org.sosy_lab.cpachecker.cpa.smg.SMGTransferRelation.SMGAddress;
 import org.sosy_lab.cpachecker.cpa.smg.objects.SMGObject;
 import org.sosy_lab.cpachecker.cpa.smg.objects.SMGRegion;
+import org.sosy_lab.cpachecker.cpa.value.Value;
+import org.sosy_lab.cpachecker.cpa.value.ValueAnalysisState;
+import org.sosy_lab.cpachecker.cpa.value.ValueAnalysisState.MemoryLocation;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Strings;
@@ -44,10 +45,10 @@ import com.google.common.base.Strings;
 public final class SMGExplicitPlotter {
   private final HashMap <Location, String> locationIndex = new HashMap<>();
   private int offset = 0;
-  private final ExplicitState explicitState;
+  private final ValueAnalysisState explicitState;
   private final SMGState smgState;
 
-  public SMGExplicitPlotter(ExplicitState pExplicitState, SMGState pSmgState) {
+  public SMGExplicitPlotter(ValueAnalysisState pExplicitState, SMGState pSmgState) {
     explicitState = pExplicitState;
     smgState = pSmgState;
   }
@@ -120,8 +121,8 @@ public final class SMGExplicitPlotter {
   }
 
   private String explicitValueAsDot(MemoryLocation pMemloc) {
-    long value = explicitState.getValueFor(pMemloc);
-    return "expValue_" + value + "[label=\"" + value + "\"];";
+    Value value = explicitState.getValueFor(pMemloc);
+    return "expValue_" + value.toString() + "[label=\"" + value.toString() + "\"];";
   }
 
   private void addStackSubgraph(CLangSMG pSmg, StringBuilder pSb) {

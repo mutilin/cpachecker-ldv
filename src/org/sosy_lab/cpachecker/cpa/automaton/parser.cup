@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2013  Dirk Beyer
+ *  Copyright (C) 2007-2014  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,6 +28,7 @@ import java.io.InputStream;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
@@ -37,12 +38,15 @@ import java_cup.runtime.Scanner;
 import java_cup.runtime.Symbol;
 import java_cup.runtime.SymbolFactory;
 
-import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.io.Path;
+import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CParser;
+import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
 import org.sosy_lab.cpachecker.cfa.types.MachineModel;
+import org.sosy_lab.cpachecker.exceptions.CParserException;
+
 
 import com.google.common.base.Throwables;
 
@@ -58,6 +62,10 @@ parser code {:
       this.logger = pLogger;
       this.cparser = pCparser;
   }
+  
+  public List<CStatement> generateSourceASTOfBlock(String code) throws InvalidAutomatonException, InvalidConfigurationException, CParserException {
+    return AutomatonASTComparator.generateSourceASTOfBlock(code, cparser);
+  }
 
   @Override
   public void report_error(String message, Object info) {
@@ -72,6 +80,7 @@ parser code {:
     AutomatonTransition trans = new AutomatonTransition(
         AutomatonBoolExpr.TRUE, 
         Collections.singletonList(pA),
+        new ArrayList<CStatement>(),
         Collections.<AutomatonAction>emptyList(),
         "OK");
     AutomatonInternalState okState = new AutomatonInternalState("OK", 
@@ -112,7 +121,7 @@ parser code {:
 
 
 
-terminal EXCLAMATION, AND, OR, ARROW, SEMICOLON, COMMA, COLON, OPEN_BRACKETS, CLOSE_BRACKETS, AUTOMATON,OBSERVER, CONTROL, END, LOCAL, INITIAL, STATE, ERROR, STOP, EXIT, ASSERT, ASSUME, MATCH, LABEL, CHECK, EVAL, MODIFY, DO, PRINT, GOTO, IDENTIFIER, INTEGER_LITERAL, NEQ, EQ, EQEQ, PLUS, MINUS, TRUE, FALSE, STRING_LITERAL, CURLYEXPR, SQUAREEXPR, USEALL, USEFIRST, TARGET, IS_TARGET_STATE ;
+terminal EXCLAMATION, AND, OR, ARROW, SEMICOLON, COMMA, COLON, OPEN_BRACKETS, CLOSE_BRACKETS, AUTOMATON,OBSERVER, CONTROL, END, LOCAL, INITIAL, STATE, ERROR, STOP, EXIT, BREAK, ASSERT, ASSUME, MATCH, LABEL, CHECK, EVAL, MODIFY, DO, PRINT, GOTO, IDENTIFIER, INTEGER_LITERAL, NEQ, EQ, EQEQ, PLUS, MINUS, TRUE, FALSE, STRING_LITERAL, CURLYEXPR, SQUAREEXPR, USEALL, USEFIRST, TARGET, IS_TARGET_STATE ;
 non terminal List<Automaton> initial ;  
 non terminal Automaton Specification ;
 non terminal Automaton Automaton ;
@@ -122,7 +131,7 @@ non terminal Map<String, AutomatonVariable> LocalDefs ;
 non terminal List<AutomatonInternalState> StateDefs ;
 non terminal List<AutomatonTransition> Transitions ;
 non terminal List<AutomatonBoolExpr> Assertions ;
-non terminal String Assume ;
+non terminal List<CStatement> Assume ;
 non terminal List<AutomatonAction> Actions ;
 
 non terminal AutomatonVariable LocalDef ;
@@ -201,12 +210,14 @@ Transitions   ::= Transition:t Transitions:lst {: lst.add(0, t); RESULT = lst; :
             | /* empty */ {: RESULT = new LinkedList<AutomatonTransition>(); :}
             ;
 
-Transition   ::= Bool:trigger  ARROW Assertions:ass Assume Actions:acts GOTO IDENTIFIER:follow SEMICOLON
-              {: RESULT = new AutomatonTransition(trigger, ass, acts, follow.toString()); :}
-               | Bool:trigger  ARROW Assertions:ass Assume Actions:acts ERROR SEMICOLON
-              {: RESULT = new AutomatonTransition(trigger, ass, acts, AutomatonInternalState.ERROR); :}
-               | Bool:trigger  ARROW Assertions:ass Assume Actions:acts STOP SEMICOLON
-              {: RESULT = new AutomatonTransition(trigger, ass, acts, AutomatonInternalState.BOTTOM); :}
+Transition   ::= Bool:trigger  ARROW Assertions:ass Assume:a Actions:acts GOTO IDENTIFIER:follow SEMICOLON
+              {: RESULT = new AutomatonTransition(trigger, ass, a, acts, follow.toString()); :}
+               | Bool:trigger  ARROW Assertions:ass Assume:a Actions:acts ERROR SEMICOLON
+              {: RESULT = new AutomatonTransition(trigger, ass, a, acts, AutomatonInternalState.ERROR); :}
+               | Bool:trigger  ARROW Assertions:ass Assume:a Actions:acts STOP SEMICOLON
+              {: RESULT = new AutomatonTransition(trigger, ass, a, acts, AutomatonInternalState.BOTTOM); :}
+               | Bool:trigger  ARROW Assertions:ass Assume:a Actions:acts BREAK SEMICOLON
+              {: RESULT = new AutomatonTransition(trigger, ass, a, acts, AutomatonInternalState.BREAK); :}
               ;
 
 Assertions ::= Assertion:a Assertions:lst {: lst.add(0,a); RESULT = lst; :}
@@ -214,8 +225,8 @@ Assertions ::= Assertion:a Assertions:lst {: lst.add(0,a); RESULT = lst; :}
              ;
 Assertion  ::= ASSERT  Bool:b   {: RESULT = b; :};
 
-Assume    ::= ASSUME STRING_LITERAL:a {: RESULT = a.toString(); :}
-             | /* empty */ {: RESULT = ""; :};
+Assume    ::= ASSUME CURLYEXPR:a {: RESULT = parser.generateSourceASTOfBlock(a.toString()); :}
+             | /* empty */ {: RESULT = new ArrayList<CStatement>(); :};
 
 Actions   ::= Action:a Actions:lst {: lst.add(0,a); RESULT = lst; :} // insert at the beginning of the list to preserve the order.
             | /* empty */ {: RESULT = new LinkedList<AutomatonAction>(); :}
@@ -272,6 +283,8 @@ Bool      ::= TRUE  {: RESULT = AutomatonBoolExpr.TRUE; :}
               {: RESULT = new AutomatonBoolExpr.MatchCFAEdgeRegEx(expr.toString()); :}
             | MATCH LABEL SQUAREEXPR:expr
               {: RESULT = new AutomatonBoolExpr.MatchLabelRegEx(expr.toString()); :}
+            | MATCH ASSERT
+              {: RESULT = new AutomatonBoolExpr.MatchJavaAssert(); :}
             | MATCH EXIT
               {: RESULT = new AutomatonBoolExpr.MatchProgramExit(); :}
 /*next statement is deprecated*/ 

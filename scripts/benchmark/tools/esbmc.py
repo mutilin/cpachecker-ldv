@@ -37,7 +37,9 @@ class Tool(benchmark.tools.template.BaseTool):
         return 'ESBMC'
 
 
-    def getCmdline(self, executable, options, sourcefile):
+    def getCmdline(self, executable, options, sourcefiles, propertyfile):
+        assert len(sourcefiles) == 1, "only one sourcefile supported"
+        sourcefile = sourcefiles[0]
         workingDir = self.getWorkingDirectory(executable)
         return [os.path.relpath(executable, start=workingDir)] + options + [os.path.relpath(sourcefile, start=workingDir)]
 
@@ -64,12 +66,12 @@ class Tool(benchmark.tools.template.BaseTool):
                       'error label',
                       'VERIFICATION FAILED'],
                       output):
-            status = result.STR_FALSE_LABEL
+            status = result.STR_FALSE_REACH
         elif self.allInText(['Violated property:',
                       'assertion',
                       'VERIFICATION FAILED'],
                       output):
-            status = result.STR_FALSE_LABEL
+            status = result.STR_FALSE_REACH
         elif self.allInText(['Violated property:',
                       'dereference failure: forgotten memory',
                       'VERIFICATION FAILED'],

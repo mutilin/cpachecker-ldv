@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2013  Dirk Beyer
+ *  Copyright (C) 2007-2014  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -49,7 +49,7 @@ public class Z3InterpolatingProver implements InterpolatingProverEnvironment<Lon
 
   public Z3InterpolatingProver(Z3FormulaManager mgr) {
     this.mgr = mgr;
-    this.z3context = mgr.getContext();
+    this.z3context = mgr.getEnvironment();
     this.z3solver = mk_solver(z3context);
     solver_inc_ref(z3context, z3solver);
     this.smtLogger = mgr.getSmtLogger();

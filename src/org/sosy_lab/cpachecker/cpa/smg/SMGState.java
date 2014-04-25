@@ -1,8 +1,8 @@
- /*
+/*
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2012  Dirk Beyer
+ *  Copyright (C) 2007-2014  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,22 +23,23 @@
  */
 package org.sosy_lab.cpachecker.cpa.smg;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 
 import javax.annotation.Nullable;
 
-import org.sosy_lab.common.LogManager;
+import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionDeclaration;
 import org.sosy_lab.cpachecker.cfa.types.MachineModel;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractQueryableState;
 import org.sosy_lab.cpachecker.core.interfaces.Targetable;
-import org.sosy_lab.cpachecker.cpa.explicit.ExplicitState;
-import org.sosy_lab.cpachecker.cpa.explicit.ExplicitState.MemoryLocation;
 import org.sosy_lab.cpachecker.cpa.smg.SMGTransferRelation.SMGAddress;
 import org.sosy_lab.cpachecker.cpa.smg.SMGTransferRelation.SMGAddressValue;
 import org.sosy_lab.cpachecker.cpa.smg.SMGTransferRelation.SMGExplicitValue;
@@ -46,17 +47,19 @@ import org.sosy_lab.cpachecker.cpa.smg.SMGTransferRelation.SMGKnownExpValue;
 import org.sosy_lab.cpachecker.cpa.smg.SMGTransferRelation.SMGKnownSymValue;
 import org.sosy_lab.cpachecker.cpa.smg.SMGTransferRelation.SMGSymbolicValue;
 import org.sosy_lab.cpachecker.cpa.smg.SMGTransferRelation.SMGUnknownValue;
-import org.sosy_lab.cpachecker.cpa.smg.SMGJoin.SMGJoin;
-import org.sosy_lab.cpachecker.cpa.smg.SMGJoin.SMGJoinStatus;
+import org.sosy_lab.cpachecker.cpa.smg.join.SMGJoin;
+import org.sosy_lab.cpachecker.cpa.smg.join.SMGJoinStatus;
 import org.sosy_lab.cpachecker.cpa.smg.objects.SMGObject;
 import org.sosy_lab.cpachecker.cpa.smg.objects.SMGRegion;
+import org.sosy_lab.cpachecker.cpa.value.ValueAnalysisState;
+import org.sosy_lab.cpachecker.cpa.value.ValueAnalysisState.MemoryLocation;
 import org.sosy_lab.cpachecker.exceptions.InvalidQueryException;
 
 public class SMGState implements AbstractQueryableState, Targetable {
   static boolean targetMemoryErrors = true;
   static boolean unknownOnUndefined = true;
 
-  static private int id_counter = 0;
+  static private final AtomicInteger id_counter = new AtomicInteger(0);
 
   private final Map<SMGKnownSymValue, SMGKnownExpValue> explicitValues = new HashMap<>();
   private final CLangSMG heap;
@@ -118,7 +121,7 @@ public class SMGState implements AbstractQueryableState, Targetable {
     heap = new CLangSMG(pMachineModel);
     logger = pLogger;
     predecessor = null;
-    id = id_counter++;
+    id = id_counter.getAndIncrement();
   }
 
   /**
@@ -134,7 +137,7 @@ public class SMGState implements AbstractQueryableState, Targetable {
     heap = new CLangSMG(pOriginalState.heap);
     logger = pOriginalState.logger;
     predecessor = pOriginalState.predecessor;
-    id = id_counter++;
+    id = id_counter.getAndIncrement();
     explicitValues.putAll(pOriginalState.explicitValues);
   }
 
@@ -300,7 +303,7 @@ public class SMGState implements AbstractQueryableState, Targetable {
    * @param pExplicitState
    * @return String containing a DOT graph corresponding to the SMGState.
    */
-  public String toDot(String pName, String pLocation, ExplicitState pExplicitState) {
+  public String toDot(String pName, String pLocation, ValueAnalysisState pExplicitState) {
     SMGExplicitPlotter plotter = new SMGExplicitPlotter(pExplicitState, this);
     return plotter.smgAsDot(heap, "Explicit_"+ pName, pLocation);
   }
@@ -462,10 +465,6 @@ public class SMGState implements AbstractQueryableState, Targetable {
    */
   private SMGEdgeHasValue writeValue(SMGObject pObject, int pOffset, CType pType, Integer pValue) throws SMGInconsistentException {
     // vgl Algorithm 1 Byte-Precise Verification of Low-Level List Manipulation FIT-TR-2012-04
-
-    if (pValue == null) {
-      pValue = heap.getNullValue();
-    }
 
     if (! heap.isObjectValid(pObject)) {
       //Attempt to write to invalid object
@@ -772,9 +771,15 @@ public class SMGState implements AbstractQueryableState, Targetable {
     heap.setValidity(smgObject, false);
     SMGEdgeHasValueFilter filter = SMGEdgeHasValueFilter.objectFilter(smgObject);
 
+    List<SMGEdgeHasValue> to_remove = new ArrayList<>();
     for (SMGEdgeHasValue edge : heap.getHVEdges(filter)) {
+      to_remove.add(edge);
+    }
+
+    for (SMGEdgeHasValue edge : to_remove) {
       heap.removeHasValueEdge(edge);
     }
+
     performConsistencyCheck(SMGRuntimeCheck.HALF);
   }
 

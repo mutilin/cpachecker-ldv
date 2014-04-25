@@ -16,7 +16,10 @@ class Tool(benchmark.tools.template.BaseTool):
         return 'Acsar'
 
 
-    def getCmdline(self, executable, options, sourcefile):
+    def getCmdline(self, executable, options, sourcefiles, propertyfile):
+        assert len(sourcefiles) == 1, "only one sourcefile supported"
+        sourcefile = sourcefiles[0]
+
         # create tmp-files for acsar, acsar needs special error-labels
         self.prepSourcefile = self._prepareSourcefile(sourcefile)
 
@@ -63,7 +66,7 @@ class Tool(benchmark.tools.template.BaseTool):
             status = result.STR_TRUE
 
         elif "Error Location <<ERROR_LOCATION>> is reachable via the following path" in output:
-            status = result.STR_FALSE_LABEL
+            status = result.STR_FALSE_REACH
 
         else:
             status = result.STR_UNKNOWN

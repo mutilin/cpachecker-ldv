@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2013  Dirk Beyer
+ *  Copyright (C) 2007-2014  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -30,6 +30,7 @@ import java.util.Set;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.sosy_lab.cpachecker.cfa.ast.FileLocation;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CParameterDeclaration;
 import org.sosy_lab.cpachecker.cfa.types.MachineModel;
@@ -42,7 +43,7 @@ import com.google.common.collect.ImmutableList;
 
 public class CLangStackFrameTest {
   static private final CFunctionType functionType = AnonymousTypes.createSimpleFunctionType(AnonymousTypes.dummyInt);
-  static private final CFunctionDeclaration functionDeclaration = new CFunctionDeclaration(null, functionType, "foo", ImmutableList.<CParameterDeclaration>of());
+  static private final CFunctionDeclaration functionDeclaration = new CFunctionDeclaration(FileLocation.DUMMY, functionType, "foo", ImmutableList.<CParameterDeclaration>of());
   static private final MachineModel usedMachineModel = MachineModel.LINUX64;
   private CLangStackFrame sf;
 
@@ -116,8 +117,8 @@ public class CLangStackFrameTest {
   public void CLangStackFrameMissingVariableTest() {
     Assert.assertFalse("Non-added variable is not present", sf.containsVariable("fooVaz"));
 
-    @SuppressWarnings("unused")
     SMGObject smg_object = sf.getVariable("fooVaz");
+    smg_object.getLabel(); // Avoid dead store warning
   }
 
   @Test
@@ -126,5 +127,4 @@ public class CLangStackFrameTest {
     Assert.assertNotNull(fd);
     Assert.assertEquals("Correct function is returned", "foo", fd.getName());
   }
-
 }
