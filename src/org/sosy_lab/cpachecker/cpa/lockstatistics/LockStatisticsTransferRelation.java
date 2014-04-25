@@ -37,10 +37,12 @@ import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.ast.c.CAssignment;
+import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCall;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallStatement;
+import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CIntegerLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CLeftHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
@@ -48,6 +50,7 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionReturnEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
@@ -120,6 +123,10 @@ public class LockStatisticsTransferRelation implements TransferRelation
         successor = handleSimpleEdge(lockStatisticsElement, precision, state, cfaEdge);
     }
 
+    if (successor == null) {
+      return Collections.emptySet();
+    }
+
     if (!successor.equals(lockStatisticsElement)) {
       return Collections.singleton(successor);
     } else {
@@ -140,8 +147,10 @@ public class LockStatisticsTransferRelation implements TransferRelation
           return handleStatement(element, precision, state, statement, cfaEdge.getPredecessor().getFunctionName());
         }
 
-      case BlankEdge:
       case AssumeEdge:
+        return handleAssumption(element, (CAssumeEdge)cfaEdge, precision, state);
+
+      case BlankEdge:
       case ReturnStatementEdge:
       case DeclarationEdge:
       case CallToReturnEdge:
@@ -157,6 +166,40 @@ public class LockStatisticsTransferRelation implements TransferRelation
       default:
         throw new UnrecognizedCCodeException("Unknown edge type", cfaEdge);
     }
+  }
+
+  private LockStatisticsState handleAssumption(LockStatisticsState lockStatisticsElement, CAssumeEdge cfaEdge,
+      LockStatisticsPrecision lockStatisticsPrecision, CallstackState state) {
+    CExpression assumption = cfaEdge.getExpression();
+
+    if (assumption instanceof CBinaryExpression) {
+      if (((CBinaryExpression) assumption).getOperand1() instanceof CIdExpression) {
+        LockInfo lockInfo = findLockByVariable(((CIdExpression)((CBinaryExpression) assumption).getOperand1()).getName());
+        if (lockInfo != null) {
+          LockStatisticsLock lock = lockStatisticsElement.findLock(lockInfo.lockName, "");
+          if (!(((CBinaryExpression) assumption).getOperand2() instanceof CIntegerLiteralExpression)) {
+            return lockStatisticsElement.clone();
+          }
+          int level = ((CIntegerLiteralExpression)(((CBinaryExpression) assumption).getOperand2())).getValue().intValue();
+          if (lock != null && lock.getAccessCounter() == level) {
+            if (cfaEdge.getTruthAssumption()) {
+              return lockStatisticsElement.clone();
+            } else {
+              return null;
+            }
+          } else if (lock == null && level == 0) {
+            if (cfaEdge.getTruthAssumption()) {
+              return lockStatisticsElement.clone();
+            } else {
+              return null;
+            }
+          } else {
+            return null;
+          }
+        }
+      }
+    }
+    return lockStatisticsElement.clone();
   }
 
   private LockStatisticsState handleFunctionReturnEdge(LockStatisticsState lockStatisticsElement, CFunctionReturnEdge cfaEdge,
@@ -261,15 +304,15 @@ public class LockStatisticsTransferRelation implements TransferRelation
          */
         CLeftHandSide leftSide = ((CAssignment) expression).getLeftHandSide();
         CRightHandSide rightSide = ((CAssignment) expression).getRightHandSide();
-        if (rightSide instanceof CIntegerLiteralExpression) {
-          int level = ((CIntegerLiteralExpression)rightSide).getValue().intValue();
-          LockInfo lock = findLockByVariable(leftSide.toASTString());
-          if (lock != null) {
+        LockInfo lock = findLockByVariable(leftSide.toASTString());
+        if (lock != null) {
+          if (rightSide instanceof CIntegerLiteralExpression) {
+            int level = ((CIntegerLiteralExpression)rightSide).getValue().intValue();
             processSetLevel(newElement, precision, state, expression.getFileLocation().getStartingLineNumber(), level, lock);
+          } else {
+            logger.log(Level.WARNING, "Lock level isn't numeric constant: " + expression.toASTString()
+                + "(line " + expression.getFileLocation().getStartingLineNumber() + ")");
           }
-        } else {
-          logger.log(Level.WARNING, "Lock level isn't numeric constant: " + expression.toASTString()
-              + "(line " + expression.getFileLocation().getStartingLineNumber() + ")");
         }
       }
 

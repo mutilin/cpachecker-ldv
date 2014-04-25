@@ -29,19 +29,19 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.PrintWriter;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-import org.sosy_lab.common.Files;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.FileOption;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
+import org.sosy_lab.common.io.Files;
+import org.sosy_lab.common.io.Path;
+import org.sosy_lab.common.io.Paths;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
@@ -125,8 +125,9 @@ public class CoverCPAStatistics implements Statistics {
          */
         for (CFANode node : cfa.getAllNodes()) {
           //we shouldn't consider declarations
-          if (isDeclarationNode(node))
+          if (isDeclarationNode(node)) {
             continue;
+          }
 
           //All locations, which are in MultiEdge are thrown away, so, we should return them by ourselves
           for (int i = 0; i < node.getNumLeavingEdges(); i++) {
@@ -191,8 +192,9 @@ public class CoverCPAStatistics implements Statistics {
   private Boolean isDeclarationNode(CFANode node) {
     for (int i = 0; i < node.getNumEnteringEdges(); i++) {
       CFAEdge tmpEdge = node.getEnteringEdge(i);
-      if (tmpEdge instanceof CDeclarationEdge)
+      if (tmpEdge instanceof CDeclarationEdge) {
         return true;
+      }
     }
     return false;
   }

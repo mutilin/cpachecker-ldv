@@ -24,30 +24,45 @@
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.Map;
 
 import org.sosy_lab.cpachecker.core.defaults.AbstractSingleWrapperState;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
+import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
+import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
+import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 /**
  * Represents one abstract state of the UsageStatistics CPA.
  */
-class UsageStatisticsState extends AbstractSingleWrapperState  {
+public class UsageStatisticsState extends AbstractSingleWrapperState  {
   /* Boilerplate code to avoid serializing this class */
 
   private static final long serialVersionUID = -898577877284268426L;
+  private final UsageContainer container;
+  private Map <SingleIdentifier, LinkedList<UsageInfo>> recentUsages;
 
   private final Map<AbstractIdentifier, AbstractIdentifier> variableBindingRelation;
 
-  public UsageStatisticsState(AbstractState pWrappedElement) {
+  public UsageStatisticsState(AbstractState pWrappedElement, UsageContainer pContainer) {
+    //Only for getInitialState()
     super(pWrappedElement);
     variableBindingRelation = new HashMap<>();
+    recentUsages = new HashMap<>();
+    container = pContainer;
   }
 
-  private UsageStatisticsState(AbstractState pWrappedElement, Map<AbstractIdentifier, AbstractIdentifier> map) {
+  private UsageStatisticsState(AbstractState pWrappedElement, UsageStatisticsState state) {
     super(pWrappedElement);
-    variableBindingRelation = new HashMap<>(map);
+    variableBindingRelation = new HashMap<>(state.variableBindingRelation);
+    recentUsages = new HashMap<>(state.recentUsages);
+
+    for (SingleIdentifier id : state.recentUsages.keySet()) {
+      recentUsages.put(id, new LinkedList<>(state.recentUsages.get(id)));
+    }
+    container = state.container;
   }
 
   public boolean containsLinks(AbstractIdentifier id) {
@@ -69,6 +84,14 @@ class UsageStatisticsState extends AbstractSingleWrapperState  {
     if (!id1.equals(id2)) {
       variableBindingRelation.put(id1, id2);
     }
+  }
+
+  public boolean containsUsage(SingleIdentifier id) {
+    return recentUsages.containsKey(id);
+  }
+
+  public void removeUsage(SingleIdentifier id) {
+    recentUsages.remove(id);
   }
 
   public AbstractIdentifier getLinks(AbstractIdentifier id) {
@@ -93,11 +116,11 @@ class UsageStatisticsState extends AbstractSingleWrapperState  {
 
   @Override
   public UsageStatisticsState clone() {
-    return new UsageStatisticsState(this.getWrappedState(), this.variableBindingRelation);
+    return clone(this.getWrappedState());
   }
 
   public UsageStatisticsState clone(AbstractState pWrappedState) {
-    return new UsageStatisticsState(pWrappedState, this.variableBindingRelation);
+    return new UsageStatisticsState(pWrappedState, this);
   }
 
   @Override
@@ -105,6 +128,7 @@ class UsageStatisticsState extends AbstractSingleWrapperState  {
     final int prime = 31;
     int result = 1;
     result = prime * result + ((variableBindingRelation == null) ? 0 : variableBindingRelation.hashCode());
+    result = prime * super.hashCode();
     return result;
   }
 
@@ -127,7 +151,7 @@ class UsageStatisticsState extends AbstractSingleWrapperState  {
     } else if (!variableBindingRelation.equals(other.variableBindingRelation)) {
       return false;
     }
-    return true;
+    return super.equals(other);
   }
 
   @Override
@@ -163,4 +187,53 @@ class UsageStatisticsState extends AbstractSingleWrapperState  {
     return true;
   }
 
+  public void addUsage(SingleIdentifier id, UsageInfo usage) {
+    LinkedList<UsageInfo> uset;
+    if (!recentUsages.containsKey(id)) {
+      uset = new LinkedList<>();
+      recentUsages.put(id, uset);
+    } else {
+      uset = recentUsages.get(id);
+    }
+    uset.add(usage);
+
+  }
+
+  public void clearUsagesIfNeed() {
+    PredicateAbstractState state = AbstractStates.extractStateByType(this, PredicateAbstractState.class);
+    if (state == null || !state.getAbstractionFormula().isFalse() && state.isAbstractionState()) {
+      recentUsages.clear();
+    }
+  }
+
+  public UsageStatisticsState expand(UsageStatisticsState root, AbstractState wrappedState) {
+    UsageStatisticsState result = root.clone(wrappedState);
+
+    for (SingleIdentifier id : this.recentUsages.keySet()) {
+      result.recentUsages.put(id, new LinkedList<>(this.recentUsages.get(id)));
+    }
+    return result;
+  }
+
+  public UsageContainer getContainer() {
+    return container;
+  }
+
+  public void saveUnsafesInContainer() {
+    for (SingleIdentifier id : recentUsages.keySet()) {
+      for (UsageInfo uinfo : recentUsages.get(id)) {
+        container.add(id, uinfo);
+      }
+    }
+  }
+
+  public void updateKeyState(AbstractState pState) {
+    for (SingleIdentifier id : recentUsages.keySet()) {
+      for (UsageInfo uinfo : recentUsages.get(id)) {
+        if (uinfo.getKeyState() == null) {
+          uinfo.setKeyState(pState);
+        }
+      }
+    }
+  }
 }

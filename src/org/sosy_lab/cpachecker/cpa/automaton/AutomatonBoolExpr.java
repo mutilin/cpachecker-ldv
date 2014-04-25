@@ -23,13 +23,23 @@
  */
 package org.sosy_lab.cpachecker.cpa.automaton;
 
+import java.util.Collections;
+import java.util.Set;
 import java.util.logging.Level;
 import java.util.regex.Pattern;
 
 import org.sosy_lab.common.LogManager;
 import org.sosy_lab.cpachecker.cfa.ast.c.CAstNode;
+import org.sosy_lab.cpachecker.cfa.ast.c.CDeclaration;
+import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionDeclaration;
+import org.sosy_lab.cpachecker.cfa.ast.c.CTypeDeclaration;
+import org.sosy_lab.cpachecker.cfa.ast.c.CVariableDeclaration;
+import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
+import org.sosy_lab.cpachecker.cfa.model.BlankEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.CLabelNode;
+import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractQueryableState;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.automaton.AutomatonASTComparator.ASTMatcher;
@@ -37,6 +47,7 @@ import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.InvalidQueryException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCFAEdgeException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
+import org.sosy_lab.cpachecker.util.CFAUtils;
 
 import com.google.common.base.Optional;
 
@@ -181,6 +192,77 @@ interface AutomatonBoolExpr extends AutomatonExpression {
     @Override
     public String toString() {
       return "MATCH \"" + pattern + "\"";
+    }
+  }
+
+  static class MatchEdgeTokens implements AutomatonBoolExpr {
+
+    private final Set<Integer> matchTokens;
+    private final Optional<Boolean> matchNegatedSemantics;
+
+    public MatchEdgeTokens(Set<Integer> pTokens, Optional<Boolean> pMatchNegatedSemantics) {
+      matchTokens = pTokens;
+      matchNegatedSemantics = pMatchNegatedSemantics;
+    }
+
+    private boolean handleAsEpsilonEdge(CFAEdge edge) {
+      if (edge instanceof BlankEdge) {
+        return true;
+      } else if (edge instanceof CDeclarationEdge) {
+        CDeclarationEdge declEdge = (CDeclarationEdge) edge;
+        CDeclaration decl = declEdge.getDeclaration();
+        if (decl instanceof CFunctionDeclaration) {
+          return true;
+        } else if (decl instanceof CTypeDeclaration) {
+          return true;
+        } else if (decl instanceof CVariableDeclaration) {
+          CVariableDeclaration varDecl = (CVariableDeclaration) decl;
+          if (varDecl.getInitializer() == null) {
+            return true;
+          }
+        }
+      }
+
+      return false;
+    }
+
+    @Override
+    public ResultValue<Boolean> eval(AutomatonExpressionArguments pArgs) {
+      boolean match = false;
+
+      Set<Integer> edgeTokens;
+      if (handleAsEpsilonEdge(pArgs.getCfaEdge())) {
+        edgeTokens = Collections.emptySet();
+      } else {
+        edgeTokens = CFAUtils.getTokensFromCFAEdge(pArgs.getCfaEdge());
+      }
+
+      match = edgeTokens.equals(matchTokens);
+      if (match && matchNegatedSemantics.isPresent()) {
+        if (pArgs.getCfaEdge() instanceof AssumeEdge) {
+          AssumeEdge a = (AssumeEdge) pArgs.getCfaEdge();
+          if (matchNegatedSemantics.get() && a.getTruthAssumption()) {
+            match = false;
+          }
+        } else {
+          throw new IllegalStateException("Matching of negative semantics only possible for assume edges!");
+        }
+      }
+
+      return match ? CONST_TRUE : CONST_FALSE;
+    }
+
+    public Optional<Boolean> getMatchNegatedSemantics() {
+      return matchNegatedSemantics;
+    }
+
+    public Set<Integer> getMatchTokens() {
+      return matchTokens;
+    }
+
+    @Override
+    public String toString() {
+      return "MATCH TOKENS " + matchTokens;
     }
   }
 

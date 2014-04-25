@@ -827,34 +827,31 @@ public class CtoFormulaConverter {
       throws CPATransferException {
     // this is where the "meat" is... We have to parse the statement
     // attached to the edge, and convert it to the appropriate formula
-    ErrorConditions errorConditions = new ErrorConditions(bfmgr);
+      ErrorConditions errorConditions = new ErrorConditions(bfmgr);
 
-    if (edge.getEdgeType() == CFAEdgeType.BlankEdge) {
+      if (edge.getEdgeType() == CFAEdgeType.BlankEdge) {
 
-      // in this case there's absolutely nothing to do, so take a shortcut
-      return Pair.of(oldFormula, errorConditions);
-    }
+        // in this case there's absolutely nothing to do, so take a shortcut
+        return Pair.of(oldFormula, errorConditions);
+      }
 
-    String function = (edge.getPredecessor() != null)
-                          ? edge.getPredecessor().getFunctionName() : null;
+      String function = (edge.getPredecessor() != null)
+                            ? edge.getPredecessor().getFunctionName() : null;
 
-    SSAMapBuilder ssa = oldFormula.getSsa().builder();
-    Constraints constraints = new Constraints(bfmgr);
+      SSAMapBuilder ssa = oldFormula.getSsa().builder();
+      Constraints constraints = new Constraints(bfmgr);
+      BooleanFormula edgeFormula = createFormulaForEdge(edge, function, ssa, constraints);
+      edgeFormula = bfmgr.and(edgeFormula, constraints.get());
+      SSAMap newSsa = ssa.build();
+      if (bfmgr.isTrue(edgeFormula) && (newSsa == oldFormula.getSsa())) {
+        // formula is just "true" and SSAMap is identical
+        // i.e. no writes to SSAMap, no branching and length should stay the same
+        return Pair.of(oldFormula, errorConditions);
+      }
 
-    BooleanFormula edgeFormula = createFormulaForEdge(edge, function, ssa, constraints);
-
-    edgeFormula = bfmgr.and(edgeFormula, constraints.get());
-
-    SSAMap newSsa = ssa.build();
-    if (bfmgr.isTrue(edgeFormula) && (newSsa == oldFormula.getSsa())) {
-      // formula is just "true" and SSAMap is identical
-      // i.e. no writes to SSAMap, no branching and length should stay the same
-      return Pair.of(oldFormula, errorConditions);
-    }
-
-    BooleanFormula newFormula = bfmgr.and(oldFormula.getFormula(), edgeFormula);
-    int newLength = oldFormula.getLength() + 1;
-    return Pair.of(new PathFormula(newFormula, newSsa, newLength), errorConditions);
+      BooleanFormula newFormula = bfmgr.and(oldFormula.getFormula(), edgeFormula);
+      int newLength = oldFormula.getLength() + 1;
+      return Pair.of(new PathFormula(newFormula, newSsa, newLength), errorConditions);
   }
 
   /**
@@ -882,6 +879,7 @@ public class CtoFormulaConverter {
 
     case DeclarationEdge: {
       CDeclarationEdge d = (CDeclarationEdge)edge;
+      //return bfmgr.makeBoolean(true);
       return makeDeclaration(d, function, ssa, constraints);
     }
 
@@ -926,7 +924,6 @@ public class CtoFormulaConverter {
   protected BooleanFormula makeDeclaration(
       CDeclarationEdge edge, String function, SSAMapBuilder ssa,
       Constraints constraints) throws CPATransferException {
-
     if (!(edge.getDeclaration() instanceof CVariableDeclaration)) {
       // struct prototype, function declaration, typedef etc.
       logfOnce(Level.FINEST, edge, "Ignoring declaration");
@@ -969,7 +966,6 @@ public class CtoFormulaConverter {
         result = bfmgr.and(result, fmgr.assignment(var, zero));
       }
     }
-
     StatementToFormulaVisitor v = getStatementVisitor(edge, function, ssa, constraints);
 
     for (CExpressionAssignmentStatement assignment : CInitializers.convertToAssignments(decl, edge)) {

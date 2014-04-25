@@ -26,14 +26,14 @@ package org.sosy_lab.cpachecker.cpa.explicit;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.Writer;
-import java.nio.file.Path;
 import java.util.logging.Level;
 
-import org.sosy_lab.common.Files;
 import org.sosy_lab.common.configuration.FileOption;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
+import org.sosy_lab.common.io.Files;
+import org.sosy_lab.common.io.Path;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
@@ -43,6 +43,7 @@ import org.sosy_lab.cpachecker.core.interfaces.WrapperPrecision;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.AbstractARGBasedRefiner;
 import org.sosy_lab.cpachecker.cpa.explicit.ExplicitPrecision.RefinablePrecision;
+import org.sosy_lab.cpachecker.cpa.explicit.ExplicitState.MemoryLocation;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 
 import com.google.common.collect.HashMultimap;
@@ -131,7 +132,7 @@ public class ExplicitCPAStatistics implements Statistics {
       if (precision instanceof WrapperPrecision) {
         ExplicitPrecision prec = ((WrapperPrecision)precision).retrieveWrappedPrecision(ExplicitPrecision.class);
         if (joinedPrecision == null) {
-          joinedPrecision = prec.getRefinablePrecision().refine(HashMultimap.<CFANode, String>create());
+          joinedPrecision = prec.getRefinablePrecision().refine(HashMultimap.<CFANode, MemoryLocation>create());
         }
         else {
           joinedPrecision.join(prec.getRefinablePrecision());

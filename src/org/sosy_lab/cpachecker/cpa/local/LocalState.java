@@ -131,7 +131,8 @@ public class LocalState implements AbstractState {
     } else {
       name = aId;
     }
-    if (LocalCPA.localVariables != null && LocalCPA.localVariables.contains(name.toString())) {
+    if (LocalCPA.localVariables != null && name instanceof SingleIdentifier
+        && LocalCPA.localVariables.contains(((SingleIdentifier)name).getName())) {
       return DataType.LOCAL;
     }
     if (localInfo.containsKey(name)) {
@@ -147,7 +148,7 @@ public class LocalState implements AbstractState {
         AbstractIdentifier tmp = name.containsIn(localInfo.keySet());
         return (tmp == null ? null : localInfo.get(tmp));
       } else if (name instanceof ConstantIdentifier) {
-        if (name.isPointer()) {
+        if (name.isPointer() && !((ConstantIdentifier)name).getName().equals("0")) {
           return DataType.GLOBAL;
         } else {
           return DataType.LOCAL;

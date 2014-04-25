@@ -142,10 +142,10 @@ class RunExecutor():
             totalCpuCount = len(self.cpus)
             myCpusStart = (myCpuIndex * myCpuCount) % totalCpuCount
             myCpusEnd = (myCpusStart + myCpuCount - 1) % totalCpuCount
-            myCpus = ','.join(map(str, range(myCpusStart, myCpusEnd + 1)))
+            myCpus = ','.join(map(str, map(lambda i: self.cpus[i], range(myCpusStart, myCpusEnd + 1))))
             writeFile(myCpus, cgroupCpuset, 'cpuset.cpus')
             myCpus = readFile(cgroupCpuset, 'cpuset.cpus')
-            logging.debug('Executing {0} with cpu cores {1}.'.format(args, myCpus))
+            logging.debug('Executing {0} with cpu cores [{1}].'.format(args, myCpus))
 
         # Setup memory limit
         if MEMLIMIT in rlimits:
@@ -155,16 +155,27 @@ class RunExecutor():
 
             cgroupMemory = cgroups[MEMORY]
             memlimit = str(rlimits[MEMLIMIT] * _BYTE_FACTOR * _BYTE_FACTOR) # MB to Byte
-            writeFile(memlimit, cgroupMemory, 'memory.limit_in_bytes')
 
-            try:
-                writeFile(memlimit, cgroupMemory, 'memory.memsw.limit_in_bytes')
-            except IOError as e:
-                if e.errno == 95: # kernel responds with error 95 (operation unsupported) if this is disabled
-                    sys.exit("Memory limit specified, but kernel does not allow limiting swap memory. Please set swapaccount=1 on your kernel command line.")
-                raise e
+            limitFile = 'memory.limit_in_bytes'
+            writeFile(memlimit, cgroupMemory, limitFile)
 
-            memlimit = readFile(cgroupMemory, 'memory.memsw.limit_in_bytes')
+            swapLimitFile = 'memory.memsw.limit_in_bytes'
+            # We need swap limit because otherwise the kernel just starts swapping
+            # out our process if the limit is reached.
+            # Some kernels might not have this feature,
+            # which is ok if there is actually no swap.
+            if not os.path.exists(os.path.join(cgroupMemory, swapLimitFile)):
+                if _hasSwap():
+                    sys.exit('Kernel misses feature for accounting swap memory (memory.memsw.limit_in_bytes file does not exist in memory cgroup), but machine has swap.')
+            else:
+                try:
+                    writeFile(memlimit, cgroupMemory, swapLimitFile)
+                except IOError as e:
+                    if e.errno == 95: # kernel responds with error 95 (operation unsupported) if this is disabled
+                        sys.exit("Memory limit specified, but kernel does not allow limiting swap memory. Please set swapaccount=1 on your kernel command line.")
+                    raise e
+
+            memlimit = readFile(cgroupMemory, limitFile)
             logging.debug('Executing {0} with memory limit {1} bytes.'.format(args, memlimit))
 
         return (cgroups, myCpuCount)
@@ -184,6 +195,26 @@ class RunExecutor():
 
             # put us into the cgroup(s)
             pid = os.getpid()
+            # On some systems, cgrulesngd would move our process into other cgroups.
+            # We disable this behavior via libcgroup if available.
+            # Unfortunately, logging/printing does not seem to work here.
+            from ctypes import cdll
+            try:
+                libcgroup = cdll.LoadLibrary('libcgroup.so.1')
+                failure = libcgroup.cgroup_init()
+                if failure:
+                    pass
+                    #print('Could not initialize libcgroup, error {}'.format(success))
+                else:
+                    CGROUP_DAEMON_UNCHANGE_CHILDREN = 0x1
+                    failure = libcgroup.cgroup_register_unchanged_process(pid, CGROUP_DAEMON_UNCHANGE_CHILDREN)
+                    if failure:
+                        pass
+                        #print('Could not register process to cgrulesndg, error {}. Probably the daemon will mess up our cgroups.'.format(success))
+            except OSError as e:
+                pass
+                #print('libcgroup is not available: {}'.format(e.strerror))
+
             for cgroup in cgroups.values():
                 _addTaskToCgroup(cgroup, pid)
 
@@ -231,17 +262,21 @@ class RunExecutor():
                 timelimitThread.start()
 
             if MEMLIMIT in rlimits:
-                oomThread = _OomEventThread(cgroups[MEMORY], p, rlimits[MEMLIMIT])
-                oomThread.start()
-        
-            logging.debug("waiting for: pid:{0}".format(p.pid))
-            pid, returnvalue, ru_child = os.wait4(p.pid, 0)
-            logging.debug("waiting finished: pid:{0}, retVal:{1}".format(pid, returnvalue))
+                try:
+                    oomThread = _OomEventThread(cgroups[MEMORY], p, rlimits[MEMLIMIT])
+                    oomThread.start()
+                except OSError as e:
+                    logging.critical("OSError {0} during setup of OomEventListenerThread: {1}.".format(e.errno, e.strerror))
 
-        except OSError as e:
-            returnvalue = 0
-            ru_child = None
-            logging.critical("OSError {0} while waiting for termination of {1} ({2}): {3}.".format(e.errno, args[0], p.pid, e.strerror))
+            try:
+                logging.debug("waiting for: pid:{0}".format(p.pid))
+                pid, returnvalue, ru_child = os.wait4(p.pid, 0)
+                logging.debug("waiting finished: pid:{0}, retVal:{1}".format(pid, returnvalue))
+
+            except OSError as e:
+                returnvalue = 0
+                ru_child = None
+                logging.critical("OSError {0} while waiting for termination of {1} ({2}): {3}.".format(e.errno, args[0], p.pid, e.strerror))
 
         finally:
             with self.SUB_PROCESSES_LOCK:
@@ -295,8 +330,11 @@ class RunExecutor():
             # This measurement reads the maximum number of bytes of RAM+Swap the process used.
             # For more details, c.f. the kernel documentation:
             # https://www.kernel.org/doc/Documentation/cgroups/memory.txt
+            memUsageFile = 'memory.memsw.max_usage_in_bytes'
+            if not os.path.exists(os.path.join(cgroups[MEMORY], memUsageFile)):
+                memUsageFile = 'memory.max_usage_in_bytes'
             try:
-                memUsage = readFile(cgroups[MEMORY], 'memory.memsw.max_usage_in_bytes')
+                memUsage = readFile(cgroups[MEMORY], memUsageFile)
                 memUsage = int(memUsage)
             except IOError as e:
                 if e.errno == 95: # kernel responds with error 95 (operation unsupported) if this is disabled
@@ -323,7 +361,7 @@ class RunExecutor():
         return (cpuTime, memUsage)
 
 
-    def executeRun(self, args, rlimits, outputFileName, myCpuIndex=None, environments={}, runningDir=None):
+    def executeRun(self, args, rlimits, outputFileName, myCpuIndex=None, environments={}, runningDir=None, maxLogfileSize=-1):
         """
         This function executes a given command with resource limits,
         and writes the output to a file.
@@ -352,11 +390,16 @@ class RunExecutor():
 
         logging.debug("executeRun: reading output.")
         outputFile = open(outputFileName, 'rt') # re-open file for reading output
-        output = list(map(Util.decodeToString, outputFile.readlines()[6:])) # first 6 lines are for logging, rest is output of subprocess
+        output = list(map(Util.decodeToString, outputFile.readlines()))
         outputFile.close()
 
         logging.debug("executeRun: analysing output for crash-info.")
         getDebugOutputAfterCrash(output, outputFileName)
+
+        output = reduceFileSize(outputFileName, output, maxLogfileSize)
+        
+        output = output[6:] # first 6 lines are for logging, rest is output of subprocess
+
 
         logging.debug("executeRun: Run execution returns with code {0}, walltime={1}, cputime={2}, memory={3}"
                       .format(returnvalue, wallTime, cpuTime, memUsage))
@@ -369,6 +412,36 @@ class RunExecutor():
         with self.SUB_PROCESSES_LOCK:
             for process in self.SUB_PROCESSES:
                 _killSubprocess(process)
+
+def reduceFileSize(outputFileName, output, maxLogfileSize=-1):
+    """
+    This function shrinks the logfile-content and returns the modified content.
+    We remove only the middle part of a file,
+    the file-start and the file-end remain unchanged.
+    """
+    if maxLogfileSize == -1: return output # disabled, nothing to do
+
+    rest = maxLogfileSize * 1000 * 1000 # as MB, we assume: #char == #byte
+
+    if sum(len(line) for line in output) < rest: return output # too small, nothing to do
+
+    logging.warning("Logfile '{0}' too big. Removing lines.".format(outputFileName))
+
+    half = len(output)/2
+    newOutput = ([],[])
+    # iterate parallel from start and end
+    for lineFront, lineEnd in zip(output[:half], reversed(output[half:])):
+        if len(lineFront) > rest: break
+        newOutput[0].append(lineFront)
+        if len(lineEnd) > rest: break
+        newOutput[1].insert(0,lineEnd)
+        rest = rest - len(lineFront) - len(lineEnd)
+
+    # build new content and write to file
+    output = newOutput[0] + ["\n\n\nWARNING: YOUR LOGFILE WAS TOO LONG, SOME LINES IN THE MIDDLE WERE REMOVED.\n\n\n"] + newOutput[1]
+    writeFile(''.join(output).encode('utf-8'), outputFileName)
+
+    return output
 
 
 def getDebugOutputAfterCrash(output, outputFileName):
@@ -433,11 +506,20 @@ class _OomEventThread(threading.Thread):
             EFD_CLOEXEC = 0x80000 # from <sys/eventfd.h>
             self._efd = libc.eventfd(0, EFD_CLOEXEC) 
 
-            writeFile('{} {}'.format(self._efd, ofd),
-                      cgroup, 'cgroup.event_control')
+            try:
+                writeFile('{} {}'.format(self._efd, ofd),
+                          cgroup, 'cgroup.event_control')
 
-            # If everything worked, disable Kernel-side process killing
-            os.write(ofd, '1')
+                # If everything worked, disable Kernel-side process killing.
+                # This is not allowed if memory.use_hierarchy is enabled,
+                # but we don't care.
+                try:
+                    os.write(ofd, '1')
+                except OSError:
+                    pass
+            except Error as e:
+                os.close(self._efd)
+                raise e
         finally:
             os.close(ofd)
 
@@ -462,8 +544,14 @@ class _OomEventThread(threading.Thread):
                 # We now need to increase the memory limit of this cgroup
                 # to give the process a chance to terminate
                 # 10MB ought to be enough
-                writeFile(str((self._memlimit + 10) * _BYTE_FACTOR * _BYTE_FACTOR),
-                          self._cgroup, 'memory.memsw.limit_in_bytes')
+                limitFile = 'memory.memsw.limit_in_bytes'
+                if not os.path.exists(os.path.join(self._cgroup, limitFile)):
+                    limitFile = 'memory.limit_in_bytes'
+                try:
+                    writeFile(str((self._memlimit + 10) * _BYTE_FACTOR * _BYTE_FACTOR),
+                              self._cgroup, limitFile)
+                except IOError:
+                    logging.warning('Failed to increase memory limit after OOM: error {0} ({1})'.format(e.errno, e.strerror))
 
         finally:
             os.close(self._efd)
@@ -528,6 +616,15 @@ def _killSubprocess(process):
         os.killpg(process.pid, signal.SIGKILL)
     except OSError: # process itself returned and exited before killing
         pass
+
+def _hasSwap():
+    with open('/proc/meminfo', 'r') as meminfo:
+        for line in meminfo:
+            if line.startswith('SwapTotal:'):
+                swap = line.split()[1]
+                if int(swap) == 0:
+                    return False
+    return True
 
 def _findCgroupMount(subsystem=None):
     with open('/proc/mounts', 'rt') as mounts:
@@ -629,7 +726,7 @@ def _removeCgroup(cgroup):
         try:
             os.rmdir(cgroup)
         except OSError:
-            # somethings this fails because the cgroup is still busy, we try again once
+            # sometimes this fails because the cgroup is still busy, we try again once
             os.rmdir(cgroup)
 
 def _initCgroup(cgroupsParents, subsystem):

@@ -23,7 +23,6 @@
  */
 package org.sosy_lab.cpachecker.cpa.lockstatistics;
 
-import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -31,60 +30,27 @@ import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cpa.abm.ABMRestoreStack;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackReducer;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier.LockType;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.LineInfo;
 
 import com.google.common.collect.ImmutableList;
 
 
-public class LockStatisticsLock {
+public class LockStatisticsLock implements Comparable<LockStatisticsLock> {
 
-  public static class LockComparator implements Comparator<LockStatisticsLock> {
-
-    @Override
-    public int compare(LockStatisticsLock pO1, LockStatisticsLock pO2) {
-      int result = 0;
-      if (pO1.variable.equals("")) {
-        result -= 50;
-      }
-      if (pO2.variable.equals("")) {
-        result += 50;
-      }
-      String name1 = pO1.toString();
-      String name2 = pO2.toString();
-      return (result + name1.compareTo(name2));
-    }
-  }
-
-  public static enum LockType {
-    MUTEX,
-    GLOBAL_LOCK,
-    LOCAL_LOCK,
-    SPINLOCK;
-
-    public String toASTString() {
-      return name().toLowerCase();
-    }
-  }
-
-  private final String name;
+  private final LockIdentifier lockId;
   private final ImmutableList<AccessPoint> accessPoints;
-  private final LockType type;
-  private final String variable;
 
   LockStatisticsLock(String n, int l, LockType t, CallstackState s, CallstackState reduced, String v) {
-    name = n;
+    lockId = LockIdentifier.of(n, getCleanName(v), t);
     LinkedList<AccessPoint> tmpAccessPoints = new LinkedList<>();
     tmpAccessPoints.add(new AccessPoint( new LineInfo(l), s, reduced));
     accessPoints = ImmutableList.copyOf(tmpAccessPoints);
-    type = t;
-    variable = getCleanName(v);
   }
 
-  private LockStatisticsLock(String n, LockType t, LinkedList<AccessPoint> points, String v) {
-    name = n;
+  private LockStatisticsLock(LockIdentifier id, LinkedList<AccessPoint> points) {
+    lockId = id;
     accessPoints = ImmutableList.copyOf(points);
-    type = t;
-    variable = getCleanName(v);
   }
 
   public ImmutableList<AccessPoint> getAccessPoints() {
@@ -113,24 +79,28 @@ public class LockStatisticsLock {
 
   @Override
   public LockStatisticsLock clone() {
-    LinkedList<AccessPoint> tmpAccessPoints = new LinkedList<>();
-    for (AccessPoint point : this.accessPoints) {
+    LinkedList<AccessPoint> tmpAccessPoints = new LinkedList<>(accessPoints);
+    /*for (AccessPoint point : this.accessPoints) {
       tmpAccessPoints.add(point.clone());
-    }
-    return new LockStatisticsLock(this.name, this.type, tmpAccessPoints, this.variable);
+    }*/
+    return clone(tmpAccessPoints);
+  }
+
+  private LockStatisticsLock clone(LinkedList<AccessPoint> tmpAccessPoints) {
+    return new LockStatisticsLock(this.lockId, tmpAccessPoints);
   }
 
   public LockStatisticsLock addAccessPointer(AccessPoint accessPoint) {
     LinkedList<AccessPoint> tmpAccessPoints = new LinkedList<>(this.accessPoints);
     tmpAccessPoints.add(accessPoint);
-    return new LockStatisticsLock(this.name, this.type, tmpAccessPoints, this.variable);
+    return clone(tmpAccessPoints);
   }
 
   public LockStatisticsLock removeLastAccessPointer() {
     if(this.accessPoints.size() > 1) { //we have access points after removing
       LinkedList<AccessPoint> tmpAccessPoints = new LinkedList<>(this.accessPoints);
       tmpAccessPoints.removeLast();
-      return new LockStatisticsLock(this.name, this.type, tmpAccessPoints, this.variable);
+      return clone(tmpAccessPoints);
     } else {
       return null;
     }
@@ -138,18 +108,31 @@ public class LockStatisticsLock {
 
   public boolean hasEqualNameAndVariable(LockStatisticsLock lock) {
     //Here we know exactly, that variable is clean, so check equals at once (without getCleanName)
-    return this.name.equals(lock.name) && this.variable.equals(lock.variable);
+    return this.lockId == lock.lockId;
   }
 
   public boolean hasEqualNameAndVariable(String lockName, String variableName) {
     //most of cases, where is used this method, have such variables, as 'var___0', so we need clean it
     //variable is important
-    return (this.name.equals(lockName) && variable.equals(getCleanName(variableName)));
+    return (lockId == LockIdentifier.of(lockName, getCleanName(variableName), LockType.GLOBAL_LOCK));
   }
 
-  public void markOldPoints() {
-    for (AccessPoint accessPoint : accessPoints) {
-      accessPoint.markAsOld();
+  public LockStatisticsLock markOldPoints() {
+    LinkedList<AccessPoint> tmpAccessPoints = new LinkedList<>();
+    boolean changed = false;
+    AccessPoint tmpPoint;
+    for (AccessPoint point : this.accessPoints) {
+      tmpPoint = point.clone();
+      if (point.isNew()) {
+        changed = true;
+      }
+      tmpPoint.markAsOld();
+      tmpAccessPoints.add(tmpPoint);
+    }
+    if (changed) {
+      return clone(tmpAccessPoints);
+    } else {
+      return this;
     }
   }
 
@@ -157,10 +140,8 @@ public class LockStatisticsLock {
   public int hashCode() {
     final int prime = 31;
     int result = 1;
-    result = prime * result + ((variable == null) ? 0 : variable.hashCode());
-    result = prime * result + ((name == null) ? 0 : name.hashCode());
+    result = prime * result + ((lockId == null) ? 0 : lockId.hashCode());
     result = prime * result + accessPoints.size();
-    result = prime * result + ((type == null) ? 0 : type.hashCode());
     //result = prime * result + ((accessPoints == null) ? 0 : accessPoints.hashCode());
     return result;
   }
@@ -177,24 +158,14 @@ public class LockStatisticsLock {
       return false;
     }
     LockStatisticsLock other = (LockStatisticsLock) obj;
-    if (variable == null) {
-      if (other.variable != null) {
+    if (lockId == null) {
+      if (other.lockId != null) {
         return false;
       }
-    } else if (!variable.equals(other.variable)) {
-      return false;
-    }
-    if (name == null) {
-      if (other.name != null) {
-        return false;
-      }
-    } else if (!name.equals(other.name)) {
+    } else if (!lockId.equals(other.lockId)) {
       return false;
     }
     if (accessPoints.size() != other.accessPoints.size()) {
-      return false;
-    }
-    if (type != other.type) {
       return false;
     }
     return true;
@@ -202,7 +173,7 @@ public class LockStatisticsLock {
 
   @Override
   public String toString() {
-    return name + ( variable != "" ? ("(" + variable + ")") : "" )  + "[" + accessPoints.size() + "]";
+    return lockId.toString()  + "[" + accessPoints.size() + "]";
   }
 
   public boolean existsIn(List<LockStatisticsLock> locks) {
@@ -215,8 +186,9 @@ public class LockStatisticsLock {
   }
 
   public LockStatisticsLock addRecursiveAccessPointer(int pNum, AccessPoint pAccessPoint) {
-    LockStatisticsLock tmpLock = this.clone();
+    LockStatisticsLock tmpLock = this;
     for (int i = 0; i < pNum; i++) {
+      //addAccessCounter() also clones
       tmpLock = tmpLock.addAccessPointer(pAccessPoint);
     }
     return tmpLock;
@@ -246,7 +218,7 @@ public class LockStatisticsLock {
       }
     }
     if (changed) {
-      return new LockStatisticsLock(name, type, newAccessPoints, variable);
+      return clone(newAccessPoints);
     } else {
       return this;
     }
@@ -268,7 +240,7 @@ public class LockStatisticsLock {
       }
     }
     if (isChanged) {
-      return new LockStatisticsLock(name, type, newAccessPoints, variable);
+      return clone(newAccessPoints);
     } else {
       return this;
     }
@@ -286,5 +258,14 @@ public class LockStatisticsLock {
       result += (state == null ? 0 : state.getDepth());
     }
     return result;
+  }
+
+  @Override
+  public int compareTo(LockStatisticsLock pO) {
+    int result = this.lockId.compareTo(pO.lockId);
+    if (result != 0) {
+      return result;
+    }
+    return this.accessPoints.size() - pO.accessPoints.size();
   }
 }

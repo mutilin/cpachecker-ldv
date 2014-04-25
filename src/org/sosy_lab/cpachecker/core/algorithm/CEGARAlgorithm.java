@@ -44,15 +44,21 @@ import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
+import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Refiner;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
+import org.sosy_lab.cpachecker.cpa.abm.ABMTransferRelation;
+import org.sosy_lab.cpachecker.cpa.arg.ARGState;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.USReachedSet;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.InvalidComponentException;
 import org.sosy_lab.cpachecker.exceptions.RefinementFailedException;
+import org.sosy_lab.cpachecker.util.AbstractStates;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
@@ -221,27 +227,33 @@ public class CEGARAlgorithm implements Algorithm, StatisticsProvider {
   public boolean run(ReachedSet reached) throws CPAException, InterruptedException {
     boolean isComplete        = true;
     int initialReachedSetSize = reached.size();
-    
+
     stats.totalTimer.start();
     try {
       boolean refinementSuccessful;
       do {
         refinementSuccessful = false;
-        
+
         // run algorithm
         isComplete &= algorithm.run(reached);
 
         // if there is any target state do refinement
-        if (refinementNecessary(reached)) {
+        //if (refinementNecessary(reached)) {
 
           refinementSuccessful = refine(reached);
 
           // assert that reached set is free of target states,
-          // if refinement was successful and initial reached set was empty (i.e. stopAfterError=true) 
+          // if refinement was successful and initial reached set was empty (i.e. stopAfterError=true)
           if (refinementSuccessful && initialReachedSetSize == 1) {
             assert !from(reached).anyMatch(IS_TARGET_STATE);
+            ((ABMTransferRelation)(((CPAAlgorithm)algorithm).cpa).getTransferRelation()).clearCaches();
+            ARGState firstState = (ARGState) reached.getFirstState();
+            CFANode firstNode = AbstractStates.extractLocation(firstState);
+            Precision precision = reached.getPrecision(firstState);
+            ((USReachedSet)reached).clear();
+            reached.add((((CPAAlgorithm)algorithm).cpa).getInitialState(firstNode), precision);
           }
-        }
+        //}
 
       } while (refinementSuccessful);
 

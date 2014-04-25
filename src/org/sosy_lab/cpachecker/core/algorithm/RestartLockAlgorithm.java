@@ -26,7 +26,6 @@ package org.sosy_lab.cpachecker.core.algorithm;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Strings.isNullOrEmpty;
 
-import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -49,6 +48,7 @@ import org.sosy_lab.common.configuration.FileOption;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
+import org.sosy_lab.common.io.Path;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.CPABuilder;
@@ -68,6 +68,7 @@ import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.CPAs;
 
 import com.google.common.base.Strings;
+import com.google.common.collect.Iterators;
 
 @Options(prefix="restartAlgorithm")
 public class RestartLockAlgorithm implements Algorithm, StatisticsProvider {
@@ -137,7 +138,7 @@ public class RestartLockAlgorithm implements Algorithm, StatisticsProvider {
 
   @Option(required=true, description = "list of files with configurations to use")
   @FileOption(FileOption.Type.REQUIRED_INPUT_FILE)
-  private List<File> configFiles;
+  private List<Path> configFiles;
 
   private final LogManager logger;
   private final ShutdownNotifier shutdownNotifier;
@@ -182,13 +183,13 @@ public class RestartLockAlgorithm implements Algorithm, StatisticsProvider {
     assert mainFunction != null : "Location information needed";
 
     @Nullable ConfigurableProgramAnalysis currentCpa = null;
-    Iterator<File> configFilesIterator = configFiles.iterator();
+    Iterator<Path> configFilesIterator = Iterators.peekingIterator(configFiles.iterator());
     ShutdownNotifier singleShutdownNotifier = ShutdownNotifier.createWithParent(shutdownNotifier);
     while (configFilesIterator.hasNext()) {
       stats.totalTime.start();
       ReachedSet currentReached;
       try {
-        File singleConfigFileName = configFilesIterator.next();
+        Path singleConfigFileName = configFilesIterator.next();
 
         try {
           Triple<Algorithm, ConfigurableProgramAnalysis, ReachedSet> currentAlg = createNextAlgorithm(singleConfigFileName, mainFunction, singleShutdownNotifier, isFirst);
@@ -262,7 +263,7 @@ public class RestartLockAlgorithm implements Algorithm, StatisticsProvider {
     return false;
   }
 
-  private Triple<Algorithm, ConfigurableProgramAnalysis, ReachedSet> createNextAlgorithm(File singleConfigFileName, CFANode mainFunction
+  private Triple<Algorithm, ConfigurableProgramAnalysis, ReachedSet> createNextAlgorithm(Path singleConfigFileName, CFANode mainFunction
       , ShutdownNotifier singleShutdownNotifier, boolean isFirst) throws InvalidConfigurationException, CPAException, InterruptedException, IOException {
 
     ReachedSet reached;
@@ -313,12 +314,19 @@ public class RestartLockAlgorithm implements Algorithm, StatisticsProvider {
   private Algorithm createAlgorithm(final ConfigurableProgramAnalysis cpa, Configuration pConfig, ShutdownNotifier pShutdownNotifier,
       boolean isFirst) throws InvalidConfigurationException, CPAException {
     logger.log(Level.FINE, "Creating algorithms");
+    Algorithm algorithm;
+
 
     if (isFirst) {
-      return new CPALocalSaveAlgorithm(cpa, logger, pConfig, pShutdownNotifier);
+      algorithm =  new CPALocalSaveAlgorithm(cpa, logger, pConfig, pShutdownNotifier);
     } else {
-      return new CPAAlgorithm(cpa, logger, pConfig, pShutdownNotifier);
+      algorithm =  new CPAAlgorithm(cpa, logger, pConfig, pShutdownNotifier);
     }
+    String cegar = pConfig.getProperty("analysis.algorithm.CEGAR");
+    if (cegar != null && cegar.equals("true")) {
+      algorithm = new CEGARAlgorithm(algorithm, cpa, pConfig, logger);
+    }
+    return algorithm;
   }
 
   private void printReachedSet(Map<CFANode, LocalState> reachedStatistics) {

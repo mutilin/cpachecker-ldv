@@ -24,6 +24,7 @@
 package org.sosy_lab.cpachecker.cpa.explicit.refiner;
 
 import java.io.PrintStream;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -41,8 +42,11 @@ import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.ast.AIdExpression;
 import org.sosy_lab.cpachecker.cfa.ast.IAExpression;
+import org.sosy_lab.cpachecker.cfa.ast.IASimpleDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.IAStatement;
 import org.sosy_lab.cpachecker.cfa.ast.IAssignment;
+import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpressionCollectorVisitor;
 import org.sosy_lab.cpachecker.cfa.ast.c.CVariableDeclaration;
 import org.sosy_lab.cpachecker.cfa.model.ADeclarationEdge;
 import org.sosy_lab.cpachecker.cfa.model.AStatementEdge;
@@ -51,19 +55,23 @@ import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdgeType;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionReturnEdge;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.ShutdownNotifier;
+import org.sosy_lab.cpachecker.core.defaults.ForwardingTransferRelation;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.conditions.path.AssignmentsInPathCondition.AssignmentsInPathConditionState;
+import org.sosy_lab.cpachecker.cpa.explicit.ExplicitState.MemoryLocation;
 import org.sosy_lab.cpachecker.cpa.explicit.refiner.utils.ExplicitInterpolator;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.RefinementFailedException;
 import org.sosy_lab.cpachecker.exceptions.RefinementFailedException.Reason;
 import org.sosy_lab.cpachecker.util.AbstractStates;
+import org.sosy_lab.cpachecker.util.CFAUtils.Loop;
 
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Lists;
@@ -82,6 +90,10 @@ public class ExplicitInterpolationBasedExplicitRefiner implements Statistics {
   @Option(description="whether or not to avoid restarting at assume edges after a refinement")
   private boolean avoidAssumes = false;
 
+  @Option(description="whether or not to ignore the semantics of loop-leaving-assume-edges during interpolation - "
+      + "this avoids to have loop-counters in the interpolant")
+  private boolean ignoreAssumptionsInLoops = true;
+
   /**
    * the offset in the path from where to cut-off the subtree, and restart the analysis
    */
@@ -91,6 +103,16 @@ public class ExplicitInterpolationBasedExplicitRefiner implements Statistics {
    * a reference to the assignment-counting state, to make the precision increment aware of thresholds
    */
   private AssignmentsInPathConditionState assignments = null;
+
+  /**
+   * the set of assume-edges that leave loop structures
+   */
+  private Set<CAssumeEdge> loopLeavingAssumes = new HashSet<>();
+
+  /**
+   * the set of memory locations appearing in the loop-leaving-assume-edges
+   */
+  private Set<MemoryLocation> loopLeavingMemoryLocations = new HashSet<>();
 
   // statistics
   private int numberOfInterpolations        = 0;
@@ -109,9 +131,44 @@ public class ExplicitInterpolationBasedExplicitRefiner implements Statistics {
     logger           = pLogger;
     cfa              = pCfa;
     shutdownNotifier = pShutdownNotifier;
+
+    initializeLoopInformation();
   }
 
-  protected Multimap<CFANode, String> determinePrecisionIncrement(ARGPath errorPath)
+  /**
+   * This method initializes the loop-information which is used during interpolation.
+   */
+  private void initializeLoopInformation() {
+    for(Loop l : cfa.getLoopStructure().get().values()) {
+      for(CFAEdge currentEdge : l.getOutgoingEdges()) {
+        if(currentEdge instanceof CAssumeEdge) {
+          loopLeavingAssumes.add((CAssumeEdge)currentEdge);
+        }
+      }
+    }
+
+    for(CAssumeEdge assumeEdge : loopLeavingAssumes) {
+      CIdExpressionCollectorVisitor collector = new CIdExpressionCollectorVisitor();
+      assumeEdge.getExpression().accept(collector);
+
+      for (CIdExpression id : collector.getReferencedIdExpressions()) {
+        String scope = ForwardingTransferRelation.isGlobal(id) ? null : assumeEdge.getPredecessor().getFunctionName();
+
+        if(scope == null) {
+          loopLeavingMemoryLocations.add(MemoryLocation.valueOf(id.getName()));
+        } else {
+          loopLeavingMemoryLocations.add(MemoryLocation.valueOf(scope, id.getName(), 0));
+        }
+      }
+    }
+
+    // clear the set of assume edges if the respective option is not set
+    if(!ignoreAssumptionsInLoops) {
+      loopLeavingAssumes.clear();
+    }
+  }
+
+  protected Multimap<CFANode, MemoryLocation> determinePrecisionIncrement(ARGPath errorPath)
       throws CPAException, InterruptedException {
     timerInterpolation.start();
 
@@ -119,22 +176,22 @@ public class ExplicitInterpolationBasedExplicitRefiner implements Statistics {
     assignments                           = AbstractStates.extractStateByType(errorPath.getLast().getFirst(),
         AssignmentsInPathConditionState.class);
 
-    ExplicitInterpolator interpolator     = new ExplicitInterpolator(logger, shutdownNotifier, cfa);
-    Map<String, Long> currentInterpolant  = new HashMap<>();
-    Multimap<CFANode, String> increment   = HashMultimap.create();
+    ExplicitInterpolator interpolator             = new ExplicitInterpolator(logger, shutdownNotifier, cfa,
+                                                      loopLeavingAssumes, loopLeavingMemoryLocations);
+    Map<MemoryLocation, Long> currentInterpolant  = new HashMap<>();
+    Multimap<CFANode, MemoryLocation> increment   = HashMultimap.create();
 
     List<CFAEdge> cfaTrace = Lists.newArrayList();
     for(Pair<ARGState, CFAEdge> elem : errorPath) {
       cfaTrace.add(elem.getSecond());
     }
-
     for (int i = 0; i < errorPath.size(); i++) {
       shutdownNotifier.shutdownIfNecessary();
       CFAEdge currentEdge = errorPath.get(i).getSecond();
 
       if (currentEdge instanceof BlankEdge) {
         // add the current interpolant to the increment
-        for (String variableName : currentInterpolant.keySet()) {
+        for (MemoryLocation variableName : currentInterpolant.keySet()) {
           addToPrecisionIncrement(increment, currentEdge, variableName);
         }
         continue;
@@ -144,8 +201,8 @@ public class ExplicitInterpolationBasedExplicitRefiner implements Statistics {
       }
 
       // do interpolation
-      Map<String, Long> inputInterpolant = new HashMap<>(currentInterpolant);
-      Set<Pair<String, Long>> interpolant = interpolator.deriveInterpolant(cfaTrace, i, inputInterpolant);
+      Map<MemoryLocation, Long> inputInterpolant = new HashMap<>(currentInterpolant);
+      Set<Pair<MemoryLocation, Long>> interpolant = interpolator.deriveInterpolant(cfaTrace, i, inputInterpolant);
       numberOfInterpolations += interpolator.getNumberOfInterpolations();
 
       // early stop once we are past the first statement that made a path feasible for the first time
@@ -153,7 +210,7 @@ public class ExplicitInterpolationBasedExplicitRefiner implements Statistics {
         timerInterpolation.stop();
         return increment;
       }
-      for (Pair<String, Long> element : interpolant) {
+      for (Pair<MemoryLocation, Long> element : interpolant) {
         if (element.getSecond() == null) {
           currentInterpolant.remove(element.getFirst());
         } else {
@@ -168,7 +225,7 @@ public class ExplicitInterpolationBasedExplicitRefiner implements Statistics {
       }
 
       // add the current interpolant to the increment
-      for (String variableName : currentInterpolant.keySet()) {
+      for (MemoryLocation variableName : currentInterpolant.keySet()) {
         if (interpolationOffset == -1) {
           interpolationOffset = i + 1;
         }
@@ -178,6 +235,7 @@ public class ExplicitInterpolationBasedExplicitRefiner implements Statistics {
     }
 
     timerInterpolation.stop();
+
     return increment;
   }
 
@@ -188,8 +246,10 @@ public class ExplicitInterpolationBasedExplicitRefiner implements Statistics {
    * @param currentEdge the current edge for which to add a new variable
    * @param variableName the name of the variable to add to the increment at the given edge
    */
-  private void addToPrecisionIncrement(Multimap<CFANode, String> increment, CFAEdge currentEdge, String variableName) {
-    if(assignments == null || !assignments.variableExceedsThreshold(variableName)) {
+  private void addToPrecisionIncrement(Multimap<CFANode, MemoryLocation> increment, CFAEdge currentEdge, MemoryLocation variableName) {
+    if(assignments == null ||
+        (assignments.variableExceedsSoftThreshold(variableName.getAsSimpleString()) &&
+            !assignments.variableExceedsHardThreshold(variableName.getAsSimpleString()))) {
       increment.put(currentEdge.getSuccessor(), variableName);
     }
   }
@@ -201,9 +261,9 @@ public class ExplicitInterpolationBasedExplicitRefiner implements Statistics {
    * @param functionName the name of the function for which to remove variables
    * @return the current interpolant with the respective variables removed
    */
-  private Map<String, Long> clearInterpolant(Map<String, Long> currentInterpolant, String functionName) {
-    for (Iterator<String> variableNames = currentInterpolant.keySet().iterator(); variableNames.hasNext(); ) {
-      if (variableNames.next().startsWith(functionName + "::")) {
+  private Map<MemoryLocation, Long> clearInterpolant(Map<MemoryLocation, Long> currentInterpolant, String functionName) {
+    for (Iterator<MemoryLocation> variableNames = currentInterpolant.keySet().iterator(); variableNames.hasNext(); ) {
+      if (variableNames.next().isOnFunctionStack(functionName)) {
         variableNames.remove();
       }
     }
@@ -220,7 +280,7 @@ public class ExplicitInterpolationBasedExplicitRefiner implements Statistics {
    * @return the new refinement root
    * @throws RefinementFailedException if no refinement root can be determined
    */
-  Pair<ARGState, CFAEdge> determineRefinementRoot(ARGPath errorPath, Multimap<CFANode, String> increment,
+  Pair<ARGState, CFAEdge> determineRefinementRoot(ARGPath errorPath, Multimap<CFANode, MemoryLocation> increment,
       boolean isRepeatedRefinement) throws RefinementFailedException {
 
     if(interpolationOffset == -1) {
@@ -229,7 +289,6 @@ public class ExplicitInterpolationBasedExplicitRefiner implements Statistics {
 
     // if doing lazy abstraction, use the node closest to the root node where new information is present
     if (doLazyAbstraction) {
-
       // try to find a more suitable cut-off point when we deal with a repeated refinement or
       // cut-off is an assume edge, and this should be avoided
       if (isRepeatedRefinement || (avoidAssumes && cutOffIsAssumeEdge(errorPath))) {
@@ -241,7 +300,7 @@ public class ExplicitInterpolationBasedExplicitRefiner implements Statistics {
         }
 
         // check each edge, if it assigns a "relevant" variable, if so, use that as new refinement root
-        Set<String> releventVariables = new HashSet<>(increment.values());
+        Collection<String> releventVariables = convertToIdentifiers(increment.values());
         for (Pair<ARGState, CFAEdge> currentElement : trace) {
           if(edgeAssignsVariable(currentElement.getSecond(), releventVariables)) {
             return errorPath.get(errorPath.indexOf(currentElement) + 1);
@@ -256,6 +315,22 @@ public class ExplicitInterpolationBasedExplicitRefiner implements Statistics {
     else {
       return errorPath.get(1);
     }
+  }
+
+  /**
+   * This method translates a collection of memory locations to a collection of variable identifiers.
+   *
+   * @param memoryLocations the collection of memory locations
+   * @return the set of variable identifiers
+   */
+  private Collection<String> convertToIdentifiers(Collection<MemoryLocation> memoryLocations) {
+    Set<String> identifiers = new HashSet<>();
+
+    for(MemoryLocation memoryLocation : memoryLocations) {
+      identifiers.add(memoryLocation.getAsSimpleString());
+    }
+
+    return identifiers;
   }
 
   /**
@@ -275,7 +350,7 @@ public class ExplicitInterpolationBasedExplicitRefiner implements Statistics {
    * @param variableNames the collection of variables to check for
    * @return true, if any of the given variables is assigned in the given edge
    */
-  private boolean edgeAssignsVariable(CFAEdge currentEdge, Set<String> variableNames) {
+  private boolean edgeAssignsVariable(CFAEdge currentEdge, Collection<String> variableNames) {
     switch (currentEdge.getEdgeType()) {
       case StatementEdge:
       case DeclarationEdge:
@@ -287,6 +362,9 @@ public class ExplicitInterpolationBasedExplicitRefiner implements Statistics {
             return true;
           }
         }
+        break;
+
+      default:
         break;
     }
 
@@ -300,14 +378,19 @@ public class ExplicitInterpolationBasedExplicitRefiner implements Statistics {
    * @param variableNames the collection of variables to check for
    * @return true, if any of the given variables is assigned in the given edge
    */
-  private boolean isAssigningEdge(CFAEdge currentEdge, Set<String> variableNames) {
+  private boolean isAssigningEdge(CFAEdge currentEdge, Collection<String> variableNames) {
     if (currentEdge.getEdgeType() == CFAEdgeType.StatementEdge) {
       IAStatement statement = ((AStatementEdge)currentEdge).getStatement();
 
       if (statement instanceof IAssignment) {
         IAExpression assignedVariable = ((IAssignment)statement).getLeftHandSide();
-        if ((assignedVariable instanceof AIdExpression) && variableNames.contains(((AIdExpression)assignedVariable).getName())) {
-          return true;
+
+        if (assignedVariable instanceof AIdExpression) {
+          IASimpleDeclaration declaration = ((AIdExpression)assignedVariable).getDeclaration();
+
+          if(declaration instanceof CVariableDeclaration) {
+            return variableNames.contains(((CVariableDeclaration)declaration).getQualifiedName());
+          }
         }
       }
     }
@@ -315,10 +398,7 @@ public class ExplicitInterpolationBasedExplicitRefiner implements Statistics {
     else if (currentEdge.getEdgeType() == CFAEdgeType.DeclarationEdge) {
       ADeclarationEdge declEdge = ((ADeclarationEdge)currentEdge);
       if (declEdge.getDeclaration() instanceof CVariableDeclaration) {
-        String declaredVariable = ((CVariableDeclaration)declEdge.getDeclaration()).getQualifiedName();
-        if (variableNames.contains(declaredVariable)) {
-          return true;
-        }
+        return variableNames.contains(((CVariableDeclaration)declEdge.getDeclaration()).getQualifiedName());
       }
     }
 

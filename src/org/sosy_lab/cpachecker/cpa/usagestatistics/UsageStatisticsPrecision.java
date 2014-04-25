@@ -143,10 +143,14 @@ public class UsageStatisticsPrecision implements WrapperPrecision {
     if (replaceType.equals(UsageStatisticsPrecision.class)) {
       return newPrecision;
     } else if (replaceType.equals(wrappedPrecision.getClass())) {
-      return new UsageStatisticsPrecision(newPrecision);
+      UsageStatisticsPrecision result = new UsageStatisticsPrecision(newPrecision);
+      result.localStatistics = this.localStatistics;
+      return result;
     } else if (wrappedPrecision instanceof WrapperPrecision) {
-      return
-        new UsageStatisticsPrecision(((WrapperPrecision) wrappedPrecision).replaceWrappedPrecision(newPrecision, replaceType));
+      UsageStatisticsPrecision result = new UsageStatisticsPrecision(((WrapperPrecision) wrappedPrecision).replaceWrappedPrecision(newPrecision, replaceType));
+      result.localStatistics = this.localStatistics;
+      return result;
+
     } else {
       return null;
     }

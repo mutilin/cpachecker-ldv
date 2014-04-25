@@ -26,6 +26,7 @@ package org.sosy_lab.cpachecker.cpa.automaton;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
 
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 
@@ -41,7 +42,7 @@ public class Automaton {
   private final AutomatonInternalState initState;
 
   public Automaton(String pName, Map<String, AutomatonVariable> pVars, List<AutomatonInternalState> pStates,
-      String pInit) throws InvalidAutomatonException {
+      String pInitialStateName) throws InvalidAutomatonException {
     this.name = pName;
     this.initVars = pVars;
     this.states = pStates;
@@ -53,9 +54,9 @@ public class Automaton {
       }
     }
 
-    initState = statesMap.get(pInit);
+    initState = statesMap.get(pInitialStateName);
     if (initState == null) {
-      throw new InvalidAutomatonException("Inital state " + pInit + " not found in automaton " + pName);
+      throw new InvalidAutomatonException("Inital state " + pInitialStateName + " not found in automaton " + pName);
     }
 
     // set the FollowStates of all Transitions
@@ -120,7 +121,7 @@ public class Automaton {
   }
 
   private static String formatTransition(AutomatonInternalState sourceState, AutomatonTransition t) {
-    return String.format("%d -> %d [label=\"" /*+ pattern */ + "\"]\n", sourceState.getStateId(), t.getFollowState().getStateId());
+    return String.format("%d -> %d [label=\"%s\"]\n", sourceState.getStateId(), t.getFollowState().getStateId(), t.toString().replaceAll("\"", Matcher.quoteReplacement("\\\"")));
   }
 
 

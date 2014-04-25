@@ -283,7 +283,7 @@ public class LocalTransferRelation implements TransferRelation {
           int rightDereference = findDereference(right.getExpressionType());
           AbstractIdentifier rightId = createId((CExpression)right, rightDereference);
           //assume(pSuccessor, leftId, rightId);
-          if (leftId.isGlobal()) {
+          if (leftId.isGlobal() && !(leftId instanceof SingleIdentifier && LocalCPA.localVariables.contains(((SingleIdentifier)leftId).getName()))) {
             //Variable is global, not memory location!
             //So, we should set the type of 'right' to global
             pSuccessor.set(rightId, DataType.GLOBAL);

@@ -30,7 +30,9 @@ import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustment;
 import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
 import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSetView;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
+import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
+import org.sosy_lab.cpachecker.util.AbstractStates;
 
 import com.google.common.base.Functions;
 import com.google.common.base.Preconditions;
@@ -63,13 +65,16 @@ class UsageStatisticsPrecisionAdjustment implements PrecisionAdjustment {
     Precision newWrappedPrecision = unwrappedResult.getSecond();
     Action action = unwrappedResult.getThird();
 
+    PredicateAbstractState state = AbstractStates.extractStateByType(newElement, PredicateAbstractState.class);
+    if (state == null || !state.getAbstractionFormula().isFalse() && state.isAbstractionState()) {
+      element.saveUnsafesInContainer();
+    }
+
     if ((oldElement == newElement) && (oldWrappedPrecision == newWrappedPrecision)) {
       // nothing has changed
       return Triple.of(pElement, oldPrecision, action);
     }
-
-    AbstractState resultElement = new UsageStatisticsState(newElement);
-
+    AbstractState resultElement = element.clone(newElement);
     UsageStatisticsPrecision newPrecision = ((UsageStatisticsPrecision)oldPrecision).clone(newWrappedPrecision);
     return Triple.of(resultElement, (Precision)newPrecision, action);
   }

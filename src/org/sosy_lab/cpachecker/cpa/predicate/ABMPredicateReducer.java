@@ -25,9 +25,9 @@ package org.sosy_lab.cpachecker.cpa.predicate;
 
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.logging.Level;
 
 import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.Pair;
@@ -35,6 +35,7 @@ import org.sosy_lab.common.Timer;
 import org.sosy_lab.common.collect.PersistentMap;
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionEntryNode;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
@@ -258,19 +259,19 @@ public class ABMPredicateReducer implements Reducer {
 
     private void computeView() {
       if (evaluatedPredicateMap == null) {
-        ReducedPredicatePrecision lExpandedPredicatePrecision = null;
+        /*ReducedPredicatePrecision lExpandedPredicatePrecision = null;
         if (expandedPredicatePrecision instanceof ReducedPredicatePrecision) {
           lExpandedPredicatePrecision = (ReducedPredicatePrecision) expandedPredicatePrecision;
-        }
+        }*/
 
         evaluatedGlobalPredicates =
             ImmutableSet.copyOf(relevantComputer.getRelevantPredicates(context,
                 rootPredicatePrecision.getGlobalPredicates()));
 
         ImmutableSetMultimap.Builder<CFANode, AbstractionPredicate> pmapBuilder = ImmutableSetMultimap.builder();
-        Set<CFANode> keySet =
-            lExpandedPredicatePrecision == null ? rootPredicatePrecision.getLocalPredicates().keySet()
-                : lExpandedPredicatePrecision.approximatePredicateMap().keySet();
+        Set<CFANode> keySet = rootPredicatePrecision.getLocalPredicates().keySet();
+            /*lExpandedPredicatePrecision == null ? rootPredicatePrecision.getLocalPredicates().keySet()
+                : lExpandedPredicatePrecision.approximatePredicateMap().keySet();*/
         for (CFANode node : keySet) {
           if (context.getNodes().contains(node)) {
             // TODO handle location-instance-specific predicates
@@ -283,6 +284,17 @@ public class ABMPredicateReducer implements Reducer {
 
         evaluatedPredicateMap = pmapBuilder.build();
       }
+    }
+
+    @Override
+    public ReducedPredicatePrecision mergeWith(PredicatePrecision other) {
+      PredicatePrecision merged;
+      if (other instanceof ReducedPredicatePrecision) {
+        merged = ((ReducedPredicatePrecision) other).getRootPredicatePrecision().mergeWith(this.getRootPredicatePrecision());
+      } else {
+        merged = other.mergeWith(this.getRootPredicatePrecision());
+      }
+      return new ReducedPredicatePrecision(merged, context);
     }
 
     private SetMultimap<CFANode, AbstractionPredicate> approximatePredicateMap() {
@@ -310,19 +322,26 @@ public class ABMPredicateReducer implements Reducer {
 
     @Override
     public Set<AbstractionPredicate> getPredicates(CFANode loc, Integer locInstance) {
-      if (!context.getNodes().contains(loc)) {
+      /*if (!context.getNodes().contains(loc)) {
         logger.log(Level.WARNING, context, "was left in an unexpected way. Analysis might be unsound.");
-      }
+      }*/
 
       if (evaluatedPredicateMap != null) {
         Set<AbstractionPredicate> result = evaluatedPredicateMap.get(loc);
         if (result.isEmpty()) {
           result = evaluatedGlobalPredicates;
         }
+        String funcName = context.getCallNode().getFunctionName();
+        result = new HashSet<>(result); //This is ImmutableSet
+        result.addAll(rootPredicatePrecision.getFunctionPredicates().get(funcName));
+        if (loc instanceof CFunctionEntryNode) {
+          //Evaluated map skips predicates, which is relevant to next function
+          result.addAll(rootPredicatePrecision.getLocalPredicates().get(loc));
+        }
         return result;
       } else {
-        Set<AbstractionPredicate> result =
-            relevantComputer.getRelevantPredicates(context, rootPredicatePrecision.getPredicates(loc, locInstance));
+        Set<AbstractionPredicate> result = rootPredicatePrecision.getPredicates(loc, locInstance);
+           // relevantComputer.getRelevantPredicates(context, rootPredicatePrecision.getPredicates(loc, locInstance));
         if (result.isEmpty()) {
           result = relevantComputer.getRelevantPredicates(context, rootPredicatePrecision.getGlobalPredicates());
         }

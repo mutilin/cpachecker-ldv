@@ -68,6 +68,7 @@ import org.sosy_lab.cpachecker.cpa.callstack.CallstackTransferRelation;
 import org.sosy_lab.cpachecker.cpa.local.LocalState;
 import org.sosy_lab.cpachecker.cpa.local.LocalState.DataType;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsPrecision;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.BinderFunctionInfo.LinkerInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.EdgeInfo.EdgeType;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
@@ -78,7 +79,9 @@ import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.GeneralIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.IdentifierCreator;
+import org.sosy_lab.cpachecker.util.identifiers.LocalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
+import org.sosy_lab.cpachecker.util.identifiers.StructureIdentifier;
 
 @Options(prefix="cpa.usagestatistics")
 public class UsageStatisticsTransferRelation implements TransferRelation {
@@ -86,6 +89,9 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
   private final TransferRelation wrappedTransfer;
   private final UsageStatisticsCPAStatistics statistics;
   private final ExpressionHandler handler;
+
+  @Option(description = "variables, which will not be saved in statistics")
+  private Set<String> skippedvariables = null;
 
   @Option(description = "functions, which we don't analize")
   private Set<String> skippedfunctions = null;
@@ -100,10 +106,6 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
   private Map<String, BinderFunctionInfo> binderFunctionInfo;
   private final LogManager logger;
-
-  /*int globalAdress = 0;
-  int localAdress = 0;
-  int structAdress = 0;*/
 
   public UsageStatisticsTransferRelation(TransferRelation pWrappedTransfer,
       Configuration config, LogManager pLogger, UsageStatisticsCPAStatistics s, CallstackTransferRelation transfer) throws InvalidConfigurationException {
@@ -177,12 +179,13 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     }
 
     AbstractState oldWrappedState = oldState.getWrappedState();
-    oldState = handleEdge(pPrecision, oldState, pCfaEdge);
+    UsageStatisticsState newState = oldState.clone();
+    newState = handleEdge(pPrecision, newState, pCfaEdge);
     Collection<? extends AbstractState> newWrappedStates = wrappedTransfer.getAbstractSuccessors(oldWrappedState, pPrecision.getWrappedPrecision(), currentEdge);
     for (AbstractState newWrappedState : newWrappedStates) {
-      UsageStatisticsState newState = oldState.clone(newWrappedState);
-      if (newState != null) {
-        results.add(newState);
+      UsageStatisticsState resultState = newState.clone(newWrappedState);
+      if (resultState != null) {
+        results.add(resultState);
       }
     }
   }
@@ -249,6 +252,9 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       , UsageStatisticsPrecision pPrecision, CFunctionCallEdge edge) throws HandleCodeException {
     CStatement statement = edge.getRawAST().get();
     String functionName = edge.getSuccessor().getFunctionName();
+    /*if (functionName.equals("sync")) {
+      System.out.println("sync function");
+    }*/
     if (abortfunctions != null && abortfunctions.contains(functionName)) {
       pNewState = null;
       logger.log(Level.FINEST, functionName + " is abort function and was skipped");
@@ -452,23 +458,55 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     Map<GeneralIdentifier, DataType> localInfo = pPrecision.get(node);
 
     if (localInfo != null && LocalState.getType(localInfo, singleId) == DataType.LOCAL) {
-      /*if (id.toString().contains("&")) {
-        if (id instanceof GlobalVariableIdentifier)
-          globalAdress++;
-        else if (id instanceof LocalVariableIdentifier)
-          localAdress++;
-        else if (id instanceof StructureIdentifier)
-          structAdress++;
-        else
-          System.out.println(id.toString());
-        System.out.println(globalAdress + " : " + localAdress + " : " + structAdress);
-      }*/
-      logger.log(Level.FINE, singleId + " is considered to be local, so it wasn't add to statistics");
+      logger.log(Level.FINER, singleId + " is considered to be local, so it wasn't add to statistics");
       return;
     }
 
     CallstackState fullCallstack = pPrecision.retrieveWrappedPrecision(LockStatisticsPrecision.class).getPreciseState();
-    statistics.add(singleId, access, state, eType, line, fullCallstack);
+
+    if (fullCallstack == null) {
+      //No ABM, so get real callstack
+      fullCallstack = AbstractStates.extractStateByType(state, CallstackState.class);
+    }
+
+    if (state.containsLinks(singleId)) {
+      singleId = (SingleIdentifier) state.getLinks(id);
+    }
+
+    if (skippedvariables != null && skippedvariables.contains(singleId.getName())) {
+      return;
+    } else if (skippedvariables != null && singleId instanceof StructureIdentifier) {
+      AbstractIdentifier owner = singleId;
+      while (owner instanceof StructureIdentifier) {
+        owner = ((StructureIdentifier)owner).getOwner();
+        if (owner instanceof SingleIdentifier && skippedvariables.contains(((SingleIdentifier)owner).getName())) {
+          return;
+        }
+      }
+    }
+
+    if (singleId instanceof LocalVariableIdentifier && singleId.getDereference() <= 0) {
+      //we don't save in statistics ordinary local variables
+      return;
+    }
+    if (singleId instanceof StructureIdentifier && !singleId.isGlobal() && !singleId.isPointer()) {
+      //skips such cases, as 'a.b'
+      return;
+    }
+    if (singleId instanceof StructureIdentifier) {
+      singleId = ((StructureIdentifier)singleId).toStructureFieldIdentifier();
+    }
+    logger.log(Level.FINER, "Add id " + singleId + " to unsafe statistics");
+    LockStatisticsState lockState = AbstractStates.extractStateByType(state, LockStatisticsState.class);
+    logger.log(Level.FINEST, "Its locks are: " + lockState);
+
+    //We can't get line from location, because it is old state
+    LineInfo lineInfo = new LineInfo(line);
+    EdgeInfo info = new EdgeInfo(eType);
+
+    UsageInfo usage = new UsageInfo(access, lineInfo, info, lockState, fullCallstack);
+
+    state.addUsage(singleId, usage);
   }
 
   @Override

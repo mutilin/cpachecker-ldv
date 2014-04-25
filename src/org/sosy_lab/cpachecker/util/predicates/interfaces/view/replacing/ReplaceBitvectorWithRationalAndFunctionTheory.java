@@ -204,7 +204,12 @@ public class ReplaceBitvectorWithRationalAndFunctionTheory implements BitvectorF
 
   @Override
   public BitvectorFormula add(BitvectorFormula pNumber1, BitvectorFormula pNumber2) {
+    try{
     assert getLength(pNumber1) == getLength(pNumber2) : "Expect operators to have the same size";
+    } catch (AssertionError e){
+      System.out.println(e);
+      throw e;
+    }
     return wrap(getFormulaType(pNumber1), rationalFormulaManager.add(unwrap(pNumber1), unwrap(pNumber2)));
   }
 

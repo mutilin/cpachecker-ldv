@@ -66,4 +66,13 @@ public class ReturnIdentifier extends VariableIdentifier implements GeneralIdent
     return instance;
   }
 
+  @Override
+  public int compareTo(AbstractIdentifier pO) {
+    if (pO == instance) {
+      return 0;
+    } else {
+      return -1;
+    }
+  }
+
 }

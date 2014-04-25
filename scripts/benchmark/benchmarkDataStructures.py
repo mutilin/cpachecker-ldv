@@ -50,8 +50,8 @@ def getOptionsFromXML(optionsTag):
     This function searches for options in a tag
     and returns a list with command-line arguments.
     '''
-    return Util.toSimpleList([(option.get("name"), option.text)
-               for option in optionsTag.findall("option")])
+    return Util.toSimpleList((option.get("name"), option.text)
+               for option in optionsTag.findall("option"))
 
 
 def substituteVars(oldList, runSet, sourcefile=None):
@@ -210,7 +210,7 @@ class Benchmark:
             self._requiredFiles.extend(requiredFiles)
 
         # get requirements
-        self.requirements = Requirements(rootTag.findall("require"), self.rlimits, config.cloudCpuModel)
+        self.requirements = Requirements(rootTag.findall("require"), self.rlimits, config.cloudCPUModel)
 
         self.resultFilesPattern = None
         resultFilesTags = rootTag.findall("resultfiles")
@@ -468,9 +468,11 @@ class Run():
         self.benchmark = runSet.benchmark
         self.specificOptions = fileOptions # options that are specific for this run
         self.logFile = runSet.logFolder + os.path.basename(sourcefile) + ".log"
-        self.options = substituteVars(runSet.options + fileOptions, # all options to be used when executing this run
-                                      runSet,
-                                      sourcefile)
+        
+        # lets reduce memory-consumption: if 2 lists are equal, do not use the second one
+        self.options = runSet.options + fileOptions if fileOptions else runSet.options # all options to be used when executing this run
+        substitutedOptions = substituteVars(self.options, runSet, sourcefile)
+        if substitutedOptions != self.options: self.options = substitutedOptions # for less memory again
 
         # Copy columns for having own objects in run
         # (we need this for storing the results in them).
@@ -482,13 +484,34 @@ class Run():
         self.wallTime = 0
         self.memUsage = None
         self.host = None
+        self.category = result.CATEGORY_UNKNOWN
 
-        self.tool = self.benchmark.tool
-        args = self.tool.getCmdline(self.benchmark.executable, self.options, self.sourcefile)
+
+    def getCmdline(self):
+        args = self.benchmark.tool.getCmdline(self.benchmark.executable, self.options, self.sourcefile)
         args = [os.path.expandvars(arg) for arg in args]
         args = [os.path.expanduser(arg) for arg in args]
-        self.args = args;
+        return args;
 
+
+    def getPropFile(self):
+        # get prp-file from options
+        prpfile = None
+        for option in self.options:
+            if option.endswith('.prp'):
+                assert prpfile == None
+                prpfile = option
+                break
+
+        #if prpfile is None and not logPrpfileOnlyOnce:
+        #    logging.warn("Could not find propertyfile in options. This will be logged only once!")
+
+        # prpfile is relative to toolWorkingDir, we need it relativ to currentWorkingDir
+        if prpfile is not None:
+            prpfile = os.path.join(self.benchmark.tool.getWorkingDirectory(self.benchmark.executable), prpfile)
+            assert os.path.isfile(prpfile)
+
+        return prpfile
 
 
     def afterExecution(self, returnvalue, output):
@@ -501,21 +524,24 @@ class Run():
         returnsignal = returnvalue & 0x7F
         returncode = returnvalue >> 8
         logging.debug("My subprocess returned {0}, code {1}, signal {2}.".format(returnvalue, returncode, returnsignal))
-        self.status = self.tool.getStatus(returncode, returnsignal, output, isTimeout)
-        self.tool.addColumnValues(output, self.columns)
+        self.status = self.benchmark.tool.getStatus(returncode, returnsignal, output, isTimeout)
+        self.category = result.getResultCategory(self.sourcefile, self.status, self.getPropFile())
+        self.benchmark.tool.addColumnValues(output, self.columns)
 
         # Tools sometimes produce a result even after a timeout.
         # This should not be counted, so we overwrite the result with TIMEOUT
         # here. if this is the case.
         # However, we don't want to forget more specific results like SEGFAULT,
         # so we do this only if the result is a "normal" one like TRUE.
-        if self.status in [result.STR_TRUE, result.STR_FALSE, result.STR_UNKNOWN] and isTimeout:
+        if self.status in result.STR_LIST and isTimeout:
             self.status = "TIMEOUT"
+            self.category = result.CATEGORY_ERROR
         if returnsignal == 9 \
                 and MEMLIMIT in rlimits \
                 and self.memUsage \
                 and int(self.memUsage) >= (rlimits[MEMLIMIT] * 1024 * 1024):
             self.status = 'OUT OF MEMORY'
+            self.category = result.CATEGORY_ERROR
 
 
     def _isTimeout(self):
@@ -550,7 +576,7 @@ class Requirements:
     If no values are found, at least the limits are used as requirements.
     If the user gives a cpuModel, it overrides the previous cpuModel.
     '''
-    def __init__(self, tags, rlimits, cloudCpuModel):
+    def __init__(self, tags, rlimits, cloudCPUModel):
         
         self.cpuModel = None
         self.memory   = None
@@ -584,8 +610,8 @@ class Requirements:
         if self.memory is None:
             self.memory = rlimits.get(MEMLIMIT, None)
 
-        if cloudCpuModel is not None: # user-given model -> override value
-            self.cpuModel = cloudCpuModel
+        if cloudCPUModel is not None: # user-given model -> override value
+            self.cpuModel = cloudCPUModel
 
         if self.cpuCores is not None and self.cpuCores <= 0:
             raise Exception('Invalid value {} for required CPU cores.'.format(self.cpuCores))

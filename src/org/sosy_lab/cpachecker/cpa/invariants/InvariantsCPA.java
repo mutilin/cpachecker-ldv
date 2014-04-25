@@ -32,6 +32,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Queue;
 import java.util.Set;
+import java.util.WeakHashMap;
 import java.util.logging.Level;
 
 import org.sosy_lab.common.LogManager;
@@ -116,8 +117,17 @@ public class InvariantsCPA extends AbstractCPA {
     @Option(description="the maximum number of variables to consider as interesting. -1 one disables the limit, but this is not recommended. 0 means that guessing interesting variables is disabled.")
     private int interestingVariableLimit = 2;
 
+    @Option(description="the maximum tree depth of a formula recorded in the environment.")
+    private int maximumFormulaDepth = 4;
+
+    @Option(description="whether or not to collect information about binary variable interrelations.")
+    private boolean useBinaryVariableInterrelations = true;
+
     @Option(description="whether or not to use a bit vector formula manager when extracting invariant approximations from states.")
     private boolean useBitvectors = false;
+
+    @Option(description="whether or not to use abstract evaluation to ensure termination when the merge operator is SEP or the limit for interesting variables or predicates is positive.")
+    private boolean useAbstractEvaluation = true;
 
   }
 
@@ -151,6 +161,8 @@ public class InvariantsCPA extends AbstractCPA {
    */
   private final CFA cfa;
 
+  private final WeakHashMap<CFANode, InvariantsPrecision> initialPrecisionMap = new WeakHashMap<>();
+
   /**
    * Gets a factory for creating InvariantCPAs.
    *
@@ -182,7 +194,7 @@ public class InvariantsCPA extends AbstractCPA {
   }
 
   @Override
-  public AbstractState getInitialState(CFANode pNode) {
+  public InvariantsState getInitialState(CFANode pNode) {
     Set<CFANode> relevantLocations = new LinkedHashSet<>();
     Set<CFANode> targetLocations = new LinkedHashSet<>();
 
@@ -190,19 +202,26 @@ public class InvariantsCPA extends AbstractCPA {
     boolean determineTargetLocations = options.analyzeTargetPathsOnly || options.interestingPredicatesLimit != 0 || options.interestingVariableLimit != 0;
     if (determineTargetLocations) {
       try {
-        Configuration.Builder configurationBuilder = Configuration.builder().copyFrom(config);
+        Configuration.Builder configurationBuilder = Configuration.builder();
         configurationBuilder.setOption("output.disable", "true");
         configurationBuilder.setOption("CompositeCPA.cpas", "cpa.location.LocationCPA");
-        configurationBuilder.setOption("specification", "config/specification/default.spc");
+        String specification = config.getProperty("specification");
+        specification = "config/specification/default.spc";
+        configurationBuilder.setOption("specification", specification);
 
         ConfigurableProgramAnalysis cpa = new CPABuilder(configurationBuilder.build(), logManager, shutdownNotifier, reachedSetFactory).buildCPAs(cfa);
         ReachedSet reached = reachedSetFactory.create();
         reached.add(cpa.getInitialState(pNode), cpa.getInitialPrecision(pNode));
-        new CPAAlgorithm(cpa, logManager, config, shutdownNotifier).run(reached);
+        CPAAlgorithm targetFindingAlgorithm = new CPAAlgorithm(cpa, logManager, config, shutdownNotifier);
 
-        for (AbstractState state : FluentIterable.from(reached).filter(AbstractStates.IS_TARGET_STATE)) {
-          CFANode location = AbstractStates.extractLocation(state);
-          targetLocations.add(location);
+        boolean changed = true;
+        while (changed) {
+          changed = false;
+          targetFindingAlgorithm.run(reached);
+          for (AbstractState state : FluentIterable.from(reached).filter(AbstractStates.IS_TARGET_STATE)) {
+            CFANode location = AbstractStates.extractLocation(state);
+            changed |= targetLocations.add(location);
+          }
         }
       } catch (InvalidConfigurationException | CPAException | InterruptedException e) {
         this.logManager.logException(Level.SEVERE, e, "Unable to find target locations. Defaulting to selecting all locations.");
@@ -305,12 +324,26 @@ public class InvariantsCPA extends AbstractCPA {
       }
     }
 
-    // Create the configured initial state
-    return new InvariantsState(options.useBitvectors,
-        variableSelection,
-        ImmutableSet.copyOf(relevantEdges),
+    InvariantsPrecision precision = new InvariantsPrecision(relevantEdges,
         ImmutableSet.copyOf(limit(interestingPredicates, options.interestingPredicatesLimit)),
-        ImmutableSet.copyOf(limit(interestingVariables, options.interestingVariableLimit)));
+        ImmutableSet.copyOf(limit(interestingVariables, options.interestingVariableLimit)),
+        options.maximumFormulaDepth,
+        options.useBinaryVariableInterrelations,
+        options.useAbstractEvaluation);
+
+    initialPrecisionMap.put(pNode, precision);
+
+    // Create the configured initial state
+    return new InvariantsState(options.useBitvectors, variableSelection, precision);
+  }
+
+  @Override
+  public InvariantsPrecision getInitialPrecision(CFANode pNode) {
+    InvariantsPrecision precision = initialPrecisionMap.get(pNode);
+    if (precision != null) {
+      return precision;
+    }
+    return getInitialState(pNode).getPrecision();
   }
 
   /**

@@ -122,4 +122,19 @@ public class ConstantIdentifier implements AbstractIdentifier {
     }
   }
 
+  public String getName() {
+    return name;
+  }
+
+  @Override
+  public int compareTo(AbstractIdentifier pO) {
+    if (pO instanceof ReturnIdentifier) {
+      return 1;
+    } else if (pO instanceof ConstantIdentifier) {
+      return this.name.compareTo(((ConstantIdentifier)pO).name);
+    } else {
+      return -1;
+    }
+  }
+
 }

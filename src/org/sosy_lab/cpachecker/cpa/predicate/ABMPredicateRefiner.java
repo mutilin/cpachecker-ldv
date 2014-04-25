@@ -99,7 +99,7 @@ import com.google.common.collect.Lists;
  *
  * Here ^ means inheritance and -> means reference.
  */
-public final class ABMPredicateRefiner extends AbstractABMBasedRefiner implements StatisticsProvider {
+public class ABMPredicateRefiner extends AbstractABMBasedRefiner implements StatisticsProvider {
 
   private final ExtendedPredicateRefiner refiner;
 

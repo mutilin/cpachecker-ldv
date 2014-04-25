@@ -57,4 +57,13 @@ public class GlobalVariableIdentifier extends VariableIdentifier {
   public GeneralIdentifier getGeneralId() {
     return new GeneralGlobalVariableIdentifier(name, type, dereference);
   }
+
+  @Override
+  public int compareTo(AbstractIdentifier pO) {
+    if (pO instanceof GlobalVariableIdentifier) {
+      return super.compareTo(pO);
+    } else {
+      return 1;
+    }
+  }
 }

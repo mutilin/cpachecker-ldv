@@ -45,6 +45,12 @@ import com.google.common.base.Preconditions;
  */
 public class CompoundInterval {
 
+  private static final CompoundInterval ZERO = CompoundInterval.singleton(BigInteger.ZERO);
+
+  private static final CompoundInterval ONE = CompoundInterval.singleton(BigInteger.ONE);
+
+  private static final CompoundInterval MINUS_ONE = CompoundInterval.singleton(-1);
+
   /**
    * The compound state representing "bottom".
    */
@@ -58,7 +64,7 @@ public class CompoundInterval {
   /**
    * The compound state representing "false".
    */
-  private static final CompoundInterval FALSE = CompoundInterval.singleton(BigInteger.ZERO);
+  private static final CompoundInterval FALSE = ZERO;
 
   /**
    * The compound state representing "true":
@@ -142,6 +148,7 @@ public class CompoundInterval {
         ++start;
         lastInterval = currentLocal;
         currentLocal = start < this.intervals.size() ? this.intervals.get(start) : null;
+        assert currentLocal == null || currentLocal.hasUpperBound() : toString();
       }
     }
     boolean inserted = false;
@@ -158,6 +165,10 @@ public class CompoundInterval {
         if (pOther.touches(lastInterval)) {
           result.intervals.remove(result.intervals.size() - 1);
           lastInterval = union(pOther, lastInterval);
+          if (lastInterval.touches(interval)) {
+            lastInterval = union(lastInterval, interval);
+            currentInserted = true;
+          }
           result.intervals.add(lastInterval);
           inserted = true;
         } else if (pOther.touches(interval)) {
@@ -405,7 +416,7 @@ public class CompoundInterval {
       return Character.toString('\u22A4');
     }
     StringBuilder sb = new StringBuilder();
-    sb.append("{");
+    sb.append('{');
     if (!isBottom()) {
       Iterator<SimpleInterval> intervalIterator = this.intervals.iterator();
       sb.append(intervalIterator.next());
@@ -414,7 +425,7 @@ public class CompoundInterval {
         sb.append(intervalIterator.next());
       }
     }
-    sb.append("}");
+    sb.append('}');
     return sb.toString();
   }
 
@@ -1133,7 +1144,10 @@ public class CompoundInterval {
       CompoundInterval result = bottom();
       for (SimpleInterval interval : this.intervals) {
         if (!interval.isSingleton()) {
-          return top();
+          // x & 1 always yields either 0 or 1
+          if (pState.contains(1)) {
+            return CompoundInterval.of(SimpleInterval.of(BigInteger.ZERO, BigInteger.ONE));
+          }
         }
         result = result.unionWith(SimpleInterval.singleton(interval.getLowerBound().and(pState.getValue())));
       }
@@ -1177,7 +1191,7 @@ public class CompoundInterval {
     }
     // 1 ^ [0,1] = [0,1]
     if (isSingleton() && contains(1) && pState.equals(zeroToOne)) {
-      return this;
+      return zeroToOne;
     }
     if (pState.isSingleton()) {
       CompoundInterval result = bottom();
@@ -1490,6 +1504,18 @@ public class CompoundInterval {
 
   public static CompoundInterval logicalTrue() {
     return TRUE;
+  }
+
+  public static CompoundInterval zero() {
+    return ZERO;
+  }
+
+  public static CompoundInterval one() {
+    return ONE;
+  }
+
+  public static CompoundInterval minusOne() {
+    return MINUS_ONE;
   }
 
   /**

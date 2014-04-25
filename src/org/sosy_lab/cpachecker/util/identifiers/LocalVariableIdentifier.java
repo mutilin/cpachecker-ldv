@@ -26,7 +26,7 @@ package org.sosy_lab.cpachecker.util.identifiers;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
 
 public class LocalVariableIdentifier extends VariableIdentifier {
-  protected String function;//function, where this variable was declarated
+  protected String function;//function, where this variable was declared
 
   public LocalVariableIdentifier(String nm, CType t, String func, int dereference) {
     super(nm, t, dereference);
@@ -96,5 +96,21 @@ public class LocalVariableIdentifier extends VariableIdentifier {
   @Override
   public GeneralIdentifier getGeneralId() {
     return new GeneralLocalVariableIdentifier(name, type, function, dereference);
+  }
+
+  @Override
+  public int compareTo(AbstractIdentifier pO) {
+    if (pO instanceof LocalVariableIdentifier) {
+      int result = super.compareTo(pO);
+      if (result != 0) {
+        return result;
+      }
+      result = this.function.compareTo(((LocalVariableIdentifier) pO).function);
+      return result;
+    } else if (pO instanceof GlobalVariableIdentifier){
+      return -1;
+    } else {
+      return 1;
+    }
   }
 }

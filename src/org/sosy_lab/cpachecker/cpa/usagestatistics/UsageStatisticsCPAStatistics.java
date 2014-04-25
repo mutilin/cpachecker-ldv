@@ -27,19 +27,13 @@ import java.io.BufferedWriter;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.PrintStream;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.logging.Level;
 
-import org.sosy_lab.common.Files;
 import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.Timer;
@@ -48,6 +42,9 @@ import org.sosy_lab.common.configuration.FileOption;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
+import org.sosy_lab.common.io.Files;
+import org.sosy_lab.common.io.Path;
+import org.sosy_lab.common.io.Paths;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
@@ -55,21 +52,17 @@ import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.AccessPoint;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsLock;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.EdgeInfo.EdgeType;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
-import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.GlobalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.LocalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.StructureFieldIdentifier;
-import org.sosy_lab.cpachecker.util.identifiers.StructureIdentifier;
 
 @Options(prefix="cpa.usagestatistics")
 public class UsageStatisticsCPAStatistics implements Statistics {
 
-  private Map<SingleIdentifier, List<UsageInfo>> Stat;
+  public Map<SingleIdentifier, UsageSet> Stat;
 
   private UnsafeDetector unsafeDetector = null;
 
@@ -80,122 +73,29 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   @FileOption(FileOption.Type.OUTPUT_FILE)
   private Path outputStatFileName = Paths.get("unsafe_rawdata");
 
-  @Option(description = "variables, which will not be saved in statistics")
-  private Set<String> skippedvariables = null;
-
-  @Option(values={"PAIR", "SETDIFF"},toUppercase=true,
+  /*@Option(values={"PAIR", "SETDIFF"},toUppercase=true,
       description="which data process we should use")
-  private String unsafeDetectorType = "PAIR";
+  private String unsafeDetectorType = "PAIR";*/
 
   @Option(description="print all unsafe cases in report")
   private boolean printAllUnsafeUsages = false;
 
   private final LogManager logger;
-  private final Set<SingleIdentifier> unsafes = new HashSet<>();
 
   public Timer transferRelationTimer = new Timer();
   public Timer printStatisticsTimer = new Timer();
 
-  /*Timer full = new Timer();
-  Timer one = new Timer();
-  Timer two = new Timer();
-
-  public void addTmp(SingleIdentifier id, EdgeInfo.EdgeType e, int line) {
-    int i, j;
-    if (id instanceof GlobalVariableIdentifier) {
-      i = 0;
-    } else if (id instanceof LocalVariableIdentifier) {
-      i = 1;
-    } else if (id instanceof StructureIdentifier) {
-      i = 2;
-    } else {
-      System.err.println("What is the type of identifier: " + id.toString());
-      return;
-    }
-    switch (e) {
-      case ASSIGNMENT:
-        j = 0;
-        break;
-      case ASSUMPTION:
-        j = 1;
-        break;
-      case FUNCTION_CALL:
-        j = 2;
-        break;
-      default:
-        System.err.println("What is the type of usage: " + e);
-        return;
-    }
-    if (i == 1 && j == 0) {
-      System.out.println(line);
-    }
-    counter[i][j]++;
-  }*/
-
   public UsageStatisticsCPAStatistics(Configuration config, LogManager pLogger) throws InvalidConfigurationException{
-    Stat = new HashMap<>();
     config.inject(this);
+    unsafeDetector = new PairwiseUnsafeDetector(config);
+    /*if (unsafeDetectorType.equals("PAIR")) {
 
-    if (unsafeDetectorType.equals("PAIR")) {
-      unsafeDetector = new PairwiseUnsafeDetector(config);
-    }/* else if (unsafeDetectorType.equals("SETDIFF")) {
+    } else if (unsafeDetectorType.equals("SETDIFF")) {
       unsafeDetector = new SetDifferenceUnsafeDetector(config);
-    } */else {
-      throw new InvalidConfigurationException("Unknown data procession " + unsafeDetectorType);
-    }
-    logger = pLogger;
-  }
-
-  public void add(SingleIdentifier id, Access access, UsageStatisticsState state, EdgeType type, int line, CallstackState callstackState) throws HandleCodeException {
-    if (state.containsLinks(id)) {
-      id = (SingleIdentifier) state.getLinks(id);
-    }
-    if (skippedvariables != null && skippedvariables.contains(id.getName())) {
-      return;
-    } else if (skippedvariables != null && id instanceof StructureIdentifier) {
-      AbstractIdentifier owner = id;
-      while (owner instanceof StructureIdentifier) {
-        owner = ((StructureIdentifier)owner).getOwner();
-        if (owner instanceof SingleIdentifier && skippedvariables.contains(((SingleIdentifier)owner).getName())) {
-          return;
-        }
-      }
-    }
-    if (id instanceof LocalVariableIdentifier && id.getDereference() <= 0) {
-      //we don't save in statistics ordinary local variables
-      return;
-    }
-    if (id instanceof StructureIdentifier && !id.isGlobal() && !id.isPointer()) {
-      //skips such cases, as 'a.b'
-      return;
-    }
-    if (id instanceof StructureIdentifier) {
-      id = ((StructureIdentifier)id).toStructureFieldIdentifier();
-    }
-    /*if (!printAllUnsafeUsages && unsafes.contains(id)) {
-      return;
-    }*/
-    logger.log(Level.FINE, "Add id " + id + " to unsafe statistics");
-    List<UsageInfo> uset;
-    LockStatisticsState lockState = AbstractStates.extractStateByType(state, LockStatisticsState.class);
-    logger.log(Level.FINEST, "Its locks are: " + lockState);
-
-    //We can't get line from location, because it is old state
-    LineInfo lineInfo = new LineInfo(line);
-    EdgeInfo info = new EdgeInfo(type);
-
-    UsageInfo usage = new UsageInfo(access, lineInfo, info, lockState, callstackState);
-
-    if (!Stat.containsKey(id)) {
-      uset = new LinkedList<>();
-      Stat.put(id, uset);
     } else {
-      uset = Stat.get(id);
-      if (!unsafes.contains(id) && unsafeDetector.isUnsafeCase(Stat.get(id), usage)) {
-        unsafes.add(id);
-      }
-    }
-    uset.add(usage);
+      throw new InvalidConfigurationException("Unknown data procession " + unsafeDetectorType);
+    }*/
+    logger = pLogger;
   }
 
   private List<LockStatisticsLock> findAllLocks() {
@@ -314,7 +214,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   }
 
   private void createVisualization(SingleIdentifier id, BufferedWriter writer) throws IOException {
-    List<UsageInfo> uinfo = Stat.get(id);
+    UsageSet uinfo = Stat.get(id);
 
     if (uinfo == null || uinfo.size() == 0) {
       return;
@@ -330,6 +230,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
     writer.append(id.getDereference() + "\n");
     writer.append(id.getType().toASTString(id.getName()) + "\n");
+    if (uinfo.isTrueUnsafe()) {
+      writer.append("Line 0:     N0 -{/*Is true unsafe:*/}-> N0" + "\n");
+    }
     writer.append("Line 0:     N0 -{/*Number of usages:" + uinfo.size() + "*/}-> N0" + "\n");
     writer.append("Line 0:     N0 -{/*Two examples:*/}-> N0" + "\n");
     try {
@@ -353,6 +256,10 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   public void printStatistics(PrintStream out, Result result, ReachedSet reached) {
 		BufferedWriter writer = null;
 		printStatisticsTimer.start();
+		UsageContainer container = AbstractStates.extractStateByType(reached.getFirstState(), UsageStatisticsState.class)
+		    .getContainer();
+		Stat = container.getStatistics();
+		List<SingleIdentifier> unsafes = container.getUnsafes();
     try {
       writer = Files.openOutputFile(outputStatFileName);
       logger.log(Level.FINE, "Print statistics about unsafe cases");
@@ -375,16 +282,12 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     out.println("Time for transfer relation:    " + transferRelationTimer);
     printStatisticsTimer.stop();
     out.println("Time for printing statistics:  " + printStatisticsTimer);
-    /*System.out.println(" \t \t Global Local \t Structure");
-    System.out.println("Assignment: \t " + counter[0][0] + " \t " + counter[1][0] + " \t " + counter[2][0]);
-    System.out.println("Assumption: \t " + counter[0][1] +" \t " + counter[1][1] +" \t " + counter[2][1] );
-    System.out.println("Function call: \t " + counter[0][2] +" \t " + counter[1][2] +" \t " + counter[2][2]);*/
   }
 
   private void printLockStatistics(BufferedWriter writer) throws IOException {
     List<LockStatisticsLock> mutexes = findAllLocks();
 
-    Collections.sort(mutexes, new LockStatisticsLock.LockComparator());
+    Collections.sort(mutexes);
     writer.append(mutexes.size() + "\n");
     for (LockStatisticsLock lock : mutexes) {
       writer.append(lock.toString() + "\n");
@@ -418,7 +321,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         }
       }
     }
-    //writer.println(counter);
     writer.append(global + "\n");
     writer.append(globalPointer + "\n");
     writer.append(local + "\n");
@@ -432,9 +334,5 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   @Override
   public String getName() {
     return "UsageStatisticsCPA";
-  }
-
-  public void addSkippedVariables(Set<String> vars) {
-    skippedvariables.addAll(vars);
   }
 }

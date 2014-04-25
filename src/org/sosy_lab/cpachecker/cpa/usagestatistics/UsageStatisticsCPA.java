@@ -64,6 +64,8 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
   private final PrecisionAdjustment precisionAdjustment;
   private final Reducer reducer;
   private final UsageStatisticsCPAStatistics statistics;
+  //Do not remove container from CPA - we clean all states while refinement
+  private final UsageContainer container;
   private UsageStatisticsPrecision precision;
   private final CFA cfa;
 
@@ -89,6 +91,8 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
     this.mergeOperator = initializeMergeOperator();
     this.stopOperator = initializeStopOperator();
 
+    this.statistics = new UsageStatisticsCPAStatistics(pConfig, pLogger);
+    this.container = new UsageContainer(pConfig);
     this.precisionAdjustment = new UsageStatisticsPrecisionAdjustment(pCpa.getPrecisionAdjustment());
     if (pCpa instanceof ConfigurableProgramAnalysisWithABM) {
       Reducer wrappedReducer = ((ConfigurableProgramAnalysisWithABM)pCpa).getReducer();
@@ -100,7 +104,6 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
     } else {
       reducer = null;
     }
-    this.statistics = new UsageStatisticsCPAStatistics(pConfig, pLogger);
     this.transferRelation = new UsageStatisticsTransferRelation(pCpa.getTransferRelation(), pConfig, pLogger, statistics
         , (CallstackTransferRelation) (CPAs.retrieveCPA(this, CallstackCPA.class)).getTransferRelation());
 
@@ -164,7 +167,7 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
 
   @Override
   public AbstractState getInitialState(CFANode pNode) {
-    return new UsageStatisticsState(getWrappedCpa().getInitialState(pNode));
+    return new UsageStatisticsState(getWrappedCpa().getInitialState(pNode), container);
   }
 
   @Override

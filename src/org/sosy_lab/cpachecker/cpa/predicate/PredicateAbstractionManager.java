@@ -27,10 +27,8 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Predicates.*;
 import static com.google.common.collect.FluentIterable.from;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.Writer;
-import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -43,7 +41,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
 
-import org.sosy_lab.common.Files;
 import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.NestedTimer;
 import org.sosy_lab.common.Pair;
@@ -53,6 +50,7 @@ import org.sosy_lab.common.configuration.FileOption;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
+import org.sosy_lab.common.io.Path;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cpa.predicate.persistence.PredicateAbstractionsStorage;
 import org.sosy_lab.cpachecker.cpa.predicate.persistence.PredicateAbstractionsStorage.AbstractionNode;
@@ -73,6 +71,7 @@ import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormula;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.SSAMap;
 import org.sosy_lab.cpachecker.util.statistics.StatTimer;
 
+import com.google.common.base.Charsets;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -246,7 +245,6 @@ public class PredicateAbstractionManager {
       Collection<AbstractionPredicate> pPredicates) throws InterruptedException {
 
     stats.numCallsAbstraction++;
-
     logger.log(Level.FINEST, "Computing abstraction", stats.numCallsAbstraction, "with", pPredicates.size(), "predicates");
     logger.log(Level.ALL, "Old abstraction:", abstractionFormula.asFormula());
     logger.log(Level.ALL, "Path formula:", pathFormula);
@@ -258,7 +256,6 @@ public class PredicateAbstractionManager {
     final SSAMap ssa = pathFormula.getSsa();
 
     ImmutableSet<AbstractionPredicate> predicates = getRelevantPredicates(pPredicates, f, ssa);
-
     // Try to reuse stored abstractions
     if (reuseAbstractionsFrom != null
         && !abstractionReuseDisabledBecauseOfAmbiguity) {
@@ -353,6 +350,12 @@ public class PredicateAbstractionManager {
     if (pPredicates.isEmpty()) {
       logger.log(Level.FINEST, "Abstraction", stats.numCallsAbstraction, "with empty precision is true");
       stats.numSymbolicAbstractions++;
+      boolean unsat = unsat(abstractionFormula, pathFormula);
+      if (unsat) {
+        return new AbstractionFormula(fmgr, rmgr.makeFalse(),
+            bfmgr.makeBoolean(false), bfmgr.makeBoolean(false),
+            pathFormula, noAbstractionReuse);
+      }
       return makeTrueAbstractionFormula(pathFormula);
     }
 
@@ -410,7 +413,6 @@ public class PredicateAbstractionManager {
                      .toSet();
       stats.trivialPredicatesTime.stop();
     }
-
     try (ProverEnvironment thmProver = solver.newProverEnvironment()) {
       thmProver.push(f);
 
@@ -465,7 +467,6 @@ public class PredicateAbstractionManager {
         }
       }
     }
-
     AbstractionFormula result = makeAbstractionFormula(abs, ssa, pathFormula);
 
     if (useCache) {
@@ -480,16 +481,15 @@ public class PredicateAbstractionManager {
         + stats.abstractionEnumTime.getLengthOfLastOuterInterval();
     logger.log(Level.FINEST, "Computing abstraction took", abstractionTime, "ms");
     logger.log(Level.ALL, "Abstraction result is", result);
-
     if (dumpHardAbstractions && abstractionTime > 10000) {
       // we want to dump "hard" problems...
-      File dumpFile;
+      Path dumpFile;
 
       dumpFile = fmgr.formatFormulaOutputFile("abstraction", stats.numCallsAbstraction, "input", 0);
       fmgr.dumpFormulaToFile(f, dumpFile);
 
       dumpFile = fmgr.formatFormulaOutputFile("abstraction", stats.numCallsAbstraction, "predicates", 0);
-      try (Writer w = Files.openOutputFile(dumpFile.toPath())) {
+      try (Writer w = dumpFile.asCharSink(Charsets.UTF_8).openStream()) {
         Joiner.on('\n').appendTo(w, predicates);
       } catch (IOException e) {
         logger.logUserException(Level.WARNING, e, "Failed to wrote predicates to file");
@@ -498,7 +498,6 @@ public class PredicateAbstractionManager {
       dumpFile = fmgr.formatFormulaOutputFile("abstraction", stats.numCallsAbstraction, "result", 0);
       fmgr.dumpFormulaToFile(result.asInstantiatedFormula(), dumpFile);
     }
-
     return result;
   }
 
@@ -520,7 +519,6 @@ public class PredicateAbstractionManager {
   public ImmutableSet<AbstractionPredicate> getRelevantPredicates(
       final Collection<AbstractionPredicate> pPredicates,
       final BooleanFormula f, final SSAMap ssa) {
-
     Set<String> variables = fmgr.extractVariables(f);
     ImmutableSet.Builder<AbstractionPredicate> predicateBuilder = ImmutableSet.builder();
     for (AbstractionPredicate predicate : pPredicates) {
@@ -536,6 +534,8 @@ public class PredicateAbstractionManager {
       Set<String> predVariables = fmgr.extractVariables(instantiatedPredicate);
 
       if (!Sets.intersection(predVariables, variables).isEmpty()) {
+        predicateBuilder.add(predicate);
+      } else if (predicateTerm.toString().contains("(*")) {
         predicateBuilder.add(predicate);
       } else {
         logger.log(Level.FINEST, "Ignoring predicate about variables", predVariables);
@@ -792,7 +792,6 @@ public class PredicateAbstractionManager {
     thmProver.push(predDef);
     AllSatResult allSatResult = thmProver.allSat(predVars, rmgr,
         stats.abstractionSolveTime, stats.abstractionEnumTime);
-
     // pop() is actually costly sometimes, and we delete the environment anyway
     // thmProver.pop();
 

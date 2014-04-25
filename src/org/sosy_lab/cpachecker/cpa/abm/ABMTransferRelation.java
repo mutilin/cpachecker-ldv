@@ -281,6 +281,7 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
       preciseReachedCache.clear();
       unpreciseReachedCache.clear();
       returnCache.clear();
+      blockARGCache.clear();
     }
 
     private boolean containsPreciseKey(AbstractState predicateKey, Precision precisionKey, Block context) {
@@ -428,7 +429,6 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
     if (edge == null) {
 
       CFANode node = extractLocation(pElement);
-
       if (partitioning.isCallNode(node)) {
         //we have to start a recursive analysis
         nextBlock = partitioning.getBlockForCallNode(node);
@@ -588,14 +588,14 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
 
     CFANode currentNode = edge.getPredecessor();
 
-    Block currentNodeBlock = partitioning.getBlockForReturnNode(currentNode);
+    /*Block currentNodeBlock = partitioning.getBlockForReturnNode(currentNode);
     if (currentNodeBlock != null && !currentBlock.equals(currentNodeBlock)
         && currentNodeBlock.getNodes().contains(edge.getSuccessor())) {
       // we are not analyzing the block corresponding to currentNode (currentNodeBlock) but the currentNodeBlock is inside of this block
       // avoid a reanalysis
       //return wrappedTransfer.getAbstractSuccessors(pElement, pPrecision, edge);
       return Collections.emptySet();
-    }
+    }*/
 
     if (currentBlock.isReturnNode(currentNode) && !currentBlock.getNodes().contains(edge.getSuccessor())) {
       // do not perform analysis beyond the current block
@@ -667,14 +667,15 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
         returnElements = AbstractStates.filterLocations(reached, currentBlock.getReturnNodes())
             .toList();
 
-        //If we have LockStatisticsCPA, we should change a bit returned states
-        if (AbstractStates.extractStateByType(initialState, LockStatisticsState.class) != null) {
-          LockStatisticsState currentState;
-          CallstackReducer reducer = (CallstackReducer)CPAs.retrieveCPA(abmCPA, CallstackCPA.class).getReducer();
-          for (AbstractState returnState : returnElements) {
-            currentState = AbstractStates.extractStateByType(returnState, LockStatisticsState.class);
-            currentState.reduceCallstack(reducer, node);
-          }
+      }
+
+      //If we have LockStatisticsCPA, we should change a bit returned states
+      if (AbstractStates.extractStateByType(initialState, LockStatisticsState.class) != null) {
+        LockStatisticsState currentState;
+        CallstackReducer reducer = (CallstackReducer)CPAs.retrieveCPA(abmCPA, CallstackCPA.class).getReducer();
+        for (AbstractState returnState : returnElements) {
+          currentState = AbstractStates.extractStateByType(returnState, LockStatisticsState.class);
+          currentState.reduceCallstack(reducer, node);
         }
       }
 
@@ -783,7 +784,7 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
     removeSubtreeTimer.start();
 
     List<ARGState> path = trimPath(pPath, element);
-    assert path.get(path.size() - 1).equals(element);
+    //assert path.get(path.size() - 1).equals(element);
 
     Set<ARGState> relevantCallNodes = getRelevantDefinitionNodes(path);
 
@@ -1104,6 +1105,133 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
     return Pair.of(callNodes, returnNodes);
   }
 
+  public ARGState findPath(ARGState target,
+      Map<ARGState, ARGState> pPathElementToReachedState, final CallstackState stack) throws InterruptedException, RecursiveAnalysisFailedException {
+
+    Map<ARGState, BackwardARGState> elementsMap = new HashMap<>();
+    Stack<ARGState> openElements = new Stack<>();
+    ARGState root = null;
+
+    BackwardARGState newTreeTarget = new BackwardARGState(target.getWrappedState(), null);
+    pPathElementToReachedState.put(newTreeTarget, target);
+    elementsMap.put(target, newTreeTarget);
+    ARGState currentState = target, tmpChild;
+
+    //Find path to nearest abstraction state
+    PredicateAbstractState pState = AbstractStates.extractStateByType(currentState, PredicateAbstractState.class);
+    while (!pState.isAbstractionState()) {
+      //assert currentState.getChildren().size() == 1;
+      tmpChild = currentState.getChildren().iterator().next();
+      BackwardARGState newState = new BackwardARGState(tmpChild.getWrappedState(), elementsMap.get(currentState));
+      elementsMap.put(tmpChild, newState);
+      pPathElementToReachedState.put(newState, tmpChild);
+      currentState = tmpChild;
+      pState = AbstractStates.extractStateByType(currentState, PredicateAbstractState.class);
+    }
+
+    openElements.push(target);
+    while (!openElements.empty()) {
+      ARGState currentElement = openElements.pop();
+
+      for (ARGState parent : currentElement.getParents()) {
+        if (!elementsMap.containsKey(parent)) {
+          //create node for parent in the new subtree
+          BackwardARGState newParent = new BackwardARGState(parent.getWrappedState(), null);
+          elementsMap.put(parent, newParent);
+          pPathElementToReachedState.put(newParent, parent);
+          //and remember to explore the parent later
+          openElements.push(parent);
+        }
+        CFAEdge edge = ABMARGUtils.getEdgeToChild(parent, currentElement);
+        if (edge == null) {
+          //this is a summarized call and thus an direct edge could not be found
+          //we have the transfer function to handle this case, as our reachSet is wrong
+          //(we have to use the cached ones)
+          ReachedSet newReachedSet = abstractStateToReachedSet.get(parent);
+          ARGState innerTree =
+              computeCounterexampleSubgraph(parent, newReachedSet.getPrecision(newReachedSet.getFirstState()),
+                  elementsMap.get(currentElement), pPathElementToReachedState);
+          if (innerTree == null) {
+            return null;
+          }
+          for (ARGState child : innerTree.getChildren()) {
+            child.addParent(elementsMap.get(parent));
+          }
+          innerTree.removeFromARG();
+          elementsMap.get(parent).updateDecreaseId();
+        } else {
+          //normal edge
+          //create an edge from parent to current
+          elementsMap.get(currentElement).addParent(elementsMap.get(parent));
+        }
+      }
+      if (currentElement.getParents().isEmpty()) {
+        if (stack.getPreviousState() == null) {
+          root = elementsMap.get(currentElement);
+          break;
+        }
+        ARGState expandedState = null;
+        BackwardARGState lastNewExpandedState = null;
+        ARGState lastExpandedState = null;
+        ReachedSet tmpReachedSet;
+        Set<ARGState> removedStates = new HashSet<>();
+        //Find correct expanded state
+        for (AbstractState tmpExpanded : abstractStateToReachedSet.keySet()) {
+          tmpReachedSet = abstractStateToReachedSet.get(tmpExpanded);
+          if (tmpReachedSet.getFirstState().equals(currentElement)) {
+            CallstackState expandedCallstack = AbstractStates.extractStateByType(tmpExpanded, CallstackState.class);
+            if (!(expandedCallstack.getPreviousState().getCurrentFunction()
+                .equals(stack.getPreviousState().getCurrentFunction()))) {
+              continue;
+            }
+            expandedState = (ARGState) tmpExpanded;
+            if (lastExpandedState != null && expandedState.isOlderThan(lastExpandedState)) {
+              continue;
+            }
+            //Try to find path.
+            //It may be null, if somewhere callstack becomes different (now we don't understand this)
+            ARGState tmpRoot = findPath(expandedState, pPathElementToReachedState, stack.getPreviousState());
+            if (tmpRoot != null) {
+              BackwardARGState newExpandedState = null;
+              for (ARGState tmp : pPathElementToReachedState.keySet()) {
+                if (tmp.isDestroyed()) {
+                  continue;
+                }
+                if (pPathElementToReachedState.get(tmp).equals(expandedState) && tmp.getChildren().size() == 0) {
+                  newExpandedState = (BackwardARGState) tmp;
+                  break;
+                }
+              }
+              root = tmpRoot;
+              if (lastNewExpandedState != null) {
+                removedStates.add(lastNewExpandedState);
+              }
+              lastNewExpandedState = newExpandedState;
+              lastExpandedState = expandedState;
+            }
+          }
+        }
+        if (lastNewExpandedState == null || root == null) {
+          return null;
+        }
+        elementsMap.put(expandedState, lastNewExpandedState);
+        pPathElementToReachedState.put(lastNewExpandedState, expandedState);
+        for (ARGState child : elementsMap.get(currentElement).getChildren()) {
+          child.addParent(lastNewExpandedState);
+        }
+        removedStates.add(elementsMap.get(currentElement));
+        for (ARGState toRemove : removedStates) {
+          toRemove.removeFromARG();
+        }
+      }
+      if (currentElement.isDestroyed()) {
+        //It means, that we delete some part of path
+        return null;
+      }
+    }
+    return root;
+  }
+
   //returns root of a subtree leading from the root element of the given reachedSet to the target state
   //subtree is represented using children and parents of ARGElements, where newTreeTarget is the ARGState
   //in the constructed subtree that represents target
@@ -1197,9 +1325,11 @@ public class ABMTransferRelation implements TransferRelation, ABMRestoreStack {
     return result;
   }
 
-  void clearCaches() {
+  public void clearCaches() {
     argCache.clear();
     abstractStateToReachedSet.clear();
+    expandedToReducedCache.clear();
+    BlockStack.clear();
   }
 
   Pair<Block, ReachedSet> getCachedReachedSet(ARGState root, Precision rootPrecision) {

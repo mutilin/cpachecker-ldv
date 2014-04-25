@@ -61,8 +61,8 @@ public abstract class AbstractABMBasedRefiner extends AbstractARGBasedRefiner {
   final Timer computeSubtreeTimer = new Timer();
   final Timer computeCounterexampleTimer = new Timer();
 
-  private final ABMTransferRelation transfer;
-  private final Map<ARGState, ARGState> pathStateToReachedState = new HashMap<>();
+  protected final ABMTransferRelation transfer;
+  protected final Map<ARGState, ARGState> pathStateToReachedState = new HashMap<>();
 
   protected AbstractABMBasedRefiner(ConfigurableProgramAnalysis pCpa)
       throws InvalidConfigurationException {
@@ -89,8 +89,8 @@ public abstract class AbstractABMBasedRefiner extends AbstractARGBasedRefiner {
   }
 
   @Override
-  protected final ARGPath computePath(ARGState pLastElement, ARGReachedSet pReachedSet) throws InterruptedException, CPATransferException {
-    assert pLastElement.isTarget();
+  protected ARGPath computePath(ARGState pLastElement, ARGReachedSet pReachedSet) throws InterruptedException, CPATransferException {
+    //assert pLastElement.isTarget();
 
     pathStateToReachedState.clear();
 
@@ -118,7 +118,7 @@ public abstract class AbstractABMBasedRefiner extends AbstractARGBasedRefiner {
     }
   }
 
-  private ARGPath computeCounterexample(ARGState root) {
+  protected ARGPath computeCounterexample(ARGState root) {
     ARGPath path = new ARGPath();
     ARGState currentElement = root;
     while (currentElement.getChildren().size() > 0) {
@@ -133,13 +133,13 @@ public abstract class AbstractABMBasedRefiner extends AbstractARGBasedRefiner {
     return path;
   }
 
-  private static class ABMReachedSet extends ARGReachedSet.ForwardingARGReachedSet {
+  public static class ABMReachedSet extends ARGReachedSet.ForwardingARGReachedSet {
 
     private final ABMTransferRelation transfer;
     private final ARGPath path;
     private final Map<ARGState, ARGState> pathStateToReachedState;
 
-    private ABMReachedSet(ABMTransferRelation pTransfer, ARGReachedSet pReached, ARGPath pPath, Map<ARGState, ARGState> pPathElementToReachedState) {
+    public ABMReachedSet(ABMTransferRelation pTransfer, ARGReachedSet pReached, ARGPath pPath, Map<ARGState, ARGState> pPathElementToReachedState) {
       super(pReached);
       this.transfer = pTransfer;
       this.path = pPath;

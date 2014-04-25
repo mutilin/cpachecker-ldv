@@ -70,25 +70,31 @@ class Tool(benchmark.tools.template.BaseTool):
         # Determine the revision and add it to the version.
         cpaShDir = os.path.dirname(os.path.realpath(executable))
         cpacheckerDir = os.path.join(cpaShDir, os.path.pardir)
-        svnProcess = subprocess.Popen(['svnversion', cpacheckerDir], env={'LANG': 'C'}, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        (stdout, stderr) = svnProcess.communicate()
-        stdout = Util.decodeToString(stdout).strip()
-        if not (svnProcess.returncode or stderr or (stdout == 'exported')):
-            return version + ' ' + stdout
+        try:
+            svnProcess = subprocess.Popen(['svnversion', cpacheckerDir], env={'LANG': 'C'}, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            (stdout, stderr) = svnProcess.communicate()
+            stdout = Util.decodeToString(stdout).strip()
+            if not (svnProcess.returncode or stderr or (stdout == 'exported')):
+                return version + ' ' + stdout
+        except OSError:
+            pass
 
         # CPAchecker might be within a git-svn repository
-        gitProcess = subprocess.Popen(['git', 'svn', 'find-rev', 'HEAD'], env={'LANG': 'C'}, cwd=cpacheckerDir, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        (stdout, stderr) = gitProcess.communicate()
-        stdout = Util.decodeToString(stdout).strip()
-        if not (gitProcess.returncode or stderr) and stdout:
-            return version + ' ' + stdout + ('M' if self._isGitRepositoryDirty(cpacheckerDir) else '')
-
-        # CPAchecker might be within a git repository
-        gitProcess = subprocess.Popen(['git', 'log', '-1', '--pretty=format:%h', '--abbrev-commit'], env={'LANG': 'C'}, cwd=cpacheckerDir, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        (stdout, stderr) = gitProcess.communicate()
-        stdout = Util.decodeToString(stdout).strip()
-        if not (gitProcess.returncode or stderr) and stdout:
-            return version + ' ' + stdout + ('+' if self._isGitRepositoryDirty(cpacheckerDir) else '')
+        try:
+            gitProcess = subprocess.Popen(['git', 'svn', 'find-rev', 'HEAD'], env={'LANG': 'C'}, cwd=cpacheckerDir, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            (stdout, stderr) = gitProcess.communicate()
+            stdout = Util.decodeToString(stdout).strip()
+            if not (gitProcess.returncode or stderr) and stdout:
+                return version + ' ' + stdout + ('M' if self._isGitRepositoryDirty(cpacheckerDir) else '')
+    
+            # CPAchecker might be within a git repository
+            gitProcess = subprocess.Popen(['git', 'log', '-1', '--pretty=format:%h', '--abbrev-commit'], env={'LANG': 'C'}, cwd=cpacheckerDir, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            (stdout, stderr) = gitProcess.communicate()
+            stdout = Util.decodeToString(stdout).strip()
+            if not (gitProcess.returncode or stderr) and stdout:
+                return version + ' ' + stdout + ('+' if self._isGitRepositoryDirty(cpacheckerDir) else '')
+        except OSError:
+            pass
 
         return version
 
@@ -148,7 +154,6 @@ class Tool(benchmark.tools.template.BaseTool):
         else:
             status = ''
 
-        property = None
         for line in output.splitlines():
             if 'java.lang.OutOfMemoryError' in line:
                 status = 'OUT OF JAVA MEMORY'
@@ -174,17 +179,15 @@ class Tool(benchmark.tools.template.BaseTool):
                 elif 'Parsing failed' in line:
                     status = 'ERROR (parsing failed)'
 
-            elif line.startswith('Found violation of property '):
-                property = re.match('Found violation of property ([^ ]*) .*', line).group(1)
-
             elif line.startswith('Verification result: '):
                 line = line[21:].strip()
-                if line.startswith('SAFE'):
+                if line.startswith('TRUE'):
                     newStatus = result.STR_TRUE
-                elif line.startswith('UNSAFE'):
-                    newStatus = result.STR_FALSE
-                    if property:
-                        newStatus = newStatus + '(' + property + ')'
+                elif line.startswith('FALSE'):
+                    newStatus = result.STR_FALSE_LABEL
+                    match = re.match('.* Violation of propert[a-z]* (.*) found by chosen configuration.*', line)
+                    if match:
+                        newStatus = newStatus + '(' + match.group(1) + ')'
                 else:
                     newStatus = result.STR_UNKNOWN if not status.startswith('ERROR') else None
                 if newStatus:

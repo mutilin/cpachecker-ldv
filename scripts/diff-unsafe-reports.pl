@@ -82,8 +82,8 @@ my $tmp_file = $output."/tmp";
 
 my $OLD;
 my $NEW;
-open($OLD, "<", $old_file);
-open($NEW, "<", $new_file);
+open($OLD, "<", $old_file) or die("$!");
+open($NEW, "<", $new_file) or die("$!");
 
 my $old_variables;
 my $new_variables;
