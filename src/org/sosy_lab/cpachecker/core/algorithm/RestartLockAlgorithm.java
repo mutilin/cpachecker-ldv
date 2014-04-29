@@ -40,15 +40,16 @@ import java.util.logging.Level;
 
 import javax.annotation.Nullable;
 
-import org.sosy_lab.common.LogManager;
-import org.sosy_lab.common.Timer;
 import org.sosy_lab.common.Triple;
 import org.sosy_lab.common.configuration.Configuration;
+import org.sosy_lab.common.configuration.ConfigurationBuilder;
 import org.sosy_lab.common.configuration.FileOption;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.io.Path;
+import org.sosy_lab.common.log.LogManager;
+import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.CPABuilder;
@@ -269,7 +270,7 @@ public class RestartLockAlgorithm implements Algorithm, StatisticsProvider {
     ReachedSet reached;
     Algorithm algorithm;
 
-    Configuration.Builder singleConfigBuilder = Configuration.builder();
+    ConfigurationBuilder singleConfigBuilder = Configuration.builder();
     singleConfigBuilder.copyFrom(globalConfig);
     singleConfigBuilder.clearOption("analysis.saveLocalResults");
 
@@ -311,16 +312,17 @@ public class RestartLockAlgorithm implements Algorithm, StatisticsProvider {
     return cpa;
   }
 
-  private Algorithm createAlgorithm(final ConfigurableProgramAnalysis cpa, Configuration pConfig, ShutdownNotifier pShutdownNotifier,
+  private Algorithm createAlgorithm(final ConfigurableProgramAnalysis cpa, Configuration pConfig,
+      ShutdownNotifier pShutdownNotifier,
       boolean isFirst) throws InvalidConfigurationException, CPAException {
     logger.log(Level.FINE, "Creating algorithms");
     Algorithm algorithm;
 
 
     if (isFirst) {
-      algorithm =  new CPALocalSaveAlgorithm(cpa, logger, pConfig, pShutdownNotifier);
+      algorithm =  new CPALocalSaveAlgorithm(cpa, logger, pShutdownNotifier);
     } else {
-      algorithm =  new CPAAlgorithm(cpa, logger, pConfig, pShutdownNotifier);
+      algorithm =  CPAAlgorithm.create(cpa, logger, pConfig, pShutdownNotifier);
     }
     String cegar = pConfig.getProperty("analysis.algorithm.CEGAR");
     if (cegar != null && cegar.equals("true")) {

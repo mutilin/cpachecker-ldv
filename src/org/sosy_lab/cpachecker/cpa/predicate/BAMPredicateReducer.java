@@ -332,6 +332,7 @@ public class BAMPredicateReducer implements Reducer {
         }
         if (loc instanceof CFunctionEntryNode) {
           //Evaluated map skips predicates, which is relevant to next function
+          result = new HashSet<>(result); //This is ImmutableSet
           result.addAll(rootPredicatePrecision.getLocalPredicates().get(loc));
         }
         String functionName = context.getCallNode().getFunctionName();

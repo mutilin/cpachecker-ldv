@@ -33,12 +33,12 @@ import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
 
-import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
+import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.ast.c.CAssignment;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpressionStatement;
@@ -58,6 +58,7 @@ import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionEntryNode;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionSummaryStatementEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
@@ -159,7 +160,15 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
     CFAEdge currentEdge = pCfaEdge;
 
-    if (checkFunciton(pCfaEdge, abortfunctions)) {
+    /*if (checkFunciton(pCfaEdge, abortfunctions)) {
+      logger.log(Level.FINEST, currentEdge + " is abort edge, analysis was stopped");
+      return;
+    }*/
+    CFANode node = AbstractStates.extractLocation(oldState);
+   /* if (node.getFunctionName().equals("panic")) {
+      System.out.println("Enters panic");
+    }*/
+    if (node instanceof CFunctionEntryNode && abortfunctions.contains(node.getFunctionName())) {
       logger.log(Level.FINEST, currentEdge + " is abort edge, analysis was stopped");
       return;
     }
@@ -167,7 +176,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     if (checkFunciton(pCfaEdge, skippedfunctions)) {
       callstackTransfer.setFlag();
       //Find right summary edge
-      CFANode node = AbstractStates.extractLocation(oldState);
+      //CFANode node = AbstractStates.extractLocation(oldState);
       for (int k = 0; k < node.getNumLeavingEdges(); k++) {
         currentEdge = node.getLeavingEdge(k);
         if (currentEdge instanceof CFunctionSummaryStatementEdge) {
@@ -251,15 +260,15 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
   private void handleFunctionCall(UsageStatisticsState pNewState
       , UsageStatisticsPrecision pPrecision, CFunctionCallEdge edge) throws HandleCodeException {
     CStatement statement = edge.getRawAST().get();
-    String functionName = edge.getSuccessor().getFunctionName();
-    /*if (functionName.equals("sync")) {
+    /*String functionName = edge.getSuccessor().getFunctionName();
+    if (functionName.equals("sync")) {
       System.out.println("sync function");
     }*/
-    if (abortfunctions != null && abortfunctions.contains(functionName)) {
+   /* if (abortfunctions != null && abortfunctions.contains(functionName)) {
       pNewState = null;
       logger.log(Level.FINEST, functionName + " is abort function and was skipped");
       return;
-    }
+    }*/
     if (statement instanceof CFunctionCallAssignmentStatement) {
       /*
        * a = f(b)

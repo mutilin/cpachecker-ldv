@@ -30,6 +30,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -48,29 +49,45 @@ import org.sosy_lab.cpachecker.cfa.blocks.BlockPartitioning;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionReturnEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionSummaryStatementEdge;
 import org.sosy_lab.cpachecker.core.ShutdownNotifier;
 import org.sosy_lab.cpachecker.core.algorithm.CPAAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.CPAAlgorithm.CPAAlgorithmFactory;
+import org.sosy_lab.cpachecker.core.algorithm.CPALocalSaveAlgorithm;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
+import org.sosy_lab.cpachecker.core.interfaces.WrapperPrecision;
 import org.sosy_lab.cpachecker.core.interfaces.pcc.ProofChecker;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSetFactory;
 import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
 import org.sosy_lab.cpachecker.cpa.arg.ARGReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
+import org.sosy_lab.cpachecker.cpa.callstack.CallstackCPA;
+import org.sosy_lab.cpachecker.cpa.callstack.CallstackReducer;
+import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
+import org.sosy_lab.cpachecker.cpa.callstack.CallstackTransferRelation;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsCPA;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsPrecision;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsReducer;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
+import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
+import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.CFAUtils;
+import org.sosy_lab.cpachecker.util.CPAs;
 
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Multimap;
 
-public class BAMTransferRelation implements TransferRelation {
+public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
 
   @Options
   static class PCCInformation {
@@ -100,6 +117,8 @@ public class BAMTransferRelation implements TransferRelation {
   final Map<AbstractState, AbstractState> expandedToReducedCache = new HashMap<>();
 
   private Block currentBlock;
+  private LinkedList<Block> BlockStack = new LinkedList<>();
+
   private BlockPartitioning partitioning;
   private int depth = 0;
 
@@ -110,6 +129,8 @@ public class BAMTransferRelation implements TransferRelation {
   private final Reducer wrappedReducer;
   private final BAMCPA bamCPA;
   private final ProofChecker wrappedProofChecker;
+  private final String entryFunction;
+  private final CallstackTransferRelation callstackTransfer;
 
   private Map<AbstractState, Precision> forwardPrecisionToExpandedPrecision;
   private Map<Pair<ARGState, Block>, Collection<ARGState>> correctARGsForBlocks = null;
@@ -122,7 +143,8 @@ public class BAMTransferRelation implements TransferRelation {
   final Timer removeSubtreeTimer = new Timer();
 
   boolean breakAnalysis = false;
-
+  boolean localAnalysis = false;
+  ShutdownNotifier tmpShutdownNotifier;
   public BAMTransferRelation(Configuration pConfig, LogManager pLogger, BAMCPA bamCpa,
                              ProofChecker wrappedChecker, BAMCache cache,
       ReachedSetFactory pReachedSetFactory, ShutdownNotifier pShutdownNotifier) throws InvalidConfigurationException {
@@ -131,12 +153,25 @@ public class BAMTransferRelation implements TransferRelation {
     reachedSetFactory = pReachedSetFactory;
     wrappedTransfer = bamCpa.getWrappedCpa().getTransferRelation();
     wrappedReducer = bamCpa.getReducer();
+    callstackTransfer = (CallstackTransferRelation) (CPAs.retrieveCPA(bamCpa, CallstackCPA.class)).getTransferRelation();
     PCCInformation.instantiate(pConfig);
     bamCPA = bamCpa;
     wrappedProofChecker = wrappedChecker;
     argCache = cache;
+    tmpShutdownNotifier = pShutdownNotifier;
+    LockStatisticsCPA tmpCpa;
+    if ((tmpCpa = CPAs.retrieveCPA(bamCpa, LockStatisticsCPA.class)) != null) {
+      ((LockStatisticsReducer)tmpCpa.getReducer()).setRestorator(this);
+    }
+    Configuration newConfig =  Configuration.copyWithNewPrefix(pConfig, "analysis");
+    String param = newConfig.getProperty("analysis.saveLocalResults");
+    if (param != null && param.equals("true")) {
+      localAnalysis = true;
+    }
 
     assert wrappedReducer != null;
+
+    entryFunction = pConfig.getProperty("analysis.entryFunction");
   }
 
 
@@ -180,7 +215,17 @@ public class BAMTransferRelation implements TransferRelation {
       // the easy case: we are in the middle of a block, so just forward to wrapped CPAs
       List<AbstractState> result = new ArrayList<>();
       for (CFAEdge e : CFAUtils.leavingEdges(node)) {
-        result.addAll(getAbstractSuccessors0(pState, pPrecision, e));
+        if (isRecursionEdge(e)) {
+          callstackTransfer.setFlag();
+          result.addAll(getAbstractSuccessors0(pState, pPrecision, getSummaryEdge(node)));
+          break;
+        }
+
+        Collection<? extends AbstractState> tmpResult = getAbstractSuccessors0(pState, pPrecision, e);
+        result.addAll(tmpResult);
+        if (e instanceof CFunctionReturnEdge && tmpResult.size() > 0) {
+          setLockStatisticsPrecision(tmpResult.iterator().next(), pPrecision);
+        }
       }
       return result;
     }
@@ -189,7 +234,19 @@ public class BAMTransferRelation implements TransferRelation {
       // we are already in same context
       // thus we already did the recursive call or we have a recursion in the cachedSubtrees
       // the latter is not supported yet, but in the the former case we can classically do the post operation
+      if (BlockStack.size() == 0) {
+        BlockStack.add(currentBlock);
+        setLockStatisticsPrecision(pState, pPrecision);
+      }
       return wrappedTransfer.getAbstractSuccessors(pState, pPrecision, null); // edge is null
+    }
+    Block nextBlock;
+    nextBlock = partitioning.getBlockForCallNode(node);
+    if (BlockStack.contains(nextBlock)) {
+      logger.log(Level.INFO, "BlockStack contains nextBlock");
+      //go by summaryEdge
+      callstackTransfer.setFlag();
+      return attachAdditionalInfoToCallNodes(wrappedTransfer.getAbstractSuccessors(pState, pPrecision, getSummaryEdge(node)));
     }
 
     if (isHeadOfMainFunction(node)) {
@@ -222,6 +279,7 @@ public class BAMTransferRelation implements TransferRelation {
     final Block outerSubtree = currentBlock;
     currentBlock = partitioning.getBlockForCallNode(node);
 
+    BlockStack.add(currentBlock);
     Collection<Pair<AbstractState, Precision>> reducedResult = performCompositeAnalysis(pState, pPrecision, node);
 
     logger.log(Level.FINER, "Recursive analysis of depth", depth--, "finished");
@@ -238,10 +296,20 @@ public class BAMTransferRelation implements TransferRelation {
 
     logger.log(Level.FINEST, "Expanding states", reducedResult);
 
+    //If we have LockStatisticsCPA, we should change a bit returned states
+    if (AbstractStates.extractStateByType(pState, LockStatisticsState.class) != null) {
+      LockStatisticsState currentState;
+      CallstackReducer reducer = (CallstackReducer)CPAs.retrieveCPA(bamCPA, CallstackCPA.class).getReducer();
+      for (Pair<AbstractState, Precision> returnStates : reducedResult) {
+        currentState = AbstractStates.extractStateByType(returnStates.getFirst(), LockStatisticsState.class);
+        currentState.reduceCallstack(reducer, node);
+      }
+    }
     final List<AbstractState> expandedResult = expandResultStates(reducedResult, outerSubtree, pState, pPrecision);
 
     logger.log(Level.ALL, "Expanded results:", expandedResult);
 
+    BlockStack.removeLast();
     currentBlock = outerSubtree;
 
     return expandedResult;
@@ -254,12 +322,12 @@ public class BAMTransferRelation implements TransferRelation {
     CFANode currentNode = edge.getPredecessor();
 
     Block currentNodeBlock = partitioning.getBlockForReturnNode(currentNode);
-    if (currentNodeBlock != null && !currentBlock.equals(currentNodeBlock)
+    /*if (currentNodeBlock != null && !currentBlock.equals(currentNodeBlock)
         && currentNodeBlock.getNodes().contains(edge.getSuccessor())) {
       // we are not analyzing the block corresponding to currentNode (currentNodeBlock) but the currentNodeBlock is inside of this block
       // avoid a reanalysis
       return Collections.emptySet();
-    }
+    }*/
 
     if (currentBlock.isReturnNode(currentNode) && !currentBlock.getNodes().contains(edge.getSuccessor())) {
       // do not perform analysis beyond the current block
@@ -296,6 +364,53 @@ public class BAMTransferRelation implements TransferRelation {
     return expandedResult;
   }
 
+  private void setLockStatisticsPrecision(final AbstractState pOldState, Precision pPrecision) {
+    if (pPrecision instanceof WrapperPrecision) {
+      LockStatisticsPrecision lockPrecision = ((WrapperPrecision) pPrecision).retrieveWrappedPrecision(LockStatisticsPrecision.class);
+
+      if (lockPrecision != null) {
+        CallstackState state = AbstractStates.extractStateByType(pOldState, CallstackState.class);
+        try {
+          CallstackState fullState = restoreCallstack(state);
+          lockPrecision.setPreciseState(fullState);
+        } catch (HandleCodeException e) {
+          logger.log(Level.WARNING, "Can't restore callstack");
+        }
+      }
+    }
+  }
+
+  private void cleanLockStatisticsPrecision(Precision pPrecision) {
+    if (pPrecision instanceof WrapperPrecision) {
+      LockStatisticsPrecision lockPrecision = ((WrapperPrecision) pPrecision).retrieveWrappedPrecision(LockStatisticsPrecision.class);
+      if (lockPrecision != null) {
+        lockPrecision.setPreciseState(null);
+      }
+    }
+  }
+
+  private boolean isRecursionEdge(CFAEdge e) {
+    if (e instanceof CFunctionCallEdge) {
+      for (Block block : BlockStack) {
+        if (block.getCallNode().equals(e.getSuccessor())) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  private CFunctionSummaryStatementEdge getSummaryEdge(CFANode node) {
+    CFAEdge e;
+    for (int i = 0; i < node.getNumLeavingEdges(); i++) {
+      e = node.getLeavingEdge(i);
+      if (e instanceof CFunctionSummaryStatementEdge) {
+        return (CFunctionSummaryStatementEdge)e;
+      }
+    }
+    return null;
+  }
+
   /** Analyse the block starting at node with initialState.
    * If there is a result in the cache, it is used,
    * otherwise a recursive CPAAlgorithm is started. */
@@ -308,6 +423,7 @@ public class BAMTransferRelation implements TransferRelation {
     final Precision reducedInitialPrecision = wrappedReducer.getVariableReducedPrecision(initialPrecision, currentBlock);
 
     // try to get previously computed element from cache
+    cleanLockStatisticsPrecision(reducedInitialPrecision);
     final Pair<ReachedSet, Collection<AbstractState>> pair =
             argCache.get(reducedInitialState, reducedInitialPrecision, currentBlock);
     ReachedSet reached = pair.getFirst();
@@ -315,6 +431,7 @@ public class BAMTransferRelation implements TransferRelation {
 
     final Collection<Pair<AbstractState, Precision>> result;
 
+    setLockStatisticsPrecision(initialState, reducedInitialPrecision);
     if (returnStates != null) {
       assert reached != null;
       // cache hit, return element from cache
@@ -326,7 +443,9 @@ public class BAMTransferRelation implements TransferRelation {
         // we have not even cached a partly computed reach-set,
         // so we must compute the subgraph specification from scratch
         reached = createInitialReachedSet(reducedInitialState, reducedInitialPrecision);
+        cleanLockStatisticsPrecision(reducedInitialPrecision);
         argCache.put(reducedInitialState, reducedInitialPrecision, currentBlock, reached);
+        setLockStatisticsPrecision(initialState, reducedInitialPrecision);
         logger.log(Level.FINEST, "Cache miss: starting recursive CPAAlgorithm with new initial reached-set.");
       } else {
         logger.log(Level.FINEST, "Partial cache hit: starting recursive CPAAlgorithm with partial reached-set.");
@@ -351,9 +470,15 @@ public class BAMTransferRelation implements TransferRelation {
           throws InterruptedException, CPAException {
 
     // CPAAlgorithm is not re-entrant due to statistics
-    final CPAAlgorithm algorithm = algorithmFactory.newInstance();
-    algorithm.run(reached);
+    CPAAlgorithm algorithm;
+    try {
+      algorithm = localAnalysis ?  new CPALocalSaveAlgorithm(bamCPA, logger, tmpShutdownNotifier) : algorithmFactory.newInstance();
 
+      algorithm.run(reached);
+    } catch (InvalidConfigurationException e) {
+      // TODO Auto-generated catch block
+      e.printStackTrace();
+    }
     // if the element is an error element
     final Collection<AbstractState> returnStates;
     final AbstractState lastState = reached.getLastState();
@@ -463,6 +588,136 @@ public class BAMTransferRelation implements TransferRelation {
     removeSubtreeTimer.stop();
   }
 
+  public ARGState findPath(ARGState target,
+      Map<ARGState, ARGState> pPathElementToReachedState, final CallstackState stack) throws InterruptedException, RecursiveAnalysisFailedException {
+
+    Map<ARGState, BackwardARGState> elementsMap = new HashMap<>();
+    Stack<ARGState> openElements = new Stack<>();
+    ARGState root = null;
+
+    BackwardARGState newTreeTarget = new BackwardARGState(target.getWrappedState(), null);
+    pPathElementToReachedState.put(newTreeTarget, target);
+    elementsMap.put(target, newTreeTarget);
+    ARGState currentState = target, tmpChild;
+
+    //Find path to nearest abstraction state
+    PredicateAbstractState pState = AbstractStates.extractStateByType(currentState, PredicateAbstractState.class);
+    while (!pState.isAbstractionState()) {
+      //assert currentState.getChildren().size() == 1;
+      if (currentState.getChildren().size() == 0) {
+        System.out.println("last state");
+      }
+      tmpChild = currentState.getChildren().iterator().next();
+      BackwardARGState newState = new BackwardARGState(tmpChild.getWrappedState(), elementsMap.get(currentState));
+      elementsMap.put(tmpChild, newState);
+      pPathElementToReachedState.put(newState, tmpChild);
+      currentState = tmpChild;
+      pState = AbstractStates.extractStateByType(currentState, PredicateAbstractState.class);
+    }
+
+    openElements.push(target);
+    while (!openElements.empty()) {
+      ARGState currentElement = openElements.pop();
+
+      for (ARGState parent : currentElement.getParents()) {
+        if (!elementsMap.containsKey(parent)) {
+          //create node for parent in the new subtree
+          BackwardARGState newParent = new BackwardARGState(parent.getWrappedState(), null);
+          elementsMap.put(parent, newParent);
+          pPathElementToReachedState.put(newParent, parent);
+          //and remember to explore the parent later
+          openElements.push(parent);
+        }
+        CFAEdge edge = BAMARGUtils.getEdgeToChild(parent, currentElement);
+        if (edge == null) {
+          //this is a summarized call and thus an direct edge could not be found
+          //we have the transfer function to handle this case, as our reachSet is wrong
+          //(we have to use the cached ones)
+          ReachedSet newReachedSet = abstractStateToReachedSet.get(parent);
+          ARGState innerTree =
+              computeCounterexampleSubgraph(parent, newReachedSet.getPrecision(newReachedSet.getFirstState()),
+                  elementsMap.get(currentElement), pPathElementToReachedState);
+          if (innerTree == null) {
+            return null;
+          }
+          for (ARGState child : innerTree.getChildren()) {
+            child.addParent(elementsMap.get(parent));
+          }
+          innerTree.removeFromARG();
+          elementsMap.get(parent).updateDecreaseId();
+        } else {
+          //normal edge
+          //create an edge from parent to current
+          elementsMap.get(currentElement).addParent(elementsMap.get(parent));
+        }
+      }
+      if (currentElement.getParents().isEmpty()) {
+        if (stack.getPreviousState() == null) {
+          root = elementsMap.get(currentElement);
+          break;
+        }
+        ARGState expandedState = null;
+        BackwardARGState lastNewExpandedState = null;
+        ARGState lastExpandedState = null;
+        ReachedSet tmpReachedSet;
+        Set<ARGState> removedStates = new HashSet<>();
+        //Find correct expanded state
+        for (AbstractState tmpExpanded : abstractStateToReachedSet.keySet()) {
+          tmpReachedSet = abstractStateToReachedSet.get(tmpExpanded);
+          if (tmpReachedSet.getFirstState().equals(currentElement)) {
+            CallstackState expandedCallstack = AbstractStates.extractStateByType(tmpExpanded, CallstackState.class);
+            if (!(expandedCallstack.getPreviousState().getCurrentFunction()
+                .equals(stack.getPreviousState().getCurrentFunction()))) {
+              continue;
+            }
+            expandedState = (ARGState) tmpExpanded;
+            if (lastExpandedState != null && expandedState.isOlderThan(lastExpandedState)) {
+              continue;
+            }
+            //Try to find path.
+            //It may be null, if somewhere callstack becomes different (now we don't understand this)
+            ARGState tmpRoot = findPath(expandedState, pPathElementToReachedState, stack.getPreviousState());
+            if (tmpRoot != null) {
+              BackwardARGState newExpandedState = null;
+              for (ARGState tmp : pPathElementToReachedState.keySet()) {
+                if (tmp.isDestroyed()) {
+                  continue;
+                }
+                if (pPathElementToReachedState.get(tmp).equals(expandedState) && tmp.getChildren().size() == 0) {
+                  newExpandedState = (BackwardARGState) tmp;
+                  break;
+                }
+              }
+              root = tmpRoot;
+              if (lastNewExpandedState != null) {
+                removedStates.add(lastNewExpandedState);
+              }
+              lastNewExpandedState = newExpandedState;
+              lastExpandedState = expandedState;
+            }
+          }
+        }
+        if (lastNewExpandedState == null || root == null) {
+          return null;
+        }
+        elementsMap.put(expandedState, lastNewExpandedState);
+        pPathElementToReachedState.put(lastNewExpandedState, expandedState);
+        for (ARGState child : elementsMap.get(currentElement).getChildren()) {
+          child.addParent(lastNewExpandedState);
+        }
+        removedStates.add(elementsMap.get(currentElement));
+        for (ARGState toRemove : removedStates) {
+          toRemove.removeFromARG();
+        }
+      }
+      if (currentElement.isDestroyed()) {
+        //It means, that we delete some part of path
+        return null;
+      }
+    }
+    return root;
+  }
+
   //returns root of a subtree leading from the root element of the given reachedSet to the target state
   //subtree is represented using children and parents of ARGElements, where newTreeTarget is the ARGState
   //in the constructed subtree that represents target
@@ -556,9 +811,10 @@ public class BAMTransferRelation implements TransferRelation {
     return result;
   }
 
-  void clearCaches() {
+  public void clearCaches() {
     argCache.clear();
     abstractStateToReachedSet.clear();
+    expandedToReducedCache.clear();
   }
 
   Pair<Block, ReachedSet> getCachedReachedSet(ARGState root, Precision rootPrecision) {
@@ -676,6 +932,62 @@ public class BAMTransferRelation implements TransferRelation {
       }
     }
     return true;
+  }
+
+  @Override
+  public CallstackState restoreCallstack(CallstackState state) throws HandleCodeException {
+    CallstackState fullState = null, tmpState;
+    CFANode currentNode, previousNode, predecessor;
+
+    previousNode = null;
+    for (int i = 0; i < BlockStack.size(); i++) {
+      currentNode = BlockStack.get(i).getCallNode();
+      predecessor = currentNode;
+      for (int j = 0; j < currentNode.getNumEnteringEdges(); j++) {
+        predecessor = currentNode.getEnteringEdge(j).getPredecessor();
+        if (previousNode == null && predecessor.getFunctionName().equals(entryFunction)) {
+          break;
+        } else if (previousNode != null && predecessor.getFunctionName().equals(previousNode.getFunctionName())) {
+          break;
+        }
+      }
+      fullState = new CallstackState(fullState, currentNode.getFunctionName(), predecessor);
+      previousNode = currentNode;
+    }
+    tmpState = state;
+    if (fullState != null) {
+      if (tmpState.getCurrentFunction().equals(fullState.getCurrentFunction())) {
+        return fullState;
+      } else if (!tmpState.getCurrentFunction().equals(fullState.getCurrentFunction()) && tmpState.getPreviousState() != null) {
+        Stack<CallstackState> callstack = new Stack<>();
+        while (!tmpState.getCurrentFunction().equals(fullState.getCurrentFunction())) {
+          callstack.push(tmpState);
+          tmpState = tmpState.getPreviousState();
+          if (tmpState == null) {
+            throw new HandleCodeException("Can't restore callstack");
+          }
+        }
+        tmpState = fullState;
+        CallstackState savedState;
+        while (!callstack.empty()) {
+          savedState = callstack.pop();
+          tmpState = new CallstackState(tmpState, savedState.getCurrentFunction(), savedState.getCallNode());
+        }
+        return tmpState;
+      } else/* if (!tmpState.getCurrentFunction().equals(fullState.getCurrentFunction()) && tmpState.getPreviousState() == null) */{
+        currentNode = currentBlock.getCallNode();
+        for (int i = 0; i < currentNode.getNumEnteringEdges(); i++) {
+          previousNode = currentNode.getEnteringEdge(i).getPredecessor();
+          if (previousNode.getFunctionName().equals(fullState.getCurrentFunction())) {
+            tmpState = new CallstackState(fullState, tmpState.getCurrentFunction(), previousNode);
+            return tmpState;
+          }
+        }
+        throw new HandleCodeException("Can't find called function");
+      }
+    } else {
+      return tmpState;
+    }
   }
 
   private Pair<Boolean, Collection<ARGState>> checkARGBlock(ARGState rootNode,

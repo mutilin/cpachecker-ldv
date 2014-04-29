@@ -27,7 +27,7 @@ import java.util.LinkedList;
 import java.util.List;
 
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
-import org.sosy_lab.cpachecker.cpa.abm.ABMRestoreStack;
+import org.sosy_lab.cpachecker.cpa.bam.BAMRestoreStack;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackReducer;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier.LockType;
@@ -194,7 +194,7 @@ public class LockStatisticsLock implements Comparable<LockStatisticsLock> {
     return tmpLock;
   }
 
-  public LockStatisticsLock expandCallstack(LockStatisticsLock rootLock, ABMRestoreStack restorator) {
+  public LockStatisticsLock expandCallstack(LockStatisticsLock rootLock, BAMRestoreStack restorator) {
     boolean changed = false;
 
     AccessPoint tmpPoint, newPoint;

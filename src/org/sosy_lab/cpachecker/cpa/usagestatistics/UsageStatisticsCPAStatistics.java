@@ -23,10 +23,10 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
-import java.io.BufferedWriter;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.io.Writer;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedList;
@@ -34,9 +34,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
 
-import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.Pair;
-import org.sosy_lab.common.Timer;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.FileOption;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
@@ -45,6 +43,8 @@ import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.io.Files;
 import org.sosy_lab.common.io.Path;
 import org.sosy_lab.common.io.Paths;
+import org.sosy_lab.common.log.LogManager;
+import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
@@ -123,7 +123,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
    * looks through all unsafe cases of current identifier and find the example of two lines with different locks,
    * one of them must be 'write'
    */
-  private void createVisualization(SingleIdentifier id, UsageInfo usage, BufferedWriter writer) throws IOException {
+  private void createVisualization(SingleIdentifier id, UsageInfo usage, Writer writer) throws IOException {
     LinkedList<TreeLeaf> leafStack = new LinkedList<>();
     TreeLeaf currentLeaf;
 
@@ -166,7 +166,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
   }
 
-  private TreeLeaf findFork(BufferedWriter writer, TreeLeaf pCurrentLeaf, LinkedList<TreeLeaf> leafStack) throws IOException {
+  private TreeLeaf findFork(Writer writer, TreeLeaf pCurrentLeaf, LinkedList<TreeLeaf> leafStack) throws IOException {
     TreeLeaf tmpLeaf, currentLeaf = pCurrentLeaf;
 
     while (true) {
@@ -213,7 +213,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     return tmpList;
   }
 
-  private void createVisualization(SingleIdentifier id, BufferedWriter writer) throws IOException {
+  private void createVisualization(SingleIdentifier id, Writer writer) throws IOException {
     UsageSet uinfo = Stat.get(id);
 
     if (uinfo == null || uinfo.size() == 0) {
@@ -254,7 +254,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
   @Override
   public void printStatistics(PrintStream out, Result result, ReachedSet reached) {
-		BufferedWriter writer = null;
+		Writer writer = null;
 		printStatisticsTimer.start();
 		UsageContainer container = AbstractStates.extractStateByType(reached.getFirstState(), UsageStatisticsState.class)
 		    .getContainer();
@@ -284,7 +284,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     out.println("Time for printing statistics:  " + printStatisticsTimer);
   }
 
-  private void printLockStatistics(BufferedWriter writer) throws IOException {
+  private void printLockStatistics(Writer writer) throws IOException {
     List<LockStatisticsLock> mutexes = findAllLocks();
 
     Collections.sort(mutexes);
@@ -294,7 +294,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
   }
 
-  private void printCountStatistics(BufferedWriter writer, Collection<SingleIdentifier> idSet) throws IOException {
+  private void printCountStatistics(Writer writer, Collection<SingleIdentifier> idSet) throws IOException {
     int global = 0, local = 0, fields = 0;
     int globalPointer = 0, localPointer = 0, fieldPointer = 0;
 

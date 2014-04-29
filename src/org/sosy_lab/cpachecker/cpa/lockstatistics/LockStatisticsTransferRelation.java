@@ -31,11 +31,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
 
-import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
+import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.ast.c.CAssignment;
 import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
@@ -48,7 +48,6 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CLeftHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
-import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
@@ -72,11 +71,6 @@ public class LockStatisticsTransferRelation implements TransferRelation
   private final Map<String, AnnotationInfo> annotatedfunctions;
 
   private final Set<LockInfo> locks;
-
-  /*@Option(name="exceptions",
-      description="functions with parameters, which we don't need to use")
-  private Set<String> exceptions;
-*/
   private LogManager logger;
 
   int i = 0;
@@ -204,7 +198,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
 
   private LockStatisticsState handleFunctionReturnEdge(LockStatisticsState lockStatisticsElement, CFunctionReturnEdge cfaEdge,
       LockStatisticsPrecision lockStatisticsPrecision, CallstackState state) {
-    CFANode tmpNode = cfaEdge.getSummaryEdge().getPredecessor();
+    //CFANode tmpNode = cfaEdge.getSummaryEdge().getPredecessor();
     String fName = cfaEdge.getSummaryEdge().getExpression().getFunctionCallExpression().getFunctionNameExpression().toASTString();
     LockStatisticsState successor = lockStatisticsElement.clone();
     if (annotatedfunctions != null && annotatedfunctions.containsKey(fName)) {
@@ -213,13 +207,13 @@ public class LockStatisticsTransferRelation implements TransferRelation
         successor = successor.restore(annotatedfunctions.get(fName).restoreLocks, logger);
 
         logger.log(Level.FINER, "Restore " + annotatedfunctions.get(fName).restoreLocks
-            + ", \n\tline=" + tmpNode.getLineNumber());
+            + ", \n\tline=" + cfaEdge.getLineNumber());
 
       }
       if (currentAnnotation.freeLocks.size() > 0) {
         //Free in state at first restores saved state
         logger.log(Level.FINER, "Free " + annotatedfunctions.get(fName).freeLocks.keySet() + " in " + successor
-                    + ", \n\t line = " + tmpNode.getLineNumber());
+                    + ", \n\t line = " + cfaEdge.getLineNumber());
         ImmutableMap<String, String> freeLocks = annotatedfunctions.get(fName).freeLocks;
         successor = successor.restore(freeLocks, logger); //it also clones
         String variable;
@@ -235,7 +229,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
       if (currentAnnotation.resetLocks.size() > 0) {
         //Reset in state at first restores saved state
         logger.log(Level.FINER, "Reset " + annotatedfunctions.get(fName).resetLocks.keySet() + " in " + successor
-            + ", \n\t line = " + tmpNode.getLineNumber());
+            + ", \n\t line = " + cfaEdge.getLineNumber());
         ImmutableMap<String, String> resetLocks = annotatedfunctions.get(fName).resetLocks;
         successor = successor.restore(resetLocks, logger); //it also clones
         String variable;
@@ -251,7 +245,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
       if (currentAnnotation.captureLocks.size() > 0) {
         Map<String, String> locks = annotatedfunctions.get(fName).captureLocks;
         logger.log(Level.FINER, "Force lock of " + annotatedfunctions.get(fName).captureLocks.keySet() + " in " + successor
-            + ", \n\t line = " + tmpNode.getLineNumber());
+            + ", \n\t line = " + cfaEdge.getLineNumber());
         successor = successor.restore(locks, logger);
         for (String name : locks.keySet()) {
           processLock(successor, lockStatisticsPrecision, state, cfaEdge.getLineNumber(), findLockByName(name), locks.get(name));

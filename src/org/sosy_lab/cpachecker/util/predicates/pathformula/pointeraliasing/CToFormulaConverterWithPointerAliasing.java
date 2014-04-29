@@ -88,6 +88,7 @@ import org.sosy_lab.cpachecker.util.predicates.pathformula.ErrorConditions;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.SSAMap.SSAMapBuilder;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.ctoformula.Constraints;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.ctoformula.CtoFormulaConverter;
+import org.sosy_lab.cpachecker.util.predicates.pathformula.ctoformula.IsRelevantLhsVisitor;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.pointeraliasing.PointerTargetSetBuilder.RealPointerTargetSetBuilder;
 
 import com.google.common.base.Optional;
@@ -157,7 +158,7 @@ public class CToFormulaConverterWithPointerAliasing extends CtoFormulaConverter 
   }
 
   Formula makeBaseAddressOfTerm(final Formula address) {
-    return ffmgr.createFuncAndCall("__BASE_ADDRESS_OF__", voidPointerFormulaType, ImmutableList.of(address));
+    return bfmgr.makeBoolean(true);// return ffmgr.createFuncAndCall("__BASE_ADDRESS_OF__", voidPointerFormulaType, ImmutableList.of(address));
   }
 
   public static CFieldReference eliminateArrow(final CFieldReference e, final CFAEdge edge)
@@ -551,7 +552,7 @@ public class CToFormulaConverterWithPointerAliasing extends CtoFormulaConverter 
     CType declarationType = CTypeUtils.simplifyType(declaration.getType());
 
     if (!isRelevantVariable(declaration) &&
-        !isAddressedVariable(declaration)) {
+        !isAddressedVariable(declaration)|| declaration.isGlobal()) {
       // The variable is unused
       logDebug("Ignoring declaration of unused variable", declarationEdge);
       return bfmgr.makeBoolean(true);
@@ -559,9 +560,9 @@ public class CToFormulaConverterWithPointerAliasing extends CtoFormulaConverter 
 
     // Constraint is only necessary for correct error conditions,
     // but seems to give better performance even without error conditions.
-    final Formula address = makeConstant(PointerTargetSet.getBaseName(declaration.getQualifiedName()),
-                                         CTypeUtils.getBaseType(declarationType));
-    constraints.addConstraint(fmgr.makeEqual(makeBaseAddressOfTerm(address), address));
+    /*final Formula address = makeConstant(PointerTargetSet.getBaseName(declaration.getQualifiedName()),
+                                         CTypeUtils.getBaseType(declarationType));*/
+    //constraints.addConstraint(fmgr.makeEqual(makeBaseAddressOfTerm(address), address));
 
     // if there is an initializer associated to this variable,
     // take it into account
@@ -655,13 +656,17 @@ public class CToFormulaConverterWithPointerAliasing extends CtoFormulaConverter 
     CExpressionVisitorWithPointerAliasing ev = new CExpressionVisitorWithPointerAliasing(this, edge, function, ssa, constraints, errorConditions, pts);
     BooleanFormula result = toBooleanFormula(ev.asValueFormula(e.accept(ev), expressionType));
 
-    if (options.deferUntypedAllocations()) {
-      DynamicMemoryHandler memoryHandler = new DynamicMemoryHandler(this, edge, ssa, pts, constraints, errorConditions);
-      memoryHandler.handleDeferredAllocationsInAssume(e, ev.getUsedDeferredAllocationPointers());
-    }
+    if (e.accept(new IsRelevantLhsVisitor(this))) {
+      if (options.deferUntypedAllocations()) {
+        DynamicMemoryHandler memoryHandler = new DynamicMemoryHandler(this, edge, ssa, pts, constraints, errorConditions);
+        memoryHandler.handleDeferredAllocationsInAssume(e, ev.getUsedDeferredAllocationPointers());
+      }
 
-    if (!truthAssumtion) {
-      result = bfmgr.not(result);
+      if (!truthAssumtion) {
+        result = bfmgr.not(result);
+      }
+    }  else {
+      result = bfmgr.makeBoolean(true);
     }
 
     pts.addEssentialFields(ev.getInitializedFields());

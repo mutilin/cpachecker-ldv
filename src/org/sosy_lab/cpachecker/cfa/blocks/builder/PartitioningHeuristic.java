@@ -58,7 +58,7 @@ public abstract class PartitioningHeuristic {
    */
   public final BlockPartitioning buildPartitioning(CFANode mainFunction) {
     Set<CFANode> mainFunctionBody = CFATraversal.dfs().ignoreFunctionCalls().collectNodesReachableFrom(mainFunction);
-    BlockPartitioningBuilder builder = new UnrecursiveBlockPartitioningBuilder(mainFunctionBody);
+    BlockPartitioningBuilder builder = new BlockPartitioningBuilder(mainFunctionBody);
 
     //traverse CFG
     Set<CFANode> seen = new HashSet<>();

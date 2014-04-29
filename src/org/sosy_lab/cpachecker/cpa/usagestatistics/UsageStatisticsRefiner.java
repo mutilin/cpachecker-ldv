@@ -28,8 +28,8 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 
-import org.sosy_lab.common.Timer;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
+import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.CounterexampleInfo;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
@@ -41,14 +41,14 @@ import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
 import org.sosy_lab.cpachecker.cpa.arg.ARGReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
-import org.sosy_lab.cpachecker.cpa.predicate.ABMPredicateRefiner;
+import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateRefiner;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 
-public class UsageStatisticsRefiner extends ABMPredicateRefiner implements StatisticsProvider {
+public class UsageStatisticsRefiner extends BAMPredicateRefiner implements StatisticsProvider {
 
   private class Stats implements Statistics {
 
@@ -112,14 +112,14 @@ public class UsageStatisticsRefiner extends ABMPredicateRefiner implements Stati
       }
     }*/
     System.out.println("Before refinement: " + unsafes.size() + " unsafes");
-    if (i++ == 11) {
+    if (i++ == 1) {
       //System.out.println("This refinement: " + i);
       return false;
     }
     //int iterationNum = 0;
     pStat.UnsafeCheck.start();
     while ((refinementId = container.check(refinementId)) != null) {
-      pStat.UnsafeCheck.stop();
+      pStat.UnsafeCheck.stopIfRunning();
       pathStateToReachedState.clear();
       pStat.DetectUnsafeCases.start();
       refinementFinish = true;
@@ -152,7 +152,7 @@ public class UsageStatisticsRefiner extends ABMPredicateRefiner implements Stati
       }*/
       pStat.ComputePath.start();
       ARGPath pPath = computePath((ARGState)target.getKeyState(), target.getCallStack());
-      pStat.ComputePath.stop();
+      pStat.ComputePath.stopIfRunning();
       if (pPath == null) {
         container.removeState(AbstractStates.extractStateByType(target.getKeyState(), UsageStatisticsState.class));
         System.out.println(target + " isn't found");
@@ -162,7 +162,7 @@ public class UsageStatisticsRefiner extends ABMPredicateRefiner implements Stati
       try {
         pStat.Refinement.start();
         CounterexampleInfo counterexample = super.performRefinement0(
-            new ABMReachedSet(transfer, new ARGReachedSet(pReached), pPath, pathStateToReachedState), pPath);
+            new BAMReachedSet(transfer, new ARGReachedSet(pReached), pPath, pathStateToReachedState), pPath);
         if (!counterexample.isSpurious()) {
           System.out.println(target + " is true");
           target.setRefineFlag();
@@ -182,12 +182,12 @@ public class UsageStatisticsRefiner extends ABMPredicateRefiner implements Stati
         System.out.println(target + " is " + (findUnknown++) + " unknown");
         target.setRefineFlag();
       } finally {
-        pStat.Refinement.stop();
+        pStat.Refinement.stopIfRunning();
       }
 
       pStat.UnsafeCheck.start();
     }
-    pStat.UnsafeCheck.stop();
+    pStat.UnsafeCheck.stopIfRunning();
     return refinementFinish;
   }
 

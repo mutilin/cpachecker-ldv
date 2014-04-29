@@ -92,8 +92,4 @@ public final class PathFormula implements Serializable {
     result = prime * result + ssa.hashCode();
     return result;
   }
-
-  public PathFormula clone(SSAMap pSsa) {
-    return new PathFormula(formula, pSsa, length);
-  }
 }

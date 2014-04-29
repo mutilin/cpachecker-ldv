@@ -1943,8 +1943,4 @@ class CFAFunctionBuilder extends ASTVisitor {
       }
     }
   }
-
-  public Iterable<? extends CFANode> getUnreachableNodes() {
-    return deadCode;
-  }
 }

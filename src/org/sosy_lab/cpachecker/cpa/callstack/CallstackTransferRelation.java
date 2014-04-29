@@ -88,7 +88,6 @@ public class CallstackTransferRelation implements TransferRelation {
     case StatementEdge: {
       if (pCfaEdge instanceof CFunctionSummaryStatementEdge) {
         CFunctionSummaryStatementEdge summary = (CFunctionSummaryStatementEdge)pCfaEdge;
-        CallstackState element = (CallstackState)pElement;
         if (shouldGoByFunctionSummaryStatement(element, summary)) {
           //skip call, return the same element
           return Collections.singleton(pElement);
@@ -161,7 +160,6 @@ public class CallstackTransferRelation implements TransferRelation {
 
         if (!isWildcardState(element)) {
 
-        assert (callerFunction.equals(returnElement.getCurrentFunction()));
           if (!callNode.equals(element.getCallNode())) {
             // this is not the right return edge
             return Collections.emptySet();
@@ -289,6 +287,7 @@ public class CallstackTransferRelation implements TransferRelation {
 
   private boolean shouldGoByFunctionSummaryStatement(CallstackState element, CFunctionSummaryStatementEdge sumEdge) {
     if (goByStatementNow) {
+      goByStatementNow = false;
       return true;
     }
     String functionName = sumEdge.getFunctionName();

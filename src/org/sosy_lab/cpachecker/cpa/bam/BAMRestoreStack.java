@@ -21,7 +21,7 @@
  *  CPAchecker web page:
  *    http://cpachecker.sosy-lab.org
  */
-package org.sosy_lab.cpachecker.cpa.abm;
+package org.sosy_lab.cpachecker.cpa.bam;
 
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
@@ -29,7 +29,7 @@ import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 /**
  * Interface, which has only one method - restoration reduced callstack.
  */
-public interface ABMRestoreStack {
+public interface BAMRestoreStack {
 
   public CallstackState restoreCallstack(CallstackState state) throws HandleCodeException;
 }

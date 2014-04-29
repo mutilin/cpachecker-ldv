@@ -23,21 +23,21 @@
  */
 package org.sosy_lab.cpachecker.cpa.lockstatistics;
 
-import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Options;
+import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.defaults.AbstractCPA;
 import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.CPAFactory;
-import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysisWithABM;
+import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysisWithBAM;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
 
 @Options(prefix="cpa.lockstatistics")
-public class LockStatisticsCPA extends AbstractCPA implements ConfigurableProgramAnalysisWithABM{
+public class LockStatisticsCPA extends AbstractCPA implements ConfigurableProgramAnalysisWithBAM{
 
   public static CPAFactory factory() {
     return AutomaticCPAFactory.forType(LockStatisticsCPA.class);

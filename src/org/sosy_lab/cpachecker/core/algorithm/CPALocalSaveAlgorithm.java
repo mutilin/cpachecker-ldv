@@ -27,10 +27,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
-import org.sosy_lab.common.LogManager;
-import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Options;
+import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.ShutdownNotifier;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
@@ -47,8 +46,10 @@ import org.sosy_lab.cpachecker.util.AbstractStates;
 public class CPALocalSaveAlgorithm extends CPAAlgorithm {
 
   private static Map<CFANode, LocalState> reachedStatistics;
-  public CPALocalSaveAlgorithm(ConfigurableProgramAnalysis pCpa, LogManager pLogger, Configuration pConfig, ShutdownNotifier pShutdownNotifier)  throws InvalidConfigurationException {
-    super(pCpa, pLogger, pConfig, pShutdownNotifier);
+
+  public CPALocalSaveAlgorithm(ConfigurableProgramAnalysis pCpa, LogManager pLogger, ShutdownNotifier pShutdownNotifier)  throws InvalidConfigurationException {
+    super(pCpa, pLogger, pShutdownNotifier,
+        null);
     if (reachedStatistics == null) {
       reachedStatistics = new HashMap<>();
     }
@@ -86,14 +87,14 @@ public class CPALocalSaveAlgorithm extends CPAAlgorithm {
       return b;
 
     } finally {
-      stats.totalTimer.stop();
-      stats.chooseTimer.stop();
-      stats.precisionTimer.stop();
-      stats.transferTimer.stop();
-      stats.mergeTimer.stop();
-      stats.stopTimer.stop();
-      stats.addTimer.stop();
-      stats.forcedCoveringTimer.stop();
+      stats.totalTimer.stopIfRunning();
+      stats.chooseTimer.stopIfRunning();
+      stats.precisionTimer.stopIfRunning();
+      stats.transferTimer.stopIfRunning();
+      stats.mergeTimer.stopIfRunning();
+      stats.stopTimer.stopIfRunning();
+      stats.addTimer.stopIfRunning();
+      stats.forcedCoveringTimer.stopIfRunning();
     }
   }
 

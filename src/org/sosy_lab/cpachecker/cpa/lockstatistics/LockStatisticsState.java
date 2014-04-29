@@ -30,11 +30,11 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.logging.Level;
 
-import org.sosy_lab.common.LogManager;
 import org.sosy_lab.common.Pair;
+import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
-import org.sosy_lab.cpachecker.cpa.abm.ABMRestoreStack;
+import org.sosy_lab.cpachecker.cpa.bam.BAMRestoreStack;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackReducer;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier.LockType;
@@ -381,7 +381,7 @@ public class LockStatisticsState implements AbstractState, Serializable {
     return true;
   }
 
-  public void expandCallstack(LockStatisticsState rootState, ABMRestoreStack restorator) {
+  public void expandCallstack(LockStatisticsState rootState, BAMRestoreStack restorator) {
     Set<Pair<LockStatisticsLock, LockStatisticsLock>> toChange = new HashSet<>();
     LockStatisticsLock tmpLock;
     for (LockStatisticsLock lock : this.locks) {

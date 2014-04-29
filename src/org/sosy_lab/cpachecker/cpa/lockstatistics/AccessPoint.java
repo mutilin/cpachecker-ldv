@@ -24,7 +24,7 @@
 package org.sosy_lab.cpachecker.cpa.lockstatistics;
 
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
-import org.sosy_lab.cpachecker.cpa.abm.ABMRestoreStack;
+import org.sosy_lab.cpachecker.cpa.bam.BAMRestoreStack;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackReducer;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.LineInfo;
@@ -116,7 +116,7 @@ public class AccessPoint {
     return result;
   }
 
-  public AccessPoint expandCallstack(ABMRestoreStack pRestorator) {
+  public AccessPoint expandCallstack(BAMRestoreStack pRestorator) {
     AccessPoint result = this.clone();
     try {
       result.callstack = pRestorator.restoreCallstack(this.reducedCallstack);
