@@ -28,8 +28,6 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-import org.sosy_lab.common.configuration.Configuration;
-import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.BinaryIdentifier;
@@ -70,10 +68,10 @@ public class LocalState implements AbstractState {
     previousState = state;
   }
 
-  public LocalState(LocalState state, Configuration pConfig) throws InvalidConfigurationException {
+  /*public LocalState(LocalState state, Configuration pConfig) throws InvalidConfigurationException {
     DataInfo = new HashMap<>();
     previousState = state;
-  }
+  }*/
 
   private LocalState(Map<AbstractIdentifier, DataType> oldMap, LocalState state) {
     DataInfo = new HashMap<>(oldMap);
@@ -192,6 +190,9 @@ public class LocalState implements AbstractState {
         && !this.previousState.equals(pState2.previousState)) {
       //it can be, when we join states, called from different functions
       joinedPreviousState = this.previousState.join(pState2.previousState);
+    } else if (this.previousState != null && pState2.previousState != null
+        && this.previousState.equals(pState2.previousState)) {
+      joinedPreviousState = this.previousState;
     }
 
     LocalState joinState = this.clone(joinedPreviousState);
@@ -220,7 +221,7 @@ public class LocalState implements AbstractState {
 
   public boolean isLessOrEqual(LocalState pState2) {
     //LOCAL < NULL < GLOBAL
-    for (AbstractIdentifier name : this.DataInfo.keySet()) {
+    /*for (AbstractIdentifier name : this.DataInfo.keySet()) {
       if (this.DataInfo.get(name) == DataType.LOCAL) {
         continue;
       }
@@ -231,6 +232,11 @@ public class LocalState implements AbstractState {
     }
     for (AbstractIdentifier name : pState2.DataInfo.keySet()) {
       if (!this.DataInfo.containsKey(name) && pState2.DataInfo.get(name) == DataType.LOCAL) {
+        return false;
+      }
+    }*/
+    for (AbstractIdentifier name : this.DataInfo.keySet()) {
+      if (this.getType(name) != pState2.getType(name)) {
         return false;
       }
     }
