@@ -29,11 +29,13 @@ import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
 import org.sosy_lab.cpachecker.cpa.bam.BAMRestoreStack;
+import org.sosy_lab.cpachecker.cpa.callstack.CallstackReducer;
 
 
 public class LockStatisticsReducer implements Reducer {
   //this field should be initialized by ABM
   private BAMRestoreStack restorator;
+  private CallstackReducer cReducer;
 
   @Override
   public AbstractState getVariableReducedState(AbstractState pExpandedElement, Block pContext, CFANode pCallNode) {
@@ -51,6 +53,7 @@ public class LockStatisticsReducer implements Reducer {
     LockStatisticsState reducedState = (LockStatisticsState)pReducedElement;
     LockStatisticsState expandedState = reducedState.clone();
     LockStatisticsState rootState = (LockStatisticsState) pRootElement;
+    expandedState.reduceCallstack(cReducer, pReducedContext.getCallNode());
     expandedState.expandCallstack(rootState, restorator);
     expandedState.copyRestoreState(rootState);
     return expandedState;
@@ -93,5 +96,9 @@ public class LockStatisticsReducer implements Reducer {
 
   public void setRestorator(BAMRestoreStack r) {
     restorator = r;
+  }
+
+  public void setCallstackReducer(CallstackReducer r) {
+    cReducer = r;
   }
 }
