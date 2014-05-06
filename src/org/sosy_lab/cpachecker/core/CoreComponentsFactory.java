@@ -44,7 +44,6 @@ import org.sosy_lab.cpachecker.core.algorithm.CounterexampleCheckAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.PredicatedAnalysisAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.ProofCheckAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.RestartAlgorithm;
-import org.sosy_lab.cpachecker.core.algorithm.RestartLockAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.RestartWithConditionsAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.ResultCheckAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.impact.ImpactAlgorithm;
@@ -153,11 +152,11 @@ public class CoreComponentsFactory {
       algorithm = new ProofCheckAlgorithm(cpa, config, logger, shutdownNotifier);
     } else if (useRestartingAlgorithm) {
       logger.log(Level.INFO, "Using Restarting Algorithm");
-      if (saveLocalResults) {
+      /*if (saveLocalResults) {
         algorithm = new RestartLockAlgorithm(config, logger, shutdownNotifier, programDenotation, cfa);
-      } else {
+      } else {*/
         algorithm = new RestartAlgorithm(config, logger, shutdownNotifier, programDenotation, cfa);
-      }
+      //}
 
     } else if (useImpactAlgorithm) {
       algorithm = new ImpactAlgorithm(config, logger, shutdownNotifier, cpa, cfa);

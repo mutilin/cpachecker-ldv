@@ -24,6 +24,7 @@
 package org.sosy_lab.cpachecker.cpa.local;
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -49,16 +50,19 @@ import org.sosy_lab.cpachecker.core.interfaces.MergeOperator;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustment;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
+import org.sosy_lab.cpachecker.core.interfaces.Statistics;
+import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
 import org.sosy_lab.cpachecker.core.interfaces.StopOperator;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 
 
 @Options(prefix="cpa.local")
-public class LocalCPA implements ConfigurableProgramAnalysisWithBAM {
+public class LocalCPA implements ConfigurableProgramAnalysisWithBAM, StatisticsProvider {
     private LocalDomain abstractDomain;
     private MergeOperator mergeOperator;
     private StopOperator stopOperator;
     private TransferRelation transferRelation;
+    private Statistics statistics;
     private final Reducer reducer;
 
     public static Set<String> localVariables;
@@ -80,6 +84,7 @@ public class LocalCPA implements ConfigurableProgramAnalysisWithBAM {
       this.abstractDomain = new LocalDomain();
       this.mergeOperator = initializeMergeOperator();
       this.stopOperator = initializeStopOperator();
+      statistics = new LocalStatistics(pConfig, pLogger);
       reducer = new LocalReducer();
       this.transferRelation = new LocalTransferRelation(pConfig);
       // @Option is not allowed on static members
@@ -151,5 +156,10 @@ public class LocalCPA implements ConfigurableProgramAnalysisWithBAM {
     @Override
     public Reducer getReducer() {
       return reducer;
+    }
+
+    @Override
+    public void collectStatistics(Collection<Statistics> pStatsCollection) {
+      pStatsCollection.add(statistics);
     }
 }
