@@ -55,7 +55,6 @@ import org.sosy_lab.cpachecker.cfa.model.c.CFunctionSummaryStatementEdge;
 import org.sosy_lab.cpachecker.core.ShutdownNotifier;
 import org.sosy_lab.cpachecker.core.algorithm.CPAAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.CPAAlgorithm.CPAAlgorithmFactory;
-import org.sosy_lab.cpachecker.core.algorithm.CPALocalSaveAlgorithm;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
@@ -74,7 +73,6 @@ import org.sosy_lab.cpachecker.cpa.callstack.CallstackTransferRelation;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsCPA;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsPrecision;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsReducer;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
@@ -143,8 +141,6 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
   final Timer removeSubtreeTimer = new Timer();
 
   boolean breakAnalysis = false;
-  boolean localAnalysis = false;
-  ShutdownNotifier tmpShutdownNotifier;
   public BAMTransferRelation(Configuration pConfig, LogManager pLogger, BAMCPA bamCpa,
                              ProofChecker wrappedChecker, BAMCache cache,
       ReachedSetFactory pReachedSetFactory, ShutdownNotifier pShutdownNotifier) throws InvalidConfigurationException {
@@ -158,15 +154,10 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
     bamCPA = bamCpa;
     wrappedProofChecker = wrappedChecker;
     argCache = cache;
-    tmpShutdownNotifier = pShutdownNotifier;
     LockStatisticsCPA tmpCpa;
     if ((tmpCpa = CPAs.retrieveCPA(bamCpa, LockStatisticsCPA.class)) != null) {
       ((LockStatisticsReducer)tmpCpa.getReducer()).setRestorator(this);
-    }
-    Configuration newConfig =  Configuration.copyWithNewPrefix(pConfig, "analysis");
-    String param = newConfig.getProperty("analysis.saveLocalResults");
-    if (param != null && param.equals("true")) {
-      localAnalysis = true;
+      ((LockStatisticsReducer)tmpCpa.getReducer()).setCallstackReducer((CallstackReducer)CPAs.retrieveCPA(bamCPA, CallstackCPA.class).getReducer());
     }
 
     assert wrappedReducer != null;
@@ -203,7 +194,6 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
     throws CPATransferException, InterruptedException {
 
     forwardPrecisionToExpandedPrecision.clear();
-
     if (edge != null) {
       // TODO when does this happen?
       return getAbstractSuccessors0(pState, pPrecision, edge);
@@ -296,15 +286,6 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
 
     logger.log(Level.FINEST, "Expanding states", reducedResult);
 
-    //If we have LockStatisticsCPA, we should change a bit returned states
-    if (AbstractStates.extractStateByType(pState, LockStatisticsState.class) != null) {
-      LockStatisticsState currentState;
-      CallstackReducer reducer = (CallstackReducer)CPAs.retrieveCPA(bamCPA, CallstackCPA.class).getReducer();
-      for (Pair<AbstractState, Precision> returnStates : reducedResult) {
-        currentState = AbstractStates.extractStateByType(returnStates.getFirst(), LockStatisticsState.class);
-        currentState.reduceCallstack(reducer, node);
-      }
-    }
     final List<AbstractState> expandedResult = expandResultStates(reducedResult, outerSubtree, pState, pPrecision);
 
     logger.log(Level.ALL, "Expanded results:", expandedResult);
@@ -421,9 +402,8 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
     logger.log(Level.FINEST, "Reducing state", initialState);
     final AbstractState reducedInitialState = wrappedReducer.getVariableReducedState(initialState, currentBlock, node);
     final Precision reducedInitialPrecision = wrappedReducer.getVariableReducedPrecision(initialPrecision, currentBlock);
-
     // try to get previously computed element from cache
-    cleanLockStatisticsPrecision(reducedInitialPrecision);
+    //cleanLockStatisticsPrecision(reducedInitialPrecision);
     final Pair<ReachedSet, Collection<AbstractState>> pair =
             argCache.get(reducedInitialState, reducedInitialPrecision, currentBlock);
     ReachedSet reached = pair.getFirst();
@@ -443,9 +423,9 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
         // we have not even cached a partly computed reach-set,
         // so we must compute the subgraph specification from scratch
         reached = createInitialReachedSet(reducedInitialState, reducedInitialPrecision);
-        cleanLockStatisticsPrecision(reducedInitialPrecision);
+        //cleanLockStatisticsPrecision(reducedInitialPrecision);
         argCache.put(reducedInitialState, reducedInitialPrecision, currentBlock, reached);
-        setLockStatisticsPrecision(initialState, reducedInitialPrecision);
+        //setLockStatisticsPrecision(initialState, reducedInitialPrecision);
         logger.log(Level.FINEST, "Cache miss: starting recursive CPAAlgorithm with new initial reached-set.");
       } else {
         logger.log(Level.FINEST, "Partial cache hit: starting recursive CPAAlgorithm with partial reached-set.");
@@ -470,15 +450,9 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
           throws InterruptedException, CPAException {
 
     // CPAAlgorithm is not re-entrant due to statistics
-    CPAAlgorithm algorithm;
-    try {
-      algorithm = localAnalysis ?  new CPALocalSaveAlgorithm(bamCPA, logger, tmpShutdownNotifier) : algorithmFactory.newInstance();
+    CPAAlgorithm algorithm =  algorithmFactory.newInstance();
 
-      algorithm.run(reached);
-    } catch (InvalidConfigurationException e) {
-      // TODO Auto-generated catch block
-      e.printStackTrace();
-    }
+    algorithm.run(reached);
     // if the element is an error element
     final Collection<AbstractState> returnStates;
     final AbstractState lastState = reached.getLastState();
