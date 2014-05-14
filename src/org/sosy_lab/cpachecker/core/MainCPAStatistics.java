@@ -76,7 +76,7 @@ import com.google.common.collect.Multiset;
 import com.google.common.collect.Ordering;
 
 @Options
-class MainCPAStatistics implements Statistics {
+public class MainCPAStatistics implements Statistics {
 
   // Beyond this many states, we omit some statistics because they are costly.
   private static final int MAX_SIZE_FOR_REACHED_STATISTICS = 1000000;
@@ -108,7 +108,7 @@ class MainCPAStatistics implements Statistics {
   private final MemoryStatistics memStats;
   private Thread memStatsThread;
 
-  private final Timer programTime = new Timer();
+  public static final Timer programTime = new Timer();
   final Timer creationTime = new Timer();
   final Timer cpaCreationTime = new Timer();
   private final Timer analysisTime = new Timer();
