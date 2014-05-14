@@ -258,10 +258,10 @@ public class BAMPredicateReducer implements Reducer {
 
     private void computeView() {
       if (evaluatedPredicateMap == null) {
-        /*ReducedPredicatePrecision lExpandedPredicatePrecision = null;
+        ReducedPredicatePrecision lExpandedPredicatePrecision = null;
         if (expandedPredicatePrecision instanceof ReducedPredicatePrecision) {
           lExpandedPredicatePrecision = (ReducedPredicatePrecision) expandedPredicatePrecision;
-        }*/
+        }
 
         evaluatedGlobalPredicates =
             ImmutableSet.copyOf(relevantComputer.getRelevantPredicates(context,
@@ -275,8 +275,8 @@ public class BAMPredicateReducer implements Reducer {
           if (context.getNodes().contains(node)) {
             // TODO handle location-instance-specific predicates
             // Without support for them, we can just pass 0 as locInstance parameter
-            Collection<AbstractionPredicate> set =
-                relevantComputer.getRelevantPredicates(context, rootPredicatePrecision.getPredicates(node, 0));
+            Collection<AbstractionPredicate> set = rootPredicatePrecision.getPredicates(node, 0);
+                //relevantComputer.getRelevantPredicates(context, rootPredicatePrecision.getPredicates(node, 0));
             pmapBuilder.putAll(node, set);
           }
         }
@@ -333,19 +333,15 @@ public class BAMPredicateReducer implements Reducer {
         if (loc instanceof CFunctionEntryNode) {
           //Evaluated map skips predicates, which is relevant to next function
           result = new HashSet<>(result); //This is ImmutableSet
-          result.addAll(rootPredicatePrecision.getLocalPredicates().get(loc));
+          result.addAll(rootPredicatePrecision.getPredicates(loc, locInstance));
         }
         String functionName = context.getCallNode().getFunctionName();
         result = new HashSet<>(result); //This is ImmutableSet
         result.addAll(rootPredicatePrecision.getFunctionPredicates().get(functionName));
-	if (loc instanceof CFunctionEntryNode) {
-          //Evaluated map skips predicates, which is relevant to next function
-          result.addAll(rootPredicatePrecision.getLocalPredicates().get(loc));
-        }
         return result;
       } else {
         Set<AbstractionPredicate> result = rootPredicatePrecision.getPredicates(loc, locInstance);
-           // relevantComputer.getRelevantPredicates(context, rootPredicatePrecision.getPredicates(loc, locInstance));
+            //relevantComputer.getRelevantPredicates(context, rootPredicatePrecision.getPredicates(loc, locInstance));
         if (result.isEmpty()) {
           result = relevantComputer.getRelevantPredicates(context, rootPredicatePrecision.getGlobalPredicates());
         }

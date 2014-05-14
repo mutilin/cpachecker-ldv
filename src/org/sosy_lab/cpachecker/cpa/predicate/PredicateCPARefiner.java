@@ -229,9 +229,10 @@ public class PredicateCPARefiner extends AbstractARGBasedRefiner implements Stat
 
       strategy.performRefinement(pReached, abstractionStatesTrace, counterexample.getInterpolants(), repeatedCounterexample);
 
+      PredicatePrecision p = Precisions.extractPrecisionByType(pReached.asReachedSet().getPrecision(pReached.asReachedSet().getFirstState()),
+          PredicatePrecision.class);
       System.out.println("Total number of predicates: "
-        + Precisions.extractPrecisionByType(pReached.asReachedSet().getPrecision(pReached.asReachedSet().getFirstState()),
-             PredicatePrecision.class).getLocalPredicates().size());
+        + (p.getFunctionPredicates().size() != 0 ? p.getFunctionPredicates().size() : p.getLocalPredicates().size()));
       totalRefinement.stop();
       return CounterexampleInfo.spurious();
 
