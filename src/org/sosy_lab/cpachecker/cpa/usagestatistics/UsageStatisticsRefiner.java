@@ -32,6 +32,7 @@ import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.CounterexampleInfo;
+import org.sosy_lab.cpachecker.core.MainCPAStatistics;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.Refiner;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
@@ -88,7 +89,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
   int findUnknown = 0;
   @Override
   public boolean performRefinement(ReachedSet pReached) throws CPAException, InterruptedException {
-    UsageCache cache = new UsageFunctionCache();
+    UsageCache cache = new UsageLineCache();
     Set<UsageInfo> toDelete = new HashSet<>();
     UsageContainer container =
         AbstractStates.extractStateByType(pReached.getFirstState(), UsageStatisticsState.class).getContainer();
@@ -97,25 +98,22 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     SingleIdentifier refinementId = unsafes.isEmpty() ? null : unsafes.iterator().next();
     PairwiseUnsafeDetector detector = new PairwiseUnsafeDetector(null);
 
-    System.out.println("Perform US refinement: " + i);
-    //int originSize = 0;
+    System.out.println("Perform US refinement: " + i++);
+    System.out.println("Time: " + MainCPAStatistics.programTime);
+    int counter = 0;
     boolean refinementFinish = false;
-    /*for (SingleIdentifier id : container.getStatistics().keySet()) {
+    for (SingleIdentifier id : container.getStatistics().keySet()) {
       UsageSet uset = container.getStatistics().get(id);
       if (uset.isTrueUnsafe()) {
-        continue;
+        counter++;
       }
-      for (UsageInfo uinfo : uset) {
-        if (detector.isUnsafeCase(uset, uinfo) && !uinfo.isRefined()) {
-          originSize++;
-        }
-      }
-    }*/
-    System.out.println("Before refinement: " + unsafes.size() + " unsafes");
-    if (i++ == 1) {
+    }
+    System.out.println("Unsafes: " + unsafes.size());
+    System.out.println("True refined: " + counter);
+    /*if (i++ == 2) {
       //System.out.println("This refinement: " + i);
       return false;
-    }
+    }*/
     //int iterationNum = 0;
     pStat.UnsafeCheck.start();
     while ((refinementId = container.check(refinementId)) != null) {
@@ -147,7 +145,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       //iterationNum++;
       System.out.println("Refine " + refinementId);
       //System.out.println("Refine " + iterationNum + " from " + originSize);
-      /*if (target.getLine().getLine() == 24374) {
+      /*if (target.getLine().getLine() == 23127) {
          System.out.println("That line");
       }*/
       pStat.ComputePath.start();
