@@ -25,6 +25,7 @@ package org.sosy_lab.cpachecker.cpa.local;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -88,7 +89,12 @@ public class LocalCPA implements ConfigurableProgramAnalysisWithBAM, StatisticsP
       reducer = new LocalReducer();
       this.transferRelation = new LocalTransferRelation(pConfig);
       // @Option is not allowed on static members
-      localVariables = new HashSet<>(Arrays.asList(pConfig.getProperty("cpa.local.localvariables").split(", ")));
+      String localVars = pConfig.getProperty("cpa.local.localvariables");
+      if (localVars != null) {
+        localVariables = new HashSet<>(Arrays.asList(localVars.split(", ")));
+      } else {
+        localVariables = Collections.emptySet();
+      }
     }
 
     private MergeOperator initializeMergeOperator() {
