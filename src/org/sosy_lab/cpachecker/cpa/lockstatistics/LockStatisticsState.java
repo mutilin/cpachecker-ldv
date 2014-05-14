@@ -48,8 +48,7 @@ public class LockStatisticsState implements AbstractState, Serializable {
   //if we need restore state, we save it here
   //Used for function annotations like annotate.function_name.restore
   public LockStatisticsState() {
-    locks  = new TreeSet<>();
-    toRestore = null;
+    this(new TreeSet<LockStatisticsLock>(), null);
   }
 
   private LockStatisticsState(Set<LockStatisticsLock> gLocks, LockStatisticsState state) {
@@ -273,60 +272,9 @@ public class LockStatisticsState implements AbstractState, Serializable {
     return sb.toString();
   }*/
 
-  /**
-   * This element joins this element with another element.
-   *
-   * @param other the other element to join with this element
-   * @return a new element representing the join of this element and the other element
-   */
-  public LockStatisticsState join(LockStatisticsState other) {
-    Set<LockStatisticsLock> newLocks = new TreeSet<>();
-
-    for (LockStatisticsLock otherLock : other.locks) {
-
-      if (locks.contains(otherLock)) {
-        newLocks.add(otherLock);
-      }
-    }
-
-    return new LockStatisticsState(newLocks, this.toRestore);
-  }
-
-  /**
-   * This method decides if this element is less or equal than the other element, based on the order imposed by the lattice.
-   *
-   * @param other the other element
-   * @return true, if this element is less or equal than the other element, based on the order imposed by the lattice
-   */
-  public boolean isLessOrEqual(LockStatisticsState other) {
-
-    if (toRestore != null && !toRestore.equals(other.toRestore)) {
-      return false;
-    } else if (toRestore == null && other.toRestore != null) {
-      return false;
-    }
-
-    if (locks.size() == 0 && other.locks.size() > 0) {
-      return false;
-    }
-
-    // also, this element is not less or equal than the other element,
-    // if any one constant's value of the other element differs from the constant's value in this element
-    for (LockStatisticsLock Lock : locks) {
-      if (other.findLock(Lock) == null) {
-        return false;
-      }
-    }
-    return true;
-  }
-
   @Override
   public LockStatisticsState clone() {
     return new LockStatisticsState(new TreeSet<>(this.locks), this.toRestore);
-    //result.toRestore = ;
-    /*for (LockStatisticsLock lock : this.locks) {
-    result.loc = new LockStatisticsState(gLocks, state)t.locks = new LockStatisticsState(gLocks, state)
-    return result;*/
   }
 
   public void markOldLocks() {

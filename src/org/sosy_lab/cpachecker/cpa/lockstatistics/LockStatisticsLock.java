@@ -80,9 +80,6 @@ public class LockStatisticsLock implements Comparable<LockStatisticsLock> {
   @Override
   public LockStatisticsLock clone() {
     LinkedList<AccessPoint> tmpAccessPoints = new LinkedList<>(accessPoints);
-    /*for (AccessPoint point : this.accessPoints) {
-      tmpAccessPoints.add(point.clone());
-    }*/
     return clone(tmpAccessPoints);
   }
 
