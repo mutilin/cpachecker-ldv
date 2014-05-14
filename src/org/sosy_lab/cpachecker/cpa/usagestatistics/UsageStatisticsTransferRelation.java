@@ -160,14 +160,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
     CFAEdge currentEdge = pCfaEdge;
 
-    /*if (checkFunciton(pCfaEdge, abortfunctions)) {
-      logger.log(Level.FINEST, currentEdge + " is abort edge, analysis was stopped");
-      return;
-    }*/
     CFANode node = AbstractStates.extractLocation(oldState);
-   /* if (node.getFunctionName().equals("panic")) {
-      System.out.println("Enters panic");
-    }*/
     if (node instanceof CFunctionEntryNode && abortfunctions.contains(node.getFunctionName())) {
       logger.log(Level.FINEST, currentEdge + " is abort edge, analysis was stopped");
       return;

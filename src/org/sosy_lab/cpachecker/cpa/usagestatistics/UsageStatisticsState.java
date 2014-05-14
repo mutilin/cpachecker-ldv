@@ -29,6 +29,7 @@ import java.util.Map;
 
 import org.sosy_lab.cpachecker.core.defaults.AbstractSingleWrapperState;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
+import org.sosy_lab.cpachecker.core.interfaces.Targetable;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
@@ -37,7 +38,7 @@ import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 /**
  * Represents one abstract state of the UsageStatistics CPA.
  */
-public class UsageStatisticsState extends AbstractSingleWrapperState  {
+public class UsageStatisticsState extends AbstractSingleWrapperState implements Targetable {
   /* Boilerplate code to avoid serializing this class */
 
   private static final long serialVersionUID = -898577877284268426L;
@@ -218,6 +219,11 @@ public class UsageStatisticsState extends AbstractSingleWrapperState  {
   public UsageContainer getContainer() {
     return container;
   }
+
+  /*@Override
+  public boolean isTarget() {
+    return container.refinementRequired() || super.isTarget();
+  }*/
 
   public void saveUnsafesInContainer() {
     for (SingleIdentifier id : recentUsages.keySet()) {
