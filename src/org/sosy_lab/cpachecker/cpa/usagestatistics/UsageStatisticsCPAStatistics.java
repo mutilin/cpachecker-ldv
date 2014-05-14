@@ -81,6 +81,8 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   private boolean printAllUnsafeUsages = false;
 
   private final LogManager logger;
+  private int totalUsages = 0;
+  private int maxNumberOfUsages = 0;
 
   public Timer transferRelationTimer = new Timer();
   public Timer printStatisticsTimer = new Timer();
@@ -215,9 +217,12 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
   private void createVisualization(SingleIdentifier id, Writer writer) throws IOException {
     UsageSet uinfo = Stat.get(id);
-
     if (uinfo == null || uinfo.size() == 0) {
       return;
+    }
+    totalUsages += uinfo.size();
+    if (uinfo.size() > maxNumberOfUsages) {
+      maxNumberOfUsages = uinfo.size();
     }
     if (id instanceof StructureFieldIdentifier) {
       writer.append("###\n");
@@ -279,6 +284,21 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       logger.log(Level.SEVERE, e.getMessage());
       return;
     }
+    out.println("Amount of unsafes:             " + unsafes.size());
+    out.println("Amount of unsafe usages:       " + totalUsages + "(avg. " +
+        (unsafes.size() == 0 ? "0" : (totalUsages/unsafes.size()))
+        + ", max " + maxNumberOfUsages + ")");
+    int allUsages = 0, maxUsage = 0;
+    for (SingleIdentifier id : Stat.keySet()) {
+      allUsages += Stat.get(id).size();
+      if (maxUsage < Stat.get(id).size()) {
+        maxUsage = Stat.get(id).size();
+      }
+    }
+    out.println("Total amount of variables:     " + Stat.keySet().size());
+    out.println("Total amount of usages:        " + allUsages + "(avg. " +
+        (Stat.keySet().size() == 0 ? "0" : (allUsages/Stat.keySet().size()))
+        + ", max " + maxUsage + ")");
     out.println("Time for transfer relation:    " + transferRelationTimer);
     printStatisticsTimer.stop();
     out.println("Time for printing statistics:  " + printStatisticsTimer);
