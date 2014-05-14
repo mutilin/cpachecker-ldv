@@ -150,6 +150,9 @@ public class CEGARAlgorithm implements Algorithm, StatisticsProvider {
   @Option(name="globalRefinement", description="Whether to do refinement immediately after finding an error state, or globally after the ARG has been unrolled completely.")
   private boolean globalRefinement = false;
 
+  @Option(name="refinementLoops", description="Number of loops of refinement")
+  private int refinementLoops = -1;
+
   private final LogManager logger;
   private final Algorithm algorithm;
   private final Refiner mRefiner;
@@ -238,6 +241,9 @@ public class CEGARAlgorithm implements Algorithm, StatisticsProvider {
         // run algorithm
         isComplete &= algorithm.run(reached);
 
+        if (stats.countRefinements == refinementLoops) {
+          break;
+        }
         // if there is any target state do refinement
         //if (refinementNecessary(reached)) {
 
@@ -246,13 +252,13 @@ public class CEGARAlgorithm implements Algorithm, StatisticsProvider {
           // assert that reached set is free of target states,
           // if refinement was successful and initial reached set was empty (i.e. stopAfterError=true)
           if (refinementSuccessful && initialReachedSetSize == 1) {
-            assert !from(reached).anyMatch(IS_TARGET_STATE);
             ((BAMTransferRelation)(((CPAAlgorithm)algorithm).cpa).getTransferRelation()).clearCaches();
             ARGState firstState = (ARGState) reached.getFirstState();
             CFANode firstNode = AbstractStates.extractLocation(firstState);
             Precision precision = reached.getPrecision(firstState);
             ((USReachedSet)reached).clear();
             reached.add((((CPAAlgorithm)algorithm).cpa).getInitialState(firstNode), precision);
+            assert !from(reached).anyMatch(IS_TARGET_STATE);
           }
         //}
 
