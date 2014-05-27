@@ -154,6 +154,11 @@ public class UsageContainer {
       return null;
     }
     UsageSet uset = Stat.get(refinementId);
+    if (refinementId.getName().equals("b_flags") && unsafeDetector.containsUnsafe(uset, SearchMode.FALSE)) {
+      return refinementId;
+    } else if (refinementId.getName().equals("b_flags") && !unsafeDetector.containsUnsafe(uset, SearchMode.FALSE)) {
+      return null;
+    }
     if (uset.isTrueUnsafe() || !unsafeDetector.containsUnsafe(uset, SearchMode.FALSE)) {
       if (!unsafeDetector.containsUnsafe(uset, SearchMode.TRUE)) {
         unsafes.remove(refinementId);
@@ -163,11 +168,14 @@ public class UsageContainer {
         uset.setUnsafe();
       }
       for (SingleIdentifier id : unsafes) {
-        uset = Stat.get(id);
+        if (id.getName().equals("b_flags")) {
+          return id;
+        }
+        /*uset = Stat.get(id);
         if (uset.isTrueUnsafe()) {
          continue;
         }
-        return id;
+        return id;*/
       }
       return null;
     } else {
