@@ -24,8 +24,11 @@
 package org.sosy_lab.cpachecker.util.identifiers;
 
 import java.util.Collection;
+import java.util.Map;
 
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
+import org.sosy_lab.cpachecker.cpa.local.LocalCPA;
+import org.sosy_lab.cpachecker.cpa.local.LocalState.DataType;
 
 
 public abstract class SingleIdentifier implements AbstractIdentifier{
@@ -148,5 +151,22 @@ public abstract class SingleIdentifier implements AbstractIdentifier{
       }
       return this.dereference - ((SingleIdentifier)pO).dereference;
     }
+  }
+
+  @Override
+  public DataType getType(Map<? extends AbstractIdentifier, DataType> localInfo) {
+    if (LocalCPA.localVariables != null && LocalCPA.localVariables.contains(name)) {
+      return DataType.LOCAL;
+    }
+    AbstractIdentifier checkerId;
+    if (this instanceof LocalVariableIdentifier || this instanceof GlobalVariableIdentifier) {
+      checkerId = getGeneralId();
+    } else {
+      checkerId = this;
+    }
+    if (localInfo.containsKey(checkerId)) {
+      return localInfo.get(checkerId);
+    }
+    return null;
   }
 }

@@ -66,7 +66,6 @@ import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackTransferRelation;
-import org.sosy_lab.cpachecker.cpa.local.LocalState;
 import org.sosy_lab.cpachecker.cpa.local.LocalState.DataType;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsPrecision;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
@@ -253,15 +252,6 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
   private void handleFunctionCall(UsageStatisticsState pNewState
       , UsageStatisticsPrecision pPrecision, CFunctionCallEdge edge) throws HandleCodeException {
     CStatement statement = edge.getRawAST().get();
-    /*String functionName = edge.getSuccessor().getFunctionName();
-    if (functionName.equals("sync")) {
-      System.out.println("sync function");
-    }*/
-   /* if (abortfunctions != null && abortfunctions.contains(functionName)) {
-      pNewState = null;
-      logger.log(Level.FINEST, functionName + " is abort function and was skipped");
-      return;
-    }*/
     if (statement instanceof CFunctionCallAssignmentStatement) {
       /*
        * a = f(b)
@@ -459,7 +449,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     CFANode node = AbstractStates.extractLocation(state);
     Map<GeneralIdentifier, DataType> localInfo = pPrecision.get(node);
 
-    if (localInfo != null && LocalState.getType(localInfo, singleId) == DataType.LOCAL) {
+    if (localInfo != null && singleId.getType(localInfo) == DataType.LOCAL) {
       logger.log(Level.FINER, singleId + " is considered to be local, so it wasn't add to statistics");
       return;
     }

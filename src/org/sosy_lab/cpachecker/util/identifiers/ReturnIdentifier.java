@@ -23,7 +23,10 @@
  */
 package org.sosy_lab.cpachecker.util.identifiers;
 
+import java.util.Map;
+
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
+import org.sosy_lab.cpachecker.cpa.local.LocalState.DataType;
 
 
 public class ReturnIdentifier extends VariableIdentifier implements GeneralIdentifier {
@@ -73,6 +76,11 @@ public class ReturnIdentifier extends VariableIdentifier implements GeneralIdent
     } else {
       return -1;
     }
+  }
+
+  @Override
+  public DataType getType(Map<? extends AbstractIdentifier, DataType> pLocalInfo) {
+    return pLocalInfo.get(instance);
   }
 
 }

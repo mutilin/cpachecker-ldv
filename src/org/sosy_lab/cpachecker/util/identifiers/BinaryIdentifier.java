@@ -24,6 +24,9 @@
 package org.sosy_lab.cpachecker.util.identifiers;
 
 import java.util.Collection;
+import java.util.Map;
+
+import org.sosy_lab.cpachecker.cpa.local.LocalState.DataType;
 
 
 
@@ -175,5 +178,21 @@ public class BinaryIdentifier implements AbstractIdentifier {
     } else {
       return 1;
     }
+  }
+
+  @Override
+  public DataType getType(Map<? extends AbstractIdentifier, DataType> pLocalInfo) {
+    /*AbstractIdentifier tmp = name.containsIn(localInfo.keySet());
+    DataType result1 = (tmp == null ? null : localInfo.get(tmp));*/
+    int deref = id1.getDereference();
+    AbstractIdentifier tmp1 = id1.clone();
+    //AbstractIdentifier tmp2 = ((BinaryIdentifier) name).getIdentifier2().clone();
+    tmp1.setDereference(dereference + deref);
+    /*deref = ((BinaryIdentifier) name).getIdentifier2().getDereference();
+    tmp2.setDereference(((BinaryIdentifier) name).getDereference() + deref);*/
+    return tmp1.getType(pLocalInfo);
+    //DataType type2 = getType(localInfo, tmp2);
+    //return DataType.max(type1, type2);
+    //return result2;
   }
 }

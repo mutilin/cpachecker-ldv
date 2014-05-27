@@ -23,7 +23,10 @@
  */
 package org.sosy_lab.cpachecker.util.identifiers;
 
+import java.util.Map;
+
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
+import org.sosy_lab.cpachecker.cpa.local.LocalState.DataType;
 
 
 
@@ -117,5 +120,10 @@ public class StructureFieldIdentifier extends SingleIdentifier {
     } else {
       return super.compareTo(pO);
     }
+  }
+
+  @Override
+  public DataType getType(Map<? extends AbstractIdentifier, DataType> pLocalInfo) {
+    return null;
   }
 }

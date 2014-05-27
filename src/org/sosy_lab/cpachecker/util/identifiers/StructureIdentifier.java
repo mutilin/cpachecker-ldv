@@ -24,6 +24,7 @@
 package org.sosy_lab.cpachecker.util.identifiers;
 
 import java.util.Collection;
+import java.util.Map;
 
 import org.sosy_lab.cpachecker.cfa.types.c.CArrayType;
 import org.sosy_lab.cpachecker.cfa.types.c.CBasicType;
@@ -37,6 +38,7 @@ import org.sosy_lab.cpachecker.cfa.types.c.CSimpleType;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
 import org.sosy_lab.cpachecker.cfa.types.c.CTypeVisitor;
 import org.sosy_lab.cpachecker.cfa.types.c.CTypedefType;
+import org.sosy_lab.cpachecker.cpa.local.LocalState.DataType;
 import org.sosy_lab.cpachecker.cpa.local.LocalTransferRelation;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 
@@ -208,7 +210,11 @@ public class StructureIdentifier extends SingleIdentifier{
   }
 
   public StructureFieldIdentifier toStructureFieldIdentifier() {
-    return new StructureFieldIdentifier(name, type.toASTString(""), type, dereference);
+    if (owner instanceof SingleIdentifier) {
+      return new StructureFieldIdentifier(name, type.toASTString(""), ((SingleIdentifier)owner).type, dereference);
+    } else {
+      return new StructureFieldIdentifier(name, type.toASTString(""), type, dereference);
+    }
   }
 
   /**
@@ -228,5 +234,14 @@ public class StructureIdentifier extends SingleIdentifier{
         return ownerContainer;
       }
     }
+  }
+
+  @Override
+  public DataType getType(Map<? extends AbstractIdentifier, DataType> pLocalInfo) {
+    DataType result = super.getType(pLocalInfo);
+    if (result != null) {
+      return result;
+    }
+    return owner.getType(pLocalInfo);
   }
 }

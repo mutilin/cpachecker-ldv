@@ -41,6 +41,9 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCall;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallAssignmentStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallStatement;
+import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CInitializer;
+import org.sosy_lab.cpachecker.cfa.ast.c.CInitializerExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CParameterDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
@@ -97,6 +100,7 @@ public class LocalTransferRelation implements TransferRelation {
     switch(pCfaEdge.getEdgeType()) {
 
       case FunctionCallEdge: {
+
         successor = createNewScopeInState(LocalElement, (CFunctionCallEdge)pCfaEdge);
         break;
       }
@@ -127,7 +131,6 @@ public class LocalTransferRelation implements TransferRelation {
 
   private LocalState handleSimpleEdge(LocalState pState, CFAEdge pCfaEdge) throws HandleCodeException, UnrecognizedCFAEdgeException {
     LocalState newState = pState.clone();
-
     switch(pCfaEdge.getEdgeType()) {
       case DeclarationEdge: {
         CDeclarationEdge declEdge = (CDeclarationEdge) pCfaEdge;
@@ -206,10 +209,10 @@ public class LocalTransferRelation implements TransferRelation {
           if (num == 0) {
             //local data are returned from function
             if (!returnId.isGlobal()) {
-              pSuccessor.forceSetLocal(returnId);
+              newElement.forceSetLocal(returnId);
             }
           } else if (num > 0) {
-            handleFunctionCallExpression(pSuccessor, assignExp.getRightHandSide());
+            handleFunctionCallExpression(newElement, assignExp.getRightHandSide());
           }
         } else {
           newElement.set(returnId, returnType);
@@ -272,33 +275,8 @@ public class LocalTransferRelation implements TransferRelation {
       // assignment like "a = b" or "a = foo()"
       CAssignment assignment = (CAssignment)pStatement;
       CExpression left = assignment.getLeftHandSide();
+      assign(pSuccessor, left, assignment.getRightHandSide());
 
-      int leftDereference = findDereference(left.getExpressionType());
-      if (leftDereference > 0) {
-        CRightHandSide right = assignment.getRightHandSide();
-
-        AbstractIdentifier leftId = createId(left, leftDereference);
-
-        if (right instanceof CExpression && !(leftId instanceof ConstantIdentifier)) {
-          int rightDereference = findDereference(right.getExpressionType());
-          AbstractIdentifier rightId = createId((CExpression)right, rightDereference);
-          //assume(pSuccessor, leftId, rightId);
-          if (leftId.isGlobal() && !(leftId instanceof SingleIdentifier && LocalCPA.localVariables.contains(((SingleIdentifier)leftId).getName()))) {
-            //Variable is global, not memory location!
-            //So, we should set the type of 'right' to global
-            pSuccessor.set(rightId, DataType.GLOBAL);
-          } else {
-            DataType type = pSuccessor.getType(rightId);
-            pSuccessor.set(leftId, type);
-          }
-        }/* else if (right instanceof CFunctionCallExpression) {
-          if (pSuccessor.getType(leftId) == DataType.LOCAL) {
-            //reset it
-            pSuccessor.set(leftId, null);
-          }
-          handleFunctionCallExpression(pSuccessor, leftId, (CFunctionCallExpression)assignment.getRightHandSide());
-        }*/
-      }
     }
   }
 
@@ -325,20 +303,29 @@ public class LocalTransferRelation implements TransferRelation {
     return id;
   }
 
-  /*private void assume(LocalState pSuccessor, AbstractIdentifier leftId, AbstractIdentifier rightId) throws HandleCodeException {
-    if (leftId instanceof ConstantIdentifier) {
-      //Can't assume to constant, but this situation can occur, if we have *(a + b)...
-      return;
+  private void assign(LocalState pSuccessor, CExpression left, CRightHandSide right) throws HandleCodeException {
+
+    int leftDereference = findDereference(left.getExpressionType());
+    if (leftDereference > 0) {
+      AbstractIdentifier leftId = createId(left, leftDereference);
+
+      if (right instanceof CExpression && !(leftId instanceof ConstantIdentifier)) {
+        int rightDereference = findDereference(right.getExpressionType());
+        AbstractIdentifier rightId = createId((CExpression)right, rightDereference);
+        //assume(pSuccessor, leftId, rightId);
+        if (leftId.isGlobal() && !(leftId instanceof SingleIdentifier && LocalCPA.localVariables.contains(((SingleIdentifier)leftId).getName()))) {
+          //if (!(rightId instanceof ConstantIdentifier)) {
+            //Variable is global, not memory location!
+          //So, we should set the type of 'right' to global
+            pSuccessor.set(rightId, DataType.GLOBAL);
+          //}
+        } else {
+          DataType type = pSuccessor.getType(rightId);
+          pSuccessor.set(leftId, type);
+        }
+      }
     }
-    if (leftId.isGlobal()) {
-      //Variable is global, not memory location!
-      //So, we should set the type of 'right' to global
-      pSuccessor.set(rightId, DataType.GLOBAL);
-    } else {
-      DataType type = pSuccessor.getType(rightId);
-      pSuccessor.set(leftId, type);
-    }
-  }*/
+  }
 
   private void handleDeclaration(LocalState pSuccessor, CDeclarationEdge declEdge) throws HandleCodeException {
     if (declEdge.getDeclaration().getClass() != CVariableDeclaration.class) {
@@ -346,9 +333,17 @@ public class LocalTransferRelation implements TransferRelation {
     }
 
     CDeclaration decl = declEdge.getDeclaration();
-    if (findDereference(decl.getType()) > 0 && !decl.isGlobal()) {
-      //we don't save global variables
-      pSuccessor.set(new GeneralLocalVariableIdentifier(decl.getName(), findDereference(decl.getType())), DataType.LOCAL);
+    if (decl instanceof CVariableDeclaration) {
+      CInitializer init = ((CVariableDeclaration)decl).getInitializer();
+      if (init != null && init instanceof CInitializerExpression) {
+        assign(pSuccessor, new CIdExpression(((CVariableDeclaration)decl).getFileLocation(), decl),
+            ((CInitializerExpression)init).getExpression());
+      } else {
+        if (findDereference(decl.getType()) > 0 && !decl.isGlobal() && declEdge.getSuccessor().getFunctionName().equals("ldv_main")) {
+          //we don't save global variables
+          pSuccessor.set(new GeneralLocalVariableIdentifier(decl.getName(), findDereference(decl.getType())), DataType.LOCAL);
+        }
+      }
     }
   }
 

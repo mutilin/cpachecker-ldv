@@ -24,6 +24,9 @@
 package org.sosy_lab.cpachecker.util.identifiers;
 
 import java.util.Collection;
+import java.util.Map;
+
+import org.sosy_lab.cpachecker.cpa.local.LocalState.DataType;
 
 
 public interface AbstractIdentifier extends Comparable<AbstractIdentifier> {
@@ -53,4 +56,6 @@ public interface AbstractIdentifier extends Comparable<AbstractIdentifier> {
    * @return first abstract identifier, which is found or null if no owners are found in collection
    */
   public AbstractIdentifier containsIn(Collection<? extends AbstractIdentifier> set);
+
+  public DataType getType(Map<? extends AbstractIdentifier, DataType> localInfo);
 }

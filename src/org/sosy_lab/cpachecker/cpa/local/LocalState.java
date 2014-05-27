@@ -30,12 +30,8 @@ import java.util.Set;
 
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
-import org.sosy_lab.cpachecker.util.identifiers.BinaryIdentifier;
-import org.sosy_lab.cpachecker.util.identifiers.ConstantIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.GlobalVariableIdentifier;
-import org.sosy_lab.cpachecker.util.identifiers.LocalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
-import org.sosy_lab.cpachecker.util.identifiers.StructureIdentifier;
 
 
 public class LocalState implements AbstractState {
@@ -68,11 +64,6 @@ public class LocalState implements AbstractState {
     previousState = state;
   }
 
-  /*public LocalState(LocalState state, Configuration pConfig) throws InvalidConfigurationException {
-    DataInfo = new HashMap<>();
-    previousState = state;
-  }*/
-
   private LocalState(Map<AbstractIdentifier, DataType> oldMap, LocalState state) {
     DataInfo = new HashMap<>(oldMap);
     previousState = state;
@@ -87,10 +78,6 @@ public class LocalState implements AbstractState {
   }
 
   public void set(AbstractIdentifier name, DataType type) {
-    if (LocalCPA.localVariables.contains(name.toString())) {
-      DataInfo.put(name, DataType.LOCAL);
-      return;
-    }
     if (name instanceof GlobalVariableIdentifier) {
       //Don't save obvious information
       return;
@@ -119,45 +106,7 @@ public class LocalState implements AbstractState {
   }
 
   public DataType getType(AbstractIdentifier pName) {
-    return getType(this.DataInfo, pName);
-  }
-
-  public static DataType getType(Map<? extends AbstractIdentifier, DataType> localInfo, AbstractIdentifier aId) {
-    AbstractIdentifier name;
-    if (aId instanceof LocalVariableIdentifier || aId instanceof GlobalVariableIdentifier) {
-      name = ((SingleIdentifier)aId).getGeneralId();
-    } else {
-      name = aId;
-    }
-    if (LocalCPA.localVariables != null && name instanceof SingleIdentifier
-        && LocalCPA.localVariables.contains(((SingleIdentifier)name).getName())) {
-      return DataType.LOCAL;
-    }
-    if (localInfo.containsKey(name)) {
-      return localInfo.get(name);
-    } else {
-      if (name instanceof GlobalVariableIdentifier) {
-        return DataType.GLOBAL;
-      } else if (name instanceof LocalVariableIdentifier && !name.isPointer()) {
-        //it is not value of variable, it is memory location
-        return DataType.LOCAL;
-      }
-      else if (name instanceof BinaryIdentifier) {
-        AbstractIdentifier tmp = name.containsIn(localInfo.keySet());
-        return (tmp == null ? null : localInfo.get(tmp));
-      } else if (name instanceof ConstantIdentifier) {
-        if (name.isPointer() && !((ConstantIdentifier)name).getName().equals("0")) {
-          return DataType.GLOBAL;
-        } else {
-          return DataType.LOCAL;
-        }
-      } else if (name instanceof StructureIdentifier){
-        StructureIdentifier id = (StructureIdentifier) name;
-        return getType(localInfo, id.getOwner());
-      } else {
-        return null;
-      }
-    }
+    return pName.getType(DataInfo);
   }
 
   @Override
@@ -221,7 +170,7 @@ public class LocalState implements AbstractState {
 
   public boolean isLessOrEqual(LocalState pState2) {
     //LOCAL < NULL < GLOBAL
-    /*for (AbstractIdentifier name : this.DataInfo.keySet()) {
+    for (AbstractIdentifier name : this.DataInfo.keySet()) {
       if (this.DataInfo.get(name) == DataType.LOCAL) {
         continue;
       }
@@ -234,12 +183,12 @@ public class LocalState implements AbstractState {
       if (!this.DataInfo.containsKey(name) && pState2.DataInfo.get(name) == DataType.LOCAL) {
         return false;
       }
-    }*/
-    for (AbstractIdentifier name : this.DataInfo.keySet()) {
+    }
+    /*for (AbstractIdentifier name : this.DataInfo.keySet()) {
       if (this.getType(name) != pState2.getType(name)) {
         return false;
       }
-    }
+    }*/
     return true;
   }
 
@@ -278,9 +227,9 @@ public class LocalState implements AbstractState {
     for (AbstractIdentifier id : DataInfo.keySet()) {
       if (id instanceof SingleIdentifier) {
         sb.append(((SingleIdentifier)id).toLog() + ";" + DataInfo.get(id) + "\n");
-      } else {
+      }/* else {
         System.err.println("Can't write to log " + id.toString());
-      }
+      }*/
     }
 
     if (sb.length() > 2) {
