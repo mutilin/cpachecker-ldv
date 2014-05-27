@@ -124,7 +124,16 @@ public class UsageInfo {
       return true;
     }
 
-    return this.locks.intersects(other.locks);
+    boolean result = this.locks.intersects(other.locks);
+    if (result) {
+      return result;
+    }
+    if (locks.getLocks().size() == 0 && other.locks.getLocks().size() == 0 ){
+      if (this.callstack.getCurrentFunction().equals(other.callstack.getCurrentFunction())) {
+        return true; //this is equal states, like for a++;
+      }
+    }
+    return false;
   }
 
   @Override

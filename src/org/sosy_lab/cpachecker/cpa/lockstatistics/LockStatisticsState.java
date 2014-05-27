@@ -385,9 +385,9 @@ public class LockStatisticsState implements AbstractState, Serializable {
   }
 
   public boolean intersects(LockStatisticsState pLocks) {
-    if (pLocks.locks.size() == 0 && this.locks.size() == 0) {
+    /*if (pLocks.locks.size() == 0 && this.locks.size() == 0) {
       return true;    //this is our assumption. This isn't unsafe.
-    }
+    }*/
     for (LockStatisticsLock lock : pLocks.locks) {
       for (LockStatisticsLock myLock : this.locks) {
         if (lock.hasEqualNameAndVariable(myLock)) {
