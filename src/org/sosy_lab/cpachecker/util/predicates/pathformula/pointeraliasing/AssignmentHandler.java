@@ -115,10 +115,10 @@ class AssignmentHandler {
       return conv.bfmgr.makeBoolean(true);
     }
 
-    if (rhs instanceof CExpression && !((CExpression)rhs).accept(new IsRelevantLhsVisitor(conv))) {
+    /*if (rhs instanceof CExpression && !((CExpression)rhs).accept(new IsRelevantLhsVisitor(conv))) {
       //remove global variable assignments
       return conv.bfmgr.makeBoolean(true);
-    }
+    }*/
 
     final CType lhsType = CTypeUtils.simplifyType(lhs.getExpressionType());
     final CType rhsType = rhs != null ? CTypeUtils.simplifyType(rhs.getExpressionType()) :
@@ -132,7 +132,8 @@ class AssignmentHandler {
     if (rhs != null &&
         (!(rhs instanceof CFunctionCallExpression) ||
          !(((CFunctionCallExpression) rhs).getFunctionNameExpression() instanceof CIdExpression) ||
-         !conv.options.isNondetFunction(((CIdExpression)((CFunctionCallExpression) rhs).getFunctionNameExpression()).getName()))) {
+         !conv.options.isNondetFunction(((CIdExpression)((CFunctionCallExpression) rhs).getFunctionNameExpression()).getName()))
+         && (!(rhs instanceof CExpression) || ((CExpression)rhs).accept(new IsRelevantLhsVisitor(conv)))) {
       CExpressionVisitorWithPointerAliasing rhsVisitor = new CExpressionVisitorWithPointerAliasing(conv, edge, function, ssa, constraints, errorConditions, pts);
       rhsExpression = rhs.accept(rhsVisitor);
       pts.addEssentialFields(rhsVisitor.getInitializedFields());
