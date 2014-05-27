@@ -214,10 +214,15 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
         Collection<? extends AbstractState> tmpResult = getAbstractSuccessors0(pState, pPrecision, e);
         result.addAll(tmpResult);
         if (e instanceof CFunctionReturnEdge && tmpResult.size() > 0) {
-          setLockStatisticsPrecision(tmpResult.iterator().next(), pPrecision);
+          setLockStatisticsPrecision(AbstractStates.extractStateByType(tmpResult.iterator().next(), CallstackState.class),
+              pPrecision);
         }
       }
       return result;
+    }
+    if (node.getFunctionName().equals("kvprintf")) {
+      callstackTransfer.setFlag();
+      return attachAdditionalInfoToCallNodes(wrappedTransfer.getAbstractSuccessors(pState, pPrecision, getSummaryEdge(node)));
     }
 
     if (partitioning.getBlockForCallNode(node).equals(currentBlock)) {
@@ -226,7 +231,7 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
       // the latter is not supported yet, but in the the former case we can classically do the post operation
       if (BlockStack.size() == 0) {
         BlockStack.add(currentBlock);
-        setLockStatisticsPrecision(pState, pPrecision);
+        setLockStatisticsPrecision(AbstractStates.extractStateByType(pState, CallstackState.class), pPrecision);
       }
       return wrappedTransfer.getAbstractSuccessors(pState, pPrecision, null); // edge is null
     }
@@ -290,7 +295,6 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
 
     logger.log(Level.ALL, "Expanded results:", expandedResult);
 
-    BlockStack.removeLast();
     currentBlock = outerSubtree;
 
     return expandedResult;
@@ -342,30 +346,22 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
 
       forwardPrecisionToExpandedPrecision.put(expandedState, expandedPrecision);
     }
+    BlockStack.removeLast();
+    setLockStatisticsPrecision(AbstractStates.extractStateByType(state, CallstackState.class).getPreviousState(), precision);
     return expandedResult;
   }
 
-  private void setLockStatisticsPrecision(final AbstractState pOldState, Precision pPrecision) {
+  private void setLockStatisticsPrecision(final CallstackState state, Precision pPrecision) {
     if (pPrecision instanceof WrapperPrecision) {
       LockStatisticsPrecision lockPrecision = ((WrapperPrecision) pPrecision).retrieveWrappedPrecision(LockStatisticsPrecision.class);
 
       if (lockPrecision != null) {
-        CallstackState state = AbstractStates.extractStateByType(pOldState, CallstackState.class);
         try {
           CallstackState fullState = restoreCallstack(state);
           lockPrecision.setPreciseState(fullState);
         } catch (HandleCodeException e) {
           logger.log(Level.WARNING, "Can't restore callstack");
         }
-      }
-    }
-  }
-
-  private void cleanLockStatisticsPrecision(Precision pPrecision) {
-    if (pPrecision instanceof WrapperPrecision) {
-      LockStatisticsPrecision lockPrecision = ((WrapperPrecision) pPrecision).retrieveWrappedPrecision(LockStatisticsPrecision.class);
-      if (lockPrecision != null) {
-        lockPrecision.setPreciseState(null);
       }
     }
   }
@@ -411,7 +407,7 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
 
     final Collection<Pair<AbstractState, Precision>> result;
 
-    setLockStatisticsPrecision(initialState, reducedInitialPrecision);
+    setLockStatisticsPrecision(AbstractStates.extractStateByType(initialState, CallstackState.class), reducedInitialPrecision);
     if (returnStates != null) {
       assert reached != null;
       // cache hit, return element from cache
@@ -578,9 +574,6 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
     PredicateAbstractState pState = AbstractStates.extractStateByType(currentState, PredicateAbstractState.class);
     while (!pState.isAbstractionState()) {
       //assert currentState.getChildren().size() == 1;
-      if (currentState.getChildren().size() == 0) {
-        System.out.println("last state");
-      }
       tmpChild = currentState.getChildren().iterator().next();
       BackwardARGState newState = new BackwardARGState(tmpChild.getWrappedState(), elementsMap.get(currentState));
       elementsMap.put(tmpChild, newState);
@@ -709,7 +702,6 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
     openElements.push(target);
     while (!openElements.empty()) {
       ARGState currentElement = openElements.pop();
-
       assert reachedSet.asReachedSet().contains(currentElement);
 
       for (ARGState parent : currentElement.getParents()) {
