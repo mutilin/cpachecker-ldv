@@ -100,7 +100,6 @@ public class LocalTransferRelation implements TransferRelation {
     switch(pCfaEdge.getEdgeType()) {
 
       case FunctionCallEdge: {
-
         successor = createNewScopeInState(LocalElement, (CFunctionCallEdge)pCfaEdge);
         break;
       }
@@ -334,12 +333,15 @@ public class LocalTransferRelation implements TransferRelation {
 
     CDeclaration decl = declEdge.getDeclaration();
     if (decl instanceof CVariableDeclaration) {
+
       CInitializer init = ((CVariableDeclaration)decl).getInitializer();
       if (init != null && init instanceof CInitializerExpression) {
         assign(pSuccessor, new CIdExpression(((CVariableDeclaration)decl).getFileLocation(), decl),
             ((CInitializerExpression)init).getExpression());
       } else {
-        if (findDereference(decl.getType()) > 0 && !decl.isGlobal() && declEdge.getSuccessor().getFunctionName().equals("ldv_main")) {
+        if (findDereference(decl.getType()) > 0 &&
+            (!decl.isGlobal() && declEdge.getSuccessor().getFunctionName().equals("ldv_main") ||
+                decl.getType() instanceof CArrayType)) {
           //we don't save global variables
           pSuccessor.set(new GeneralLocalVariableIdentifier(decl.getName(), findDereference(decl.getType())), DataType.LOCAL);
         }
