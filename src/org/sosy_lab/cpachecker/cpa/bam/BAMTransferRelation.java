@@ -205,6 +205,11 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
       // the easy case: we are in the middle of a block, so just forward to wrapped CPAs
       List<AbstractState> result = new ArrayList<>();
       for (CFAEdge e : CFAUtils.leavingEdges(node)) {
+
+        if (e instanceof CFunctionCallEdge && e.getSuccessor().getFunctionName().equals("kvprintf")) {
+          callstackTransfer.setFlag();
+          return attachAdditionalInfoToCallNodes(wrappedTransfer.getAbstractSuccessors(pState, pPrecision, getSummaryEdge(node)));
+        }
         if (isRecursionEdge(e)) {
           callstackTransfer.setFlag();
           result.addAll(getAbstractSuccessors0(pState, pPrecision, getSummaryEdge(node)));
@@ -219,10 +224,6 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
         }
       }
       return result;
-    }
-    if (node.getFunctionName().equals("kvprintf")) {
-      callstackTransfer.setFlag();
-      return attachAdditionalInfoToCallNodes(wrappedTransfer.getAbstractSuccessors(pState, pPrecision, getSummaryEdge(node)));
     }
 
     if (partitioning.getBlockForCallNode(node).equals(currentBlock)) {
