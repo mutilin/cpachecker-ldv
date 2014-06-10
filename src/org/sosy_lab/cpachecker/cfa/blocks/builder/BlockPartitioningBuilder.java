@@ -56,9 +56,7 @@ public class BlockPartitioningBuilder {
   protected final Map<CFANode, Set<FunctionEntryNode>> innerFunctionCallsMap = new HashMap<>();
   protected final Map<CFANode, Set<CFANode>> blockNodesMap = new HashMap<>();
 
-  public BlockPartitioningBuilder(Set<CFANode> mainFunctionBody) {
-    referenceCollector = new ReferencedVariablesCollector(mainFunctionBody);
-  }
+  public BlockPartitioningBuilder() {}
 
   public BlockPartitioning build(CFANode mainFunction) {
     //fixpoint iteration to take inner function calls into account for referencedVariables and callNodesMap
@@ -203,6 +201,6 @@ public class BlockPartitioningBuilder {
   }
 
   private Set<ReferencedVariable> collectReferencedVariables(Set<CFANode> nodes) {
-    return referenceCollector.collectVars(nodes);
+    return (new ReferencedVariablesCollector(nodes)).getVars();
   }
 }

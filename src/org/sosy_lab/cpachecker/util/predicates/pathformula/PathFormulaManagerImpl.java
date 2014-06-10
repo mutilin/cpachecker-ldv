@@ -48,9 +48,9 @@ import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.types.MachineModel;
 import org.sosy_lab.cpachecker.cfa.types.c.CNumericTypes;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
-import org.sosy_lab.cpachecker.core.Model;
-import org.sosy_lab.cpachecker.core.Model.AssignableTerm;
-import org.sosy_lab.cpachecker.core.Model.TermType;
+import org.sosy_lab.cpachecker.core.counterexample.Model;
+import org.sosy_lab.cpachecker.core.counterexample.Model.AssignableTerm;
+import org.sosy_lab.cpachecker.core.counterexample.Model.TermType;
 import org.sosy_lab.cpachecker.core.ShutdownNotifier;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
@@ -459,7 +459,7 @@ public class PathFormulaManagerImpl implements PathFormulaManager {
             // We expect this situation of one of the children is a target state created by PredicateCPA.
             continue;
           } else {
-            logger.log(Level.WARNING, "ARG branching with more than two outgoing edges");
+            logger.log(Level.WARNING, "ARG branching with more than two outgoing edges at ARG node " + pathElement.getStateId() + ".");
             return bfmgr.makeBoolean(true);
           }
         }
@@ -476,7 +476,7 @@ public class PathFormulaManagerImpl implements PathFormulaManager {
             // We expect this situation of one of the children is a target state created by PredicateCPA.
             continue;
           } else {
-            logger.log(Level.WARNING, "ARG branching without AssumeEdge");
+            logger.log(Level.WARNING, "ARG branching without AssumeEdge at ARG node " + pathElement.getStateId() + ".");
             return bfmgr.makeBoolean(true);
           }
         }

@@ -31,8 +31,8 @@ import java.util.List;
 
 import org.sosy_lab.common.time.NestedTimer;
 import org.sosy_lab.common.time.Timer;
-import org.sosy_lab.cpachecker.core.Model;
 import org.sosy_lab.cpachecker.core.ShutdownNotifier;
+import org.sosy_lab.cpachecker.core.counterexample.Model;
 import org.sosy_lab.cpachecker.util.predicates.AbstractionManager.RegionCreator;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.ProverEnvironment;
@@ -89,8 +89,10 @@ class SmtInterpolTheoremProver implements ProverEnvironment {
   @Override
   public void close() {
     Preconditions.checkNotNull(env);
-    env.pop(assertedTerms.size());
-    assertedTerms.clear();
+    if (!assertedTerms.isEmpty()) {
+      env.pop(assertedTerms.size());
+      assertedTerms.clear();
+    }
     env = null;
   }
 

@@ -21,41 +21,39 @@
  *  CPAchecker web page:
  *    http://cpachecker.sosy-lab.org
  */
-package org.sosy_lab.cpachecker.cpa.octagon.coefficients;
+package org.sosy_lab.cpachecker.core.counterexample;
 
-import org.sosy_lab.cpachecker.cpa.octagon.OctState;
-import org.sosy_lab.cpachecker.util.octagon.NumArray;
+import java.util.Map;
 
-public final class OctEmptyCoefficients extends AOctCoefficients {
+import com.google.common.base.Preconditions;
 
-  public static final OctEmptyCoefficients INSTANCE = new OctEmptyCoefficients();
 
-  private OctEmptyCoefficients() {
-    super(0, null);
+public class Memory {
+
+  private final String name;
+  private final Map<Address, Object> values;
+
+  public Memory(String pName, Map<Address, Object> pValues) {
+    name = pName;
+    values = pValues;
+  }
+
+  public String getName() {
+    return name;
+  }
+
+  public boolean hasValue(Address address) {
+    return values.containsKey(address);
+  }
+
+  public Object getValue(Address address) {
+    Preconditions.checkArgument(hasValue(address));
+    return values.get(address);
   }
 
   @Override
-  public OctEmptyCoefficients expandToSize(int pSize, OctState oct) {
-    return this;
-  }
-
-  @Override
-  public OctEmptyCoefficients add(IOctCoefficients pOther) {
-    return INSTANCE;
-  }
-
-  @Override
-  public OctEmptyCoefficients sub(IOctCoefficients pOther) {
-    return INSTANCE;
-  }
-
-  @Override
-  public boolean hasOnlyConstantValue() {
-    return false;
-  }
-
-  @Override
-  public NumArray getNumArray() {
-    return null;
+  public String toString() {
+    return "Memory name=" + name + " , " +
+        " values=" + values.toString();
   }
 }

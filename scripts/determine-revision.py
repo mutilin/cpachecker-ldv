@@ -44,18 +44,18 @@ def determineRevision(dir):
         svnProcess = subprocess.Popen(['svnversion', dir], env={'LANG': 'C'}, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         (stdout, stderr) = svnProcess.communicate()
         stdout = Util.decodeToString(stdout).strip()
-        if not (svnProcess.returncode or stderr or (stdout == 'exported')):
+        if not (svnProcess.returncode or stderr or (stdout == 'exported') or (stdout == 'Unversioned directory')):
             return stdout
     except OSError:
         pass
 
     # Check for git-svn repository
     try:
-        DEVNULL = open(os.devnull, "wb")
-        # This will silently perform the migration from older git-svn directory layout.
-        # Otherwise, the migration may be performed by the next git svn invocation,
-        # producing nonempty stderr.
-        subprocess.call(['git', 'svn', 'migrate'], stderr=DEVNULL)
+        with open(os.devnull, "wb") as DEVNULL:
+            # This will silently perform the migration from older git-svn directory layout.
+            # Otherwise, the migration may be performed by the next git svn invocation,
+            # producing nonempty stderr.
+            subprocess.call(['git', 'svn', 'migrate'], stderr=DEVNULL)
 
         gitProcess = subprocess.Popen(['git', 'svn', 'find-rev', 'HEAD'], env={'LANG': 'C'}, cwd=dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         (stdout, stderr) = gitProcess.communicate()

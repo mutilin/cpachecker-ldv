@@ -29,11 +29,12 @@ import static org.sosy_lab.cpachecker.util.predicates.z3.Z3NativeApiConstants.*;
 import java.math.BigInteger;
 
 import org.sosy_lab.common.Pair;
-import org.sosy_lab.cpachecker.core.Model;
-import org.sosy_lab.cpachecker.core.Model.AssignableTerm;
-import org.sosy_lab.cpachecker.core.Model.Function;
-import org.sosy_lab.cpachecker.core.Model.TermType;
-import org.sosy_lab.cpachecker.core.Model.Variable;
+import org.sosy_lab.cpachecker.core.counterexample.Model;
+import org.sosy_lab.cpachecker.core.counterexample.Model.AssignableTerm;
+import org.sosy_lab.cpachecker.core.counterexample.Model.Constant;
+import org.sosy_lab.cpachecker.core.counterexample.Model.Function;
+import org.sosy_lab.cpachecker.core.counterexample.Model.TermType;
+import org.sosy_lab.cpachecker.core.counterexample.Model.Variable;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.view.FormulaManagerView;
 import org.sosy_lab.cpachecker.util.predicates.z3.Z3NativeApi.PointerToInt;
@@ -71,7 +72,7 @@ public class Z3Model {
     }
   }
 
-  private Variable toVariable(long expr) {
+  private Constant toVariable(long expr) {
     long decl = get_app_decl(z3context, expr);
     long symbol = get_decl_name(z3context, decl);
 
@@ -83,7 +84,11 @@ public class Z3Model {
     TermType lType = toZ3Type(sort);
 
     Pair<String, Integer> lSplitName = FormulaManagerView.parseName(lName);
-    return new Variable(lSplitName.getFirst(), lSplitName.getSecond(), lType);
+    if (lSplitName.getSecond() != null) {
+      return new Variable(lSplitName.getFirst(), lSplitName.getSecond(), lType);
+    } else {
+      return new Constant(lSplitName.getFirst(), lType);
+    }
   }
 
 

@@ -21,13 +21,13 @@
  *  CPAchecker web page:
  *    http://cpachecker.sosy-lab.org
  */
-package org.sosy_lab.cpachecker.pcc.strategy.parallel.io;
+package org.sosy_lab.cpachecker.core.counterexample;
 
-import org.sosy_lab.cpachecker.core.interfaces.pcc.PCCStrategy;
+import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
 
 
-public abstract class AbstractParallelReadingStrategy implements PCCStrategy{
+public interface MemoryName {
 
-  // TODO add writing method, balanced partitioning computation, etc.
+  public String getMemoryName(CRightHandSide exp, Address address);
 
 }

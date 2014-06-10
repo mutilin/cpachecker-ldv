@@ -45,6 +45,8 @@ import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustment;
 import org.sosy_lab.cpachecker.core.interfaces.StopOperator;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.exceptions.InvalidCFAException;
+import org.sosy_lab.cpachecker.util.octagon.OctagonFloatManager;
+import org.sosy_lab.cpachecker.util.octagon.OctagonIntManager;
 import org.sosy_lab.cpachecker.util.octagon.OctagonManager;
 
 @Options(prefix="cpa.octagon")
@@ -58,6 +60,11 @@ public final class OctagonCPA implements ConfigurableProgramAnalysis {
       description="which merge operator to use for OctagonCPA?")
   private String mergeType = "SEP";
 
+  @Option(name="octagonLibrary", toUppercase=true, values={"INT", "FLOAT"},
+      description="with this option the number representation in the"
+          + " library will be changed between floats and ints.")
+  private String octagonLibrary = "INT";
+
   private final AbstractDomain abstractDomain;
   private final TransferRelation transferRelation;
   private final MergeOperator mergeOperator;
@@ -68,20 +75,25 @@ public final class OctagonCPA implements ConfigurableProgramAnalysis {
   private final Configuration config;
   private final ShutdownNotifier shutdownNotifier;
   private final CFA cfa;
+  private final OctagonManager octagonManager;
 
   private OctagonCPA(Configuration config, LogManager log,
                      ShutdownNotifier shutdownNotifier, CFA cfa)
                      throws InvalidConfigurationException, InvalidCFAException {
     config.inject(this);
     logger = log;
-    OctDomain octagonDomain = new OctDomain(logger, config);
+    OctDomain octagonDomain = new OctDomain(logger);
+
+    if (octagonLibrary.equals("FLOAT")) {
+      octagonManager = new OctagonFloatManager();
+    } else {
+      octagonManager = new OctagonIntManager();
+    }
 
     this.transferRelation = new OctTransferRelation(logger, cfa);
 
     MergeOperator octagonMergeOp = null;
-    if (mergeType.equals("SEP")) {
-      octagonMergeOp = MergeSepOperator.getInstance();
-    } else if (mergeType.equals("JOIN")) {
+    if (mergeType.equals("JOIN")) {
       octagonMergeOp = new OctMergeJoinOperator(octagonDomain, config);
     } else {
       // default is sep
@@ -98,8 +110,10 @@ public final class OctagonCPA implements ConfigurableProgramAnalysis {
     this.shutdownNotifier = shutdownNotifier;
     this.cfa = cfa;
     precision = new OctPrecision(config);
+  }
 
-    assert OctagonManager.init();
+  public OctagonManager getManager() {
+    return octagonManager;
   }
 
   @Override
@@ -129,7 +143,7 @@ public final class OctagonCPA implements ConfigurableProgramAnalysis {
 
   @Override
   public AbstractState getInitialState(CFANode node) {
-    return new OctState(logger);
+    return new OctState(logger, octagonManager);
   }
 
   @Override

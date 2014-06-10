@@ -290,6 +290,7 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
       return Collections.singleton(Iterables.getOnlyElement(reducedResult).getFirst());
     }
 
+    logger.log(Level.FINEST, "Expanding states with initial state", pState);
     logger.log(Level.FINEST, "Expanding states", reducedResult);
 
     final List<AbstractState> expandedResult = expandResultStates(reducedResult, outerSubtree, pState, pPrecision);
@@ -689,10 +690,12 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
   //returns root of a subtree leading from the root element of the given reachedSet to the target state
   //subtree is represented using children and parents of ARGElements, where newTreeTarget is the ARGState
   //in the constructed subtree that represents target
-  ARGState computeCounterexampleSubgraph(ARGState target, ARGReachedSet reachedSet, BackwardARGState newTreeTarget,
-      Map<ARGState, ARGState> pPathElementToReachedState) throws InterruptedException, RecursiveAnalysisFailedException {
+  ARGState computeCounterexampleSubgraph(ARGState target, ARGReachedSet reachedSet,
+                                                 Map<ARGState, ARGState> pPathElementToReachedState)
+          throws InterruptedException, RecursiveAnalysisFailedException {
     assert reachedSet.asReachedSet().contains(target);
 
+/* HEAD
     //start by creating ARGElements for each node needed in the tree
     Map<ARGState, BackwardARGState> elementsMap = new HashMap<>();
     Stack<ARGState> openElements = new Stack<>();
@@ -744,12 +747,12 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
     return root;
   }
 
-  /**
+  **
    * This method looks for the reached set that belongs to (root, rootPrecision),
    * then looks for target in this reached set and constructs a tree from root to target
    * (recursively, if needed).
    * @throws RecursiveAnalysisFailedException
-   */
+   *
   private ARGState computeCounterexampleSubgraph(ARGState root, Precision rootPrecision, BackwardARGState newTreeTarget,
       Map<ARGState, ARGState> pPathElementToReachedState) throws InterruptedException, RecursiveAnalysisFailedException {
     CFANode rootNode = extractLocation(root);
@@ -776,6 +779,11 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
       argCache.removeReturnEntry(reducedRootState, reachSet.getPrecision(reachSet.getFirstState()), rootSubtree);
     }
     return result;
+*/
+    final BAMCEXSubgraphComputer cexSubgraphComputer = new BAMCEXSubgraphComputer(
+            partitioning, wrappedReducer, argCache, pPathElementToReachedState,
+            abstractStateToReachedSet, expandedToReducedCache, logger);
+    return cexSubgraphComputer.computeCounterexampleSubgraph(target, reachedSet, new BAMCEXSubgraphComputer.BackwardARGState(target));
   }
 
   public void clearCaches() {
@@ -1060,27 +1068,5 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
       correctARGsForBlocks = new HashMap<>();
     }
     correctARGsForBlocks.put(pKey, pEndOfBlock);
-  }
-
-  static class BackwardARGState extends ARGState {
-
-    private static final long serialVersionUID = -3279533907385516993L;
-    private int decreasingStateID;
-    private static int nextDecreaseID = Integer.MAX_VALUE;
-
-    public BackwardARGState(AbstractState pWrappedState, ARGState pParentElement) {
-      super(pWrappedState, pParentElement);
-      decreasingStateID = nextDecreaseID--;
-    }
-
-    @Override
-    public boolean isOlderThan(ARGState other) {
-      if (other instanceof BackwardARGState) { return decreasingStateID < ((BackwardARGState) other).decreasingStateID; }
-      return super.isOlderThan(other);
-    }
-
-    void updateDecreaseId() {
-      decreasingStateID = nextDecreaseID--;
-    }
   }
 }

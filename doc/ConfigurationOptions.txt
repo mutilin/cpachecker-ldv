@@ -248,7 +248,8 @@ bmc.useInvariantsForInduction = false
 
 # File name where to put the path program that is generated as input for
 # CBMC. A temporary file is used if this is unspecified. If specified, the
-# file name should end with '.i'.
+# file name should end with '.i' because otherwise CBMC runs the
+# pre-processor on the file.
 cbmc.dumpCBMCfile = no default value
 
 # specify the name of the error label
@@ -412,6 +413,14 @@ coverage.file = "coverage.%s.info"
 # CPA to use (see doc/Configuration.txt for more documentation on this)
 cpa = CompositeCPA.class.getCanonicalName()
 
+# Use this to change the underlying abstract domain in the APRON library
+cpa.apron.domain = "OCTAGON"
+  allowed values: [BOX, OCTAGON, POLKA, POLKA_STRICT, POLKA_EQ]
+
+# which merge operator to use for ApronCPA?
+cpa.apron.merge = "SEP"
+  allowed values: [SEP, JOIN]
+
 # export one variable assignment for error path to file, if one is found
 cpa.arg.errorPath.assignment = "ErrorPath.%d.assignment.txt"
 
@@ -420,6 +429,7 @@ cpa.arg.errorPath.automaton = "ErrorPath.%d.spc"
 
 # export error path to file, if one is found
 cpa.arg.errorPath.core = "ErrorPath.%d.core.txt"
+cpa.arg.errorPath.enabled = true
 cpa.arg.errorPath.export = true
 
 # translate error path to C program
@@ -745,11 +755,6 @@ cpa.invariants.conditionAdjusterFactory = COMPOUND
 cpa.invariants.edgeBasedAbstractionStrategyFactory = VISITED_EDGES
   enum:     [ALWAYS, VISITED_EDGES, NEVER]
 
-# the maximum number of predicates to consider as interesting. -1 one
-# disables the limit, but this is not recommended. 0 means that guessing
-# interesting predicates is disabled.
-cpa.invariants.interestingPredicatesLimit = 0
-
 # the maximum number of variables to consider as interesting. -1 one disables
 # the limit, but this is not recommended. 0 means that guessing interesting
 # variables is disabled.
@@ -759,15 +764,8 @@ cpa.invariants.interestingVariableLimit = 2
 cpa.invariants.maximumFormulaDepth = 4
 
 # which merge operator to use for InvariantCPA
-cpa.invariants.merge = "JOIN"
-  allowed values: [JOIN, SEP]
-
-# whether or not to collect information about binary variable interrelations.
-cpa.invariants.useBinaryVariableInterrelations = true
-
-# whether or not to use a bit vector formula manager when extracting
-# invariant approximations from states.
-cpa.invariants.useBitvectors = false
+cpa.invariants.merge = "PRECISIONDEPENDENT"
+  allowed values: [JOIN, SEP, PRECISIONDEPENDENT]
 
 # functions, which allocate new free memory
 cpa.local.allocatefunctions = no default value
@@ -813,6 +811,11 @@ cpa.monitor.limit = 0
 # or specify a unit; 0 for infinite)
 cpa.monitor.pathcomputationlimit = 0
 
+# with this option the evaluation of float variables can be toggled.
+# Additionally the used number representation in the library will be changed
+# between floats and ints.
+cpa.octagon.handleFloats = false
+
 # whether or not to use use-definition information from the error pathsto
 # optimize the interpolation process
 cpa.octagon.interpolation.applyUseDefInformation = true
@@ -847,10 +850,6 @@ cpa.octagon.refiner.checkForRepeatedRefinements = true
 
 # whether or not to do lazy-abstraction
 cpa.octagon.refiner.doLazyAbstraction = true
-
-# whether or not to restart the analysis without refinement instead of
-# throwing an exception
-cpa.octagon.refiner.restartWithoutRefinementOnFailedRefinement = true
 
 # Timelimit (in seconds) for the backup feasibility check with the octagon
 # analysis. Zero means there is no timelimit.
@@ -1673,24 +1672,51 @@ parser.transformTokensToLines = false
 # not the original input file.
 parser.usePreprocessor = false
 
-# Selects the strategy used for partial certificate construction
-pcc.certificateType = HEURISTIC
-  enum:     [HEURISTIC, ARG, MONOTONESTOPARG]
-
 # Enable if used property checker implements satisfiesProperty(AbstractState)
 # and checked property is violated for a set iff an element in this set
 # exists for which violates the property
 pcc.checkPropertyPerElement = false
+
+# The number of cores used exclusively for proof reading. Must be less than
+# pcc.useCores and may not be negative. Value 0 means that the cores used for
+# reading and checking are shared
+pcc.interleaved.useReadCores = 0
+
+# enables parallel checking of partial certificate
+pcc.parallel.io.enableParallelCheck = false
+
+# Selects the strategy used for partial certificate construction
+pcc.partial.certificateType = HEURISTIC
+  enum:     [ALL, HEURISTIC, ARG, MONOTONESTOPARG]
+
+# If enabled, distributes checking of partial elements depending on actual
+# checking costs, else uses the number of elements
+pcc.partial.enableLoadDistribution = false
+
+# Enables proper PCC but may not work correctly for heuristics. Stops adding
+# newly computed elements to reached set if size saved in proof is reached.
+# If another element must be added, stops certificate checking and returns
+# false.
+pcc.partial.stopAddingAtReachedSetSize = false
+
+# Specifies the maximum size of the partition. This size is used to compute
+# the number of partitions if a proof (reached set) should be written.
+# Default value 0 means always a single partition.
+pcc.partitioning.maxNumElemsPerPartition = 0
+
+# Heuristic for computing partitioning of proof (partial reached set).
+pcc.partitioning.partitioningStrategy = RANDOM
+  enum:     [RANDOM, OPTIMAL]
+
+# If enabled uses the number of nodes saved in certificate size to compute
+# partition number otherwise the size of certificate
+pcc.partitioning.useGraphSizeToComputePartitionNumber = false
 
 # file in which proof representation needed for proof checking is stored
 pcc.proofFile = "arg.obj"
 
 # Generate and dump a proof
 pcc.proofgen.doPCC = false
-
-# Set to true if certificate contains not only abstract states but also the
-# size of reached set, enables proper PCC
-pcc.reachedSizeInCertificate = false
 
 # Qualified name for class which implements certification strategy, hence
 # proof writing, to be used.

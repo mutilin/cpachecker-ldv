@@ -33,8 +33,13 @@ import org.sosy_lab.cpachecker.core.interfaces.pcc.PartialReachedConstructionAlg
 import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 
+public class MonotoneTransferFunctionARGBasedPartialReachedSetConstructionAlgorithm implements PartialReachedConstructionAlgorithm {
 
-public class MonotoneStopARGBasedPartialReachedSetConstructionAlgorithm implements PartialReachedConstructionAlgorithm {
+  private final boolean returnARGStates;
+
+  public MonotoneTransferFunctionARGBasedPartialReachedSetConstructionAlgorithm(final boolean pReturnARGStatesInsteadOfWrappedStates){
+    returnARGStates = pReturnARGStatesInsteadOfWrappedStates;
+  }
 
   @Override
   public AbstractState[] computePartialReachedSet(final UnmodifiableReachedSet pReached)
@@ -43,35 +48,45 @@ public class MonotoneStopARGBasedPartialReachedSetConstructionAlgorithm implemen
         "May only compute partial reached set with this algorithm if an ARG is constructed and ARG is top level state."); }
     ARGState root = (ARGState) pReached.getFirstState();
 
-    NodeSelectionARGPass argPass = getARGPass(pReached.getPrecision(root));
+    NodeSelectionARGPass argPass = getARGPass(pReached.getPrecision(root), root);
     argPass.passARG(root);
 
-    List<AbstractState> reachedSetSubset = argPass.getSelectedNodes();
+    List<? extends AbstractState> reachedSetSubset = argPass.getSelectedNodes();
     return reachedSetSubset.toArray(new AbstractState[reachedSetSubset.size()]);
   }
 
-  protected NodeSelectionARGPass getARGPass(Precision pRootPrecision){
-    return new NodeSelectionARGPass();
+  protected NodeSelectionARGPass getARGPass(final Precision pRootPrecision, final ARGState pRoot)
+      throws InvalidConfigurationException {
+    return new NodeSelectionARGPass(pRoot);
   }
 
 
   protected class NodeSelectionARGPass extends AbstractARGPass {
 
-    public NodeSelectionARGPass() {
+    private final ARGState root;
+
+    public NodeSelectionARGPass(final ARGState pRoot) {
       super(false);
+      root = pRoot;
     }
 
     private List<AbstractState> wrappedARGStates = new ArrayList<>();
+    private List<ARGState> argStates = new ArrayList<>();
 
     @Override
     public void visitARGNode(final ARGState pNode) {
       if (isToAdd(pNode)) {
-        wrappedARGStates.add(pNode.getWrappedState());
+        if (returnARGStates) {
+          argStates.add(pNode);
+        } else {
+          wrappedARGStates.add(pNode.getWrappedState());
+        }
       }
     }
 
     protected boolean isToAdd(final ARGState pNode) {
-      return pNode.getParents().size() > 1 || pNode.getCoveredByThis().size() > 0 && !pNode.isCovered();
+      return pNode == root || pNode.getParents().size() > 1 || pNode.getCoveredByThis().size() > 0
+          && !pNode.isCovered();
     }
 
     @Override
@@ -79,8 +94,12 @@ public class MonotoneStopARGBasedPartialReachedSetConstructionAlgorithm implemen
       return false;
     }
 
-    public List<AbstractState> getSelectedNodes(){
-      return wrappedARGStates;
+    public List<? extends AbstractState> getSelectedNodes(){
+      if (returnARGStates) {
+        return argStates;
+      } else {
+        return wrappedARGStates;
+      }
     }
 
   }
