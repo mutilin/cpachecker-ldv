@@ -53,9 +53,7 @@ public class LockStatisticsReducer implements Reducer {
     LockStatisticsState reducedState = (LockStatisticsState)pReducedElement;
     LockStatisticsState expandedState = reducedState.clone();
     LockStatisticsState rootState = (LockStatisticsState) pRootElement;
-    expandedState.reduceCallstack(cReducer, pReducedContext.getCallNode());
-    expandedState.expandCallstack(rootState, restorator);
-    expandedState.copyRestoreState(rootState);
+    expandedState.expandCallstack(rootState, restorator, cReducer, pReducedContext.getCallNode());
     return expandedState;
   }
 

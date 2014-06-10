@@ -41,10 +41,10 @@ public class LockStatisticsLock implements Comparable<LockStatisticsLock> {
   private final LockIdentifier lockId;
   private final ImmutableList<AccessPoint> accessPoints;
 
-  LockStatisticsLock(String n, int l, LockType t, CallstackState s, CallstackState reduced, String v) {
+  LockStatisticsLock(String n, int l, LockType t, CallstackState s, String v) {
     lockId = LockIdentifier.of(n, getCleanName(v), t);
     LinkedList<AccessPoint> tmpAccessPoints = new LinkedList<>();
-    tmpAccessPoints.add(new AccessPoint( new LineInfo(l), s, reduced));
+    tmpAccessPoints.add(new AccessPoint( new LineInfo(l), s));
     accessPoints = ImmutableList.copyOf(tmpAccessPoints);
   }
 
@@ -191,7 +191,7 @@ public class LockStatisticsLock implements Comparable<LockStatisticsLock> {
     return tmpLock;
   }
 
-  public LockStatisticsLock expandCallstack(LockStatisticsLock rootLock, BAMRestoreStack restorator) {
+  public LockStatisticsLock expandCallstack(LockStatisticsLock rootLock, BAMRestoreStack restorator, CallstackReducer pReducer, CFANode pNode) {
     boolean changed = false;
 
     AccessPoint tmpPoint, newPoint;
@@ -200,7 +200,7 @@ public class LockStatisticsLock implements Comparable<LockStatisticsLock> {
     for (int i = 0; i < this.accessPoints.size(); i++) {
       tmpPoint = accessPoints.get(i);
       if (tmpPoint.isNew() || rootLock == null) {
-        newPoint = tmpPoint.expandCallstack(restorator);
+        newPoint = tmpPoint.expandCallstack(restorator, pReducer, pNode);
         if (newPoint != tmpPoint) {
           changed = true;
           newAccessPoints.set(i, newPoint);
@@ -215,28 +215,6 @@ public class LockStatisticsLock implements Comparable<LockStatisticsLock> {
       }
     }
     if (changed) {
-      return clone(newAccessPoints);
-    } else {
-      return this;
-    }
-  }
-
-  public LockStatisticsLock reduceCallStack(CallstackReducer pReducer, CFANode pNode) {
-    boolean isChanged = false;
-    AccessPoint tmpPoint, newPoint;
-    LinkedList<AccessPoint> newAccessPoints = new LinkedList<>(this.accessPoints);
-
-    for (int i = 0; i < this.accessPoints.size(); i++) {
-      tmpPoint = accessPoints.get(i);
-      if (tmpPoint.isNew()) {
-        newPoint = tmpPoint.reduceCallstack(pReducer, pNode);
-        if (newPoint != tmpPoint) {
-          isChanged = true;
-          newAccessPoints.set(i, newPoint);
-        }
-      }
-    }
-    if (isChanged) {
       return clone(newAccessPoints);
     } else {
       return this;

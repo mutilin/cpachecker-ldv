@@ -68,7 +68,7 @@ public class LockStatisticsState implements AbstractState, Serializable {
     toRestore = state;
   }
 
-  public void copyRestoreState(LockStatisticsState pRootState) {
+  private void copyRestoreState(LockStatisticsState pRootState) {
     setRestoreState(pRootState.toRestore);
   }
 
@@ -87,19 +87,19 @@ public class LockStatisticsState implements AbstractState, Serializable {
     return sb.toString();
   }
 
-  public void add(String lockName, int line, CallstackState state, CallstackState reduced, String variable, LogManager logger) {
+  public void add(String lockName, int line, CallstackState state, String variable, LogManager logger) {
     boolean b;
     String locksBefore = locks.toString();
 
     LockStatisticsLock oldLock = findLock(lockName, variable);
     if(oldLock != null) {
-      LockStatisticsLock newLock = oldLock.addAccessPointer(new AccessPoint(new LineInfo(line), state, reduced));
+      LockStatisticsLock newLock = oldLock.addAccessPointer(new AccessPoint(new LineInfo(line), state));
       b = locks.remove(oldLock);
       assert b;
       b = locks.add(newLock);
       assert b;
     } else {
-      LockStatisticsLock tmpLock = new LockStatisticsLock(lockName, line, LockType.GLOBAL_LOCK, state, reduced, variable);
+      LockStatisticsLock tmpLock = new LockStatisticsLock(lockName, line, LockType.GLOBAL_LOCK, state, variable);
       b = locks.add(tmpLock);
     }
     if(b && logger != null) {
@@ -188,7 +188,7 @@ public class LockStatisticsState implements AbstractState, Serializable {
     return newState;
   }
 
-  public void set(String lockName, int num, int line, CallstackState state, CallstackState reduced, String variable) {
+  public void set(String lockName, int num, int line, CallstackState state, String variable) {
     //num can be equal 0, this means, that in origin file it is 0 and we should delete locks
     LockStatisticsLock oldLock = findLock(lockName, variable);
     LockStatisticsLock newLock;
@@ -197,7 +197,7 @@ public class LockStatisticsState implements AbstractState, Serializable {
       newLock = oldLock;
       if (num > oldLock.getAccessCounter()) {
         newLock = oldLock.addRecursiveAccessPointer(num - oldLock.getAccessCounter(),
-            new AccessPoint(new LineInfo(line), state, reduced));
+            new AccessPoint(new LineInfo(line), state));
       } else if (num < oldLock.getAccessCounter()) {
         for (int i = 0; i < oldLock.getAccessCounter() - num; i++) {
           newLock = newLock.removeLastAccessPointer();
@@ -208,8 +208,8 @@ public class LockStatisticsState implements AbstractState, Serializable {
         locks.add(newLock);
       }
     } else if (num > 0) {
-      newLock = new LockStatisticsLock(lockName, line, LockType.GLOBAL_LOCK, state, reduced, variable);
-      newLock = newLock.addRecursiveAccessPointer(num - 1, new AccessPoint(new LineInfo(line), state, reduced));
+      newLock = new LockStatisticsLock(lockName, line, LockType.GLOBAL_LOCK, state, variable);
+      newLock = newLock.addRecursiveAccessPointer(num - 1, new AccessPoint(new LineInfo(line), state));
       // num - 1, because one of them is line above (new lock)
       if (newLock != null) {
         locks.add(newLock);
@@ -329,13 +329,13 @@ public class LockStatisticsState implements AbstractState, Serializable {
     return true;
   }
 
-  public void expandCallstack(LockStatisticsState rootState, BAMRestoreStack restorator) {
+  public void expandCallstack(LockStatisticsState rootState, BAMRestoreStack restorator, CallstackReducer pReducer, CFANode pNode) {
     Set<Pair<LockStatisticsLock, LockStatisticsLock>> toChange = new HashSet<>();
     LockStatisticsLock tmpLock;
     for (LockStatisticsLock lock : this.locks) {
       tmpLock = rootState.findLock(lock);
       //null is also correct (it shows, that we've found new lock)
-      tmpLock = lock.expandCallstack(tmpLock, restorator);
+      tmpLock = lock.expandCallstack(tmpLock, restorator, pReducer, pNode);
       if (lock != tmpLock) {
         toChange.add(Pair.of(lock, tmpLock));
       }
@@ -344,20 +344,7 @@ public class LockStatisticsState implements AbstractState, Serializable {
       locks.remove(pair.getFirst());
       locks.add(pair.getSecond());
     }
-  }
-
-  public void reduceCallstack(CallstackReducer pReducer, CFANode pNode) {
-    Set<Pair<LockStatisticsLock, LockStatisticsLock>> toChange = new HashSet<>();
-    for (LockStatisticsLock lock : this.locks) {
-      LockStatisticsLock newLock = lock.reduceCallStack(pReducer, pNode);
-      if (lock != newLock) {
-        toChange.add(Pair.of(lock, newLock));
-      }
-    }
-    for (Pair<LockStatisticsLock, LockStatisticsLock> pair : toChange) {
-      locks.remove(pair.getFirst());
-      locks.add(pair.getSecond());
-    }
+    copyRestoreState(rootState);
   }
 
   /**

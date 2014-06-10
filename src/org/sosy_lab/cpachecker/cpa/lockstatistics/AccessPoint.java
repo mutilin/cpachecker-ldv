@@ -39,19 +39,13 @@ public class AccessPoint {
    */
   private CallstackState callstack;
   /**
-   * reducedCallstack is responsible for storing in ABMcache.
-   * So, it is corrected only at the end of its analysis, before saving in cache.
-   */
-  private CallstackState reducedCallstack;
-  /**
    * This field shows, if this access point is new or not
    */
   private boolean isNewPoint;
 
-  AccessPoint(LineInfo l, CallstackState stack, CallstackState reduced) {
+  AccessPoint(LineInfo l, CallstackState stack) {
     line = l;
-    callstack = (stack == null ? reduced : stack); //It can be, if ABM isn't include in configuration
-    reducedCallstack = reduced;
+    callstack = stack;
     isNewPoint = true;
   }
 
@@ -111,28 +105,19 @@ public class AccessPoint {
 
   @Override
   public AccessPoint clone() {
-    AccessPoint result =  new AccessPoint(line, callstack, reducedCallstack);
+    AccessPoint result =  new AccessPoint(line, callstack);
     result.isNewPoint = this.isNewPoint;
     return result;
   }
 
-  public AccessPoint expandCallstack(BAMRestoreStack pRestorator) {
+  public AccessPoint expandCallstack(BAMRestoreStack pRestorator, CallstackReducer pReducer, CFANode pNode) {
     AccessPoint result = this.clone();
+    CallstackState reducedCallstack = (CallstackState)pReducer.getVariableReducedState(callstack, null, pNode);
     try {
-      result.callstack = pRestorator.restoreCallstack(this.reducedCallstack);
+      result.callstack = pRestorator.restoreCallstack(reducedCallstack);
     } catch (HandleCodeException e) {
       System.err.println(e.getMessage());
     }
-    if (this.equals(result)) {
-      return this;
-    } else {
-      return result;
-    }
-  }
-
-  public AccessPoint reduceCallstack(CallstackReducer pReducer, CFANode pNode) {
-    AccessPoint result = this.clone();
-    result.reducedCallstack = (CallstackState)pReducer.getVariableReducedState(callstack, null, pNode);
     return result;
   }
 }

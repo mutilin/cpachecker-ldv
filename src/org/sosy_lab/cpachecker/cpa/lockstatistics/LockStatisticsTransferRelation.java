@@ -102,11 +102,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
     switch (cfaEdge.getEdgeType()) {
 
       case FunctionCallEdge:
-        String fCallName = ((CFunctionCallEdge)cfaEdge).getSuccessor().getFunctionName();
         successor = handleFunctionCall(lockStatisticsElement, precision, state, (CFunctionCallEdge)cfaEdge);
-        if (annotatedfunctions != null && annotatedfunctions.containsKey(fCallName)) {
-          successor.setRestoreState(lockStatisticsElement);
-        }
         break;
 
       case FunctionReturnEdge:
@@ -248,7 +244,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
             + ", \n\t line = " + cfaEdge.getLineNumber());
         successor = successor.restore(locks, logger);
         for (String name : locks.keySet()) {
-          processLock(successor, lockStatisticsPrecision, state, cfaEdge.getLineNumber(), findLockByName(name), locks.get(name));
+          processLock(successor, state, cfaEdge.getLineNumber(), findLockByName(name), locks.get(name));
         }
       }
       logger.log(Level.FINEST, "\tPredessor = " + lockStatisticsElement
@@ -263,11 +259,15 @@ public class LockStatisticsTransferRelation implements TransferRelation
 
     logger.log(Level.FINEST, "Strengthen LockStatistics result");
     CallstackState state = null;
-    for (AbstractState tmpState : elements) {
-      if (tmpState instanceof CallstackState) {
-        state = (CallstackState)tmpState;
-        break;
+    if (((LockStatisticsPrecision)precision).getPreciseState() == null) {
+      for (AbstractState tmpState : elements) {
+        if (tmpState instanceof CallstackState) {
+          state = (CallstackState)tmpState;
+          break;
+        }
       }
+    } else {
+      state = ((LockStatisticsPrecision)precision).getPreciseState();
     }
     assert (state != null);
     return getAbstractSuccessors0(element, precision, state, cfaEdge);
@@ -289,7 +289,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
         String functionName = function.getFunctionNameExpression().toASTString();
         Set<LockInfo> changedLocks = findLockByFunction(functionName);
         for (LockInfo lock : changedLocks) {
-          changeState(newElement, precision, state, lock, functionName, op2.getFileLocation().getStartingLineNumber(), currentFunction,
+          changeState(newElement, state, lock, functionName, op2.getFileLocation().getStartingLineNumber(), currentFunction,
                            function.getParameterExpressions());
         }
       } else {
@@ -302,7 +302,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
         if (lock != null) {
           if (rightSide instanceof CIntegerLiteralExpression) {
             int level = ((CIntegerLiteralExpression)rightSide).getValue().intValue();
-            processSetLevel(newElement, precision, state, expression.getFileLocation().getStartingLineNumber(), level, lock);
+            processSetLevel(newElement, state, expression.getFileLocation().getStartingLineNumber(), level, lock);
           } else {
             logger.log(Level.WARNING, "Lock level isn't numeric constant: " + expression.toASTString()
                 + "(line " + expression.getFileLocation().getStartingLineNumber() + ")");
@@ -318,7 +318,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
       String functionName = statement.getFunctionCallExpression().getFunctionNameExpression().toASTString();
       Set<LockInfo> changedLocks = findLockByFunction(functionName);
       for (LockInfo lock : changedLocks) {
-        changeState(newElement, precision, state, lock, functionName, statement.getFileLocation().getStartingLineNumber(), currentFunction,
+        changeState(newElement, state, lock, functionName, statement.getFileLocation().getStartingLineNumber(), currentFunction,
           statement.getFunctionCallExpression().getParameterExpressions());
       }
     }
@@ -337,10 +337,14 @@ public class LockStatisticsTransferRelation implements TransferRelation
       String functionName = callEdge.getSuccessor().getFunctionName();
       Set<LockInfo> changedLocks = findLockByFunction(functionName);
       for (LockInfo lock : changedLocks) {
-        changeState(newElement, precision, state, lock, functionName, callEdge.getLineNumber(),
+        changeState(newElement, state, lock, functionName, callEdge.getLineNumber(),
             callEdge.getPredecessor().getFunctionName(), callEdge.getArguments());
       }
     }
+    if (annotatedfunctions != null && annotatedfunctions.containsKey(callEdge.getSuccessor().getFunctionName())) {
+      newElement.setRestoreState(element);
+    }
+
     return newElement;
   }
 
@@ -378,12 +382,12 @@ public class LockStatisticsTransferRelation implements TransferRelation
     return null;
   }
 
-  private void changeState(LockStatisticsState newElement, LockStatisticsPrecision precision, CallstackState state, LockInfo lock, String functionName, int lineNumber
+  private void changeState(LockStatisticsState newElement, CallstackState state, LockInfo lock, String functionName, int lineNumber
       , String currentFunction, List<CExpression> params) {
     if (lock.LockFunctions.containsKey(functionName)) {
       int p = lock.LockFunctions.get(functionName);
       String variable = (p == 0 ? "" : params.get(p - 1).toASTString());
-      processLock(newElement, precision, state, lineNumber, lock, variable);
+      processLock(newElement, state, lineNumber, lock, variable);
       return;
 
     } else if (lock.UnlockFunctions.containsKey(functionName)) {
@@ -402,19 +406,17 @@ public class LockStatisticsTransferRelation implements TransferRelation
 
     } else if (lock.setLevel != null && lock.setLevel.equals(functionName)) {
       int p = Integer.parseInt(params.get(0).toASTString()); //new level
-      processSetLevel(newElement, precision, state, lineNumber, p, lock);
+      processSetLevel(newElement, state, lineNumber, p, lock);
       return;//they count from 1
     }
   }
 
-  private void processLock(LockStatisticsState newElement, LockStatisticsPrecision precision, CallstackState reducedCallstack, int lineNumber, LockInfo lock, String variable) {
-    CallstackState callstack = precision.getPreciseState();
-
+  private void processLock(LockStatisticsState newElement, CallstackState callstack, int lineNumber, LockInfo lock, String variable) {
     logger.log(Level.FINER, "Lock at line " + lineNumber + ", Callstack: " + callstack);
     int d = newElement.getCounter(lock.lockName, variable);
 
     if (d < lock.maxLock) {
-      newElement.add(lock.lockName, lineNumber, callstack, reducedCallstack, variable, logger);
+      newElement.add(lock.lockName, lineNumber, callstack, variable, logger);
     } else {
       List<AccessPoint> access = newElement.findLock(lock.lockName, variable).getAccessPoints();
       StringBuilder message = new StringBuilder();
@@ -427,9 +429,8 @@ public class LockStatisticsTransferRelation implements TransferRelation
     }
   }
 
-  private void processSetLevel(LockStatisticsState newElement, LockStatisticsPrecision precision, CallstackState reducedCallstack, int lineNumber, int level, LockInfo lock) {
-    CallstackState callstack = precision.getPreciseState();
+  private void processSetLevel(LockStatisticsState newElement, CallstackState callstack, int lineNumber, int level, LockInfo lock) {
     logger.log(Level.FINER, "Set a lock level " + level + " at line " + lineNumber + ", Callstack: " + callstack);
-    newElement.set(lock.lockName, level, lineNumber, callstack, reducedCallstack, "");
+    newElement.set(lock.lockName, level, lineNumber, callstack, "");
   }
 }
