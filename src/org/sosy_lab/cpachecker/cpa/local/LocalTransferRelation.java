@@ -339,9 +339,8 @@ public class LocalTransferRelation implements TransferRelation {
         assign(pSuccessor, new CIdExpression(((CVariableDeclaration)decl).getFileLocation(), decl),
             ((CInitializerExpression)init).getExpression());
       } else {
-        if (findDereference(decl.getType()) > 0 &&
-            (!decl.isGlobal() && declEdge.getSuccessor().getFunctionName().equals("ldv_main") ||
-                decl.getType() instanceof CArrayType)) {
+        if (findDereference(decl.getType()) > 0 && !decl.isGlobal()
+            && (declEdge.getSuccessor().getFunctionName().equals("ldv_main") || decl.getType() instanceof CArrayType)) {
           //we don't save global variables
           pSuccessor.set(new GeneralLocalVariableIdentifier(decl.getName(), findDereference(decl.getType())), DataType.LOCAL);
         }
