@@ -66,6 +66,7 @@ import org.sosy_lab.cpachecker.core.reachedset.ReachedSetFactory;
 import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
 import org.sosy_lab.cpachecker.cpa.arg.ARGReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
+import org.sosy_lab.cpachecker.cpa.bam.BAMCEXSubgraphComputer.BackwardARGState;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackCPA;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackReducer;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
@@ -567,7 +568,7 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
     Stack<ARGState> openElements = new Stack<>();
     ARGState root = null;
 
-    BackwardARGState newTreeTarget = new BackwardARGState(target.getWrappedState(), null);
+    BackwardARGState newTreeTarget = new BackwardARGState(target);
     pPathElementToReachedState.put(newTreeTarget, target);
     elementsMap.put(target, newTreeTarget);
     ARGState currentState = target, tmpChild;
@@ -577,9 +578,10 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
     while (!pState.isAbstractionState()) {
       //assert currentState.getChildren().size() == 1;
       tmpChild = currentState.getChildren().iterator().next();
-      BackwardARGState newState = new BackwardARGState(tmpChild.getWrappedState(), elementsMap.get(currentState));
+      BackwardARGState newState = new BackwardARGState(tmpChild);
       elementsMap.put(tmpChild, newState);
       pPathElementToReachedState.put(newState, tmpChild);
+      newState.addParent(elementsMap.get(currentState));
       currentState = tmpChild;
       pState = AbstractStates.extractStateByType(currentState, PredicateAbstractState.class);
     }
@@ -591,7 +593,7 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
       for (ARGState parent : currentElement.getParents()) {
         if (!elementsMap.containsKey(parent)) {
           //create node for parent in the new subtree
-          BackwardARGState newParent = new BackwardARGState(parent.getWrappedState(), null);
+          BackwardARGState newParent = new BackwardARGState(parent);
           elementsMap.put(parent, newParent);
           pPathElementToReachedState.put(newParent, parent);
           //and remember to explore the parent later
@@ -603,9 +605,10 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
           //we have the transfer function to handle this case, as our reachSet is wrong
           //(we have to use the cached ones)
           ReachedSet newReachedSet = abstractStateToReachedSet.get(parent);
+          //ARGState targetARGState = (ARGState) expandedToReducedCache.get(pPathElementToReachedState.get(elementsMap.get(currentElement)));
           ARGState innerTree =
               computeCounterexampleSubgraph(parent, newReachedSet.getPrecision(newReachedSet.getFirstState()),
-                  elementsMap.get(currentElement), pPathElementToReachedState);
+              elementsMap.get(currentElement), pPathElementToReachedState);
           if (innerTree == null) {
             return null;
           }
@@ -690,12 +693,11 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
   //returns root of a subtree leading from the root element of the given reachedSet to the target state
   //subtree is represented using children and parents of ARGElements, where newTreeTarget is the ARGState
   //in the constructed subtree that represents target
-  ARGState computeCounterexampleSubgraph(ARGState target, ARGReachedSet reachedSet,
+  ARGState computeCounterexampleSubgraph(ARGState target, ARGReachedSet reachedSet, BackwardARGState newTreeTarget,
                                                  Map<ARGState, ARGState> pPathElementToReachedState)
           throws InterruptedException, RecursiveAnalysisFailedException {
     assert reachedSet.asReachedSet().contains(target);
 
-/* HEAD
     //start by creating ARGElements for each node needed in the tree
     Map<ARGState, BackwardARGState> elementsMap = new HashMap<>();
     Stack<ARGState> openElements = new Stack<>();
@@ -711,7 +713,7 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
       for (ARGState parent : currentElement.getParents()) {
         if (!elementsMap.containsKey(parent)) {
           //create node for parent in the new subtree
-          elementsMap.put(parent, new BackwardARGState(parent.getWrappedState(), null));
+          elementsMap.put(parent, new BackwardARGState(parent));
           pPathElementToReachedState.put(elementsMap.get(parent), parent);
           //and remember to explore the parent later
           openElements.push(parent);
@@ -747,12 +749,12 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
     return root;
   }
 
-  **
+  /**
    * This method looks for the reached set that belongs to (root, rootPrecision),
    * then looks for target in this reached set and constructs a tree from root to target
    * (recursively, if needed).
    * @throws RecursiveAnalysisFailedException
-   *
+   */
   private ARGState computeCounterexampleSubgraph(ARGState root, Precision rootPrecision, BackwardARGState newTreeTarget,
       Map<ARGState, ARGState> pPathElementToReachedState) throws InterruptedException, RecursiveAnalysisFailedException {
     CFANode rootNode = extractLocation(root);
@@ -779,7 +781,10 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
       argCache.removeReturnEntry(reducedRootState, reachSet.getPrecision(reachSet.getFirstState()), rootSubtree);
     }
     return result;
-*/
+  }
+    ARGState computeCounterexampleSubgraph2(ARGState target, ARGReachedSet reachedSet,
+        Map<ARGState, ARGState> pPathElementToReachedState)
+throws InterruptedException, RecursiveAnalysisFailedException {
     final BAMCEXSubgraphComputer cexSubgraphComputer = new BAMCEXSubgraphComputer(
             partitioning, wrappedReducer, argCache, pPathElementToReachedState,
             abstractStateToReachedSet, expandedToReducedCache, logger);

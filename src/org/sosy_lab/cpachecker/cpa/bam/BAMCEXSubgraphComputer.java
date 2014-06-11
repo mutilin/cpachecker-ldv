@@ -23,6 +23,14 @@
  */
 package org.sosy_lab.cpachecker.cpa.bam;
 
+import static org.sosy_lab.cpachecker.util.AbstractStates.extractLocation;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.NavigableSet;
+import java.util.TreeSet;
+import java.util.logging.Level;
+
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.blocks.BlockPartitioning;
@@ -32,14 +40,6 @@ import org.sosy_lab.cpachecker.core.interfaces.Reducer;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
-
-import java.util.HashMap;
-import java.util.Map;
-import java.util.NavigableSet;
-import java.util.TreeSet;
-import java.util.logging.Level;
-
-import static org.sosy_lab.cpachecker.util.AbstractStates.extractLocation;
 
 public class BAMCEXSubgraphComputer {
 
@@ -201,6 +201,133 @@ public class BAMCEXSubgraphComputer {
     }
     return result;
   }
+
+  /*public ARGState findPath(ARGState target,
+      Map<ARGState, ARGState> pPathElementToReachedState, final CallstackState stack) throws InterruptedException, RecursiveAnalysisFailedException {
+
+    Map<ARGState, BackwardARGState> elementsMap = new HashMap<>();
+    Stack<ARGState> openElements = new Stack<>();
+    ARGState root = null;
+
+    BackwardARGState newTreeTarget = new BackwardARGState(target);
+    pPathElementToReachedState.put(newTreeTarget, target);
+    elementsMap.put(target, newTreeTarget);
+    ARGState currentState = target, tmpChild;
+
+    //Find path to nearest abstraction state
+    PredicateAbstractState pState = AbstractStates.extractStateByType(currentState, PredicateAbstractState.class);
+    while (!pState.isAbstractionState()) {
+      //assert currentState.getChildren().size() == 1;
+      tmpChild = currentState.getChildren().iterator().next();
+      BackwardARGState newState = new BackwardARGState(tmpChild);
+      elementsMap.put(tmpChild, newState);
+      pPathElementToReachedState.put(newState, tmpChild);
+      currentState = tmpChild;
+      pState = AbstractStates.extractStateByType(currentState, PredicateAbstractState.class);
+    }
+
+    openElements.push(target);
+    while (!openElements.empty()) {
+      ARGState currentElement = openElements.pop();
+
+      for (ARGState parent : currentElement.getParents()) {
+        if (!elementsMap.containsKey(parent)) {
+          //create node for parent in the new subtree
+          BackwardARGState newParent = new BackwardARGState(parent);
+          elementsMap.put(parent, newParent);
+          pPathElementToReachedState.put(newParent, parent);
+          //and remember to explore the parent later
+          openElements.push(parent);
+        }
+        CFAEdge edge = BAMARGUtils.getEdgeToChild(parent, currentElement);
+        if (edge == null) {
+          //this is a summarized call and thus an direct edge could not be found
+          //we have the transfer function to handle this case, as our reachSet is wrong
+          //(we have to use the cached ones)
+          ReachedSet newReachedSet = abstractStateToReachedSet.get(parent);
+          ARGState innerTree =
+              computeCounterexampleSubgraph(parent, newReachedSet,
+                  elementsMap.get(currentElement));
+          if (innerTree == null) {
+            return null;
+          }
+          for (ARGState child : innerTree.getChildren()) {
+            child.addParent(elementsMap.get(parent));
+          }
+          innerTree.removeFromARG();
+          elementsMap.get(parent).updateDecreaseId();
+        } else {
+          //normal edge
+          //create an edge from parent to current
+          elementsMap.get(currentElement).addParent(elementsMap.get(parent));
+        }
+      }
+      if (currentElement.getParents().isEmpty()) {
+        if (stack.getPreviousState() == null) {
+          root = elementsMap.get(currentElement);
+          break;
+        }
+        ARGState expandedState = null;
+        BackwardARGState lastNewExpandedState = null;
+        ARGState lastExpandedState = null;
+        ReachedSet tmpReachedSet;
+        Set<ARGState> removedStates = new HashSet<>();
+        //Find correct expanded state
+        for (AbstractState tmpExpanded : abstractStateToReachedSet.keySet()) {
+          tmpReachedSet = abstractStateToReachedSet.get(tmpExpanded);
+          if (tmpReachedSet.getFirstState().equals(currentElement)) {
+            CallstackState expandedCallstack = AbstractStates.extractStateByType(tmpExpanded, CallstackState.class);
+            if (!(expandedCallstack.getPreviousState().getCurrentFunction()
+                .equals(stack.getPreviousState().getCurrentFunction()))) {
+              continue;
+            }
+            expandedState = (ARGState) tmpExpanded;
+            if (lastExpandedState != null && expandedState.isOlderThan(lastExpandedState)) {
+              continue;
+            }
+            //Try to find path.
+            //It may be null, if somewhere callstack becomes different (now we don't understand this)
+            ARGState tmpRoot = findPath(expandedState, pPathElementToReachedState, stack.getPreviousState());
+            if (tmpRoot != null) {
+              BackwardARGState newExpandedState = null;
+              for (ARGState tmp : pPathElementToReachedState.keySet()) {
+                if (tmp.isDestroyed()) {
+                  continue;
+                }
+                if (pPathElementToReachedState.get(tmp).equals(expandedState) && tmp.getChildren().size() == 0) {
+                  newExpandedState = (BackwardARGState) tmp;
+                  break;
+                }
+              }
+              root = tmpRoot;
+              if (lastNewExpandedState != null) {
+                removedStates.add(lastNewExpandedState);
+              }
+              lastNewExpandedState = newExpandedState;
+              lastExpandedState = expandedState;
+            }
+          }
+        }
+        if (lastNewExpandedState == null || root == null) {
+          return null;
+        }
+        elementsMap.put(expandedState, lastNewExpandedState);
+        pPathElementToReachedState.put(lastNewExpandedState, expandedState);
+        for (ARGState child : elementsMap.get(currentElement).getChildren()) {
+          child.addParent(lastNewExpandedState);
+        }
+        removedStates.add(elementsMap.get(currentElement));
+        for (ARGState toRemove : removedStates) {
+          toRemove.removeFromARG();
+        }
+      }
+      if (currentElement.isDestroyed()) {
+        //It means, that we delete some part of path
+        return null;
+      }
+    }
+    return root;
+  }*/
 
 
   /**

@@ -72,19 +72,12 @@ public abstract class AbstractRelevantPredicatesComputer<T> implements RelevantP
     if (fmgr.getBooleanFormulaManager().isFalse(pPredicate.getSymbolicAtom())
         || fmgr.extractVariables(pPredicate.getSymbolicAtom()).isEmpty()) {
       result = true;
-/* HEAD
-    } else if (predicateString.contains("(*")) {
-      //TODO This is quick fix of bug in struct representation
-      result = true;
-    }
-    else {
-      //result = isRelevant(pPrecomputeResult, pPredicate);
-      result = true;
-
-*/
     } else {
       String predicateString = pPredicate.getSymbolicAtom().toString();
       if (predicateString.contains("false") || predicateString.contains("retval")  || predicateString.contains("nondet")) {
+        result = true;
+      } else if (predicateString.contains("(*")) {
+        //TODO This is quick fix of bug in struct representation
         result = true;
       } else {
         result = isRelevant(pPrecomputeResult, pPredicate);

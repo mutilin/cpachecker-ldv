@@ -84,7 +84,7 @@ public abstract class AbstractARGBasedRefiner implements Refiner {
   };
 
   @Override
-  public final boolean performRefinement(ReachedSet pReached) throws CPAException, InterruptedException {
+  public boolean performRefinement(ReachedSet pReached) throws CPAException, InterruptedException {
     logger.log(Level.FINEST, "Starting ARG based refinement");
 
     assert ARGUtils.checkARG(pReached) : "ARG and reached set do not match before refinement";

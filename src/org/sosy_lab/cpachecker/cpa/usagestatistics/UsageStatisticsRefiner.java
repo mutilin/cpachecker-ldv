@@ -89,7 +89,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
   int findUnknown = 0;
   @Override
   public boolean performRefinement(ReachedSet pReached) throws CPAException, InterruptedException {
-    UsageCache cache = new UsageLineCache();
+    UsageCache cache = new UsageCallstackCache();
     Set<UsageInfo> toDelete = new HashSet<>();
     UsageContainer container =
         AbstractStates.extractStateByType(pReached.getFirstState(), UsageStatisticsState.class).getContainer();
@@ -99,7 +99,6 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     PairwiseUnsafeDetector detector = new PairwiseUnsafeDetector(null);
 
     System.out.println("Perform US refinement: " + i++);
-    System.out.println("Time: " + MainCPAStatistics.programTime);
     int counter = 0;
     boolean refinementFinish = false;
     for (SingleIdentifier id : container.getStatistics().keySet()) {
@@ -110,6 +109,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     }
     System.out.println("Unsafes: " + unsafes.size());
     System.out.println("True refined: " + counter);
+    System.out.println("Time: " + MainCPAStatistics.programTime);
     /*if (i++ == 2) {
       //System.out.println("This refinement: " + i);
       return false;

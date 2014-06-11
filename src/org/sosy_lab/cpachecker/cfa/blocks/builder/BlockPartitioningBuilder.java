@@ -48,7 +48,7 @@ public class BlockPartitioningBuilder {
 
   private static final CFATraversal TRAVERSE_CFA_INSIDE_FUNCTION = CFATraversal.dfs().ignoreFunctionCalls();
 
-  private final ReferencedVariablesCollector referenceCollector;
+  //private final ReferencedVariablesCollector referenceCollector;
 
   protected final Map<CFANode, Set<ReferencedVariable>> referencedVariablesMap = new HashMap<>();
   protected final Map<CFANode, Set<CFANode>> callNodesMap = new HashMap<>();

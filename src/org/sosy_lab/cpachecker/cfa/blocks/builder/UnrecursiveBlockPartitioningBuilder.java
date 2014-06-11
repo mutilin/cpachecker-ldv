@@ -25,7 +25,6 @@ package org.sosy_lab.cpachecker.cfa.blocks.builder;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Set;
 
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.blocks.BlockPartitioning;
@@ -35,8 +34,8 @@ import org.sosy_lab.cpachecker.cfa.model.CFANode;
 
 public class UnrecursiveBlockPartitioningBuilder extends BlockPartitioningBuilder {
 
-  public UnrecursiveBlockPartitioningBuilder(Set<CFANode> mainFunctionBody) {
-    super(mainFunctionBody);
+  public UnrecursiveBlockPartitioningBuilder() {
+    super();
   }
 
   @Override

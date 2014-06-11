@@ -56,11 +56,7 @@ public abstract class PartitioningHeuristic {
    * @see org.sosy_lab.cpachecker.cfa.blocks.BlockPartitioning
    */
   public final BlockPartitioning buildPartitioning(CFANode mainFunction) {
-/* HEAD
-    Set<CFANode> mainFunctionBody = CFATraversal.dfs().ignoreFunctionCalls().collectNodesReachableFrom(mainFunction);
-    BlockPartitioningBuilder builder = new UnrecursiveBlockPartitioningBuilder(mainFunctionBody);
-=======*/
-    BlockPartitioningBuilder builder = new BlockPartitioningBuilder();
+    BlockPartitioningBuilder builder = new UnrecursiveBlockPartitioningBuilder();
 
     //traverse CFG
     Set<CFANode> seen = new HashSet<>();
