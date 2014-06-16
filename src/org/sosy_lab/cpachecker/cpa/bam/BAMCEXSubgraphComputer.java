@@ -26,20 +26,27 @@ package org.sosy_lab.cpachecker.cpa.bam;
 import static org.sosy_lab.cpachecker.util.AbstractStates.extractLocation;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.NavigableSet;
+import java.util.Set;
+import java.util.Stack;
 import java.util.TreeSet;
 import java.util.logging.Level;
 
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.blocks.BlockPartitioning;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
+import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
+import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
+import org.sosy_lab.cpachecker.util.AbstractStates;
 
 public class BAMCEXSubgraphComputer {
 
@@ -202,7 +209,7 @@ public class BAMCEXSubgraphComputer {
     return result;
   }
 
-  /*public ARGState findPath(ARGState target,
+  public ARGState findPath(ARGState target,
       Map<ARGState, ARGState> pPathElementToReachedState, final CallstackState stack) throws InterruptedException, RecursiveAnalysisFailedException {
 
     Map<ARGState, BackwardARGState> elementsMap = new HashMap<>();
@@ -222,6 +229,7 @@ public class BAMCEXSubgraphComputer {
       BackwardARGState newState = new BackwardARGState(tmpChild);
       elementsMap.put(tmpChild, newState);
       pPathElementToReachedState.put(newState, tmpChild);
+      newState.addParent(elementsMap.get(currentState));
       currentState = tmpChild;
       pState = AbstractStates.extractStateByType(currentState, PredicateAbstractState.class);
     }
@@ -229,37 +237,35 @@ public class BAMCEXSubgraphComputer {
     openElements.push(target);
     while (!openElements.empty()) {
       ARGState currentElement = openElements.pop();
+      BackwardARGState newCurrentElement = elementsMap.get(currentElement);
 
       for (ARGState parent : currentElement.getParents()) {
-        if (!elementsMap.containsKey(parent)) {
-          //create node for parent in the new subtree
-          BackwardARGState newParent = new BackwardARGState(parent);
-          elementsMap.put(parent, newParent);
-          pPathElementToReachedState.put(newParent, parent);
-          //and remember to explore the parent later
-          openElements.push(parent);
-        }
+        //create node for parent in the new subtree
+        BackwardARGState newParent = new BackwardARGState(parent);
+        elementsMap.put(parent, newParent);
+        pPathElementToReachedState.put(newParent, parent);
+        //and remember to explore the parent later
+        openElements.push(parent);
         CFAEdge edge = BAMARGUtils.getEdgeToChild(parent, currentElement);
         if (edge == null) {
           //this is a summarized call and thus an direct edge could not be found
           //we have the transfer function to handle this case, as our reachSet is wrong
           //(we have to use the cached ones)
-          ReachedSet newReachedSet = abstractStateToReachedSet.get(parent);
+          ARGState targetARGState = (ARGState) expandedToReducedCache.get(currentElement);
           ARGState innerTree =
-              computeCounterexampleSubgraph(parent, newReachedSet,
-                  elementsMap.get(currentElement));
+              computeCounterexampleSubgraphForBlock(parent, targetARGState, newCurrentElement);
           if (innerTree == null) {
             return null;
           }
           for (ARGState child : innerTree.getChildren()) {
-            child.addParent(elementsMap.get(parent));
+            child.addParent(newParent);
           }
           innerTree.removeFromARG();
-          elementsMap.get(parent).updateDecreaseId();
+          newParent.updateDecreaseId();
         } else {
           //normal edge
           //create an edge from parent to current
-          elementsMap.get(currentElement).addParent(elementsMap.get(parent));
+          newCurrentElement.addParent(newParent);
         }
       }
       if (currentElement.getParents().isEmpty()) {
@@ -313,10 +319,10 @@ public class BAMCEXSubgraphComputer {
         }
         elementsMap.put(expandedState, lastNewExpandedState);
         pPathElementToReachedState.put(lastNewExpandedState, expandedState);
-        for (ARGState child : elementsMap.get(currentElement).getChildren()) {
+        for (ARGState child : newCurrentElement.getChildren()) {
           child.addParent(lastNewExpandedState);
         }
-        removedStates.add(elementsMap.get(currentElement));
+        removedStates.add(newCurrentElement);
         for (ARGState toRemove : removedStates) {
           toRemove.removeFromARG();
         }
@@ -327,7 +333,7 @@ public class BAMCEXSubgraphComputer {
       }
     }
     return root;
-  }*/
+  }
 
 
   /**

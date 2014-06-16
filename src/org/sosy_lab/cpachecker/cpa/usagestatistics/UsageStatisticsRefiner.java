@@ -145,9 +145,6 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       //iterationNum++;
       System.out.println("Refine " + refinementId);
       //System.out.println("Refine " + iterationNum + " from " + originSize);
-      /*if (target.getLine().getLine() == 23127) {
-         System.out.println("That line");
-      }*/
       pStat.ComputePath.start();
       ARGPath pPath = computePath((ARGState)target.getKeyState(), target.getCallStack());
       pStat.ComputePath.stopIfRunning();
@@ -169,11 +166,6 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
           System.out.println(target + " is false");
           cache.add(target);
         }
-
-        /*if (target.getLine().getLine() == 139541) {
-          System.out.println(pPath);
-          throw new InterruptedException();
-        }*/
       } catch (IllegalStateException e) {
         //msat_solver return -1 <=> unknown
         //consider its as true;

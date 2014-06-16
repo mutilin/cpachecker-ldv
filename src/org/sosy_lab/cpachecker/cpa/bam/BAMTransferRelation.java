@@ -66,7 +66,6 @@ import org.sosy_lab.cpachecker.core.reachedset.ReachedSetFactory;
 import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
 import org.sosy_lab.cpachecker.cpa.arg.ARGReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
-import org.sosy_lab.cpachecker.cpa.bam.BAMCEXSubgraphComputer.BackwardARGState;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackCPA;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackReducer;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
@@ -74,7 +73,6 @@ import org.sosy_lab.cpachecker.cpa.callstack.CallstackTransferRelation;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsCPA;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsPrecision;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsReducer;
-import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
@@ -564,225 +562,14 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
   public ARGState findPath(ARGState target,
       Map<ARGState, ARGState> pPathElementToReachedState, final CallstackState stack) throws InterruptedException, RecursiveAnalysisFailedException {
 
-    Map<ARGState, BackwardARGState> elementsMap = new HashMap<>();
-    Stack<ARGState> openElements = new Stack<>();
-    ARGState root = null;
+    final BAMCEXSubgraphComputer cexSubgraphComputer = new BAMCEXSubgraphComputer(
+        partitioning, wrappedReducer, argCache, pPathElementToReachedState,
+        abstractStateToReachedSet, expandedToReducedCache, logger);
 
-    BackwardARGState newTreeTarget = new BackwardARGState(target);
-    pPathElementToReachedState.put(newTreeTarget, target);
-    elementsMap.put(target, newTreeTarget);
-    ARGState currentState = target, tmpChild;
-
-    //Find path to nearest abstraction state
-    PredicateAbstractState pState = AbstractStates.extractStateByType(currentState, PredicateAbstractState.class);
-    while (!pState.isAbstractionState()) {
-      //assert currentState.getChildren().size() == 1;
-      tmpChild = currentState.getChildren().iterator().next();
-      BackwardARGState newState = new BackwardARGState(tmpChild);
-      elementsMap.put(tmpChild, newState);
-      pPathElementToReachedState.put(newState, tmpChild);
-      newState.addParent(elementsMap.get(currentState));
-      currentState = tmpChild;
-      pState = AbstractStates.extractStateByType(currentState, PredicateAbstractState.class);
-    }
-
-    openElements.push(target);
-    while (!openElements.empty()) {
-      ARGState currentElement = openElements.pop();
-
-      for (ARGState parent : currentElement.getParents()) {
-        if (!elementsMap.containsKey(parent)) {
-          //create node for parent in the new subtree
-          BackwardARGState newParent = new BackwardARGState(parent);
-          elementsMap.put(parent, newParent);
-          pPathElementToReachedState.put(newParent, parent);
-          //and remember to explore the parent later
-          openElements.push(parent);
-        }
-        CFAEdge edge = BAMARGUtils.getEdgeToChild(parent, currentElement);
-        if (edge == null) {
-          //this is a summarized call and thus an direct edge could not be found
-          //we have the transfer function to handle this case, as our reachSet is wrong
-          //(we have to use the cached ones)
-          ReachedSet newReachedSet = abstractStateToReachedSet.get(parent);
-          //ARGState targetARGState = (ARGState) expandedToReducedCache.get(pPathElementToReachedState.get(elementsMap.get(currentElement)));
-          ARGState innerTree =
-              computeCounterexampleSubgraph(parent, newReachedSet.getPrecision(newReachedSet.getFirstState()),
-              elementsMap.get(currentElement), pPathElementToReachedState);
-          if (innerTree == null) {
-            return null;
-          }
-          for (ARGState child : innerTree.getChildren()) {
-            child.addParent(elementsMap.get(parent));
-          }
-          innerTree.removeFromARG();
-          elementsMap.get(parent).updateDecreaseId();
-        } else {
-          //normal edge
-          //create an edge from parent to current
-          elementsMap.get(currentElement).addParent(elementsMap.get(parent));
-        }
-      }
-      if (currentElement.getParents().isEmpty()) {
-        if (stack.getPreviousState() == null) {
-          root = elementsMap.get(currentElement);
-          break;
-        }
-        ARGState expandedState = null;
-        BackwardARGState lastNewExpandedState = null;
-        ARGState lastExpandedState = null;
-        ReachedSet tmpReachedSet;
-        Set<ARGState> removedStates = new HashSet<>();
-        //Find correct expanded state
-        for (AbstractState tmpExpanded : abstractStateToReachedSet.keySet()) {
-          tmpReachedSet = abstractStateToReachedSet.get(tmpExpanded);
-          if (tmpReachedSet.getFirstState().equals(currentElement)) {
-            CallstackState expandedCallstack = AbstractStates.extractStateByType(tmpExpanded, CallstackState.class);
-            if (!(expandedCallstack.getPreviousState().getCurrentFunction()
-                .equals(stack.getPreviousState().getCurrentFunction()))) {
-              continue;
-            }
-            expandedState = (ARGState) tmpExpanded;
-            if (lastExpandedState != null && expandedState.isOlderThan(lastExpandedState)) {
-              continue;
-            }
-            //Try to find path.
-            //It may be null, if somewhere callstack becomes different (now we don't understand this)
-            ARGState tmpRoot = findPath(expandedState, pPathElementToReachedState, stack.getPreviousState());
-            if (tmpRoot != null) {
-              BackwardARGState newExpandedState = null;
-              for (ARGState tmp : pPathElementToReachedState.keySet()) {
-                if (tmp.isDestroyed()) {
-                  continue;
-                }
-                if (pPathElementToReachedState.get(tmp).equals(expandedState) && tmp.getChildren().size() == 0) {
-                  newExpandedState = (BackwardARGState) tmp;
-                  break;
-                }
-              }
-              root = tmpRoot;
-              if (lastNewExpandedState != null) {
-                removedStates.add(lastNewExpandedState);
-              }
-              lastNewExpandedState = newExpandedState;
-              lastExpandedState = expandedState;
-            }
-          }
-        }
-        if (lastNewExpandedState == null || root == null) {
-          return null;
-        }
-        elementsMap.put(expandedState, lastNewExpandedState);
-        pPathElementToReachedState.put(lastNewExpandedState, expandedState);
-        for (ARGState child : elementsMap.get(currentElement).getChildren()) {
-          child.addParent(lastNewExpandedState);
-        }
-        removedStates.add(elementsMap.get(currentElement));
-        for (ARGState toRemove : removedStates) {
-          toRemove.removeFromARG();
-        }
-      }
-      if (currentElement.isDestroyed()) {
-        //It means, that we delete some part of path
-        return null;
-      }
-    }
-    return root;
+        return cexSubgraphComputer.findPath(target, pPathElementToReachedState, stack);
   }
 
-  //returns root of a subtree leading from the root element of the given reachedSet to the target state
-  //subtree is represented using children and parents of ARGElements, where newTreeTarget is the ARGState
-  //in the constructed subtree that represents target
-  ARGState computeCounterexampleSubgraph(ARGState target, ARGReachedSet reachedSet, BackwardARGState newTreeTarget,
-                                                 Map<ARGState, ARGState> pPathElementToReachedState)
-          throws InterruptedException, RecursiveAnalysisFailedException {
-    assert reachedSet.asReachedSet().contains(target);
-
-    //start by creating ARGElements for each node needed in the tree
-    Map<ARGState, BackwardARGState> elementsMap = new HashMap<>();
-    Stack<ARGState> openElements = new Stack<>();
-    ARGState root = null;
-
-    pPathElementToReachedState.put(newTreeTarget, target);
-    elementsMap.put(target, newTreeTarget);
-    openElements.push(target);
-    while (!openElements.empty()) {
-      ARGState currentElement = openElements.pop();
-      assert reachedSet.asReachedSet().contains(currentElement);
-
-      for (ARGState parent : currentElement.getParents()) {
-        if (!elementsMap.containsKey(parent)) {
-          //create node for parent in the new subtree
-          elementsMap.put(parent, new BackwardARGState(parent));
-          pPathElementToReachedState.put(elementsMap.get(parent), parent);
-          //and remember to explore the parent later
-          openElements.push(parent);
-        }
-        CFAEdge edge = BAMARGUtils.getEdgeToChild(parent, currentElement);
-        if (edge == null) {
-          //this is a summarized call and thus an direct edge could not be found
-          //we have the transfer function to handle this case, as our reachSet is wrong
-          //(we have to use the cached ones)
-          ARGState innerTree =
-              computeCounterexampleSubgraph(parent, reachedSet.asReachedSet().getPrecision(parent),
-                  elementsMap.get(currentElement), pPathElementToReachedState);
-          if (innerTree == null) {
-            ARGSubtreeRemover.removeSubtree(reachedSet, parent);
-            return null;
-          }
-          for (ARGState child : innerTree.getChildren()) {
-            child.addParent(elementsMap.get(parent));
-          }
-          innerTree.removeFromARG();
-          elementsMap.get(parent).updateDecreaseId();
-        } else {
-          //normal edge
-          //create an edge from parent to current
-          elementsMap.get(currentElement).addParent(elementsMap.get(parent));
-        }
-      }
-      if (currentElement.getParents().isEmpty()) {
-        root = elementsMap.get(currentElement);
-      }
-    }
-    assert root != null;
-    return root;
-  }
-
-  /**
-   * This method looks for the reached set that belongs to (root, rootPrecision),
-   * then looks for target in this reached set and constructs a tree from root to target
-   * (recursively, if needed).
-   * @throws RecursiveAnalysisFailedException
-   */
-  private ARGState computeCounterexampleSubgraph(ARGState root, Precision rootPrecision, BackwardARGState newTreeTarget,
-      Map<ARGState, ARGState> pPathElementToReachedState) throws InterruptedException, RecursiveAnalysisFailedException {
-    CFANode rootNode = extractLocation(root);
-    Block rootSubtree = partitioning.getBlockForCallNode(rootNode);
-
-    AbstractState reducedRootState = wrappedReducer.getVariableReducedState(root, rootSubtree, rootNode);
-    ReachedSet reachSet = abstractStateToReachedSet.get(root);
-
-    //we found the to the root and precision corresponding reach set
-    //now try to find the target in the reach set
-    ARGState targetARGState = (ARGState) expandedToReducedCache.get(pPathElementToReachedState.get(newTreeTarget));
-    if (targetARGState.isDestroyed()) {
-      logger.log(Level.FINE,
-          "Target state refers to a destroyed ARGState, i.e., the cached subtree is outdated. Updating it.");
-      return null;
-    }
-    assert reachSet.contains(targetARGState);
-    //we found the target; now construct a subtree in the ARG starting with targetARTElement
-    ARGState result =
-        computeCounterexampleSubgraph(targetARGState, new ARGReachedSet(reachSet), newTreeTarget,
-            pPathElementToReachedState);
-    if (result == null) {
-      //enforce recomputation to update cached subtree
-      argCache.removeReturnEntry(reducedRootState, reachSet.getPrecision(reachSet.getFirstState()), rootSubtree);
-    }
-    return result;
-  }
-    ARGState computeCounterexampleSubgraph2(ARGState target, ARGReachedSet reachedSet,
+     ARGState computeCounterexampleSubgraph(ARGState target, ARGReachedSet reachedSet,
         Map<ARGState, ARGState> pPathElementToReachedState)
 throws InterruptedException, RecursiveAnalysisFailedException {
     final BAMCEXSubgraphComputer cexSubgraphComputer = new BAMCEXSubgraphComputer(
