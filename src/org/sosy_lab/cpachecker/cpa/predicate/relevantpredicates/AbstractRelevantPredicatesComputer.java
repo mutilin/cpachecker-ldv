@@ -60,7 +60,6 @@ public abstract class AbstractRelevantPredicatesComputer<T> implements RelevantP
   }
 
   private boolean isRelevant0(T pPrecomputeResult, AbstractionPredicate pPredicate) {
-
     // lookup in cache
     Pair<T, AbstractionPredicate> key = Pair.of(pPrecomputeResult, pPredicate);
     Boolean cacheResult = relevantPredicates.get(key);
@@ -81,6 +80,10 @@ public abstract class AbstractRelevantPredicatesComputer<T> implements RelevantP
         result = true;
       } else {
         result = isRelevant(pPrecomputeResult, pPredicate);
+        //result = true;
+        /*if (result == false) {
+          System.out.println("Isn't relevant predicate for block");
+        }*/
       }
     }
 
