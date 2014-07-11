@@ -33,7 +33,7 @@ import org.sosy_lab.cpachecker.cpa.usagestatistics.EdgeInfo.EdgeType;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 
-public class UsageInfo {
+public class UsageInfo implements Comparable<UsageInfo> {
 
   public static class UsageComparator implements Comparator<UsageInfo> {
 
@@ -238,5 +238,19 @@ public class UsageInfo {
 
   public boolean isRefined() {
     return isRefined;
+  }
+
+  @Override
+  public int compareTo(UsageInfo pO) {
+    int result = this.line.getLine() - pO.line.getLine();
+    if (result != 0) {
+      return result;
+    }
+    result = this.locks.getSize() - pO.locks.getSize();
+    if (result != 0) {
+      return result;
+    }
+    result = this.getCallStack().getDepth() - pO.getCallStack().getDepth();
+    return result;
   }
 }
