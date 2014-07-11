@@ -26,7 +26,7 @@ package org.sosy_lab.cpachecker.cpa.usagestatistics;
 import java.util.LinkedList;
 
 
-public class UsageSet extends LinkedList<UsageInfo> {
+public class UsageList extends LinkedList<UsageInfo> {
   private static final long serialVersionUID = 1L;
   private boolean isTrueUnsafe = false;
 
