@@ -75,15 +75,8 @@ public abstract class AbstractRelevantPredicatesComputer<T> implements RelevantP
       String predicateString = pPredicate.getSymbolicAtom().toString();
       if (predicateString.contains("false") || predicateString.contains("retval")  || predicateString.contains("nondet")) {
         result = true;
-      } else if (predicateString.contains("(*")) {
-        //TODO This is quick fix of bug in struct representation
-        result = true;
       } else {
         result = isRelevant(pPrecomputeResult, pPredicate);
-        //result = true;
-        /*if (result == false) {
-          System.out.println("Isn't relevant predicate for block");
-        }*/
       }
     }
 

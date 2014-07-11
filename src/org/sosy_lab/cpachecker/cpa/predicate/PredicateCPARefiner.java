@@ -58,6 +58,7 @@ import org.sosy_lab.cpachecker.cpa.arg.ARGReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.arg.ARGUtils;
 import org.sosy_lab.cpachecker.cpa.arg.AbstractARGBasedRefiner;
+import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateRefiner.BAMPredicateAbstractionRefinementStrategy;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.Precisions;
@@ -231,6 +232,12 @@ public class PredicateCPARefiner extends AbstractARGBasedRefiner implements Stat
 
       PredicatePrecision p = Precisions.extractPrecisionByType(pReached.asReachedSet().getPrecision(pReached.asReachedSet().getFirstState()),
           PredicatePrecision.class);
+      if (strategy instanceof BAMPredicateAbstractionRefinementStrategy) {
+        ((BAMPredicateAbstractionRefinementStrategy)strategy).checkRelevantFormulas(
+            Pair.zipList(formulas, abstractionStatesTrace),
+            p
+            );
+      }
       System.out.println("Total number of predicates: "
         + (p.getFunctionPredicates().size() != 0 ? p.getFunctionPredicates().size() : p.getLocalPredicates().size()));
       totalRefinement.stop();

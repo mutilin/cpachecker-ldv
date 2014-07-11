@@ -540,16 +540,7 @@ public class PredicateAbstractionManager {
         // Predicates without variables occur (for example, talking about UFs).
         // We do not know whether they are relevant, so we have to add them.
         predicateBuilder.add(predicate);
-      } else if (predicateTerm.toString().contains("(*")) {
-        predicateBuilder.add(predicate);
       } else {
-
-        String predicateString = predicateTerm.toString();
-        predicateString = predicateString.replace("`=_rat`", "");
-        if (!predicateString.matches(".*[a-z].*")) {
-          //System.out.println("Add heuristic's predicate: " + predicateTerm.toString());
-          predicateBuilder.add(predicate);
-        }
         logger.log(Level.FINEST, "Ignoring predicate about variables", predVariables);
       }
     }

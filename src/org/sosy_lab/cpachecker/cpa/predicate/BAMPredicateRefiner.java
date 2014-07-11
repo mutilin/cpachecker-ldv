@@ -37,7 +37,9 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
+import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.log.LogManager;
@@ -77,6 +79,7 @@ import org.sosy_lab.cpachecker.util.predicates.interpolation.InterpolationManage
 import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormula;
 
 import com.google.common.base.Function;
+import com.google.common.collect.Sets;
 
 
 /**
@@ -282,7 +285,7 @@ public class BAMPredicateRefiner extends AbstractBAMBasedRefiner implements Stat
    * This is an extension of {@link PredicateAbstractionRefinementStrategy}
    * that takes care of updating the BAM state.
    */
-  private static class BAMPredicateAbstractionRefinementStrategy extends PredicateAbstractionRefinementStrategy {
+  protected static class BAMPredicateAbstractionRefinementStrategy extends PredicateAbstractionRefinementStrategy {
 
     private final RefineableRelevantPredicatesComputer relevantPredicatesComputer;
     private final BAMPredicateCPA predicateCpa;
@@ -388,6 +391,53 @@ public class BAMPredicateRefiner extends AbstractBAMBasedRefiner implements Stat
     @Override
     protected void analyzePathPrecisions(ARGReachedSet argReached, List<ARGState> path) {
       // Not implemented for BAM (different sets of reached states have to be handled)
+    }
+
+    Map<CFANode, Set<AbstractionPredicate>> cache2 = new HashMap<>();
+    public void checkRelevantFormulas(List<Pair<BooleanFormula, ARGState>> pList, PredicatePrecision precision) {
+
+      BlockPartitioning partitioning = predicateCpa.getPartitioning();
+      FormulaManagerView fmgr = predicateCpa.getFormulaManager();
+
+      for (Pair<BooleanFormula, ARGState> pair : pList) {
+        ARGState currentState = pair.getSecond();
+        CFANode currentNode = AbstractStates.extractLocation(currentState);
+        if (partitioning.isCallNode(currentNode)) {
+          int number = pList.indexOf(pair);
+          assert number >= 0;
+          Block currentBlock = partitioning.getBlockForCallNode(currentNode);
+
+          Set<AbstractionPredicate> allPredicates = precision.getPredicates(currentNode, 0);
+          Set<AbstractionPredicate> cachedPredicates = cache2.get(currentNode);
+          if (allPredicates.equals(cachedPredicates)) {
+            continue;
+          }
+
+          Set<AbstractionPredicate> irrelevantPredicates = relevantPredicatesComputer.getIrrelevantPredicates(currentBlock, allPredicates);
+
+          for (AbstractionPredicate predicate : irrelevantPredicates) {
+            Set<String> currentVariables = fmgr.extractVariables(predicate.getSymbolicAtom());
+
+            for (int i = number + 1 ; i < pList.size(); i++) {
+              ARGState checkedState = pList.get(i).getSecond();
+              CFANode checkedNode = AbstractStates.extractLocation(checkedState);
+
+              if (currentBlock.isReturnNode(checkedNode)) {
+                break;
+              }
+
+              BooleanFormula checkedFormula = pList.get(i).getFirst();
+              Set<String> variables = fmgr.extractVariables(checkedFormula);
+
+              if (!Sets.intersection(currentVariables, variables).isEmpty()) {
+                relevantPredicatesComputer.considerPredicateAsRelevant(currentBlock, predicate);
+                break;
+              }
+            }
+          }
+          cache2.put(currentNode, allPredicates);
+        }
+      }
     }
   }
 
