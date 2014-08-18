@@ -33,34 +33,46 @@ import java.util.TreeMap;
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
+import org.sosy_lab.common.configuration.Option;
+import org.sosy_lab.common.configuration.Options;
+import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UnsafeDetector.SearchMode;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
-//@Options(prefix="cpa.usagestatistics")
+@Options(prefix="cpa.usagestatistics")
 public class UsageContainer {
 
   private PairwiseUnsafeDetector unsafeDetector = null;
 
-  private Map<SingleIdentifier, UsageSet> Stat;
+  private Map<SingleIdentifier, UsageList> Stat;
 
   public List<SingleIdentifier> unsafes = null;
+
+  @Option(name="debug", description="provides a way to look after refinement a target unsafe. Requires an option targetunsafename")
+  private boolean debugMode = false;
+
+  @Option(name="targetunsafename", description="Name the unsafe, which is target for debugging mode")
+  private String checkId;
+
+  private final LogManager logger;
 
   int totalUsages = 0;
   int totalIds = 0;
 
-  public UsageContainer(Configuration config) throws InvalidConfigurationException {
-    //config.inject(this);
+  public UsageContainer(Configuration config, LogManager l) throws InvalidConfigurationException {
+    config.inject(this);
     unsafeDetector = new PairwiseUnsafeDetector(config);
     Stat = new TreeMap<>();
+    logger = l;
   }
 
   public void add(SingleIdentifier id, UsageInfo usage) {
-    UsageSet uset;
+    UsageList uset;
 
     if (!Stat.containsKey(id)) {
-      uset = new UsageSet();
+      uset = new UsageList();
       Stat.put(id, uset);
     } else {
       uset = Stat.get(id);
@@ -80,7 +92,7 @@ public class UsageContainer {
     uset.add(usage);
   }
 
-  public Map<SingleIdentifier, UsageSet> getStatistics() {
+  public Map<SingleIdentifier, UsageList> getStatistics() {
     return Stat;
   }
 
@@ -103,18 +115,19 @@ public class UsageContainer {
     Set<SingleIdentifier> idToDelete = new HashSet<>();
 
     for (SingleIdentifier id : Stat.keySet()) {
-      UsageSet uset = Stat.get(id);
-      if (uset.isTrueUnsafe()) {
-        for (UsageInfo uinfo : uset) {
-          if (uinfo.isRefined()) {
-            uinfo.setKeyState(null);
-          } else {
-            toDelete.add(uinfo);
-          }
+      UsageList uset = Stat.get(id);
+
+      for (UsageInfo uinfo : uset) {
+        if (uinfo.isRefined()) {
+          uinfo.setKeyState(null);
+        } else {
+          toDelete.add(uinfo);
         }
-        uset.removeAll(toDelete);
-        toDelete.clear();
-      } else {
+      }
+      uset.removeAll(toDelete);
+      toDelete.clear();
+
+      if (uset.isEmpty()) {
         idToDelete.add(id);
       }
     }
@@ -149,17 +162,18 @@ public class UsageContainer {
   }
 
   public SingleIdentifier check(SingleIdentifier refinementId) {
-
     if (refinementId == null) {
       return null;
     }
-    UsageSet uset = Stat.get(refinementId);
-    /*if (refinementId.getName().equals("b_flags") && unsafeDetector.containsUnsafe(uset, SearchMode.FALSE)) {
-      return refinementId;
-    } else if (refinementId.getName().equals("b_flags") && !unsafeDetector.containsUnsafe(uset, SearchMode.FALSE)) {
-      return null;
-    }*/
-    if (uset.isTrueUnsafe() || !unsafeDetector.containsUnsafe(uset, SearchMode.FALSE)) {
+    UsageList uset = Stat.get(refinementId);
+    if (debugMode) {
+      if (refinementId.getName().equals(checkId) && unsafeDetector.containsUnsafe(uset, SearchMode.FALSE)) {
+        return refinementId;
+      } else if (refinementId.getName().equals(checkId) && !unsafeDetector.containsUnsafe(uset, SearchMode.FALSE)) {
+        return null;
+      }
+    }
+    if (uset.isTrueUnsafe() || !unsafeDetector.containsUnsafe(uset, SearchMode.FALSE) || debugMode) {
       if (!unsafeDetector.containsUnsafe(uset, SearchMode.TRUE)) {
         unsafes.remove(refinementId);
         //TODO May be remove only empty
@@ -168,14 +182,15 @@ public class UsageContainer {
         uset.setUnsafe();
       }
       for (SingleIdentifier id : unsafes) {
-        /*if (id.getName().equals("b_flags")) {
+        if (debugMode && id.getName().equals(checkId)) {
           return id;
-        }*/
-        uset = Stat.get(id);
-        if (uset.isTrueUnsafe()) {
-         continue;
+        } else if (!debugMode) {
+          uset = Stat.get(id);
+          if (uset.isTrueUnsafe()) {
+           continue;
+          }
+          return id;
         }
-        return id;
       }
       return null;
     } else {

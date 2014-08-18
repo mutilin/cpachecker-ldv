@@ -92,7 +92,7 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
     this.stopOperator = initializeStopOperator();
 
     this.statistics = new UsageStatisticsCPAStatistics(pConfig, pLogger);
-    this.container = new UsageContainer(pConfig);
+    this.container = new UsageContainer(pConfig, pLogger);
     this.precisionAdjustment = new UsageStatisticsPrecisionAdjustment(pCpa.getPrecisionAdjustment());
     if (pCpa instanceof ConfigurableProgramAnalysisWithBAM) {
       Reducer wrappedReducer = ((ConfigurableProgramAnalysisWithBAM)pCpa).getReducer();
