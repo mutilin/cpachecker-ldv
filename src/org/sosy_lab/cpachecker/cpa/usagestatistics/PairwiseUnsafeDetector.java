@@ -50,11 +50,11 @@ public class PairwiseUnsafeDetector implements UnsafeDetector {
   }
 
   @Override
-  public List<SingleIdentifier> getUnsafes(Map<SingleIdentifier, UsageSet> stat) {
+  public List<SingleIdentifier> getUnsafes(Map<SingleIdentifier, UsageList> stat) {
     List<SingleIdentifier> unsafe = new LinkedList<>();
 
     for (SingleIdentifier id : stat.keySet()) {
-      UsageSet uset = stat.get(id);
+      UsageList uset = stat.get(id);
       if (containsUnsafe(uset, SearchMode.ALL) && !unsafe.contains(id)) {
         unsafe.add(id);
       }
@@ -63,7 +63,7 @@ public class PairwiseUnsafeDetector implements UnsafeDetector {
   }
 
   @Override
-  public Pair<UsageInfo, UsageInfo> getUnsafePair(UsageSet uinfo) throws HandleCodeException {
+  public Pair<UsageInfo, UsageInfo> getUnsafePair(UsageList uinfo) throws HandleCodeException {
     Collections.sort(uinfo, new UsageInfo.UsageComparator());
 
     for (UsageInfo info1 : uinfo) {
@@ -82,7 +82,7 @@ public class PairwiseUnsafeDetector implements UnsafeDetector {
   }
 
   @Override
-  public boolean isUnsafeCase(UsageSet oldUsages, UsageInfo newUsage) {
+  public boolean isUnsafeCase(UsageList oldUsages, UsageInfo newUsage) {
     for (UsageInfo old : oldUsages) {
       if (!newUsage.intersect(old)) {
         return true;
@@ -92,7 +92,7 @@ public class PairwiseUnsafeDetector implements UnsafeDetector {
   }
 
   @Override
-  public boolean containsUnsafe(UsageSet pList, SearchMode mode) {
+  public boolean containsUnsafe(UsageList pList, SearchMode mode) {
     if (pList.isTrueUnsafe()) {
       return true;
     }
@@ -112,7 +112,7 @@ public class PairwiseUnsafeDetector implements UnsafeDetector {
         }
         if (!uinfo.intersect(uinfo2)) {
           if (uinfo.isRefined() && uinfo2.isRefined()) {
-            pList.setUnsafe();
+            pList.markAsTrueUnsafe();
           }
           return true;
         }
