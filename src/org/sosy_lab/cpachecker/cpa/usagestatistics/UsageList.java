@@ -34,7 +34,7 @@ public class UsageList extends LinkedList<UsageInfo> {
     return isTrueUnsafe;
   }
 
-  public void setUnsafe() {
+  public void markAsTrueUnsafe() {
     isTrueUnsafe = true;
   }
 }
