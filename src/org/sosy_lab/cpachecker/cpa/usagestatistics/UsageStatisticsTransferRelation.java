@@ -308,8 +308,8 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     }
   }
 
-  private void handleFunctionCallExpression(UsageStatisticsState pNewState
-      , UsageStatisticsPrecision pPrecision, CExpression left, CFunctionCallExpression fcExpression) throws HandleCodeException {
+  private void handleFunctionCallExpression(final UsageStatisticsState pNewState
+      , final UsageStatisticsPrecision pPrecision, final CExpression left, final CFunctionCallExpression fcExpression) throws HandleCodeException {
 
     String functionCallName = fcExpression.getFunctionNameExpression().toASTString();
     if (binderFunctions != null && binderFunctions.contains(functionCallName))
@@ -339,8 +339,8 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     }
   }
 
-  private void handleStatement(UsageStatisticsState pNewState
-      , UsageStatisticsPrecision pPrecision, CStatement pStatement, CFAEdge pCfaEdge) throws HandleCodeException {
+  private void handleStatement(final UsageStatisticsState pNewState
+      , final UsageStatisticsPrecision pPrecision, final CStatement pStatement, final CFAEdge pCfaEdge) throws HandleCodeException {
 
     if (pStatement instanceof CAssignment) {
       // assignment like "a = b" or "a = foo()"
@@ -371,8 +371,8 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     }
   }
 
-  private void linkVariables(UsageStatisticsState state, CExpression left, List<CExpression> params
-      , Pair<LinkerInfo, LinkerInfo> linkInfo) throws HandleCodeException {
+  private void linkVariables(final UsageStatisticsState state, final CExpression left, final List<CExpression> params
+      , final Pair<LinkerInfo, LinkerInfo> linkInfo) throws HandleCodeException {
     String function = AbstractStates.extractStateByType(state, CallstackState.class).getCurrentFunction();
     AbstractIdentifier leftId, rightId;
     IdentifierCreator creator = new IdentifierCreator();
@@ -413,7 +413,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
   }
 
-  private void linkId(UsageStatisticsState state, AbstractIdentifier idIn, AbstractIdentifier idFrom) throws HandleCodeException {
+  private void linkId(final UsageStatisticsState state, final AbstractIdentifier idIn, AbstractIdentifier idFrom) throws HandleCodeException {
     if (idIn == null || idFrom == null) {
       return;
     }
@@ -424,8 +424,8 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     state.put(idIn, idFrom);
   }
 
-  private void visitStatement(UsageStatisticsState state, UsageStatisticsPrecision pPrecision
-      , CExpression expression, Access access, EdgeType eType) throws HandleCodeException {
+  private void visitStatement(final UsageStatisticsState state, final UsageStatisticsPrecision pPrecision
+      , final CExpression expression, final Access access, final EdgeType eType) throws HandleCodeException {
     String functionName = AbstractStates.extractStateByType(state, CallstackState.class).getCurrentFunction();
     handler.setMode(functionName, access);
     expression.accept(handler);
@@ -436,8 +436,8 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
   }
 
-  private void visitId(UsageStatisticsState state, UsageStatisticsPrecision pPrecision
-      , AbstractIdentifier id, Access access, EdgeType eType, int line) throws HandleCodeException {
+  private void visitId(final UsageStatisticsState state, final UsageStatisticsPrecision pPrecision
+      , final AbstractIdentifier id, final Access access, final EdgeType eType, final int line) throws HandleCodeException {
 
     //Precise information, using results of shared analysis
     if (! (id instanceof SingleIdentifier)) {
