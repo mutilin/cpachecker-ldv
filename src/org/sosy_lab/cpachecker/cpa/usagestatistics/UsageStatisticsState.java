@@ -43,11 +43,11 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
 
   private static final long serialVersionUID = -898577877284268426L;
   private final UsageContainer container;
-  private Map <SingleIdentifier, LinkedList<UsageInfo>> recentUsages;
+  private final Map <SingleIdentifier, LinkedList<UsageInfo>> recentUsages;
 
   private final Map<AbstractIdentifier, AbstractIdentifier> variableBindingRelation;
 
-  public UsageStatisticsState(AbstractState pWrappedElement, UsageContainer pContainer) {
+  public UsageStatisticsState(final AbstractState pWrappedElement, final UsageContainer pContainer) {
     //Only for getInitialState()
     super(pWrappedElement);
     variableBindingRelation = new HashMap<>();
@@ -55,7 +55,7 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
     container = pContainer;
   }
 
-  private UsageStatisticsState(AbstractState pWrappedElement, UsageStatisticsState state) {
+  private UsageStatisticsState(final AbstractState pWrappedElement, final UsageStatisticsState state) {
     super(pWrappedElement);
     variableBindingRelation = new HashMap<>(state.variableBindingRelation);
     recentUsages = new HashMap<>(state.recentUsages);
@@ -66,7 +66,7 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
     container = state.container;
   }
 
-  public boolean containsLinks(AbstractIdentifier id) {
+  public boolean containsLinks(final AbstractIdentifier id) {
     /* Special contains!
     *  if we have *b, map also contains **b, ***b and so on.
     *  So, if we get **b, having (*b, c), we give *c
@@ -81,21 +81,21 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
     return false;
   }
 
-  public void put(AbstractIdentifier id1, AbstractIdentifier id2) {
+  public void put(final AbstractIdentifier id1, final AbstractIdentifier id2) {
     if (!id1.equals(id2)) {
       variableBindingRelation.put(id1, id2);
     }
   }
 
-  public boolean containsUsage(SingleIdentifier id) {
+  public boolean containsUsage(final SingleIdentifier id) {
     return recentUsages.containsKey(id);
   }
 
-  public void removeUsage(SingleIdentifier id) {
+  public void removeUsage(final SingleIdentifier id) {
     recentUsages.remove(id);
   }
 
-  public AbstractIdentifier getLinks(AbstractIdentifier id) {
+  public AbstractIdentifier getLinks(final AbstractIdentifier id) {
     /* Special get!
      * If we get **b, having (*b, c), we give *c
      */
@@ -120,7 +120,7 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
     return clone(this.getWrappedState());
   }
 
-  public UsageStatisticsState clone(AbstractState pWrappedState) {
+  public UsageStatisticsState clone(final AbstractState pWrappedState) {
     return new UsageStatisticsState(pWrappedState, this);
   }
 
@@ -170,7 +170,7 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
     return str.toString();
   }
 
-  boolean isLessOrEqual(UsageStatisticsState other) {
+  boolean isLessOrEqual(final UsageStatisticsState other) {
 
     // this element is not less or equal than the other element, if that one contains less elements
     if (this.variableBindingRelation.size() > other.variableBindingRelation.size()) {
@@ -188,7 +188,7 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
     return true;
   }
 
-  public void addUsage(SingleIdentifier id, UsageInfo usage) {
+  public void addUsage(final SingleIdentifier id, final UsageInfo usage) {
     LinkedList<UsageInfo> uset;
     if (!recentUsages.containsKey(id)) {
       uset = new LinkedList<>();
@@ -207,7 +207,7 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
     }
   }
 
-  public UsageStatisticsState expand(UsageStatisticsState root, AbstractState wrappedState) {
+  public UsageStatisticsState expand(final UsageStatisticsState root, final AbstractState wrappedState) {
     UsageStatisticsState result = root.clone(wrappedState);
 
     for (SingleIdentifier id : this.recentUsages.keySet()) {
@@ -233,7 +233,7 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
     }
   }
 
-  public void updateKeyState(AbstractState pState) {
+  public void updateKeyState(final AbstractState pState) {
     for (SingleIdentifier id : recentUsages.keySet()) {
       for (UsageInfo uinfo : recentUsages.get(id)) {
         if (uinfo.getKeyState() == null) {
