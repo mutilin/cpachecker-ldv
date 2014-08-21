@@ -71,7 +71,7 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
     *  if we have *b, map also contains **b, ***b and so on.
     *  So, if we get **b, having (*b, c), we give *c
     */
-    AbstractIdentifier tmpId = id.clone();
+    final AbstractIdentifier tmpId = id.clone();
     for (int d = id.getDereference(); d >= 0; d--) {
       tmpId.setDereference(d);
       if (variableBindingRelation.containsKey(tmpId)) {
@@ -189,7 +189,7 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
   }
 
   public void addUsage(final SingleIdentifier id, final UsageInfo usage) {
-    LinkedList<UsageInfo> uset;
+    final LinkedList<UsageInfo> uset;
     if (!recentUsages.containsKey(id)) {
       uset = new LinkedList<>();
       recentUsages.put(id, uset);
@@ -201,14 +201,14 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
   }
 
   public void clearUsagesIfNeed() {
-    PredicateAbstractState state = AbstractStates.extractStateByType(this, PredicateAbstractState.class);
+    final PredicateAbstractState state = AbstractStates.extractStateByType(this, PredicateAbstractState.class);
     if (state == null || !state.getAbstractionFormula().isFalse() && state.isAbstractionState()) {
       recentUsages.clear();
     }
   }
 
   public UsageStatisticsState expand(final UsageStatisticsState root, final AbstractState wrappedState) {
-    UsageStatisticsState result = root.clone(wrappedState);
+    final UsageStatisticsState result = root.clone(wrappedState);
 
     for (SingleIdentifier id : this.recentUsages.keySet()) {
       result.recentUsages.put(id, new LinkedList<>(this.recentUsages.get(id)));

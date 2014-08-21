@@ -62,9 +62,9 @@ import org.sosy_lab.cpachecker.util.identifiers.StructureFieldIdentifier;
 @Options(prefix="cpa.usagestatistics")
 public class UsageStatisticsCPAStatistics implements Statistics {
 
-  public Map<SingleIdentifier, UsageSet> Stat;
+  public Map<SingleIdentifier, UsageList> Stat;
 
-  private UnsafeDetector unsafeDetector = null;
+  private final UnsafeDetector unsafeDetector;
 
   @Option(name="localanalysis", description="should we use local analysis?")
   private boolean localAnalysis = false;
@@ -84,8 +84,8 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   private int totalUsages = 0;
   private int maxNumberOfUsages = 0;
 
-  public Timer transferRelationTimer = new Timer();
-  public Timer printStatisticsTimer = new Timer();
+  public final Timer transferRelationTimer = new Timer();
+  public final Timer printStatisticsTimer = new Timer();
 
   public UsageStatisticsCPAStatistics(Configuration config, LogManager pLogger) throws InvalidConfigurationException{
     config.inject(this);
@@ -125,8 +125,8 @@ public class UsageStatisticsCPAStatistics implements Statistics {
    * looks through all unsafe cases of current identifier and find the example of two lines with different locks,
    * one of them must be 'write'
    */
-  private void createVisualization(SingleIdentifier id, UsageInfo usage, Writer writer) throws IOException {
-    LinkedList<TreeLeaf> leafStack = new LinkedList<>();
+  private void createVisualization(final SingleIdentifier id, final UsageInfo usage, final Writer writer) throws IOException {
+    final LinkedList<TreeLeaf> leafStack = new LinkedList<>();
     TreeLeaf currentLeaf;
 
     TreeLeaf.clearTrunkState();
@@ -168,7 +168,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
   }
 
-  private TreeLeaf findFork(Writer writer, TreeLeaf pCurrentLeaf, LinkedList<TreeLeaf> leafStack) throws IOException {
+  private TreeLeaf findFork(final Writer writer, final TreeLeaf pCurrentLeaf, final LinkedList<TreeLeaf> leafStack) throws IOException {
     TreeLeaf tmpLeaf, currentLeaf = pCurrentLeaf;
 
     while (true) {
@@ -188,14 +188,12 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     return currentLeaf;
   }
 
-  private TreeLeaf createTree(CallstackState state) {
-    LinkedList<CallstackState> tmpList = revertCallstack(state);
-    TreeLeaf currentLeaf;
-    CallstackState tmpState;
+  private TreeLeaf createTree(final CallstackState state) {
+    final LinkedList<CallstackState> tmpList = revertCallstack(state);
 
     //add to tree of calls this path
-    currentLeaf = TreeLeaf.getTrunkState();
-    tmpState = tmpList.getFirst();
+    TreeLeaf currentLeaf = TreeLeaf.getTrunkState();
+    CallstackState tmpState = tmpList.getFirst();
     if (!tmpState.getCallNode().getFunctionName().equals(tmpState.getCurrentFunction())) {
       currentLeaf = currentLeaf.add(tmpList.getFirst().getCallNode().getFunctionName(), 0);
     }
@@ -206,7 +204,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   }
 
   private LinkedList<CallstackState> revertCallstack(CallstackState tmpState) {
-    LinkedList<CallstackState> tmpList = new LinkedList<>();
+    final LinkedList<CallstackState> tmpList = new LinkedList<>();
 
     while (tmpState != null) {
       tmpList.push(tmpState);
@@ -215,8 +213,8 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     return tmpList;
   }
 
-  private void createVisualization(SingleIdentifier id, Writer writer) throws IOException {
-    UsageSet uinfo = Stat.get(id);
+  private void createVisualization(final SingleIdentifier id, final Writer writer) throws IOException {
+    final UsageList uinfo = Stat.get(id);
     if (uinfo == null || uinfo.size() == 0) {
       return;
     }
@@ -258,15 +256,14 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   }
 
   @Override
-  public void printStatistics(PrintStream out, Result result, ReachedSet reached) {
-		Writer writer = null;
+  public void printStatistics(final PrintStream out, final Result result, final ReachedSet reached) {
 		printStatisticsTimer.start();
-		UsageContainer container = AbstractStates.extractStateByType(reached.getFirstState(), UsageStatisticsState.class)
+		final UsageContainer container = AbstractStates.extractStateByType(reached.getFirstState(), UsageStatisticsState.class)
 		    .getContainer();
 		Stat = container.getStatistics();
-		List<SingleIdentifier> unsafes = container.getUnsafes();
+		final List<SingleIdentifier> unsafes = container.getUnsafes();
     try {
-      writer = Files.openOutputFile(outputStatFileName);
+      final Writer writer = Files.openOutputFile(outputStatFileName);
       logger.log(Level.FINE, "Print statistics about unsafe cases");
       printCountStatistics(writer, Stat.keySet());
       Collection<SingleIdentifier> unsafeCases = unsafes;//unsafeDetector.getUnsafes(Stat);
@@ -302,10 +299,11 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     out.println("Time for transfer relation:    " + transferRelationTimer);
     printStatisticsTimer.stop();
     out.println("Time for printing statistics:  " + printStatisticsTimer);
+    out.println("Time for reseting unsafes: " + container.resetTimer);
   }
 
-  private void printLockStatistics(Writer writer) throws IOException {
-    List<LockStatisticsLock> mutexes = findAllLocks();
+  private void printLockStatistics(final Writer writer) throws IOException {
+    final List<LockStatisticsLock> mutexes = findAllLocks();
 
     Collections.sort(mutexes);
     writer.append(mutexes.size() + "\n");
@@ -314,7 +312,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
   }
 
-  private void printCountStatistics(Writer writer, Collection<SingleIdentifier> idSet) throws IOException {
+  private void printCountStatistics(final Writer writer, final Collection<SingleIdentifier> idSet) throws IOException {
     int global = 0, local = 0, fields = 0;
     int globalPointer = 0, localPointer = 0, fieldPointer = 0;
 
