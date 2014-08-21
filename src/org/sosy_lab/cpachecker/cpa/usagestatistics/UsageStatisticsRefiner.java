@@ -25,6 +25,7 @@ package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
 import java.io.PrintStream;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -53,10 +54,10 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
 
   private class Stats implements Statistics {
 
-    public Timer DetectUnsafeCases = new Timer();
-    public Timer ComputePath = new Timer();
-    public Timer Refinement = new Timer();
-    public Timer UnsafeCheck = new Timer();
+    public final Timer DetectUnsafeCases = new Timer();
+    public final Timer ComputePath = new Timer();
+    public final Timer Refinement = new Timer();
+    public final Timer UnsafeCheck = new Timer();
 
     @Override
     public void printStatistics(PrintStream pOut, Result pResult, ReachedSet pReached) {
@@ -74,10 +75,9 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
 
   }
 
-  Stats pStat = new Stats();
+  final Stats pStat = new Stats();
 
   public UsageStatisticsRefiner(ConfigurableProgramAnalysis pCpa) throws CPAException, InvalidConfigurationException {
-  //  internalRefiner = new ABMPredicateRefiner(pCpa);
     super(pCpa);
   }
 
@@ -89,26 +89,28 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
   int findUnknown = 0;
   @Override
   public boolean performRefinement(ReachedSet pReached) throws CPAException, InterruptedException {
-    UsageCache cache = new UsageCallstackCache();
-    Set<UsageInfo> toDelete = new HashSet<>();
-    UsageContainer container =
+    final UsageCache cache = new UsageCallstackCache();
+    final Set<UsageInfo> toDelete = new HashSet<>();
+    final UsageContainer container =
         AbstractStates.extractStateByType(pReached.getFirstState(), UsageStatisticsState.class).getContainer();
-    Collection<SingleIdentifier> unsafes = container.getUnsafes();
+    final Collection<SingleIdentifier> unsafes = container.getUnsafes();
 
     SingleIdentifier refinementId = unsafes.isEmpty() ? null : unsafes.iterator().next();
-    PairwiseUnsafeDetector detector = new PairwiseUnsafeDetector(null);
+    final PairwiseUnsafeDetector detector = new PairwiseUnsafeDetector(null);
 
     System.out.println("Perform US refinement: " + i++);
     int counter = 0;
+    final StringBuilder sb = new StringBuilder();
     boolean refinementFinish = false;
     for (SingleIdentifier id : container.getStatistics().keySet()) {
-      UsageSet uset = container.getStatistics().get(id);
+      UsageList uset = container.getStatistics().get(id);
       if (uset.isTrueUnsafe()) {
         counter++;
+        sb.append(id + ", ");
       }
     }
     System.out.println("Unsafes: " + unsafes.size());
-    System.out.println("True refined: " + counter);
+    System.out.println("True refined: " + counter + ". " + sb.toString());
     System.out.println("Time: " + MainCPAStatistics.programTime);
     /*if (i++ == 2) {
       //System.out.println("This refinement: " + i);
@@ -116,16 +118,17 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     }*/
     //int iterationNum = 0;
     pStat.UnsafeCheck.start();
-    while ((refinementId = container.check(refinementId)) != null) {
+    while ((refinementId = container.getRefineableId(refinementId)) != null) {
       pStat.UnsafeCheck.stopIfRunning();
       pathStateToReachedState.clear();
       pStat.DetectUnsafeCases.start();
       refinementFinish = true;
       UsageInfo target = null;
 
-      UsageSet uset = container.getStatistics().get(refinementId);
+      UsageList uset = container.getStatistics().get(refinementId);
+      Collections.sort(uset);
       for (UsageInfo uinfo : uset) {
-        if (detector.isUnsafeCase(uset, uinfo) && !uinfo.isRefined()) {
+        if (!uinfo.isRefined() && detector.isUnsafeCase(uset, uinfo)) {
           if (cache.contains(uinfo)) {
             toDelete.add(uinfo);
           } else {
@@ -140,31 +143,43 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       }
       pStat.DetectUnsafeCases.stop();
       if (target == null) {
+        pStat.UnsafeCheck.start();
         continue;
       }
       //iterationNum++;
       System.out.println("Refine " + refinementId);
       //System.out.println("Refine " + iterationNum + " from " + originSize);
+      /*if (i == 5 && target.getLine().getLine() == 152250) {
+        System.out.println("Refine 152250");
+      }*/
       pStat.ComputePath.start();
       ARGPath pPath = computePath((ARGState)target.getKeyState(), target.getCallStack());
       pStat.ComputePath.stopIfRunning();
-      if (pPath == null) {
-        container.removeState(AbstractStates.extractStateByType(target.getKeyState(), UsageStatisticsState.class));
-        System.out.println(target + " isn't found");
-        pStat.UnsafeCheck.start();
-        continue;
+      /*if (refinementId.getName().equals("m_obj")) {
+        System.out.println("m_obj");
+        //System.out.println(pPath);
       }
+
+      if (target.getLine().getLine() == 47455 ) {
+        System.out.println("Refine 47455");
+       // System.out.println(pPath);
+      }*/
+      assert (pPath != null);
       try {
         pStat.Refinement.start();
         CounterexampleInfo counterexample = super.performRefinement0(
             new BAMReachedSet(transfer, new ARGReachedSet(pReached), pPath, pathStateToReachedState), pPath);
         if (!counterexample.isSpurious()) {
           System.out.println(target + " is true");
+          /*if (refinementId.getName().equals("lock_owner")) {
+            System.out.println("lock_owner");
+            //System.out.println(pPath);
+          }*/
           target.setRefineFlag();
         } else {
-          container.removeState(AbstractStates.extractStateByType(target.getKeyState(), UsageStatisticsState.class));
           System.out.println(target + " is false");
           cache.add(target);
+          container.remove(refinementId, target);
         }
       } catch (IllegalStateException e) {
         //msat_solver return -1 <=> unknown

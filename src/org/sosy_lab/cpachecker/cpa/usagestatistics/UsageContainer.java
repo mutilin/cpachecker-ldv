@@ -71,7 +71,7 @@ public class UsageContainer {
     logger = l;
   }
 
-  public void add(SingleIdentifier id, UsageInfo usage) {
+  public void add(final SingleIdentifier id, final UsageInfo usage) {
     UsageList uset;
 
     if (!Stat.containsKey(id)) {
@@ -87,7 +87,8 @@ public class UsageContainer {
         UsageInfo oldUsage = uset.get(uset.indexOf(usage));
         if (oldUsage.isRefined()) {
           return;
-        } else {
+        } else if (oldUsage.getCallStack().equals(usage.getCallStack())){
+          //TODO May be, if this usage isn't refined and still here, it hasn't got pair to be an unsafe. And we may not to update it
           uset.remove(oldUsage);
         }
       }
@@ -120,23 +121,20 @@ public class UsageContainer {
 
     for (SingleIdentifier id : Stat.keySet()) {
       UsageList uset = Stat.get(id);
-
       //All false unsafes were deleted during refinement
-      if (uset.isTrueUnsafe()) {
-        for (UsageInfo uinfo : uset) {
-          /* This is done to free memory
-           * otherwise all ARG will be stored on the next stage of analysis
-           */
-          if (uinfo.isRefined()) {
-            uinfo.setKeyState(null);
-          } else {
-            toDelete.add(uinfo);
-          }
+      for (UsageInfo uinfo : uset) {
+        /* This is done to free memory
+         * otherwise all ARG will be stored on the next stage of analysis
+         */
+        if (uinfo.isRefined()) {
+          uinfo.setKeyState(null);
+        } else {
+          toDelete.add(uinfo);
         }
-
-        uset.removeAll(toDelete);
-        toDelete.clear();
       }
+
+      uset.removeAll(toDelete);
+      toDelete.clear();
     }
     for (SingleIdentifier id : idToDelete) {
       logger.log(Level.ALL, "Identifier " + id + " was removed from statistics");
@@ -146,7 +144,7 @@ public class UsageContainer {
     resetTimer.stop();
   }
 
-  public void removeState(UsageStatisticsState pUstate) {
+  public void removeState(final UsageStatisticsState pUstate) {
     List<UsageInfo> uset;
     //Not a set! Some usages and sets can be equals, but referes to different ids
     List<UsageInfo> toDelete = new LinkedList<>();
@@ -167,35 +165,27 @@ public class UsageContainer {
     logger.log(Level.ALL, "All unsafes related to key state " + pUstate + " were removed from reached set");
   }
 
-  public SingleIdentifier check(SingleIdentifier refinementId) {
+  public SingleIdentifier getRefineableId(SingleIdentifier refinementId) {
     if (refinementId == null) {
       return null;
     }
     UsageList uset = Stat.get(refinementId);
     if (debugMode) {
-      if (refinementId.getName().equals(checkId) && unsafeDetector.containsUnsafe(uset, SearchMode.FALSE)) {
-        return refinementId;
-      } else if (refinementId.getName().equals(checkId) && !unsafeDetector.containsUnsafe(uset, SearchMode.FALSE)) {
-        return null;
+      if (refinementId.getName().equals(checkId)) {
+        if (isRefineableUsageList(uset)) {
+          return refinementId;
+        } else {
+          return null;
+        }
       }
     }
-    if (uset.isTrueUnsafe() || !unsafeDetector.containsUnsafe(uset, SearchMode.FALSE) || debugMode) {
-      if (!unsafeDetector.containsUnsafe(uset, SearchMode.TRUE)) {
-        unsafes.remove(refinementId);
-        //TODO May be remove only empty
-        Stat.remove(refinementId);
-      } else {
-        uset.setUnsafe();
-      }
+    if (!isRefineableUsageList(uset) || debugMode) {
       for (SingleIdentifier id : unsafes) {
-        if (debugMode && id.getName().equals(checkId)) {
-          return id;
-        } else if (!debugMode) {
+        if (!debugMode || id.getName().equals(checkId)) {
           uset = Stat.get(id);
-          if (uset.isTrueUnsafe()) {
-           continue;
+          if (isRefineableUsageList(uset)) {
+            return id;
           }
-          return id;
         }
       }
       return null;
@@ -207,5 +197,17 @@ public class UsageContainer {
   public void remove(SingleIdentifier pRefinementId, UsageInfo pTarget) {
     Stat.get(pRefinementId).remove(pTarget);
     logger.log(Level.ALL, "Remove " + pTarget + " identifier " + pRefinementId + " was removed from statistics");
+  }
+
+  private boolean isRefineableUsageList(UsageList ulist) {
+    if (ulist.isTrueUnsafe()) {
+      return false;
+    } else if (unsafeDetector.containsUnsafe(ulist, SearchMode.TRUE)) {
+      ulist.markAsTrueUnsafe();
+      return false;
+    } else if (!unsafeDetector.containsUnsafe(ulist, SearchMode.FALSE)) {
+      return false;
+    }
+    return true;
   }
 }
