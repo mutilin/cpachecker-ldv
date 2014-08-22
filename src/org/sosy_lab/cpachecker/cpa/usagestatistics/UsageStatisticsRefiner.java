@@ -148,22 +148,10 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       }
       //iterationNum++;
       System.out.println("Refine " + refinementId);
-      //System.out.println("Refine " + iterationNum + " from " + originSize);
-      /*if (i == 5 && target.getLine().getLine() == 152250) {
-        System.out.println("Refine 152250");
-      }*/
       pStat.ComputePath.start();
       ARGPath pPath = computePath((ARGState)target.getKeyState(), target.getCallStack());
       pStat.ComputePath.stopIfRunning();
-      /*if (refinementId.getName().equals("m_obj")) {
-        System.out.println("m_obj");
-        //System.out.println(pPath);
-      }
 
-      if (target.getLine().getLine() == 47455 ) {
-        System.out.println("Refine 47455");
-       // System.out.println(pPath);
-      }*/
       assert (pPath != null);
       try {
         pStat.Refinement.start();
@@ -171,10 +159,6 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
             new BAMReachedSet(transfer, new ARGReachedSet(pReached), pPath, pathStateToReachedState), pPath);
         if (!counterexample.isSpurious()) {
           System.out.println(target + " is true");
-          /*if (refinementId.getName().equals("lock_owner")) {
-            System.out.println("lock_owner");
-            //System.out.println(pPath);
-          }*/
           target.setRefineFlag();
         } else {
           System.out.println(target + " is false");
