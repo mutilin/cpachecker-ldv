@@ -141,7 +141,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
     final int prime = 31;
     int result = 1;
     result = prime * result + ((accessType == null) ? 0 : accessType.hashCode());
-    //result = prime * result + ((callstack == null) ? 0 : callstack.hashCode());
+    result = prime * result + ((callstack == null) ? 0 : callstack.hashCode());
     result = prime * result + ((line == null) ? 0 : line.hashCode());
     result = prime * result + ((locks == null) ? 0 : locks.hashCode());
     result = prime * result + ((info == null) ? 0 : info.hashCode());
@@ -163,11 +163,14 @@ public class UsageInfo implements Comparable<UsageInfo> {
     if (accessType != other.accessType) {
       return false;
     }
-    /*if (callstack == null) {
-      if (other.callstack != null)
+    //Callstack is important for refinement
+    if (callstack == null) {
+      if (other.callstack != null) {
         return false;
-    } else if (!callstack.equals(other.callstack))
-      return false;*/
+      }
+    } else if (!callstack.equals(other.callstack)) {
+      return false;
+    }
     if (line == null) {
       if (other.line != null) {
         return false;
