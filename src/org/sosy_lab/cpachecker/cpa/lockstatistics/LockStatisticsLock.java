@@ -23,8 +23,8 @@
  */
 package org.sosy_lab.cpachecker.cpa.lockstatistics;
 
+import java.util.Collection;
 import java.util.LinkedList;
-import java.util.List;
 
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cpa.bam.BAMRestoreStack;
@@ -173,7 +173,7 @@ public class LockStatisticsLock implements Comparable<LockStatisticsLock> {
     return lockId.toString()  + "[" + accessPoints.size() + "]";
   }
 
-  public boolean existsIn(List<LockStatisticsLock> locks) {
+  public boolean existsIn(Collection<LockStatisticsLock> locks) {
     for (LockStatisticsLock usedLock : locks) {
       if (usedLock.hasEqualNameAndVariable(this)) {
       	return true;

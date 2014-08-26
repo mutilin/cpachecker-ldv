@@ -348,6 +348,27 @@ public class LockStatisticsState implements AbstractState, Serializable {
   }
 
   /**
+   * This method decides if this element is less or equal than the other element, based on the order imposed by the lattice.
+   *
+   * @param other the other element
+   * @return true, if this element is less or equal than the other element, based on the order imposed by the lattice
+   */
+  public boolean isLessOrEqual(LockStatisticsState other) {
+    //This method is useful for refinement optimization
+
+    if (locks.size() == 0 && other.locks.size() > 0) {
+      return false;
+    }
+
+    for (LockStatisticsLock Lock : locks) {
+      if (other.findLock(Lock) == null) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
    * This method find the difference between two states in some metric.
    * It is useful for comparators. lock1.diff(lock2) <=> lock1 - lock2.
    * @param other The other LockStatisticsState
