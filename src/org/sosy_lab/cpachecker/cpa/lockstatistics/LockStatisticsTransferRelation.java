@@ -60,6 +60,7 @@ import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCCodeException;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.UnmodifiableIterator;
 
 @Options(prefix="cpa.lockStatistics")
 public class LockStatisticsTransferRelation implements TransferRelation
@@ -418,11 +419,12 @@ public class LockStatisticsTransferRelation implements TransferRelation
     if (d < lock.maxLock) {
       newElement.add(lock.lockName, lineNumber, callstack, variable, logger);
     } else {
-      List<AccessPoint> access = newElement.findLock(lock.lockName, variable).getAccessPoints();
+      UnmodifiableIterator<AccessPoint> accessPointIterator =
+          newElement.findLock(lock.lockName, variable).getAccessPointIterator();
       StringBuilder message = new StringBuilder();
       message.append("Try to lock " + lock.lockName + " more, than " + lock.maxLock + " in " + lineNumber + " line. Previous were in ");
-      for (AccessPoint point : access) {
-        message.append(point.getLineInfo().getLine() + ", ");
+      while (accessPointIterator.hasNext()) {
+        message.append(accessPointIterator.next().getLineInfo().getLine() + ", ");
       }
       message.delete(message.length() - 2, message.length());
       logger.log(Level.WARNING, message.toString());

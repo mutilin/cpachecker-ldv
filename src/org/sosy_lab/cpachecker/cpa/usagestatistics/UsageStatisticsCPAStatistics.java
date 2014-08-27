@@ -59,6 +59,8 @@ import org.sosy_lab.cpachecker.util.identifiers.LocalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.StructureFieldIdentifier;
 
+import com.google.common.collect.UnmodifiableIterator;
+
 @Options(prefix="cpa.usagestatistics")
 public class UsageStatisticsCPAStatistics implements Statistics {
 
@@ -133,7 +135,10 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     LockStatisticsState Locks = usage.getLockState();
     if (Locks != null) {
       for (LockStatisticsLock lock : Locks.getLocks()) {
-        for (AccessPoint accessPoint : lock.getAccessPoints()) {
+        UnmodifiableIterator<AccessPoint> accessPointIterator = lock.getAccessPointIterator();
+        AccessPoint accessPoint;
+        while (accessPointIterator.hasNext()) {
+          accessPoint = accessPointIterator.next();
           currentLeaf = createTree(accessPoint.getCallstack());
           currentLeaf.add(lock.toString(), accessPoint.getLineInfo().getLine());
         }

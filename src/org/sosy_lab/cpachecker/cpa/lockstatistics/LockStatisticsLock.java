@@ -34,6 +34,7 @@ import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier.LockType;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.LineInfo;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.UnmodifiableIterator;
 
 
 public class LockStatisticsLock implements Comparable<LockStatisticsLock> {
@@ -53,8 +54,8 @@ public class LockStatisticsLock implements Comparable<LockStatisticsLock> {
     accessPoints = ImmutableList.copyOf(points);
   }
 
-  public ImmutableList<AccessPoint> getAccessPoints() {
-    return accessPoints;
+  public UnmodifiableIterator<AccessPoint> getAccessPointIterator() {
+    return accessPoints.iterator();
   }
 
   public int getAccessCounter() {
