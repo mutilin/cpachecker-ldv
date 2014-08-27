@@ -25,6 +25,7 @@ package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
 import java.io.PrintStream;
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.logging.Level;
 
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
@@ -98,8 +99,10 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     int counter = 0;
     final StringBuilder sb = new StringBuilder();
     boolean refinementFinish = false;
-    for (SingleIdentifier id : container.getStatistics().keySet()) {
-      UsageList uset = container.getStatistics().get(id);
+    Iterator<SingleIdentifier> idIterator = container.getGeneralIterator();
+    while (idIterator.hasNext()) {
+      SingleIdentifier id = idIterator.next();
+      UsageList uset = container.getUsages(id);
       if (uset.isTrueUnsafe()) {
         counter++;
         sb.append(id + ", ");

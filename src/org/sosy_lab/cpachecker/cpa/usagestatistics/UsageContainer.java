@@ -23,6 +23,7 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
+import java.io.PrintStream;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -47,7 +48,7 @@ public class UsageContainer {
 
   private PairwiseUnsafeDetector unsafeDetector = null;
 
-  private Map<SingleIdentifier, UsageList> Stat;
+  private final Map<SingleIdentifier, UsageList> Stat;
 
   public List<SingleIdentifier> unsafes = null;
 
@@ -61,8 +62,8 @@ public class UsageContainer {
 
   public Timer resetTimer = new Timer();
 
-  //int totalUsages = 0;
-  //int totalIds = 0;
+  int unsafeUsages = 0;
+  int totalIds = 0;
 
   public UsageContainer(Configuration config, LogManager l) throws InvalidConfigurationException {
     config.inject(this);
@@ -96,25 +97,23 @@ public class UsageContainer {
     uset.add(usage);
   }
 
-  public Map<SingleIdentifier, UsageList> getStatistics() {
-    return Stat;
-  }
-
   private void getUnsafesIfNecessary() {
     if (unsafes == null) {
-      //totalIds = 0;
-      //totalUsages = 0;
+      unsafeUsages = 0;
       unsafes = unsafeDetector.getUnsafes(Stat);
-      /*for (SingleIdentifier id : Stat.keySet()) {
-        totalUsages += Stat.get(id).size();
-        totalIds++;
-      }*/
+      for (SingleIdentifier id : Stat.keySet()) {
+        unsafeUsages += Stat.get(id).size();
+      }
     }
   }
 
   public Iterator<SingleIdentifier> getUnsafeIterator() {
     getUnsafesIfNecessary();
     return unsafes.iterator();
+  }
+
+  public Iterator<SingleIdentifier> getGeneralIterator() {
+    return Stat.keySet().iterator();
   }
 
   public int getUnsafeSize() {
@@ -184,5 +183,19 @@ public class UsageContainer {
 
   public UsageList getUsages(SingleIdentifier id) {
     return Stat.get(id);
+  }
+
+  public void printUsagesStatistics(final PrintStream out) {
+    int allUsages = 0, maxUsage = 0;
+    final int generalSize = Stat.keySet().size();
+    for (SingleIdentifier id : Stat.keySet()) {
+      allUsages += Stat.get(id).size();
+      if (maxUsage < Stat.get(id).size()) {
+        maxUsage = Stat.get(id).size();
+      }
+    }
+    out.println("Total amount of variables:     " + generalSize);
+    out.println("Total amount of usages:        " + allUsages + "(avg. " +
+        (generalSize == 0 ? "0" : (allUsages/generalSize)) + ", max " + maxUsage + ")");
   }
 }

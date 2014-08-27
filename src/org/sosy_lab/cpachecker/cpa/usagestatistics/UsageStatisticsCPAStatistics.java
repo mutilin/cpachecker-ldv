@@ -31,7 +31,6 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 import java.util.logging.Level;
 
 import org.sosy_lab.common.Pair;
@@ -64,7 +63,7 @@ import com.google.common.collect.UnmodifiableIterator;
 @Options(prefix="cpa.usagestatistics")
 public class UsageStatisticsCPAStatistics implements Statistics {
 
-  public Map<SingleIdentifier, UsageList> Stat;
+  //public Map<SingleIdentifier, UsageList> Stat;
 
   private final UnsafeDetector unsafeDetector;
 
@@ -86,6 +85,8 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   private int totalUsages = 0;
   private int maxNumberOfUsages = 0;
 
+  private UsageContainer container;
+
   public final Timer transferRelationTimer = new Timer();
   public final Timer printStatisticsTimer = new Timer();
 
@@ -105,8 +106,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   private List<LockStatisticsLock> findAllLocks() {
     List<LockStatisticsLock> locks = new LinkedList<>();
 
-    for (SingleIdentifier id : Stat.keySet()) {
-      List<UsageInfo> uset = Stat.get(id);
+    Iterator<SingleIdentifier> generalIterator = container.getGeneralIterator();
+    while (generalIterator.hasNext()) {
+      List<UsageInfo> uset = container.getUsages(generalIterator.next());
 
       for (UsageInfo uinfo : uset){
         if (uinfo.getLockState() == null) {
@@ -223,7 +225,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   }
 
   private void createVisualization(final SingleIdentifier id, final Writer writer) throws IOException {
-    final UsageList uinfo = Stat.get(id);
+    final UsageList uinfo = container.getUsages(id);
     if (uinfo == null || uinfo.size() == 0) {
       return;
     }
@@ -267,15 +269,15 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   @Override
   public void printStatistics(final PrintStream out, final Result result, final ReachedSet reached) {
 		printStatisticsTimer.start();
-		final UsageContainer container = AbstractStates.extractStateByType(reached.getFirstState(), UsageStatisticsState.class)
+		container = AbstractStates.extractStateByType(reached.getFirstState(), UsageStatisticsState.class)
 		    .getContainer();
-		Stat = container.getStatistics();
+		//Stat = container.getStatistics();
 		final int unsafeSize = container.getUnsafeSize();
 
     try {
       final Writer writer = Files.openOutputFile(outputStatFileName);
       logger.log(Level.FINE, "Print statistics about unsafe cases");
-      printCountStatistics(writer, Stat.keySet().iterator());
+      printCountStatistics(writer, container.getGeneralIterator());
       printCountStatistics(writer, container.getUnsafeIterator());
       printLockStatistics(writer);
       logger.log(Level.FINEST, "Processing unsafe identifiers");
@@ -295,17 +297,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     out.println("Amount of unsafe usages:       " + totalUsages + "(avg. " +
         (unsafeSize == 0 ? "0" : (totalUsages/unsafeSize))
         + ", max " + maxNumberOfUsages + ")");
-    int allUsages = 0, maxUsage = 0;
-    for (SingleIdentifier id : Stat.keySet()) {
-      allUsages += Stat.get(id).size();
-      if (maxUsage < Stat.get(id).size()) {
-        maxUsage = Stat.get(id).size();
-      }
-    }
-    out.println("Total amount of variables:     " + Stat.keySet().size());
-    out.println("Total amount of usages:        " + allUsages + "(avg. " +
-        (Stat.keySet().size() == 0 ? "0" : (allUsages/Stat.keySet().size()))
-        + ", max " + maxUsage + ")");
+    container.printUsagesStatistics(out);
     out.println("Time for transfer relation:    " + transferRelationTimer);
     printStatisticsTimer.stop();
     out.println("Time for printing statistics:  " + printStatisticsTimer);
