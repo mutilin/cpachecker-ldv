@@ -245,15 +245,19 @@ public class UsageInfo implements Comparable<UsageInfo> {
 
   @Override
   public int compareTo(UsageInfo pO) {
-    int result = this.line.getLine() - pO.line.getLine();
+
+    int result = this.locks.getSize() - pO.locks.getSize();
     if (result != 0) {
-      return result;
-    }
-    result = this.locks.getSize() - pO.locks.getSize();
-    if (result != 0) {
-      return result;
+      //Usages without locks are more convenient to analyze
+      return -result;
     }
     result = this.getCallStack().getDepth() - pO.getCallStack().getDepth();
+    if (result != 0) {
+      //Experiments show that callstacks should be ordered as it is done now
+      return result;
+    }
+
+    result = this.line.getLine() - pO.line.getLine();
     return result;
   }
 }

@@ -135,6 +135,9 @@ public class UsageContainer {
 
       uset.removeAll(toDelete);
       toDelete.clear();
+      if (unsafeDetector.containsUnsafe(uset, SearchMode.TRUE)) {
+        uset.markAsTrueUnsafe();
+      }
     }
     for (SingleIdentifier id : idToDelete) {
       logger.log(Level.ALL, "Identifier " + id + " was removed from statistics");
@@ -165,49 +168,12 @@ public class UsageContainer {
     logger.log(Level.ALL, "All unsafes related to key state " + pUstate + " were removed from reached set");
   }
 
-  public SingleIdentifier getRefineableId(SingleIdentifier refinementId) {
-    if (refinementId == null) {
-      return null;
-    }
-    UsageList uset = Stat.get(refinementId);
-    if (debugMode) {
-      if (refinementId.getName().equals(checkId)) {
-        if (isRefineableUsageList(uset)) {
-          return refinementId;
-        } else {
-          return null;
-        }
-      }
-    }
-    if (!isRefineableUsageList(uset) || debugMode) {
-      for (SingleIdentifier id : unsafes) {
-        if (!debugMode || id.getName().equals(checkId)) {
-          uset = Stat.get(id);
-          if (isRefineableUsageList(uset)) {
-            return id;
-          }
-        }
-      }
-      return null;
-    } else {
-      return refinementId;
-    }
-  }
-
   public void remove(SingleIdentifier pRefinementId, UsageInfo pTarget) {
     Stat.get(pRefinementId).remove(pTarget);
     logger.log(Level.ALL, "Remove " + pTarget + " identifier " + pRefinementId + " was removed from statistics");
   }
 
-  private boolean isRefineableUsageList(UsageList ulist) {
-    if (ulist.isTrueUnsafe()) {
-      return false;
-    } else if (unsafeDetector.containsUnsafe(ulist, SearchMode.TRUE)) {
-      ulist.markAsTrueUnsafe();
-      return false;
-    } else if (!unsafeDetector.containsUnsafe(ulist, SearchMode.FALSE)) {
-      return false;
-    }
-    return true;
+  public UsageList getUsages(SingleIdentifier id) {
+    return Stat.get(id);
   }
 }

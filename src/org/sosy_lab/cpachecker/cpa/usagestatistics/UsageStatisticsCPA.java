@@ -68,6 +68,7 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
   private final UsageContainer container;
   private UsageStatisticsPrecision precision;
   private final CFA cfa;
+  private final LogManager logger;
 
   public static CPAFactory factory() {
     return AutomaticCPAFactory.forType(UsageStatisticsCPA.class);
@@ -104,6 +105,7 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
     } else {
       reducer = null;
     }
+    logger = pLogger;
     this.transferRelation = new UsageStatisticsTransferRelation(pCpa.getTransferRelation(), pConfig, pLogger, statistics
         , (CallstackTransferRelation) (CPAs.retrieveCPA(this, CallstackCPA.class)).getTransferRelation());
 
@@ -191,5 +193,9 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
 
   public UsageStatisticsCPAStatistics getStats() {
     return statistics;
+  }
+
+  public LogManager getLogger() {
+    return logger;
   }
 }
