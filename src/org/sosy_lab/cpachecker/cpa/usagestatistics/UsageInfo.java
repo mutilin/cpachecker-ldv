@@ -128,7 +128,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
     if (result) {
       return result;
     }
-    if (locks.getLocks().size() == 0 && other.locks.getLocks().size() == 0 ){
+    if (locks.getSize() == 0 && other.locks.getSize() == 0 ){
       if (this.callstack.getCurrentFunction().equals(other.callstack.getCurrentFunction())) {
         return true; //this is equal states, like for a++;
       }

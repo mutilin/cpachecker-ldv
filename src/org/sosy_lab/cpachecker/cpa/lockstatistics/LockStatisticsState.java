@@ -25,6 +25,7 @@ package org.sosy_lab.cpachecker.cpa.lockstatistics;
 
 import java.io.Serializable;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
@@ -60,8 +61,13 @@ public class LockStatisticsState implements AbstractState, Serializable {
     return locks.size();
   }
 
-  public Set<LockStatisticsLock> getLocks() {
+  public Set<LockStatisticsLock> getHashCodeForState() {
+    //Special hash for BAM, in other cases use iterator
     return locks;
+  }
+
+  public Iterator<LockStatisticsLock> getLockIterator() {
+    return locks.iterator();
   }
 
   public void setRestoreState(LockStatisticsState state) {

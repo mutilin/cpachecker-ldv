@@ -112,7 +112,10 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         if (uinfo.getLockState() == null) {
           continue;
         }
-    	  for (LockStatisticsLock lock : uinfo.getLockState().getLocks()) {
+        Iterator<LockStatisticsLock> lockIterator = uinfo.getLockState().getLockIterator();
+    	  while (lockIterator.hasNext()) {
+    	    LockStatisticsLock lock = lockIterator.next();
+    	    //existsIn() isn't based on equals(), don't remove it
     		  if( !lock.existsIn(locks)) {
     	      locks.add(lock);
     		  }
@@ -134,11 +137,12 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     TreeLeaf.clearTrunkState();
     LockStatisticsState Locks = usage.getLockState();
     if (Locks != null) {
-      for (LockStatisticsLock lock : Locks.getLocks()) {
+      final Iterator<LockStatisticsLock> lockIterator = Locks.getLockIterator();
+      while(lockIterator.hasNext()) {
+        LockStatisticsLock lock = lockIterator.next();
         UnmodifiableIterator<AccessPoint> accessPointIterator = lock.getAccessPointIterator();
-        AccessPoint accessPoint;
         while (accessPointIterator.hasNext()) {
-          accessPoint = accessPointIterator.next();
+          AccessPoint accessPoint = accessPointIterator.next();
           currentLeaf = createTree(accessPoint.getCallstack());
           currentLeaf.add(lock.toString(), accessPoint.getLineInfo().getLine());
         }
