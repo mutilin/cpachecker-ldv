@@ -27,8 +27,8 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.Writer;
-import java.util.Collection;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -261,17 +261,18 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 		final UsageContainer container = AbstractStates.extractStateByType(reached.getFirstState(), UsageStatisticsState.class)
 		    .getContainer();
 		Stat = container.getStatistics();
-		final List<SingleIdentifier> unsafes = container.getUnsafes();
+		final int unsafeSize = container.getUnsafeSize();
+
     try {
       final Writer writer = Files.openOutputFile(outputStatFileName);
       logger.log(Level.FINE, "Print statistics about unsafe cases");
-      printCountStatistics(writer, Stat.keySet());
-      Collection<SingleIdentifier> unsafeCases = unsafes;//unsafeDetector.getUnsafes(Stat);
-      printCountStatistics(writer, unsafeCases);
+      printCountStatistics(writer, Stat.keySet().iterator());
+      printCountStatistics(writer, container.getUnsafeIterator());
       printLockStatistics(writer);
       logger.log(Level.FINEST, "Processing unsafe identifiers");
-      for (SingleIdentifier id : unsafeCases) {
-        createVisualization(id, writer);
+      Iterator<SingleIdentifier> unsafeIterator = container.getUnsafeIterator();
+      while (unsafeIterator.hasNext()) {
+        createVisualization(unsafeIterator.next(), writer);
       }
       writer.close();
     } catch(FileNotFoundException e) {
@@ -281,9 +282,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       logger.log(Level.SEVERE, e.getMessage());
       return;
     }
-    out.println("Amount of unsafes:             " + unsafes.size());
+    out.println("Amount of unsafes:             " + unsafeSize);
     out.println("Amount of unsafe usages:       " + totalUsages + "(avg. " +
-        (unsafes.size() == 0 ? "0" : (totalUsages/unsafes.size()))
+        (unsafeSize == 0 ? "0" : (totalUsages/unsafeSize))
         + ", max " + maxNumberOfUsages + ")");
     int allUsages = 0, maxUsage = 0;
     for (SingleIdentifier id : Stat.keySet()) {
@@ -312,11 +313,13 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
   }
 
-  private void printCountStatistics(final Writer writer, final Collection<SingleIdentifier> idSet) throws IOException {
+  private void printCountStatistics(final Writer writer, final Iterator<SingleIdentifier> idIterator) throws IOException {
     int global = 0, local = 0, fields = 0;
     int globalPointer = 0, localPointer = 0, fieldPointer = 0;
+    SingleIdentifier id;
 
-    for (SingleIdentifier id : idSet) {
+    while (idIterator.hasNext()) {
+      id = idIterator.next();
       if (id instanceof GlobalVariableIdentifier) {
         if (id.getDereference() == 0) {
           global++;

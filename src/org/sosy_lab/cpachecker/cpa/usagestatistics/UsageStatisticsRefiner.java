@@ -90,7 +90,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
   public boolean performRefinement(ReachedSet pReached) throws CPAException, InterruptedException {
     final UsageContainer container =
         AbstractStates.extractStateByType(pReached.getFirstState(), UsageStatisticsState.class).getContainer();
-    final Collection<SingleIdentifier> unsafes = container.getUnsafes();
+    final int unsafeSize = container.getUnsafeSize();
 
     final RefineableUsageComputer computer = new RefineableUsageComputer(container, logger);
 
@@ -105,7 +105,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
         sb.append(id + ", ");
       }
     }
-    logger.log(Level.INFO, "Unsafes: " + unsafes.size());
+    logger.log(Level.INFO, "Unsafes: " + unsafeSize);
     logger.log(Level.INFO, "True refined: " + counter + ". " + sb.toString());
     logger.log(Level.INFO, "Time: " + MainCPAStatistics.programTime);
     UsageInfo target = null;

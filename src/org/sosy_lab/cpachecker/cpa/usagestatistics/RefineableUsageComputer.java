@@ -48,7 +48,7 @@ public class RefineableUsageComputer {
   RefineableUsageComputer(UsageContainer c, LogManager l) {
     container = c;
     cache = new UsageCallstackCache();
-    idIterator = container.getUnsafes().listIterator();
+    idIterator = container.getUnsafeIterator();
     if (idIterator.hasNext()) {
       UsageList originUsageList = container.getUsages(idIterator.next());
       Collections.sort(originUsageList);

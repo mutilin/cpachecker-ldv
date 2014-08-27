@@ -24,6 +24,7 @@
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -61,8 +62,8 @@ public class UsageContainer {
 
   public Timer resetTimer = new Timer();
 
-  int totalUsages = 0;
-  int totalIds = 0;
+  //int totalUsages = 0;
+  //int totalIds = 0;
 
   public UsageContainer(Configuration config, LogManager l) throws InvalidConfigurationException {
     config.inject(this);
@@ -100,17 +101,26 @@ public class UsageContainer {
     return Stat;
   }
 
-  public List<SingleIdentifier> getUnsafes() {
+  private void getUnsafesIfNecessary() {
     if (unsafes == null) {
-      totalIds = 0;
-      totalUsages = 0;
+      //totalIds = 0;
+      //totalUsages = 0;
       unsafes = unsafeDetector.getUnsafes(Stat);
-      for (SingleIdentifier id : Stat.keySet()) {
+      /*for (SingleIdentifier id : Stat.keySet()) {
         totalUsages += Stat.get(id).size();
         totalIds++;
-      }
+      }*/
     }
-    return unsafes;
+  }
+
+  public Iterator<SingleIdentifier> getUnsafeIterator() {
+    getUnsafesIfNecessary();
+    return unsafes.iterator();
+  }
+
+  public int getUnsafeSize() {
+    getUnsafesIfNecessary();
+    return unsafes.size();
   }
 
   public void resetUnsafes() {
