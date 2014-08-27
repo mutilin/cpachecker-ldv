@@ -66,8 +66,10 @@ public class PairwiseUnsafeDetector implements UnsafeDetector {
   public Pair<UsageInfo, UsageInfo> getUnsafePair(UsageList uinfo) throws HandleCodeException {
     Collections.sort(uinfo, new UsageInfo.UsageComparator());
 
-    for (UsageInfo info1 : uinfo) {
-      for (UsageInfo info2 : uinfo) {
+    for (int i = 0; i < uinfo.size(); i++) {
+      UsageInfo info1 = uinfo.get(i);
+      for (int j = i + 1; j < uinfo.size(); j++) {
+        UsageInfo info2 = uinfo.get(j);
         if (!info1.intersect(info2) && !info1.equals(info2)) {
           return Pair.of(info1, info2);
         }
@@ -78,7 +80,7 @@ public class PairwiseUnsafeDetector implements UnsafeDetector {
 
   @Override
   public String getDescription() {
-    return "All lines with different mutexes were printed";
+    return "All lines with different locks were printed";
   }
 
   @Override
@@ -91,8 +93,7 @@ public class PairwiseUnsafeDetector implements UnsafeDetector {
     return false;
   }
 
-  @Override
-  public boolean containsUnsafe(UsageList pList, SearchMode mode) {
+  private boolean containsUnsafe(UsageList pList, SearchMode mode) {
     if (pList.isTrueUnsafe()) {
       return true;
     }
@@ -104,10 +105,8 @@ public class PairwiseUnsafeDetector implements UnsafeDetector {
       }
       for (int j = i + 1; j < pList.size(); j++) {
         uinfo2 = pList.get(j);
-        if (uinfo2.isRefined() && mode == SearchMode.FALSE) {
-          continue;
-        }
-        if (!uinfo2.isRefined() && mode == SearchMode.TRUE) {
+        if (uinfo2.isRefined() && mode == SearchMode.FALSE ||
+            !uinfo2.isRefined() && mode == SearchMode.TRUE) {
           continue;
         }
         if (!uinfo.intersect(uinfo2)) {
@@ -121,4 +120,13 @@ public class PairwiseUnsafeDetector implements UnsafeDetector {
     return false;
   }
 
+  @Override
+  public boolean containsUnrefinedUnsafeUsage(UsageList pList) {
+    return containsUnsafe(pList, SearchMode.FALSE);
+  }
+
+  @Override
+  public boolean containsTrueUnsafe(UsageList pList) {
+    return containsUnsafe(pList, SearchMode.TRUE);
+  }
 }

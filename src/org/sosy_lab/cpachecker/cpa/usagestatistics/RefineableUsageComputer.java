@@ -28,7 +28,6 @@ import java.util.Iterator;
 import java.util.logging.Level;
 
 import org.sosy_lab.common.log.LogManager;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.UnsafeDetector.SearchMode;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
@@ -105,18 +104,11 @@ public class RefineableUsageComputer {
         }
       }
       potentialUsage = usageIterator.next();
-      /*if (potentialUsage.getLine().getLine() == 161246) {
+      /*if (potentialUsage.getLine().getLine() == 41547) {
         System.out.println("Refine 67427");
       }*/
-      if (!potentialUsage.isRefined() &&
-          unsafeDetector.isUnsafeCase(currentRefineableUsageList, potentialUsage) /*May be delete this check?*/) {
-        if (cache.contains(potentialUsage)) {
-          currentRefineableUsageList.remove(potentialUsage);
-        } else {
-          if (isRefineableUsage(currentRefineableUsageList, potentialUsage)) {
-            resultUsage = potentialUsage;
-          }
-        }
+      if (isRefineableUsage(potentialUsage)) {
+        resultUsage = potentialUsage;
       }
     }
 
@@ -127,18 +119,29 @@ public class RefineableUsageComputer {
   private boolean isRefineableUsageList(UsageList ulist) {
     if (ulist.isTrueUnsafe()) {
       return false;
-    } else if (!unsafeDetector.containsUnsafe(ulist, SearchMode.FALSE)) {
+    } else if (!unsafeDetector.containsUnrefinedUnsafeUsage(ulist)) {
       //These false-checks are 10-times more often, then true-checks
       return false;
-    } else if (unsafeDetector.containsUnsafe(ulist, SearchMode.TRUE)) {
+    } else if (unsafeDetector.containsTrueUnsafe(ulist)) {
       return false;
     }
     return true;
   }
 
-  private boolean isRefineableUsage(UsageList list, UsageInfo target) {
+  private boolean isRefineableUsage(UsageInfo target) {
+    //target can be read-accessed and hasn't got any pair usage for unsafe, so this check is necessary
+    if (!unsafeDetector.isUnsafeCase(currentRefineableUsageList, target) ||
+        target.isRefined()) {
+      return false;
+    }
+
+    if (cache.contains(target)) {
+      currentRefineableUsageList.remove(target);
+      return false;
+    }
+
     //Optimization: if we know, that usage with locks is true, we don't need to refine the same lock set
-    for (UsageInfo uinfo : list) {
+    for (UsageInfo uinfo : currentRefineableUsageList) {
       if (uinfo.isRefined()) {
         if (uinfo.getLockState().isLessOrEqual(target.getLockState()) &&
             target.getLockState().getSize() > 0 &&

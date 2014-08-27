@@ -123,6 +123,9 @@ public class UsageInfo implements Comparable<UsageInfo> {
     if (this.accessType == Access.READ && other.accessType == Access.READ) {
       return true;
     }
+    if (this == other) {
+      return false;
+    }
 
     boolean result = this.locks.intersects(other.locks);
     if (result) {

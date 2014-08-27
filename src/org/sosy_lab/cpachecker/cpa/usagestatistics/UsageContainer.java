@@ -39,7 +39,6 @@ import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.UnsafeDetector.SearchMode;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
@@ -145,7 +144,7 @@ public class UsageContainer {
 
       uset.removeAll(toDelete);
       toDelete.clear();
-      if (unsafeDetector.containsUnsafe(uset, SearchMode.TRUE)) {
+      if (unsafeDetector.containsTrueUnsafe(uset)) {
         uset.markAsTrueUnsafe();
       }
     }
