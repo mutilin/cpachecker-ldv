@@ -34,7 +34,9 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -176,6 +178,7 @@ public class BAMPredicateRefiner extends AbstractBAMBasedRefiner implements Stat
     private final Timer ssaRenamingTimer = new Timer();
 
     private final PathFormulaManager pfmgr;
+    private final FormulaManagerView fmgr;
 
     private ExtendedPredicateRefiner(final Configuration config, final LogManager logger,
         final ConfigurableProgramAnalysis pCpa,
@@ -189,6 +192,7 @@ public class BAMPredicateRefiner extends AbstractBAMBasedRefiner implements Stat
       super(config, logger, pCpa, pInterpolationManager, pPathChecker, pFormulaManager, pPathFormulaManager, pStrategy);
 
       pfmgr = pPathFormulaManager;
+      fmgr = pFormulaManager;
     }
 
     @Override
@@ -250,7 +254,14 @@ public class BAMPredicateRefiner extends AbstractBAMBasedRefiner implements Stat
 
           // start new block with empty formula
           PathFormula currentFormula = getOnlyElement(currentFormulas);
-          abstractionFormulas.add(currentFormula.getFormula());
+          BooleanFormula f = currentFormula.getFormula();
+          if (fmgr.useBitwiseAxioms()) {
+        	  BooleanFormula a = fmgr.getBitwiseAxioms(f);
+              if (!fmgr.getBooleanFormulaManager().isTrue(a)) {
+                f =  fmgr.getBooleanFormulaManager().and(f, a);
+              }
+          }
+          abstractionFormulas.add(f);
           finishedFormulas.put(currentState, pfmgr.makeEmptyPathFormula(currentFormula));
 
         } else {
@@ -415,9 +426,11 @@ public class BAMPredicateRefiner extends AbstractBAMBasedRefiner implements Stat
 
           Set<AbstractionPredicate> irrelevantPredicates = relevantPredicatesComputer.getIrrelevantPredicates(currentBlock, allPredicates);
 
+          //If these "irrelevant" predicates are used in next formulas, set them as relevant forcely
           for (AbstractionPredicate predicate : irrelevantPredicates) {
             Set<String> currentVariables = fmgr.extractVariables(predicate.getSymbolicAtom());
 
+            //Check only
             for (int i = number + 1 ; i < pList.size(); i++) {
               ARGState checkedState = pList.get(i).getSecond();
               CFANode checkedNode = AbstractStates.extractLocation(checkedState);
@@ -425,12 +438,13 @@ public class BAMPredicateRefiner extends AbstractBAMBasedRefiner implements Stat
               if (currentBlock.isReturnNode(checkedNode)) {
                 break;
               }
-
+              
               BooleanFormula checkedFormula = pList.get(i).getFirst();
-              Set<String> variables = fmgr.extractVariables(checkedFormula);
+              Set<String> variables = fmgr.extractVariables(fmgr.uninstantiate(checkedFormula));
 
               if (!Sets.intersection(currentVariables, variables).isEmpty()) {
                 relevantPredicatesComputer.considerPredicateAsRelevant(currentBlock, predicate);
+                System.out.println("Consider " + predicate + " as relevant in " + currentBlock);
                 break;
               }
             }
