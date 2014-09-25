@@ -35,6 +35,8 @@ import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.ErrorConditions;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormula;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.SSAMap;
+import org.sosy_lab.cpachecker.util.predicates.pathformula.pointeraliasing.PointerTargetSet;
+import org.sosy_lab.cpachecker.util.predicates.pathformula.pointeraliasing.PointerTargetSetManager;
 
 public interface PathFormulaManager {
 
@@ -60,6 +62,8 @@ public interface PathFormulaManager {
   Pair<PathFormula, ErrorConditions> makeAndWithErrorConditions(PathFormula oldFormula, CFAEdge edge) throws CPATransferException, InterruptedException;
 
   PathFormula makeNewPathFormula(PathFormula pOldFormula, SSAMap pM);
+  
+  PathFormula makeNewPathFormula(PathFormula pOldFormula, SSAMap pM, PointerTargetSet pts);
 
   PathFormula makeFormulaForPath(List<CFAEdge> pPath) throws CPATransferException, InterruptedException;
 
@@ -88,4 +92,6 @@ public interface PathFormulaManager {
    * @return A map from ARG state id to a boolean value indicating direction.
    */
   Map<Integer, Boolean> getBranchingPredicateValuesFromModel(Model pModel);
+  
+  PointerTargetSetManager getPtsManager();
 }

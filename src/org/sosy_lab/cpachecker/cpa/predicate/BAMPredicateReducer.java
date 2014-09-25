@@ -49,6 +49,7 @@ import org.sosy_lab.cpachecker.util.predicates.interfaces.Region;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormula;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.SSAMap;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.SSAMap.SSAMapBuilder;
+import org.sosy_lab.cpachecker.util.predicates.pathformula.pointeraliasing.PointerTargetSet;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSetMultimap;
@@ -146,8 +147,13 @@ public class BAMPredicateReducer implements Reducer {
           builder.setIndex(var.getKey(), var.getValue(), rootSSA.getIndex(var.getKey()));
         }
       }
+      PointerTargetSet rootPts = rootState.getPathFormula().getPointerTargetSet();
+      PointerTargetSet reducedPts = oldPathFormula.getPointerTargetSet();
+      //oldPathFormula.
       SSAMap newSSA = builder.build();
-      PathFormula newPathFormula = pmgr.makeNewPathFormula(oldPathFormula, newSSA);
+      PointerTargetSet newPts = pmgr.getPtsManager().expand(rootPts, reducedPts,
+          pReducedContext.getCallNode().getFunctionName(), newSSA);
+      PathFormula newPathFormula = pmgr.makeNewPathFormula(oldPathFormula, newSSA, newPts);
 
       AbstractionFormula newAbstractionFormula =
           pamgr.expand(reducedAbstraction, rootAbstraction, relevantRootPredicates, newSSA);

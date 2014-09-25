@@ -35,6 +35,8 @@ import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.PathFormulaManager;
+import org.sosy_lab.cpachecker.util.predicates.pathformula.pointeraliasing.PointerTargetSet;
+import org.sosy_lab.cpachecker.util.predicates.pathformula.pointeraliasing.PointerTargetSetManager;
 
 /**
  * Implementation of {@link PathFormulaManager} that delegates to another
@@ -163,5 +165,16 @@ public class CachingPathFormulaManager implements PathFormulaManager {
   @Override
   public Map<Integer, Boolean> getBranchingPredicateValuesFromModel(Model pModel) {
     return delegate.getBranchingPredicateValuesFromModel(pModel);
+  }
+
+  @Override
+  public PointerTargetSetManager getPtsManager() {
+    return delegate.getPtsManager();
+  }
+
+  @Override
+  public PathFormula makeNewPathFormula(PathFormula pOldFormula, SSAMap pM,
+      PointerTargetSet pts) {
+    return delegate.makeNewPathFormula(pOldFormula, pM, pts);
   }
 }
