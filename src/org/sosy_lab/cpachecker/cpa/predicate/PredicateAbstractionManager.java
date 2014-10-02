@@ -257,6 +257,17 @@ public class PredicateAbstractionManager {
     final SSAMap ssa = pathFormula.getSsa();
 
     ImmutableSet<AbstractionPredicate> predicates = getRelevantPredicates(pPredicates, f, ssa);
+    
+    if (fmgr.useBitwiseAxioms()) {
+      for (AbstractionPredicate predicate : predicates) {
+        BooleanFormula bitwiseAxioms = fmgr.getBitwiseAxioms(predicate.getSymbolicAtom());
+        if (!bfmgr.isTrue(bitwiseAxioms)) {
+          f = bfmgr.and(f, bitwiseAxioms);
+  
+          logger.log(Level.ALL, "DEBUG_3", "ADDED BITWISE AXIOMS:", bitwiseAxioms);
+        }
+      }
+    }
     // Try to reuse stored abstractions
     if (reuseAbstractionsFrom != null
         && !abstractionReuseDisabledBecauseOfAmbiguity) {
