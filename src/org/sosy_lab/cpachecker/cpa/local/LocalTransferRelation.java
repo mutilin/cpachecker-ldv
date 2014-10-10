@@ -164,12 +164,14 @@ public class LocalTransferRelation implements TransferRelation {
   private void parseAllocatedFunctions(Configuration config) {
     String num;
     allocateInfo = new HashMap<>();
-    for (String funcName : allocate) {
-      num = config.getProperty(funcName + ".parameter");
-      if (num == null) {
-        allocateInfo.put(funcName, 0);
-      } else {
-        allocateInfo.put(funcName, Integer.parseInt(num));
+    if (allocate != null) {
+      for (String funcName : allocate) {
+        num = config.getProperty(funcName + ".parameter");
+        if (num == null) {
+          allocateInfo.put(funcName, 0);
+        } else {
+          allocateInfo.put(funcName, Integer.parseInt(num));
+        }
       }
     }
   }
@@ -194,7 +196,7 @@ public class LocalTransferRelation implements TransferRelation {
     if (exprOnSummary instanceof CFunctionCallAssignmentStatement) {
       CFunctionCallAssignmentStatement assignExp = ((CFunctionCallAssignmentStatement)exprOnSummary);
       String funcName = assignExp.getRightHandSide().getFunctionNameExpression().toASTString();
-      boolean isAllocatedFunction = allocate.contains(funcName);
+      boolean isAllocatedFunction = (allocate == null ? false : allocate.contains(funcName));
 
       if (returnType != null || isAllocatedFunction) {
         CExpression op1 = assignExp.getLeftHandSide();
