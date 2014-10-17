@@ -132,6 +132,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
         //consider its as true;
         logger.log(Level.WARNING, "Solver exception, consider " + target + " as true");
         computer.setResultOfRefinement(target, true);
+        target.failureFlag = true;
       } finally {
         pStat.Refinement.stopIfRunning();
       }

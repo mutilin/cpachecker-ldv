@@ -160,7 +160,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     CFAEdge currentEdge = pCfaEdge;
 
     CFANode node = AbstractStates.extractLocation(oldState);
-    if (node instanceof CFunctionEntryNode && abortfunctions.contains(node.getFunctionName())) {
+    if (node instanceof CFunctionEntryNode && abortfunctions != null && abortfunctions.contains(node.getFunctionName())) {
       logger.log(Level.FINEST, currentEdge + " is abort edge, analysis was stopped");
       return;
     }
@@ -203,7 +203,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
   private UsageStatisticsState handleEdge(UsageStatisticsPrecision precision, UsageStatisticsState newState
       , CFAEdge pCfaEdge) throws CPATransferException {
-
+    
     switch(pCfaEdge.getEdgeType()) {
 
       case DeclarationEdge: {
@@ -287,6 +287,9 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     if (!decl.toASTString().equals(declEdge.getRawStatement())) {
       //CPA replace "int t;" into "int t = 0;", so here there isn't assignment
       //It is right, but creates false unsafes.
+      return;
+    }
+    if (decl.isGlobal()) {
       return;
     }
 
@@ -493,11 +496,10 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     logger.log(Level.FINEST, "Its locks are: " + lockState);
 
     //We can't get line from location, because it is old state
-    LineInfo lineInfo = new LineInfo(line);
+    LineInfo lineInfo = new LineInfo(line, node);
     EdgeInfo info = new EdgeInfo(eType);
-
     UsageInfo usage = new UsageInfo(access, lineInfo, info, lockState, fullCallstack);
-
+    
     state.addUsage(singleId, usage);
   }
 

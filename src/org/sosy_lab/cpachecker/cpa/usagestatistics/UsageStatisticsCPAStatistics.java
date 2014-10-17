@@ -84,6 +84,11 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   private final LogManager logger;
   private int totalUsages = 0;
   private int maxNumberOfUsages = 0;
+  
+  private int totalFailureUsages = 0;
+  private int totalFailureUnsafes = 0;
+  private int totalUnsafesWithFailureUsages = 0;
+  private int totalUnsafesWithFailureUsageInPair = 0;
 
   private UsageContainer container;
 
@@ -223,12 +228,25 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
     return tmpList;
   }
+  
+  private void countFailureUsages(UsageList l) {
+    int startNum = totalFailureUsages;
+    for (UsageInfo uinfo : l) {
+      if (uinfo.failureFlag) {
+        totalFailureUsages++;
+      }
+    }
+    if (totalFailureUsages > startNum) {
+      totalUnsafesWithFailureUsages++;
+    }
+  }
 
   private void createVisualization(final SingleIdentifier id, final Writer writer) throws IOException {
     final UsageList uinfo = container.getUsages(id);
     if (uinfo == null || uinfo.size() == 0) {
       return;
     }
+    countFailureUsages(uinfo);
     totalUsages += uinfo.size();
     if (uinfo.size() > maxNumberOfUsages) {
       maxNumberOfUsages = uinfo.size();
@@ -253,6 +271,11 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       Pair<UsageInfo, UsageInfo> tmpPair = unsafeDetector.getUnsafePair(uinfo);
       createVisualization(id, tmpPair.getFirst(), writer);
       createVisualization(id, tmpPair.getSecond(), writer);
+      if (tmpPair.getFirst().failureFlag && tmpPair.getSecond().failureFlag) {
+        totalFailureUnsafes++;
+      } else if (tmpPair.getFirst().failureFlag || tmpPair.getSecond().failureFlag) {
+        totalUnsafesWithFailureUsageInPair++;
+      }
       if (printAllUnsafeUsages) {
         writer.append("Line 0:     N0 -{_____________________}-> N0" + "\n");
         writer.append("Line 0:     N0 -{All usages:}-> N0" + "\n");
@@ -297,6 +320,10 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     out.println("Amount of unsafe usages:       " + totalUsages + "(avg. " +
         (unsafeSize == 0 ? "0" : (totalUsages/unsafeSize))
         + ", max " + maxNumberOfUsages + ")");
+    out.println("Amount of unsafes with both failures in pair               " + totalFailureUnsafes);
+    out.println("Amount of unsafes with one failure in pair                 " + totalUnsafesWithFailureUsageInPair);
+    out.println("Amount of unsafes with at least once failure in usage list " + totalUnsafesWithFailureUsages);
+    out.println("Amount of usages with failure                             " + totalFailureUsages);
     container.printUsagesStatistics(out);
     out.println("Time for transfer relation:    " + transferRelationTimer);
     printStatisticsTimer.stop();

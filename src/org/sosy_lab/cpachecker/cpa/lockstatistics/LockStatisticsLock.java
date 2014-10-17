@@ -42,10 +42,10 @@ public class LockStatisticsLock implements Comparable<LockStatisticsLock> {
   private final LockIdentifier lockId;
   private final ImmutableList<AccessPoint> accessPoints;
 
-  LockStatisticsLock(String n, int l, LockType t, CallstackState s, String v) {
+  LockStatisticsLock(String n, LineInfo l, LockType t, CallstackState s, String v) {
     lockId = LockIdentifier.of(n, getCleanName(v), t);
     LinkedList<AccessPoint> tmpAccessPoints = new LinkedList<>();
-    tmpAccessPoints.add(new AccessPoint( new LineInfo(l), s));
+    tmpAccessPoints.add(new AccessPoint( l, s));
     accessPoints = ImmutableList.copyOf(tmpAccessPoints);
   }
 

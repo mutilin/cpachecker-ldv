@@ -82,6 +82,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
   private AbstractState keyState;
   private final Access accessType;
   private boolean isRefined;
+  public boolean failureFlag;
 
   public UsageInfo(Access atype, LineInfo l, EdgeInfo t, LockStatisticsState lock, CallstackState call) {
     line = l;
@@ -91,6 +92,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
     accessType = atype;
     keyState = null;
     isRefined = false;
+    failureFlag = false;
   }
 
   public LockStatisticsState getLockState() {
@@ -136,6 +138,9 @@ public class UsageInfo implements Comparable<UsageInfo> {
         return true; //this is equal states, like for a++;
       }
     }
+    /*if (this.line.equals(other.line)) {
+      return true; //this is equal states, like for a++;
+    }*/
     return false;
   }
 

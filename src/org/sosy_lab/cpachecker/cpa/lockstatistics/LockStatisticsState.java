@@ -93,13 +93,13 @@ public class LockStatisticsState implements AbstractState, Serializable {
     return sb.toString();
   }
 
-  public void add(String lockName, int line, CallstackState state, String variable, LogManager logger) {
+  public void add(String lockName, LineInfo line, CallstackState state, String variable, LogManager logger) {
     boolean b;
     String locksBefore = locks.toString();
 
     LockStatisticsLock oldLock = findLock(lockName, variable);
     if(oldLock != null) {
-      LockStatisticsLock newLock = oldLock.addAccessPointer(new AccessPoint(new LineInfo(line), state));
+      LockStatisticsLock newLock = oldLock.addAccessPointer(new AccessPoint(line, state));
       b = locks.remove(oldLock);
       assert b;
       b = locks.add(newLock);
@@ -194,7 +194,7 @@ public class LockStatisticsState implements AbstractState, Serializable {
     return newState;
   }
 
-  public void set(String lockName, int num, int line, CallstackState state, String variable) {
+  public void set(String lockName, int num, LineInfo line, CallstackState state, String variable) {
     //num can be equal 0, this means, that in origin file it is 0 and we should delete locks
     LockStatisticsLock oldLock = findLock(lockName, variable);
     LockStatisticsLock newLock;
@@ -203,7 +203,7 @@ public class LockStatisticsState implements AbstractState, Serializable {
       newLock = oldLock;
       if (num > oldLock.getAccessCounter()) {
         newLock = oldLock.addRecursiveAccessPointer(num - oldLock.getAccessCounter(),
-            new AccessPoint(new LineInfo(line), state));
+            new AccessPoint(line, state));
       } else if (num < oldLock.getAccessCounter()) {
         for (int i = 0; i < oldLock.getAccessCounter() - num; i++) {
           newLock = newLock.removeLastAccessPointer();
@@ -215,7 +215,7 @@ public class LockStatisticsState implements AbstractState, Serializable {
       }
     } else if (num > 0) {
       newLock = new LockStatisticsLock(lockName, line, LockType.GLOBAL_LOCK, state, variable);
-      newLock = newLock.addRecursiveAccessPointer(num - 1, new AccessPoint(new LineInfo(line), state));
+      newLock = newLock.addRecursiveAccessPointer(num - 1, new AccessPoint(line, state));
       // num - 1, because one of them is line above (new lock)
       if (newLock != null) {
         locks.add(newLock);
