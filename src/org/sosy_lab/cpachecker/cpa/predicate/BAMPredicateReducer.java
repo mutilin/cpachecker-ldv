@@ -149,7 +149,7 @@ public class BAMPredicateReducer implements Reducer {
       }
       PointerTargetSet rootPts = rootState.getPathFormula().getPointerTargetSet();
       PointerTargetSet reducedPts = oldPathFormula.getPointerTargetSet();
-      //oldPathFormula.
+
       SSAMap newSSA = builder.build();
       PointerTargetSet newPts = pmgr.getPtsManager().expand(rootPts, reducedPts,
           pReducedContext.getCallNode().getFunctionName(), newSSA);
@@ -274,15 +274,15 @@ public class BAMPredicateReducer implements Reducer {
                 rootPredicatePrecision.getGlobalPredicates()));
 
         ImmutableSetMultimap.Builder<CFANode, AbstractionPredicate> pmapBuilder = ImmutableSetMultimap.builder();
-        Set<CFANode> keySet = rootPredicatePrecision.getLocalPredicates().keySet();
-            /*lExpandedPredicatePrecision == null ? rootPredicatePrecision.getLocalPredicates().keySet()
-                : lExpandedPredicatePrecision.approximatePredicateMap().keySet();*/
+        Set<CFANode> keySet = //rootPredicatePrecision.getLocalPredicates().keySet();
+            lExpandedPredicatePrecision == null ? rootPredicatePrecision.getLocalPredicates().keySet()
+                : lExpandedPredicatePrecision.approximatePredicateMap().keySet();
         for (CFANode node : keySet) {
           if (context.getNodes().contains(node)) {
             // TODO handle location-instance-specific predicates
             // Without support for them, we can just pass 0 as locInstance parameter
-            Collection<AbstractionPredicate> set = rootPredicatePrecision.getPredicates(node, 0);
-                //relevantComputer.getRelevantPredicates(context, rootPredicatePrecision.getPredicates(node, 0));
+            Collection<AbstractionPredicate> set = //rootPredicatePrecision.getPredicates(node, 0);
+                relevantComputer.getRelevantPredicates(context, rootPredicatePrecision.getPredicates(node, 0));
             pmapBuilder.putAll(node, set);
           }
         }
@@ -346,8 +346,8 @@ public class BAMPredicateReducer implements Reducer {
         result.addAll(rootPredicatePrecision.getFunctionPredicates().get(functionName));
         return result;
       } else {
-        Set<AbstractionPredicate> result = rootPredicatePrecision.getPredicates(loc, locInstance);
-            //relevantComputer.getRelevantPredicates(context, rootPredicatePrecision.getPredicates(loc, locInstance));
+        Set<AbstractionPredicate> result = //rootPredicatePrecision.getPredicates(loc, locInstance);
+            relevantComputer.getRelevantPredicates(context, rootPredicatePrecision.getPredicates(loc, locInstance));
         if (result.isEmpty()) {
           result = relevantComputer.getRelevantPredicates(context, rootPredicatePrecision.getGlobalPredicates());
         }
