@@ -323,7 +323,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     out.println("Amount of unsafes with both failures in pair               " + totalFailureUnsafes);
     out.println("Amount of unsafes with one failure in pair                 " + totalUnsafesWithFailureUsageInPair);
     out.println("Amount of unsafes with at least once failure in usage list " + totalUnsafesWithFailureUsages);
-    out.println("Amount of usages with failure                             " + totalFailureUsages);
+    out.println("Amount of usages with failure                              " + totalFailureUsages);
     container.printUsagesStatistics(out);
     out.println("Time for transfer relation:    " + transferRelationTimer);
     printStatisticsTimer.stop();
