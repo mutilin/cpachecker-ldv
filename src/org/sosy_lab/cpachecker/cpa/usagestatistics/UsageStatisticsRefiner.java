@@ -97,8 +97,15 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
 
     logger.log(Level.INFO, ("Perform US refinement: " + i++));
     int counter = 0;
-    final StringBuilder sb = new StringBuilder();
+    StringBuilder sb = new StringBuilder();
     boolean refinementFinish = false;
+    Iterator<SingleIdentifier> unsafeIterator = container.getUnsafeIterator();
+    while (unsafeIterator.hasNext()) {
+      SingleIdentifier id = unsafeIterator.next();
+      sb.append(id + ", ");
+    }
+    logger.log(Level.INFO, "Unsafes: " + unsafeSize + ". "+ sb.toString());
+    sb = new StringBuilder();
     Iterator<SingleIdentifier> idIterator = container.getGeneralIterator();
     while (idIterator.hasNext()) {
       SingleIdentifier id = idIterator.next();
@@ -108,7 +115,6 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
         sb.append(id + ", ");
       }
     }
-    logger.log(Level.INFO, "Unsafes: " + unsafeSize);
     logger.log(Level.INFO, "True refined: " + counter + ". " + sb.toString());
     logger.log(Level.INFO, "Time: " + MainCPAStatistics.programTime);
     UsageInfo target = null;
