@@ -63,7 +63,7 @@ usage_ends
         die;
 }
 
-my $output_dir = ".";
+my $output_dir = "./";
 my $lcov_info_fname;
 my $cil_path_override;
 my $skip_expression;
@@ -76,7 +76,7 @@ GetOptions(
 ) or usage("Unrecognized options!");
 
 usage("LCOV info file isn't specified") unless $lcov_info_fname;
-open(my $lcov_info_fh, "<", $lcov_info_fname) or usage("Can't open LCOV info file for read");
+open(my $lcov_info_fh, "<", $lcov_info_fname) or usage("Can't open $lcov_info_fname file for read");
 
 print "Using output directory $output_dir\n";
 
@@ -158,7 +158,7 @@ top:while (<$lcov_info_fh>)
   if ($str =~ /^FN:(\d+),(.+)$/)
   {
     my $start_location = $1;
-    my $orig_location = $src_map{$start_location} or die("Can't get original location for line '$1'");
+    my $orig_location = $src_map{$start_location} or die("Can't obtain original location for line $1 (function $2)"); 
     my $start_line = $orig_location->{'line'};
     my $func_name = $2;
     $str = <$lcov_info_fh>;
@@ -180,7 +180,7 @@ top:while (<$lcov_info_fh>)
   if ($str =~ /^DA:(\d+),(.+)$/)
   {
     my $location = $1;
-    my $orig_location = $src_map{$location} or die("Can't get original location for line '$1'");
+    my $orig_location = $src_map{$location} or next top;
 		 
     foreach my $skip (@skipped_lines)
     {
