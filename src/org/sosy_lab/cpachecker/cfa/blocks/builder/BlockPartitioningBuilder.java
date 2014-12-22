@@ -27,13 +27,9 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.Map;
 import java.util.Set;
 
-import org.sosy_lab.common.Pair;
-import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.blocks.BlockPartitioning;
 import org.sosy_lab.cpachecker.cfa.blocks.ReferencedVariable;
@@ -42,11 +38,7 @@ import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
-import org.sosy_lab.cpachecker.cfa.model.c.CFunctionEntryNode;
 import org.sosy_lab.cpachecker.util.CFATraversal;
-
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
 
 
 /**
@@ -65,106 +57,8 @@ public class BlockPartitioningBuilder {
   protected final Map<CFANode, Set<CFANode>> blockNodesMap = new HashMap<>();
 
   public BlockPartitioningBuilder() {}
-  
+
   public BlockPartitioning build(CFANode mainFunction) {
-    //fixpoint iteration to take inner function calls into account for referencedVariables and callNodesMap
-    Map<CFANode, Set<ReferencedVariable>> workCopyOfReferencedVariables = Maps.newHashMap(referencedVariablesMap);
-    Map<CFANode, Set<FunctionEntryNode>> workCopyOfInnerFunctionCalls = Maps.newHashMap(innerFunctionCallsMap);
-    Set<CFANode> SingleNodes = new HashSet<>(); 
-    LinkedList<CFANode> path = new LinkedList<>();
-
-    boolean changed;
-    do {
-      changed = true;
-      while (changed) {
-        changed = false;
-        SingleNodes.clear();
-        for (CFANode node : workCopyOfReferencedVariables.keySet()) {
-          if (workCopyOfInnerFunctionCalls.get(node).size() == 0) {
-            SingleNodes.add(node);
-          }
-        }
-        if (SingleNodes.size() > 0) {
-          for (CFANode node : SingleNodes) {
-            workCopyOfReferencedVariables.remove(node);
-          }
-          changed = true;
-        } else {
-          continue;
-        }
-    
-        Set<CFANode> ToDelete = new HashSet<>();
-        
-        for (CFANode node : workCopyOfReferencedVariables.keySet()) {
-          ToDelete.clear();
-          for (CFANode calledFun : workCopyOfInnerFunctionCalls.get(node)) {
-            if (SingleNodes.contains(calledFun)) {
-              ToDelete.add(calledFun);
-              Set<ReferencedVariable> functionVars = referencedVariablesMap.get(calledFun);
-              Set<CFANode> functionBody = blockNodesMap.get(calledFun);
-              referencedVariablesMap.get(node).addAll(functionVars);
-              blockNodesMap.get(node).addAll(functionBody);
-            } else if (calledFun.equals(node)) {
-              ToDelete.add(calledFun);
-              changed = true;
-            }
-          }
-          workCopyOfInnerFunctionCalls.get(node).removeAll(ToDelete);
-        }
-      }
-      
-      if (workCopyOfReferencedVariables.size() == 0) {
-        break;
-      }
-      //Detect a recursion loop
-      path.clear();
-      CFANode currentNode = workCopyOfReferencedVariables.keySet().iterator().next();
-      while (!path.contains(currentNode)) {
-        path.add(currentNode);
-        currentNode = workCopyOfInnerFunctionCalls.get(currentNode).iterator().next();
-        assert (currentNode != null);
-      }
-      
-      CFANode caller = path.pollLast();
-      changed = false;
-      while (!caller.equals(currentNode)) {
-        changed = true;
-        joinFunctionPartitioning(currentNode, caller);
-        workCopyOfReferencedVariables.remove(caller);
-        for (CFANode keyNode : workCopyOfReferencedVariables.keySet()) {
-          Set<FunctionEntryNode> callers = workCopyOfInnerFunctionCalls.get(keyNode);
-          if (callers.remove(caller)) {
-            if (!keyNode.equals(currentNode)) {
-              callers.add((FunctionEntryNode) currentNode);
-            }
-          }
-        }
-        caller = path.pollLast();
-      } 
-
-    } while (changed) ;
-    
-    //now we can create the Blocks   for the BlockPartitioning
-    Collection<Block> blocks = new ArrayList<>(returnNodesMap.keySet().size());
-    for (CFANode key : returnNodesMap.keySet()) {
-      blocks.add(new Block(referencedVariablesMap.get(key), callNodesMap.get(key), returnNodesMap.get(key), blockNodesMap.get(key)));
-    }
-    return new BlockPartitioning(blocks, mainFunction);
-  }
-  
-  private void joinFunctionPartitioning(CFANode node, CFANode caller) {
-    Set<ReferencedVariable> functionVars = referencedVariablesMap.get(caller);
-    Set<CFANode> functionBody = blockNodesMap.get(caller);
-    referencedVariablesMap.get(node).addAll(functionVars);
-    blockNodesMap.get(node).addAll(functionBody);
-    /* We put the same object and forget, because we should update all entries, linked in the loop
-     * new Block() makes copy of these maps, so we do not care about this equality
-     */
-    referencedVariablesMap.put(caller, referencedVariablesMap.get(node));
-    blockNodesMap.put(caller, blockNodesMap.get(node));
-  }
-  
-  public BlockPartitioning build2(CFANode mainFunction) {
     //fixpoint iteration to take inner function calls into account for referencedVariables and callNodesMap
     boolean changed = true;
     outer: while (changed) {
@@ -222,10 +116,6 @@ public class BlockPartitioningBuilder {
       }
     }
 
-    if (registerNode == null) {
-      //It means, that there is no entry in this block. Don't add it
-      return;
-    }
     referencedVariablesMap.put(registerNode, referencedVariables);
     callNodesMap.put(registerNode, callNodes);
     returnNodesMap.put(registerNode, returnNodes);
