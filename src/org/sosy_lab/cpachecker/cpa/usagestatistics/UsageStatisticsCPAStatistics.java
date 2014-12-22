@@ -44,6 +44,7 @@ import org.sosy_lab.common.io.Path;
 import org.sosy_lab.common.io.Paths;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
@@ -138,8 +139,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
    * one of them must be 'write'
    */
   private void createVisualization(final SingleIdentifier id, final UsageInfo usage, final Writer writer) throws IOException {
-    final LinkedList<TreeLeaf> leafStack = new LinkedList<>();
+    final LinkedList<Iterator<TreeLeaf>> leafStack = new LinkedList<>();
     TreeLeaf currentCallstackNode;
+    Iterator<TreeLeaf> currentIterator;
 
     TreeLeaf.clearTrunkState();
     LockStatisticsState Locks = usage.getLockState();
@@ -163,8 +165,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     currentCallstackNode = TreeLeaf.getTrunkState();
     leafStack.clear();
     if (currentCallstackNode.children.size() > 0) {
-      leafStack.push(currentCallstackNode);
-      currentCallstackNode = currentCallstackNode.children.getFirst();
+      currentIterator = currentCallstackNode.children.iterator();
+      leafStack.push(currentIterator);
+      currentCallstackNode = currentIterator.next();
     } else {
       logger.log(Level.WARNING, "Empty error path, can't proceed");
       return;
@@ -172,37 +175,33 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     writer.append("Line 0:     N0 -{/*_____________________*/}-> N0\n");
     writer.append("Line 0:     N0 -{/*" + (Locks == null ? "empty" : Locks.toString()) + "*/}-> N0\n");
     while (currentCallstackNode != null) {
-      Collections.sort(currentCallstackNode.children);
       if (currentCallstackNode.children.size() > 0) {
-        writer.append(currentCallstackNode.toString() + "();}-> N0\n");
+        writer.append(currentCallstackNode.toString());
         writer.append("Line 0:     N0 -{Function start dummy edge}-> N0" + "\n");
-        leafStack.push(currentCallstackNode);
-        currentCallstackNode = currentCallstackNode.children.getFirst();
+        currentIterator = currentCallstackNode.children.iterator();
+        leafStack.push(currentIterator);
+        currentCallstackNode = currentIterator.next();
       } else {
-        writer.append(currentCallstackNode.toString() + "}-> N0\n");
-        currentCallstackNode = findFork(writer, currentCallstackNode, leafStack);
+        writer.append(currentCallstackNode.toString());
+        currentCallstackNode = findFork(writer, leafStack);
       }
     }
   }
 
-  private TreeLeaf findFork(final Writer writer, final TreeLeaf pCurrentLeaf, final LinkedList<TreeLeaf> leafStack) throws IOException {
-    TreeLeaf tmpLeaf, currentLeaf = pCurrentLeaf;
+  private TreeLeaf findFork(final Writer writer, final LinkedList<Iterator<TreeLeaf>> leafStack) throws IOException {
+    Iterator<TreeLeaf> tmpIterator;
 
-    while (true) {
-      tmpLeaf = leafStack.pop();
-      if (tmpLeaf.children.size() > 1  && !tmpLeaf.children.getLast().equals(currentLeaf)) {
-        leafStack.push(tmpLeaf);
-        currentLeaf = tmpLeaf.children.get(tmpLeaf.children.indexOf(currentLeaf) + 1);
-        break;
-      }
-      if (tmpLeaf.equals(TreeLeaf.getTrunkState())) {
-        currentLeaf = null;
-        break;
+    //The first element is root, not an ordinary callstack node
+    while (leafStack.size() > 1) {
+      tmpIterator = leafStack.peek();
+      if (tmpIterator.hasNext()) {
+        return tmpIterator.next();
+      } else {
+        leafStack.removeFirst();
       }
       writer.append("Line 0:     N0 -{return;}-> N0\n");
-      currentLeaf = tmpLeaf;
     }
-    return currentLeaf;
+    return null;
   }
 
   private TreeLeaf createTree(final CallstackState state) {
@@ -212,10 +211,10 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     TreeLeaf currentLeaf = TreeLeaf.getTrunkState();
     CallstackState tmpState = tmpList.getFirst();
     if (!tmpState.getCallNode().getFunctionName().equals(tmpState.getCurrentFunction())) {
-      currentLeaf = currentLeaf.add(tmpList.getFirst().getCallNode().getFunctionName(), 0);
+      currentLeaf = currentLeaf.add(tmpList.getFirst().getCallNode().getFunctionName() + "()", 0);
     }
     for (CallstackState callstack : tmpList) {
-      currentLeaf = currentLeaf.add(callstack.getCurrentFunction(), callstack.getCallNode().getLeavingEdge(0).getLineNumber());
+      currentLeaf = currentLeaf.add(callstack.getCurrentFunction() + "()", callstack.getCallNode().getLeavingEdge(0).getLineNumber());
     }
     return currentLeaf;
   }
