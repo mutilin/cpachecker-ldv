@@ -27,7 +27,7 @@ import java.util.LinkedList;
 
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 
-public class TreeLeaf {
+public class TreeLeaf implements Comparable<TreeLeaf> {
   private final String code;
   private final int line;
   public final LinkedList<TreeLeaf> children;
@@ -103,19 +103,8 @@ public class TreeLeaf {
     return getTrunkState();
   }
 
-  public TreeLeaf addLast(String code, int line) {
-    for (TreeLeaf leaf : this.children) {
-      if (leaf.code.equals(code) && leaf.line == line) {
-        if (this.children.size() > this.children.indexOf(leaf) + 1) {
-          this.children.remove(leaf);
-          //this needs to move it to the end of list
-          this.children.add(leaf);
-        }
-        return leaf;
-      }
-    }
-    TreeLeaf returnLeaf = new TreeLeaf(code, line);
-    this.children.add(returnLeaf);
-    return returnLeaf;
+  @Override
+  public int compareTo(TreeLeaf arg0) {
+    return this.line - arg0.line;
   }
 }

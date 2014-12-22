@@ -139,7 +139,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
    */
   private void createVisualization(final SingleIdentifier id, final UsageInfo usage, final Writer writer) throws IOException {
     final LinkedList<TreeLeaf> leafStack = new LinkedList<>();
-    TreeLeaf currentLeaf;
+    TreeLeaf currentCallstackNode;
 
     TreeLeaf.clearTrunkState();
     LockStatisticsState Locks = usage.getLockState();
@@ -150,36 +150,37 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         UnmodifiableIterator<AccessPoint> accessPointIterator = lock.getAccessPointIterator();
         while (accessPointIterator.hasNext()) {
           AccessPoint accessPoint = accessPointIterator.next();
-          currentLeaf = createTree(accessPoint.getCallstack());
-          currentLeaf.add(lock.toString(), accessPoint.getLineInfo().getLine());
+          currentCallstackNode = createTree(accessPoint.getCallstack());
+          currentCallstackNode.add(lock.toString(), accessPoint.getLineInfo().getLine());
         }
       }
     }
 
-    currentLeaf = createTree(usage.getCallStack());
-    currentLeaf.addLast(usage.createUsageView(id), usage.getLine().getLine());
+    currentCallstackNode = createTree(usage.getCallStack());
+    currentCallstackNode.add(usage.createUsageView(id), usage.getLine().getLine());
 
     //print this tree with aide of dfs
-    currentLeaf = TreeLeaf.getTrunkState();
+    currentCallstackNode = TreeLeaf.getTrunkState();
     leafStack.clear();
-    if (currentLeaf.children.size() > 0) {
-      leafStack.push(currentLeaf);
-      currentLeaf = currentLeaf.children.getFirst();
+    if (currentCallstackNode.children.size() > 0) {
+      leafStack.push(currentCallstackNode);
+      currentCallstackNode = currentCallstackNode.children.getFirst();
     } else {
       logger.log(Level.WARNING, "Empty error path, can't proceed");
       return;
     }
     writer.append("Line 0:     N0 -{/*_____________________*/}-> N0\n");
     writer.append("Line 0:     N0 -{/*" + (Locks == null ? "empty" : Locks.toString()) + "*/}-> N0\n");
-    while (currentLeaf != null) {
-      if (currentLeaf.children.size() > 0) {
-        writer.append(currentLeaf.toString() + "();}-> N0\n");
+    while (currentCallstackNode != null) {
+      Collections.sort(currentCallstackNode.children);
+      if (currentCallstackNode.children.size() > 0) {
+        writer.append(currentCallstackNode.toString() + "();}-> N0\n");
         writer.append("Line 0:     N0 -{Function start dummy edge}-> N0" + "\n");
-        leafStack.push(currentLeaf);
-        currentLeaf = currentLeaf.children.getFirst();
+        leafStack.push(currentCallstackNode);
+        currentCallstackNode = currentCallstackNode.children.getFirst();
       } else {
-        writer.append(currentLeaf.toString() + "}-> N0\n");
-        currentLeaf = findFork(writer, currentLeaf, leafStack);
+        writer.append(currentCallstackNode.toString() + "}-> N0\n");
+        currentCallstackNode = findFork(writer, currentCallstackNode, leafStack);
       }
     }
   }
@@ -214,7 +215,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       currentLeaf = currentLeaf.add(tmpList.getFirst().getCallNode().getFunctionName(), 0);
     }
     for (CallstackState callstack : tmpList) {
-      currentLeaf = currentLeaf.addLast(callstack.getCurrentFunction(), callstack.getCallNode().getLeavingEdge(0).getLineNumber());
+      currentLeaf = currentLeaf.add(callstack.getCurrentFunction(), callstack.getCallNode().getLeavingEdge(0).getLineNumber());
     }
     return currentLeaf;
   }
