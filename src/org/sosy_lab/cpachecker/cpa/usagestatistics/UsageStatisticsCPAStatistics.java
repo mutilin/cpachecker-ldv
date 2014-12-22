@@ -75,10 +75,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   @FileOption(FileOption.Type.OUTPUT_FILE)
   private Path outputStatFileName = Paths.get("unsafe_rawdata");
 
-  /*@Option(values={"PAIR", "SETDIFF"},toUppercase=true,
-      description="which data process we should use")
-  private String unsafeDetectorType = "PAIR";*/
-
   @Option(description="print all unsafe cases in report")
   private boolean printAllUnsafeUsages = false;
 
@@ -99,13 +95,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   public UsageStatisticsCPAStatistics(Configuration config, LogManager pLogger) throws InvalidConfigurationException{
     config.inject(this);
     unsafeDetector = new PairwiseUnsafeDetector(config);
-    /*if (unsafeDetectorType.equals("PAIR")) {
-
-    } else if (unsafeDetectorType.equals("SETDIFF")) {
-      unsafeDetector = new SetDifferenceUnsafeDetector(config);
-    } else {
-      throw new InvalidConfigurationException("Unknown data procession " + unsafeDetectorType);
-    }*/
     logger = pLogger;
   }
 
@@ -164,8 +153,8 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     //print this tree with aide of dfs
     currentCallstackNode = TreeLeaf.getTrunkState();
     leafStack.clear();
-    if (currentCallstackNode.children.size() > 0) {
-      currentIterator = currentCallstackNode.children.iterator();
+    currentIterator = currentCallstackNode.getChildrenIterator();
+    if (currentIterator.hasNext()) {
       leafStack.push(currentIterator);
       currentCallstackNode = currentIterator.next();
     } else {
@@ -175,14 +164,13 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     writer.append("Line 0:     N0 -{/*_____________________*/}-> N0\n");
     writer.append("Line 0:     N0 -{/*" + (Locks == null ? "empty" : Locks.toString()) + "*/}-> N0\n");
     while (currentCallstackNode != null) {
-      if (currentCallstackNode.children.size() > 0) {
-        writer.append(currentCallstackNode.toString());
+      writer.append(currentCallstackNode.toString());
+      currentIterator = currentCallstackNode.getChildrenIterator();
+      if (currentIterator.hasNext()) {
         writer.append("Line 0:     N0 -{Function start dummy edge}-> N0" + "\n");
-        currentIterator = currentCallstackNode.children.iterator();
         leafStack.push(currentIterator);
         currentCallstackNode = currentIterator.next();
       } else {
-        writer.append(currentCallstackNode.toString());
         currentCallstackNode = findFork(writer, leafStack);
       }
     }
@@ -214,7 +202,8 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       currentLeaf = currentLeaf.add(tmpList.getFirst().getCallNode().getFunctionName() + "()", 0);
     }
     for (CallstackState callstack : tmpList) {
-      currentLeaf = currentLeaf.add(callstack.getCurrentFunction() + "()", callstack.getCallNode().getLeavingEdge(0).getLineNumber());
+      currentLeaf = currentLeaf.add(callstack.getCurrentFunction() + "()",
+          callstack.getCallNode().getLeavingEdge(0).getLineNumber());
     }
     return currentLeaf;
   }
