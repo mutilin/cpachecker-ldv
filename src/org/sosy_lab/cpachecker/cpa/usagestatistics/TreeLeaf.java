@@ -23,16 +23,14 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
-import java.util.LinkedList;
+import java.util.Iterator;
 import java.util.Set;
 import java.util.TreeSet;
-
-import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 
 public class TreeLeaf implements Comparable<TreeLeaf> {
   private final String code;
   private final int line;
-  public final Set<TreeLeaf> children;
+  private final Set<TreeLeaf> children;
 
   private static TreeLeaf trunk = new TreeLeaf("super_main", 0);
 
@@ -40,10 +38,6 @@ public class TreeLeaf implements Comparable<TreeLeaf> {
     code = c;
     line = l;
     children = new TreeSet<>();
-  }
-
-  public static TreeLeaf create(CallstackState state) {
-    return new TreeLeaf(state.getCurrentFunction(), state.getCallNode().getLeavingEdge(0).getLineNumber());
   }
 
   @Override
@@ -89,6 +83,10 @@ public class TreeLeaf implements Comparable<TreeLeaf> {
     TreeLeaf returnLeaf = new TreeLeaf(code, line);
     this.children.add(returnLeaf);
     return returnLeaf;
+  }
+  
+  public Iterator<TreeLeaf> getChildrenIterator() {
+    return children.iterator();
   }
 
   @Override
