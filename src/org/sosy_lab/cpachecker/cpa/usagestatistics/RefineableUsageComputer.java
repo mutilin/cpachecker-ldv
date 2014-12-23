@@ -91,10 +91,6 @@ public class RefineableUsageComputer {
       while (!usageIterator.hasNext() || !isRefineableUsageList(currentRefineableUsageList)) {
         if (idIterator.hasNext()) {
           SingleIdentifier id = idIterator.next();
-          /*if (id.getName().equals("m_curPriority")) {
-            System.out.println("m_curPriority");
-          }*/
-          System.out.println("Refine " + id);
           UsageList originUsageList = container.getUsages(id);
           Collections.sort(originUsageList);
           currentRefineableUsageList = (UsageList) originUsageList.clone();
@@ -104,9 +100,6 @@ public class RefineableUsageComputer {
         }
       }
       potentialUsage = usageIterator.next();
-      /*if (potentialUsage.getLine().getLine() == 41547) {
-        System.out.println("Refine 67427");
-      }*/
       if (isRefineableUsage(potentialUsage)) {
         resultUsage = potentialUsage;
       }

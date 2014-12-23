@@ -25,7 +25,6 @@ package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
 import java.io.PrintStream;
 import java.util.Collection;
-import java.util.Iterator;
 import java.util.logging.Level;
 
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
@@ -33,7 +32,6 @@ import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.CounterexampleInfo;
-import org.sosy_lab.cpachecker.core.MainCPAStatistics;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.Refiner;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
@@ -48,7 +46,6 @@ import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.CPAs;
-import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 
 public class UsageStatisticsRefiner extends BAMPredicateRefiner implements StatisticsProvider {
@@ -91,32 +88,11 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
   public boolean performRefinement(ReachedSet pReached) throws CPAException, InterruptedException {
     final UsageContainer container =
         AbstractStates.extractStateByType(pReached.getFirstState(), UsageStatisticsState.class).getContainer();
-    final int unsafeSize = container.getUnsafeSize();
 
     final RefineableUsageComputer computer = new RefineableUsageComputer(container, logger);
 
     logger.log(Level.INFO, ("Perform US refinement: " + i++));
-    int counter = 0;
-    StringBuilder sb = new StringBuilder();
     boolean refinementFinish = false;
-    Iterator<SingleIdentifier> unsafeIterator = container.getUnsafeIterator();
-    while (unsafeIterator.hasNext()) {
-      SingleIdentifier id = unsafeIterator.next();
-      sb.append(id + ", ");
-    }
-    logger.log(Level.INFO, "Unsafes: " + unsafeSize + ". "+ sb.toString());
-    sb = new StringBuilder();
-    Iterator<SingleIdentifier> idIterator = container.getGeneralIterator();
-    while (idIterator.hasNext()) {
-      SingleIdentifier id = idIterator.next();
-      UsageList uset = container.getUsages(id);
-      if (uset.isTrueUnsafe()) {
-        counter++;
-        sb.append(id + ", ");
-      }
-    }
-    logger.log(Level.INFO, "True refined: " + counter + ". " + sb.toString());
-    logger.log(Level.INFO, "Time: " + MainCPAStatistics.programTime);
     UsageInfo target = null;
     pStat.UnsafeCheck.start();
     while ((target = computer.getNextRefineableUsage()) != null) {
@@ -126,7 +102,6 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       pStat.ComputePath.start();
       ARGPath pPath = computePath((ARGState)target.getKeyState(), target.getCallStack());
       pStat.ComputePath.stopIfRunning();
-
       assert (pPath != null);
       try {
         pStat.Refinement.start();
@@ -148,8 +123,6 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     pStat.UnsafeCheck.stopIfRunning();
     return refinementFinish;
   }
-
-
 
   protected ARGPath computePath(ARGState pLastElement, CallstackState stack) throws InterruptedException, CPATransferException {
     if (pLastElement == null || pLastElement.isDestroyed()) {

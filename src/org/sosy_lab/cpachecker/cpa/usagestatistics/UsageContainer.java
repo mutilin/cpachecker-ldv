@@ -35,28 +35,19 @@ import java.util.logging.Level;
 
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
-import org.sosy_lab.common.configuration.Option;
-import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
-@Options(prefix="cpa.usagestatistics")
 public class UsageContainer {
 
-  private PairwiseUnsafeDetector unsafeDetector = null;
+  private final PairwiseUnsafeDetector unsafeDetector;
 
   private final Map<SingleIdentifier, UsageList> Stat;
 
   public List<SingleIdentifier> unsafes = null;
-
-  @Option(name="debug", description="provides a way to look after refinement a target unsafe. Requires an option targetunsafename")
-  private boolean debugMode = false;
-
-  @Option(name="targetUnsafeName", description="Name the unsafe, which is target for debugging mode")
-  private String checkId;
 
   private final LogManager logger;
 
@@ -66,7 +57,6 @@ public class UsageContainer {
   int totalIds = 0;
 
   public UsageContainer(Configuration config, LogManager l) throws InvalidConfigurationException {
-    config.inject(this);
     unsafeDetector = new PairwiseUnsafeDetector(config);
     Stat = new TreeMap<>();
     logger = l;
@@ -87,6 +77,8 @@ public class UsageContainer {
       if (uset.contains(usage)) {
         UsageInfo oldUsage = uset.get(uset.indexOf(usage));
         if (oldUsage.isRefined()) {
+          //May be, we should replace it to have correct keyState
+          //uset.remove(oldUsage);
           return;
         } else if (oldUsage.getCallStack().equals(usage.getCallStack())){
           //TODO May be, if this usage isn't refined and still here, it hasn't got pair to be an unsafe. And we may not to update it
@@ -125,7 +117,6 @@ public class UsageContainer {
     resetTimer.start();
     unsafes = null;
     Set<UsageInfo> toDelete = new HashSet<>();
-    Set<SingleIdentifier> idToDelete = new HashSet<>();
 
     for (SingleIdentifier id : Stat.keySet()) {
       UsageList uset = Stat.get(id);
@@ -146,10 +137,6 @@ public class UsageContainer {
       if (unsafeDetector.containsTrueUnsafe(uset)) {
         uset.markAsTrueUnsafe();
       }
-    }
-    for (SingleIdentifier id : idToDelete) {
-      logger.log(Level.ALL, "Identifier " + id + " was removed from statistics");
-      Stat.remove(id);
     }
     logger.log(Level.FINE, "Unsafes are reseted");
     resetTimer.stop();

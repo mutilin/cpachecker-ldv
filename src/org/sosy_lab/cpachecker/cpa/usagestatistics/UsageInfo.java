@@ -138,9 +138,6 @@ public class UsageInfo implements Comparable<UsageInfo> {
         return true; //this is equal states, like for a++;
       }
     }
-    /*if (this.line.equals(other.line)) {
-      return true; //this is equal states, like for a++;
-    }*/
     return false;
   }
 
@@ -221,14 +218,14 @@ public class UsageInfo implements Comparable<UsageInfo> {
     String name = id.toString();
     if (info.getEdgeType() == EdgeType.ASSIGNMENT) {
       if (accessType == Access.READ) {
-        name = "... = " + name + ";";
+        name = "... = " + name;
       } else if (accessType == Access.WRITE) {
-        name += " = ...;";
+        name += " = ...";
       }
     } else if (info.getEdgeType() == EdgeType.ASSUMPTION) {
       name = "if ("  + name + ") {}";
     } else if (info.getEdgeType() == EdgeType.FUNCTION_CALL) {
-      name = "f("  + name + ");";
+      name = "f("  + name + ")";
     } else if (info.getEdgeType() == EdgeType.DECLARATION) {
       name = id.getType().toASTString(name);
     }

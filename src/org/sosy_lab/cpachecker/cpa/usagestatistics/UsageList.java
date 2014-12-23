@@ -29,7 +29,7 @@ import java.util.LinkedList;
 public class UsageList extends LinkedList<UsageInfo> {
   private static final long serialVersionUID = 1L;
   private boolean isTrueUnsafe = false;
-
+  
   public boolean isTrueUnsafe() {
     return isTrueUnsafe;
   }
