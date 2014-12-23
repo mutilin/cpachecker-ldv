@@ -152,7 +152,6 @@ public class LocalTransferRelation implements TransferRelation {
       }
 
       case AssumeEdge:
-        //checkSharednessIfNecessary(newState, ((AssumeEdge)pCfaEdge).getExpression());
       case BlankEdge:
       case CallToReturnEdge: {
         break;
@@ -265,17 +264,6 @@ public class LocalTransferRelation implements TransferRelation {
     // else, something like 'f(..)'. Now we can't do anything
     //TODO Do something!
     return newState;
-  }
-  
-  private void checkSharednessIfNecessary(LocalState pSuccessor, IAExpression iaExpression) throws HandleCodeException {
-    //Need, if we have information about the whole structure, but not for the particular field
-    if (iaExpression instanceof CExpression) {
-      idCreator.setDereference(0);
-      AbstractIdentifier id = ((CExpression)iaExpression).accept(idCreator);
-      System.out.println(id);
-    }  else {
-      System.out.println("Not CExression");
-    }
   }
 
   private void handleStatement(LocalState pSuccessor, CStatement pStatement) throws HandleCodeException {
