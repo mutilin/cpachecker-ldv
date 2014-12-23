@@ -110,9 +110,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     	  while (lockIterator.hasNext()) {
     	    LockStatisticsLock lock = lockIterator.next();
     	    //existsIn() isn't based on equals(), don't remove it
-    		  if( !lock.existsIn(locks)) {
+    		if( !lock.existsIn(locks)) {
     	      locks.add(lock);
-    		  }
+    		}
         }
       }
     }

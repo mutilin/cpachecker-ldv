@@ -91,7 +91,7 @@ public class TreeLeaf implements Comparable<TreeLeaf> {
 
   @Override
   public String toString() {
-    return "Line " + line + ":     N0 -{" + code + ";}-> N0\n";
+    return "Line " + line + ":     N0 -{" + code + "}-> N0\n";
   }
 
   public static TreeLeaf getTrunkState() {
