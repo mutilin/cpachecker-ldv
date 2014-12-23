@@ -23,12 +23,21 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
+
 
 public class LineInfo {
   private final int line;
+  private final CFANode node;
 
-  public LineInfo(int l) {
+  public LineInfo(CFAEdge edge) {
+    this(edge.getLineNumber(), edge.getPredecessor());
+  }
+  
+  public LineInfo(int l, CFANode n){
     line = l;
+    node = n;
   }
 
   @Override
@@ -39,31 +48,37 @@ public class LineInfo {
   public int getLine() {
     return line;
   }
+  
+  public CFANode getNode() {
+    return node;
+  }
 
   @Override
   public int hashCode() {
     final int prime = 31;
     int result = 1;
     result = prime * result + line;
+    result = prime * result + ((node == null) ? 0 : node.hashCode());
     return result;
   }
 
   @Override
   public boolean equals(Object obj) {
-    if (this == obj) {
+    if (this == obj)
       return true;
-    }
-    if (obj == null) {
+    if (obj == null)
       return false;
-    }
-    if (getClass() != obj.getClass()) {
+    if (getClass() != obj.getClass())
       return false;
-    }
     LineInfo other = (LineInfo) obj;
-    if (line != other.line) {
+    if (line != other.line)
       return false;
-    }
+    if (node == null) {
+      if (other.node != null)
+        return false;
+    } else if (!node.equals(other.node))
+      return false;
     return true;
   }
-
+  
 }

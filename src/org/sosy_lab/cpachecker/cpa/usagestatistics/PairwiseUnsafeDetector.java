@@ -50,11 +50,11 @@ public class PairwiseUnsafeDetector implements UnsafeDetector {
   }
 
   @Override
-  public List<SingleIdentifier> getUnsafes(Map<SingleIdentifier, UsageSet> stat) {
+  public List<SingleIdentifier> getUnsafes(Map<SingleIdentifier, UsageList> stat) {
     List<SingleIdentifier> unsafe = new LinkedList<>();
 
     for (SingleIdentifier id : stat.keySet()) {
-      UsageSet uset = stat.get(id);
+      UsageList uset = stat.get(id);
       if (containsUnsafe(uset, SearchMode.ALL) && !unsafe.contains(id)) {
         unsafe.add(id);
       }
@@ -63,11 +63,13 @@ public class PairwiseUnsafeDetector implements UnsafeDetector {
   }
 
   @Override
-  public Pair<UsageInfo, UsageInfo> getUnsafePair(UsageSet uinfo) throws HandleCodeException {
+  public Pair<UsageInfo, UsageInfo> getUnsafePair(UsageList uinfo) throws HandleCodeException {
     Collections.sort(uinfo, new UsageInfo.UsageComparator());
 
-    for (UsageInfo info1 : uinfo) {
-      for (UsageInfo info2 : uinfo) {
+    for (int i = 0; i < uinfo.size(); i++) {
+      UsageInfo info1 = uinfo.get(i);
+      for (int j = i + 1; j < uinfo.size(); j++) {
+        UsageInfo info2 = uinfo.get(j);
         if (!info1.intersect(info2) && !info1.equals(info2)) {
           return Pair.of(info1, info2);
         }
@@ -78,11 +80,11 @@ public class PairwiseUnsafeDetector implements UnsafeDetector {
 
   @Override
   public String getDescription() {
-    return "All lines with different mutexes were printed";
+    return "All lines with different locks were printed";
   }
 
   @Override
-  public boolean isUnsafeCase(UsageSet oldUsages, UsageInfo newUsage) {
+  public boolean isUnsafeCase(UsageList oldUsages, UsageInfo newUsage) {
     for (UsageInfo old : oldUsages) {
       if (!newUsage.intersect(old)) {
         return true;
@@ -91,8 +93,7 @@ public class PairwiseUnsafeDetector implements UnsafeDetector {
     return false;
   }
 
-  @Override
-  public boolean containsUnsafe(UsageSet pList, SearchMode mode) {
+  private boolean containsUnsafe(UsageList pList, SearchMode mode) {
     if (pList.isTrueUnsafe()) {
       return true;
     }
@@ -104,15 +105,13 @@ public class PairwiseUnsafeDetector implements UnsafeDetector {
       }
       for (int j = i + 1; j < pList.size(); j++) {
         uinfo2 = pList.get(j);
-        if (uinfo2.isRefined() && mode == SearchMode.FALSE) {
-          continue;
-        }
-        if (!uinfo2.isRefined() && mode == SearchMode.TRUE) {
+        if (uinfo2.isRefined() && mode == SearchMode.FALSE ||
+            !uinfo2.isRefined() && mode == SearchMode.TRUE) {
           continue;
         }
         if (!uinfo.intersect(uinfo2)) {
           if (uinfo.isRefined() && uinfo2.isRefined()) {
-            pList.setUnsafe();
+            pList.markAsTrueUnsafe();
           }
           return true;
         }
@@ -121,4 +120,13 @@ public class PairwiseUnsafeDetector implements UnsafeDetector {
     return false;
   }
 
+  @Override
+  public boolean containsUnrefinedUnsafeUsage(UsageList pList) {
+    return containsUnsafe(pList, SearchMode.FALSE);
+  }
+
+  @Override
+  public boolean containsTrueUnsafe(UsageList pList) {
+    return containsUnsafe(pList, SearchMode.TRUE);
+  }
 }

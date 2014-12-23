@@ -57,9 +57,11 @@ import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.LineInfo;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCCodeException;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.UnmodifiableIterator;
 
 @Options(prefix="cpa.lockStatistics")
 public class LockStatisticsTransferRelation implements TransferRelation
@@ -134,7 +136,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
           ((CFunctionCallStatement)statement).getFunctionCallExpression().getFunctionNameExpression().toASTString().equals(lockreset)) {
           return new LockStatisticsState();
         } else {
-          return handleStatement(element, precision, state, statement, cfaEdge.getPredecessor().getFunctionName());
+          return handleStatement(element, precision, state, statement, new LineInfo(cfaEdge), cfaEdge.getPredecessor().getFunctionName());
         }
 
       case AssumeEdge:
@@ -244,7 +246,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
             + ", \n\t line = " + cfaEdge.getLineNumber());
         successor = successor.restore(locks, logger);
         for (String name : locks.keySet()) {
-          processLock(successor, state, cfaEdge.getLineNumber(), findLockByName(name), locks.get(name));
+          processLock(successor, state, new LineInfo(cfaEdge), findLockByName(name), locks.get(name));
         }
       }
       logger.log(Level.FINEST, "\tPredessor = " + lockStatisticsElement
@@ -273,71 +275,72 @@ public class LockStatisticsTransferRelation implements TransferRelation
     return getAbstractSuccessors0(element, precision, state, cfaEdge);
   }
 
-  private LockStatisticsState handleStatement(LockStatisticsState element, LockStatisticsPrecision precision, CallstackState state, CStatement expression,
-      String currentFunction) {
-
+  private LockStatisticsState handleStatement(LockStatisticsState element, LockStatisticsPrecision precision,
+      CallstackState state, CStatement statement, LineInfo line, String currentFunction) {
+    
     LockStatisticsState newElement = element.clone();
 
-    if (expression instanceof CAssignment) {
+    if (statement instanceof CAssignment) {
       /*
        * level = intLock();
        */
-      CRightHandSide op2 = ((CAssignment)expression).getRightHandSide();
+      CRightHandSide op2 = ((CAssignment)statement).getRightHandSide();
 
       if (op2 instanceof CFunctionCallExpression) {
         CFunctionCallExpression function = (CFunctionCallExpression) op2;
         String functionName = function.getFunctionNameExpression().toASTString();
         Set<LockInfo> changedLocks = findLockByFunction(functionName);
         for (LockInfo lock : changedLocks) {
-          changeState(newElement, state, lock, functionName, op2.getFileLocation().getStartingLineNumber(), currentFunction,
-                           function.getParameterExpressions());
+          changeState(newElement, state, lock, functionName, line,
+              currentFunction, function.getParameterExpressions());
         }
       } else {
         /*
          * threadDispatchLevel = 1;
          */
-        CLeftHandSide leftSide = ((CAssignment) expression).getLeftHandSide();
-        CRightHandSide rightSide = ((CAssignment) expression).getRightHandSide();
+        CLeftHandSide leftSide = ((CAssignment) statement).getLeftHandSide();
+        CRightHandSide rightSide = ((CAssignment) statement).getRightHandSide();
         LockInfo lock = findLockByVariable(leftSide.toASTString());
         if (lock != null) {
           if (rightSide instanceof CIntegerLiteralExpression) {
             int level = ((CIntegerLiteralExpression)rightSide).getValue().intValue();
-            processSetLevel(newElement, state, expression.getFileLocation().getStartingLineNumber(), level, lock);
+            processSetLevel(newElement, state, line, level, lock);
           } else {
-            logger.log(Level.WARNING, "Lock level isn't numeric constant: " + expression.toASTString()
-                + "(line " + expression.getFileLocation().getStartingLineNumber() + ")");
+            logger.log(Level.WARNING, "Lock level isn't numeric constant: " + statement.toASTString()
+                + "(line " + statement.getFileLocation().getStartingLineNumber() + ")");
           }
         }
       }
 
-    } else if (expression instanceof CFunctionCallStatement) {
+    } else if (statement instanceof CFunctionCallStatement) {
       /*
        * queLock(que);
        */
-      CFunctionCallStatement statement = (CFunctionCallStatement) expression;
-      String functionName = statement.getFunctionCallExpression().getFunctionNameExpression().toASTString();
+      CFunctionCallStatement funcStatement = (CFunctionCallStatement) statement;
+      String functionName = funcStatement.getFunctionCallExpression().getFunctionNameExpression().toASTString();
       Set<LockInfo> changedLocks = findLockByFunction(functionName);
       for (LockInfo lock : changedLocks) {
-        changeState(newElement, state, lock, functionName, statement.getFileLocation().getStartingLineNumber(), currentFunction,
-          statement.getFunctionCallExpression().getParameterExpressions());
+        changeState(newElement, state, lock, functionName, line, currentFunction,
+            funcStatement.getFunctionCallExpression().getParameterExpressions());
       }
     }
     return newElement;
   }
 
-  private LockStatisticsState handleFunctionCall(LockStatisticsState element, LockStatisticsPrecision precision, CallstackState state, CFunctionCallEdge callEdge) {
+  private LockStatisticsState handleFunctionCall(LockStatisticsState element, LockStatisticsPrecision precision,
+      CallstackState state, CFunctionCallEdge callEdge) {
     Set<CFunctionCall> expressions = callEdge.getRawAST().asSet();
     LockStatisticsState newElement = element.clone();
 
     if (expressions.size() > 0) {
       for (CStatement statement : expressions) {
-        newElement = handleStatement(newElement, precision, state, statement, callEdge.getPredecessor().getFunctionName());
+        newElement = handleStatement(newElement, precision, state, statement, new LineInfo(callEdge), callEdge.getPredecessor().getFunctionName());
       }
     } else {
       String functionName = callEdge.getSuccessor().getFunctionName();
       Set<LockInfo> changedLocks = findLockByFunction(functionName);
       for (LockInfo lock : changedLocks) {
-        changeState(newElement, state, lock, functionName, callEdge.getLineNumber(),
+        changeState(newElement, state, lock, functionName, new LineInfo(callEdge),
             callEdge.getPredecessor().getFunctionName(), callEdge.getArguments());
       }
     }
@@ -382,23 +385,23 @@ public class LockStatisticsTransferRelation implements TransferRelation
     return null;
   }
 
-  private void changeState(LockStatisticsState newElement, CallstackState state, LockInfo lock, String functionName, int lineNumber
+  private void changeState(LockStatisticsState newElement, CallstackState state, LockInfo lock, String functionName, LineInfo line
       , String currentFunction, List<CExpression> params) {
     if (lock.LockFunctions.containsKey(functionName)) {
       int p = lock.LockFunctions.get(functionName);
       String variable = (p == 0 ? "" : params.get(p - 1).toASTString());
-      processLock(newElement, state, lineNumber, lock, variable);
+      processLock(newElement, state, line, lock, variable);
       return;
 
     } else if (lock.UnlockFunctions.containsKey(functionName)) {
-      logger.log(Level.FINER, "Unlock at line " + lineNumber + "int function " + currentFunction);
+      logger.log(Level.FINER, "Unlock at line " + line + "int function " + currentFunction);
       int p = lock.UnlockFunctions.get(functionName);
       String variable = (p == 0 ? "" : params.get(p - 1).toASTString());
       newElement.free(lock.lockName, variable, logger);
       return;
 
     } else if (lock.ResetFunctions != null && lock.ResetFunctions.containsKey(functionName)) {
-      logger.log(Level.FINER, "Reset at line " + lineNumber + "int function " + currentFunction);
+      logger.log(Level.FINER, "Reset at line " + line + "int function " + currentFunction);
       int p = lock.ResetFunctions.get(functionName);
       String variable = (p == 0 ? "" : params.get(p - 1).toASTString());
       newElement.reset(lock.lockName, variable, logger);
@@ -406,31 +409,32 @@ public class LockStatisticsTransferRelation implements TransferRelation
 
     } else if (lock.setLevel != null && lock.setLevel.equals(functionName)) {
       int p = Integer.parseInt(params.get(0).toASTString()); //new level
-      processSetLevel(newElement, state, lineNumber, p, lock);
+      processSetLevel(newElement, state, line, p, lock);
       return;//they count from 1
     }
   }
 
-  private void processLock(LockStatisticsState newElement, CallstackState callstack, int lineNumber, LockInfo lock, String variable) {
-    logger.log(Level.FINER, "Lock at line " + lineNumber + ", Callstack: " + callstack);
+  private void processLock(LockStatisticsState newElement, CallstackState callstack, LineInfo line, LockInfo lock, String variable) {
+    logger.log(Level.FINER, "Lock at line " + line + ", Callstack: " + callstack);
     int d = newElement.getCounter(lock.lockName, variable);
 
     if (d < lock.maxLock) {
-      newElement.add(lock.lockName, lineNumber, callstack, variable, logger);
+      newElement.add(lock.lockName, line, callstack, variable, logger);
     } else {
-      List<AccessPoint> access = newElement.findLock(lock.lockName, variable).getAccessPoints();
+      UnmodifiableIterator<AccessPoint> accessPointIterator =
+          newElement.findLock(lock.lockName, variable).getAccessPointIterator();
       StringBuilder message = new StringBuilder();
-      message.append("Try to lock " + lock.lockName + " more, than " + lock.maxLock + " in " + lineNumber + " line. Previous were in ");
-      for (AccessPoint point : access) {
-        message.append(point.getLineInfo().getLine() + ", ");
+      message.append("Try to lock " + lock.lockName + " more, than " + lock.maxLock + " in " + line + " line. Previous were in ");
+      while (accessPointIterator.hasNext()) {
+        message.append(accessPointIterator.next().getLineInfo().getLine() + ", ");
       }
       message.delete(message.length() - 2, message.length());
       logger.log(Level.WARNING, message.toString());
     }
   }
 
-  private void processSetLevel(LockStatisticsState newElement, CallstackState callstack, int lineNumber, int level, LockInfo lock) {
-    logger.log(Level.FINER, "Set a lock level " + level + " at line " + lineNumber + ", Callstack: " + callstack);
-    newElement.set(lock.lockName, level, lineNumber, callstack, "");
+  private void processSetLevel(LockStatisticsState newElement, CallstackState callstack, LineInfo line, int level, LockInfo lock) {
+    logger.log(Level.FINER, "Set a lock level " + level + " at line " + line + ", Callstack: " + callstack);
+    newElement.set(lock.lockName, level, line, callstack, "");
   }
 }

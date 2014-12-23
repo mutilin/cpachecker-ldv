@@ -93,7 +93,7 @@ public class LocalState implements AbstractState {
     }
     DataType lastType = DataInfo.get(infoId);
     if (type == null) {
-      if (name == infoId) {
+      if (name.equals(infoId)) {
         DataInfo.remove(name);
       }
       return;

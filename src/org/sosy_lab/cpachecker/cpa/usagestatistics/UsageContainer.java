@@ -23,44 +23,50 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
+import java.io.PrintStream;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.logging.Level;
 
-import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
+import org.sosy_lab.common.log.LogManager;
+import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.UnsafeDetector.SearchMode;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
-//@Options(prefix="cpa.usagestatistics")
 public class UsageContainer {
 
-  private PairwiseUnsafeDetector unsafeDetector = null;
+  private final PairwiseUnsafeDetector unsafeDetector;
 
-  private Map<SingleIdentifier, UsageSet> Stat;
+  private final Map<SingleIdentifier, UsageList> Stat;
 
   public List<SingleIdentifier> unsafes = null;
 
-  int totalUsages = 0;
+  private final LogManager logger;
+
+  public Timer resetTimer = new Timer();
+
+  int unsafeUsages = 0;
   int totalIds = 0;
 
-  public UsageContainer(Configuration config) throws InvalidConfigurationException {
-    //config.inject(this);
+  public UsageContainer(Configuration config, LogManager l) throws InvalidConfigurationException {
     unsafeDetector = new PairwiseUnsafeDetector(config);
     Stat = new TreeMap<>();
+    logger = l;
   }
 
-  public void add(SingleIdentifier id, UsageInfo usage) {
-    UsageSet uset;
+  public void add(final SingleIdentifier id, final UsageInfo usage) {
+    UsageList uset;
 
     if (!Stat.containsKey(id)) {
-      uset = new UsageSet();
+      uset = new UsageList();
       Stat.put(id, uset);
     } else {
       uset = Stat.get(id);
@@ -71,8 +77,11 @@ public class UsageContainer {
       if (uset.contains(usage)) {
         UsageInfo oldUsage = uset.get(uset.indexOf(usage));
         if (oldUsage.isRefined()) {
+          //May be, we should replace it to have correct keyState
+          //uset.remove(oldUsage);
           return;
-        } else {
+        } else if (oldUsage.getCallStack().equals(usage.getCallStack())){
+          //TODO May be, if this usage isn't refined and still here, it hasn't got pair to be an unsafe. And we may not to update it
           uset.remove(oldUsage);
         }
       }
@@ -80,106 +89,100 @@ public class UsageContainer {
     uset.add(usage);
   }
 
-  public Map<SingleIdentifier, UsageSet> getStatistics() {
-    return Stat;
-  }
-
-  public List<SingleIdentifier> getUnsafes() {
+  private void getUnsafesIfNecessary() {
     if (unsafes == null) {
-      totalIds = 0;
-      totalUsages = 0;
+      unsafeUsages = 0;
       unsafes = unsafeDetector.getUnsafes(Stat);
       for (SingleIdentifier id : Stat.keySet()) {
-        totalUsages += Stat.get(id).size();
-        totalIds++;
+        unsafeUsages += Stat.get(id).size();
       }
     }
-    return unsafes;
+  }
+
+  public Iterator<SingleIdentifier> getUnsafeIterator() {
+    getUnsafesIfNecessary();
+    return unsafes.iterator();
+  }
+
+  public Iterator<SingleIdentifier> getGeneralIterator() {
+    return Stat.keySet().iterator();
+  }
+
+  public int getUnsafeSize() {
+    getUnsafesIfNecessary();
+    return unsafes.size();
   }
 
   public void resetUnsafes() {
+    resetTimer.start();
     unsafes = null;
     Set<UsageInfo> toDelete = new HashSet<>();
-    Set<SingleIdentifier> idToDelete = new HashSet<>();
 
     for (SingleIdentifier id : Stat.keySet()) {
-      UsageSet uset = Stat.get(id);
-      if (uset.isTrueUnsafe()) {
-        for (UsageInfo uinfo : uset) {
-          if (uinfo.isRefined()) {
-            uinfo.setKeyState(null);
-          } else {
-            toDelete.add(uinfo);
-          }
+      UsageList uset = Stat.get(id);
+      //All false unsafes were deleted during refinement
+      for (UsageInfo uinfo : uset) {
+        /* This is done to free memory
+         * otherwise all ARG will be stored on the next stage of analysis
+         */
+        if (uinfo.isRefined()) {
+          uinfo.setKeyState(null);
+        } else {
+          toDelete.add(uinfo);
         }
-        uset.removeAll(toDelete);
-        toDelete.clear();
-      } else {
-        idToDelete.add(id);
+      }
+
+      uset.removeAll(toDelete);
+      toDelete.clear();
+      if (unsafeDetector.containsTrueUnsafe(uset)) {
+        uset.markAsTrueUnsafe();
       }
     }
-    for (SingleIdentifier id : idToDelete) {
-      Stat.remove(id);
-    }
+    logger.log(Level.FINE, "Unsafes are reseted");
+    resetTimer.stop();
   }
 
-  public void removeState(UsageStatisticsState pUstate) {
+  public void removeState(final UsageStatisticsState pUstate) {
     List<UsageInfo> uset;
-    List<Pair<List<UsageInfo>, UsageInfo>> toDelete = new LinkedList<>(); //Not set! Some usages and sets can be equals but referes to different ids
+    //Not a set! Some usages and sets can be equals, but referes to different ids
+    List<UsageInfo> toDelete = new LinkedList<>();
     for (SingleIdentifier id : Stat.keySet()) {
       uset = Stat.get(id);
       for (UsageInfo uinfo : uset) {
         AbstractState keyState = uinfo.getKeyState();
-        if (keyState == null) {
-          //It means, that this state is covered by other one and we havn't added it to reachedSet, remove it
+        assert (keyState != null);
+        if (AbstractStates.extractStateByType(keyState, UsageStatisticsState.class).equals(pUstate)) {
           if (!uinfo.isRefined()) {
-            toDelete.add(Pair.of(uset, uinfo));
-          }
-        } else if (AbstractStates.extractStateByType(keyState, UsageStatisticsState.class).equals(pUstate)) {
-          if (!uinfo.isRefined()) {
-            toDelete.add(Pair.of(uset, uinfo));
+            toDelete.add(uinfo);
           }
         }
       }
+      uset.removeAll(toDelete);
+      toDelete.clear();
     }
-
-    for (Pair<List<UsageInfo>, UsageInfo> pair : toDelete) {
-      pair.getFirst().remove(pair.getSecond());
-    }
+    logger.log(Level.ALL, "All unsafes related to key state " + pUstate + " were removed from reached set");
   }
 
-  public SingleIdentifier check(SingleIdentifier refinementId) {
+  public void remove(SingleIdentifier pRefinementId, UsageInfo pTarget) {
+    Stat.get(pRefinementId).remove(pTarget);
+    logger.log(Level.ALL, "Remove " + pTarget + " identifier " + pRefinementId + " was removed from statistics");
+  }
 
-    if (refinementId == null) {
-      return null;
-    }
-    UsageSet uset = Stat.get(refinementId);
-    /*if (refinementId.getName().equals("b_flags") && unsafeDetector.containsUnsafe(uset, SearchMode.FALSE)) {
-      return refinementId;
-    } else if (refinementId.getName().equals("b_flags") && !unsafeDetector.containsUnsafe(uset, SearchMode.FALSE)) {
-      return null;
-    }*/
-    if (uset.isTrueUnsafe() || !unsafeDetector.containsUnsafe(uset, SearchMode.FALSE)) {
-      if (!unsafeDetector.containsUnsafe(uset, SearchMode.TRUE)) {
-        unsafes.remove(refinementId);
-        //TODO May be remove only empty
-        Stat.remove(refinementId);
-      } else {
-        uset.setUnsafe();
+  public UsageList getUsages(SingleIdentifier id) {
+    return Stat.get(id);
+  }
+
+  public void printUsagesStatistics(final PrintStream out) {
+    int allUsages = 0, maxUsage = 0;
+    final int generalSize = Stat.keySet().size();
+    for (SingleIdentifier id : Stat.keySet()) {
+      allUsages += Stat.get(id).size();
+      if (maxUsage < Stat.get(id).size()) {
+        maxUsage = Stat.get(id).size();
       }
-      for (SingleIdentifier id : unsafes) {
-        /*if (id.getName().equals("b_flags")) {
-          return id;
-        }*/
-        uset = Stat.get(id);
-        if (uset.isTrueUnsafe()) {
-         continue;
-        }
-        return id;
-      }
-      return null;
-    } else {
-      return refinementId;
     }
+    out.println("Total amount of variables:     " + generalSize);
+    out.println("Total amount of usages:        " + allUsages + "(avg. " +
+        (generalSize == 0 ? "0" : (allUsages/generalSize)) + ", max " + maxUsage + ")");
   }
 }

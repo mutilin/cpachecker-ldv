@@ -606,7 +606,9 @@ public class CToFormulaConverterWithPointerAliasing extends CtoFormulaConverter 
         new CIdExpression(declaration.getFileLocation(), declaration);
     final AssignmentHandler assignmentHandler = new AssignmentHandler(this, declarationEdge, function, ssa, pts, constraints, errorConditions);
     if (initializer instanceof CInitializerExpression || initializer == null) {
-      declareSharedBase(declaration, false, constraints, pts);
+      final boolean share = variableClassification.isPresent() &&
+                            variableClassification.get().getAddressedVariables().contains(declaration.getQualifiedName());
+      declareSharedBase(declaration, share, constraints, pts);
 
       final BooleanFormula result;
       if (initializer != null) {

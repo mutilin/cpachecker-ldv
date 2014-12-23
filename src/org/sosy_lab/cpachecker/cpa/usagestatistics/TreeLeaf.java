@@ -23,25 +23,21 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
-import java.util.LinkedList;
+import java.util.Iterator;
+import java.util.Set;
+import java.util.TreeSet;
 
-import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
-
-public class TreeLeaf {
+public class TreeLeaf implements Comparable<TreeLeaf> {
   private final String code;
   private final int line;
-  public final LinkedList<TreeLeaf> children;
+  private final Set<TreeLeaf> children;
 
   private static TreeLeaf trunk = new TreeLeaf("super_main", 0);
 
   private TreeLeaf(String c, int l) {
     code = c;
     line = l;
-    children = new LinkedList<>();
-  }
-
-  public static TreeLeaf create(CallstackState state) {
-    return new TreeLeaf(state.getCurrentFunction(), state.getCallNode().getLeavingEdge(0).getLineNumber());
+    children = new TreeSet<>();
   }
 
   @Override
@@ -88,10 +84,14 @@ public class TreeLeaf {
     this.children.add(returnLeaf);
     return returnLeaf;
   }
+  
+  public Iterator<TreeLeaf> getChildrenIterator() {
+    return children.iterator();
+  }
 
   @Override
   public String toString() {
-    return "Line " + line + ":     N0 -{" + code;
+    return "Line " + line + ":     N0 -{" + code + ";}-> N0\n";
   }
 
   public static TreeLeaf getTrunkState() {
@@ -103,19 +103,8 @@ public class TreeLeaf {
     return getTrunkState();
   }
 
-  public TreeLeaf addLast(String code, int line) {
-    for (TreeLeaf leaf : this.children) {
-      if (leaf.code.equals(code) && leaf.line == line) {
-        if (this.children.size() > this.children.indexOf(leaf) + 1) {
-          this.children.remove(leaf);
-          //this needs to move it to the end of list
-          this.children.add(leaf);
-        }
-        return leaf;
-      }
-    }
-    TreeLeaf returnLeaf = new TreeLeaf(code, line);
-    this.children.add(returnLeaf);
-    return returnLeaf;
+  @Override
+  public int compareTo(TreeLeaf arg0) {
+    return this.line - arg0.line;
   }
 }

@@ -38,6 +38,7 @@ import javax.annotation.Nullable;
 
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.Triple;
+import org.sosy_lab.common.collect.PathCopyingPersistentTreeMap;
 import org.sosy_lab.common.collect.PersistentLinkedList;
 import org.sosy_lab.common.collect.PersistentList;
 import org.sosy_lab.common.collect.PersistentSortedMap;
@@ -201,6 +202,41 @@ public class PointerTargetSetManager {
     }
 
     return Pair.of(Triple.of(mergeFormula1, mergeFormula2, basesMergeFormula), resultPTS);
+  }
+  
+  public PointerTargetSet expand(PointerTargetSet rootPts, PointerTargetSet reducedPts, String functionPrefix, SSAMap ssa) {
+    if (rootPts.isEmpty() && reducedPts.isEmpty()) {
+      return PointerTargetSet.emptyPointerTargetSet();
+    }
+    
+    if (rootPts.equals(reducedPts)) {
+      return rootPts;
+    }
+    
+    PersistentSortedMap<String, CType> bases = rootPts.bases;
+    
+    for (String name : reducedPts.bases.keySet()) {
+      if (name.contains(functionPrefix)) {
+        bases = bases.putAndCopy(name, reducedPts.bases.get(name));
+      }
+    }
+    
+    PointerTargetSet fakePts =
+        new PointerTargetSet(bases,
+                             rootPts.lastBase,
+                             PathCopyingPersistentTreeMap.<CompositeField, Boolean>of(),
+                             PathCopyingPersistentTreeMap.<String, DeferredAllocationPool>of(),
+                             PathCopyingPersistentTreeMap.<String, PersistentList<PointerTarget>>of());
+    
+    PointerTargetSet resultPTS;
+    try {
+      resultPTS = mergePointerTargetSets(rootPts, fakePts, ssa).getSecond();
+    } catch (InterruptedException e) {
+      // TODO Auto-generated catch block
+      e.printStackTrace();
+      resultPTS = rootPts;
+    }
+    return resultPTS;
   }
 
   private PersistentSortedMap<String, DeferredAllocationPool> mergeDeferredAllocationPools(final PointerTargetSet pts1,

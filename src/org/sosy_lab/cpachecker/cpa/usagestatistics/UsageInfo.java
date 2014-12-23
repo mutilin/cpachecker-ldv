@@ -33,7 +33,7 @@ import org.sosy_lab.cpachecker.cpa.usagestatistics.EdgeInfo.EdgeType;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 
-public class UsageInfo {
+public class UsageInfo implements Comparable<UsageInfo> {
 
   public static class UsageComparator implements Comparator<UsageInfo> {
 
@@ -82,6 +82,7 @@ public class UsageInfo {
   private AbstractState keyState;
   private final Access accessType;
   private boolean isRefined;
+  public boolean failureFlag;
 
   public UsageInfo(Access atype, LineInfo l, EdgeInfo t, LockStatisticsState lock, CallstackState call) {
     line = l;
@@ -91,6 +92,7 @@ public class UsageInfo {
     accessType = atype;
     keyState = null;
     isRefined = false;
+    failureFlag = false;
   }
 
   public LockStatisticsState getLockState() {
@@ -123,12 +125,15 @@ public class UsageInfo {
     if (this.accessType == Access.READ && other.accessType == Access.READ) {
       return true;
     }
+    if (this == other) {
+      return false;
+    }
 
     boolean result = this.locks.intersects(other.locks);
     if (result) {
       return result;
     }
-    if (locks.getLocks().size() == 0 && other.locks.getLocks().size() == 0 ){
+    if (locks.getSize() == 0 && other.locks.getSize() == 0 ){
       if (this.callstack.getCurrentFunction().equals(other.callstack.getCurrentFunction())) {
         return true; //this is equal states, like for a++;
       }
@@ -141,7 +146,7 @@ public class UsageInfo {
     final int prime = 31;
     int result = 1;
     result = prime * result + ((accessType == null) ? 0 : accessType.hashCode());
-    //result = prime * result + ((callstack == null) ? 0 : callstack.hashCode());
+    result = prime * result + ((callstack == null) ? 0 : callstack.hashCode());
     result = prime * result + ((line == null) ? 0 : line.hashCode());
     result = prime * result + ((locks == null) ? 0 : locks.hashCode());
     result = prime * result + ((info == null) ? 0 : info.hashCode());
@@ -163,11 +168,14 @@ public class UsageInfo {
     if (accessType != other.accessType) {
       return false;
     }
-    /*if (callstack == null) {
-      if (other.callstack != null)
+    //Callstack is important for refinement
+    if (callstack == null) {
+      if (other.callstack != null) {
         return false;
-    } else if (!callstack.equals(other.callstack))
-      return false;*/
+      }
+    } else if (!callstack.equals(other.callstack)) {
+      return false;
+    }
     if (line == null) {
       if (other.line != null) {
         return false;
@@ -210,14 +218,14 @@ public class UsageInfo {
     String name = id.toString();
     if (info.getEdgeType() == EdgeType.ASSIGNMENT) {
       if (accessType == Access.READ) {
-        name = "... = " + name + ";";
+        name = "... = " + name;
       } else if (accessType == Access.WRITE) {
-        name += " = ...;";
+        name += " = ...";
       }
     } else if (info.getEdgeType() == EdgeType.ASSUMPTION) {
       name = "if ("  + name + ") {}";
     } else if (info.getEdgeType() == EdgeType.FUNCTION_CALL) {
-      name = "f("  + name + ");";
+      name = "f("  + name + ")";
     } else if (info.getEdgeType() == EdgeType.DECLARATION) {
       name = id.getType().toASTString(name);
     }
@@ -238,5 +246,23 @@ public class UsageInfo {
 
   public boolean isRefined() {
     return isRefined;
+  }
+
+  @Override
+  public int compareTo(UsageInfo pO) {
+
+    int result = this.locks.getSize() - pO.locks.getSize();
+    if (result != 0) {
+      //Usages without locks are more convenient to analyze
+      return -result;
+    }
+    result = this.getCallStack().getDepth() - pO.getCallStack().getDepth();
+    if (result != 0) {
+      //Experiments show that callstacks should be ordered as it is done now
+      return result;
+    }
+
+    result = this.line.getLine() - pO.line.getLine();
+    return result;
   }
 }

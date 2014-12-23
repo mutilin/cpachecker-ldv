@@ -49,7 +49,7 @@ public interface UnsafeDetector {
    * @param pStat - all collected variables
    * @return collection of unsafe variables
    */
-  public Collection<SingleIdentifier> getUnsafes(Map<SingleIdentifier, UsageSet> pStat);
+  public Collection<SingleIdentifier> getUnsafes(Map<SingleIdentifier, UsageList> pStat);
 
   /**
    * function to get simple description, its useful to write it in
@@ -59,9 +59,10 @@ public interface UnsafeDetector {
 
   public String getDescription();
 
-  public Pair<UsageInfo, UsageInfo> getUnsafePair(UsageSet uinfo)
+  public Pair<UsageInfo, UsageInfo> getUnsafePair(UsageList uinfo)
 		throws HandleCodeException;
 
-  public boolean isUnsafeCase(UsageSet pList, UsageInfo uInfo);
-  public boolean containsUnsafe(UsageSet pList, SearchMode mode);
+  public boolean isUnsafeCase(UsageList pList, UsageInfo uInfo);
+  public boolean containsUnrefinedUnsafeUsage(UsageList pList);
+  public boolean containsTrueUnsafe(UsageList pList);
 }

@@ -23,8 +23,8 @@
  */
 package org.sosy_lab.cpachecker.cpa.lockstatistics;
 
+import java.util.Collection;
 import java.util.LinkedList;
-import java.util.List;
 
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cpa.bam.BAMRestoreStack;
@@ -34,6 +34,7 @@ import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier.LockType;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.LineInfo;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.UnmodifiableIterator;
 
 
 public class LockStatisticsLock implements Comparable<LockStatisticsLock> {
@@ -41,10 +42,10 @@ public class LockStatisticsLock implements Comparable<LockStatisticsLock> {
   private final LockIdentifier lockId;
   private final ImmutableList<AccessPoint> accessPoints;
 
-  LockStatisticsLock(String n, int l, LockType t, CallstackState s, String v) {
+  LockStatisticsLock(String n, LineInfo l, LockType t, CallstackState s, String v) {
     lockId = LockIdentifier.of(n, getCleanName(v), t);
     LinkedList<AccessPoint> tmpAccessPoints = new LinkedList<>();
-    tmpAccessPoints.add(new AccessPoint( new LineInfo(l), s));
+    tmpAccessPoints.add(new AccessPoint( l, s));
     accessPoints = ImmutableList.copyOf(tmpAccessPoints);
   }
 
@@ -53,8 +54,8 @@ public class LockStatisticsLock implements Comparable<LockStatisticsLock> {
     accessPoints = ImmutableList.copyOf(points);
   }
 
-  public ImmutableList<AccessPoint> getAccessPoints() {
-    return accessPoints;
+  public UnmodifiableIterator<AccessPoint> getAccessPointIterator() {
+    return accessPoints.iterator();
   }
 
   public int getAccessCounter() {
@@ -173,7 +174,7 @@ public class LockStatisticsLock implements Comparable<LockStatisticsLock> {
     return lockId.toString()  + "[" + accessPoints.size() + "]";
   }
 
-  public boolean existsIn(List<LockStatisticsLock> locks) {
+  public boolean existsIn(Collection<LockStatisticsLock> locks) {
     for (LockStatisticsLock usedLock : locks) {
       if (usedLock.hasEqualNameAndVariable(this)) {
       	return true;

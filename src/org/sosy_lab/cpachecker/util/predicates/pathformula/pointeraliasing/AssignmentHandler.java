@@ -285,6 +285,10 @@ class AssignmentHandler {
       final CArrayType lvalueArrayType = (CArrayType) lvalueType;
       final CType lvalueElementType = CTypeUtils.simplifyType(lvalueArrayType.getType());
 
+      if (rvalue.isNondetValue()) {
+        //This is fix for races, global assignements are replaced by nondet
+        return bfmgr.makeBoolean(true);
+      }
       // There are only two cases of assignment to an array
       Preconditions.checkArgument(
         // Initializing array with a value (possibly nondet), useful for stack declarations and memset implementation
@@ -296,7 +300,7 @@ class AssignmentHandler {
         CTypeUtils.simplifyType(((CArrayType) rvalueType).getType()).equals(lvalueElementType),
         "Impossible array assignment due to incompatible types: assignment of %s to %s",
         rvalueType, lvalueType);
-
+      
       Integer length = CTypeUtils.getArrayLength(lvalueArrayType);
       // Try to fix the length if it's unknown (or too big)
       // Also ignore the tail part of very long arrays to avoid very large formulae (imprecise!)

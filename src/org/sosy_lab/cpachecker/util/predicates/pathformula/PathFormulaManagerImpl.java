@@ -549,4 +549,17 @@ public class PathFormulaManagerImpl implements PathFormulaManager {
     }
     return preds;
   }
+  
+  public PointerTargetSetManager getPtsManager() {
+    return ptsManager;
+  }
+
+  @Override
+  public PathFormula makeNewPathFormula(PathFormula oldFormula, SSAMap pM,
+      PointerTargetSet pts) {
+    return new PathFormula(oldFormula.getFormula(),
+        pM,
+        pts,
+        oldFormula.getLength());
+  }
 }

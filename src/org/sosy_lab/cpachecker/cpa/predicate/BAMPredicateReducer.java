@@ -49,6 +49,7 @@ import org.sosy_lab.cpachecker.util.predicates.interfaces.Region;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormula;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.SSAMap;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.SSAMap.SSAMapBuilder;
+import org.sosy_lab.cpachecker.util.predicates.pathformula.pointeraliasing.PointerTargetSet;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSetMultimap;
@@ -146,8 +147,13 @@ public class BAMPredicateReducer implements Reducer {
           builder.setIndex(var.getKey(), var.getValue(), rootSSA.getIndex(var.getKey()));
         }
       }
+      PointerTargetSet rootPts = rootState.getPathFormula().getPointerTargetSet();
+      PointerTargetSet reducedPts = oldPathFormula.getPointerTargetSet();
+
       SSAMap newSSA = builder.build();
-      PathFormula newPathFormula = pmgr.makeNewPathFormula(oldPathFormula, newSSA);
+      PointerTargetSet newPts = pmgr.getPtsManager().expand(rootPts, reducedPts,
+          pReducedContext.getCallNode().getFunctionName(), newSSA);
+      PathFormula newPathFormula = pmgr.makeNewPathFormula(oldPathFormula, newSSA, newPts);
 
       AbstractionFormula newAbstractionFormula =
           pamgr.expand(reducedAbstraction, rootAbstraction, relevantRootPredicates, newSSA);
@@ -268,15 +274,15 @@ public class BAMPredicateReducer implements Reducer {
                 rootPredicatePrecision.getGlobalPredicates()));
 
         ImmutableSetMultimap.Builder<CFANode, AbstractionPredicate> pmapBuilder = ImmutableSetMultimap.builder();
-        Set<CFANode> keySet = rootPredicatePrecision.getLocalPredicates().keySet();
-            /*lExpandedPredicatePrecision == null ? rootPredicatePrecision.getLocalPredicates().keySet()
-                : lExpandedPredicatePrecision.approximatePredicateMap().keySet();*/
+        Set<CFANode> keySet = //rootPredicatePrecision.getLocalPredicates().keySet();
+            lExpandedPredicatePrecision == null ? rootPredicatePrecision.getLocalPredicates().keySet()
+                : lExpandedPredicatePrecision.approximatePredicateMap().keySet();
         for (CFANode node : keySet) {
           if (context.getNodes().contains(node)) {
             // TODO handle location-instance-specific predicates
             // Without support for them, we can just pass 0 as locInstance parameter
-            Collection<AbstractionPredicate> set = rootPredicatePrecision.getPredicates(node, 0);
-                //relevantComputer.getRelevantPredicates(context, rootPredicatePrecision.getPredicates(node, 0));
+            Collection<AbstractionPredicate> set = //rootPredicatePrecision.getPredicates(node, 0);
+                relevantComputer.getRelevantPredicates(context, rootPredicatePrecision.getPredicates(node, 0));
             pmapBuilder.putAll(node, set);
           }
         }
@@ -340,8 +346,8 @@ public class BAMPredicateReducer implements Reducer {
         result.addAll(rootPredicatePrecision.getFunctionPredicates().get(functionName));
         return result;
       } else {
-        Set<AbstractionPredicate> result = rootPredicatePrecision.getPredicates(loc, locInstance);
-            //relevantComputer.getRelevantPredicates(context, rootPredicatePrecision.getPredicates(loc, locInstance));
+        Set<AbstractionPredicate> result = //rootPredicatePrecision.getPredicates(loc, locInstance);
+            relevantComputer.getRelevantPredicates(context, rootPredicatePrecision.getPredicates(loc, locInstance));
         if (result.isEmpty()) {
           result = relevantComputer.getRelevantPredicates(context, rootPredicatePrecision.getGlobalPredicates());
         }

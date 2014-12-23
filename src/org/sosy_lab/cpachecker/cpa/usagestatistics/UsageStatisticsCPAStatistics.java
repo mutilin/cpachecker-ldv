@@ -27,11 +27,10 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.Writer;
-import java.util.Collection;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 import java.util.logging.Level;
 
 import org.sosy_lab.common.Pair;
@@ -59,12 +58,12 @@ import org.sosy_lab.cpachecker.util.identifiers.LocalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.StructureFieldIdentifier;
 
+import com.google.common.collect.UnmodifiableIterator;
+
 @Options(prefix="cpa.usagestatistics")
 public class UsageStatisticsCPAStatistics implements Statistics {
 
-  public Map<SingleIdentifier, UsageSet> Stat;
-
-  private UnsafeDetector unsafeDetector = null;
+  private final UnsafeDetector unsafeDetector;
 
   @Option(name="localanalysis", description="should we use local analysis?")
   private boolean localAnalysis = false;
@@ -73,44 +72,44 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   @FileOption(FileOption.Type.OUTPUT_FILE)
   private Path outputStatFileName = Paths.get("unsafe_rawdata");
 
-  /*@Option(values={"PAIR", "SETDIFF"},toUppercase=true,
-      description="which data process we should use")
-  private String unsafeDetectorType = "PAIR";*/
-
   @Option(description="print all unsafe cases in report")
   private boolean printAllUnsafeUsages = false;
 
   private final LogManager logger;
   private int totalUsages = 0;
   private int maxNumberOfUsages = 0;
+  
+  private int totalFailureUsages = 0;
+  private int totalFailureUnsafes = 0;
+  private int totalUnsafesWithFailureUsages = 0;
+  private int totalUnsafesWithFailureUsageInPair = 0;
 
-  public Timer transferRelationTimer = new Timer();
-  public Timer printStatisticsTimer = new Timer();
+  private UsageContainer container;
+
+  public final Timer transferRelationTimer = new Timer();
+  public final Timer printStatisticsTimer = new Timer();
 
   public UsageStatisticsCPAStatistics(Configuration config, LogManager pLogger) throws InvalidConfigurationException{
     config.inject(this);
     unsafeDetector = new PairwiseUnsafeDetector(config);
-    /*if (unsafeDetectorType.equals("PAIR")) {
-
-    } else if (unsafeDetectorType.equals("SETDIFF")) {
-      unsafeDetector = new SetDifferenceUnsafeDetector(config);
-    } else {
-      throw new InvalidConfigurationException("Unknown data procession " + unsafeDetectorType);
-    }*/
     logger = pLogger;
   }
 
   private List<LockStatisticsLock> findAllLocks() {
     List<LockStatisticsLock> locks = new LinkedList<>();
 
-    for (SingleIdentifier id : Stat.keySet()) {
-      List<UsageInfo> uset = Stat.get(id);
+    Iterator<SingleIdentifier> generalIterator = container.getGeneralIterator();
+    while (generalIterator.hasNext()) {
+      List<UsageInfo> uset = container.getUsages(generalIterator.next());
 
       for (UsageInfo uinfo : uset){
         if (uinfo.getLockState() == null) {
           continue;
         }
-    	  for (LockStatisticsLock lock : uinfo.getLockState().getLocks()) {
+        Iterator<LockStatisticsLock> lockIterator = uinfo.getLockState().getLockIterator();
+    	  while (lockIterator.hasNext()) {
+    	    LockStatisticsLock lock = lockIterator.next();
+    	    //existsIn() isn't based on equals(), don't remove it
     		  if( !lock.existsIn(locks)) {
     	      locks.add(lock);
     		  }
@@ -125,88 +124,89 @@ public class UsageStatisticsCPAStatistics implements Statistics {
    * looks through all unsafe cases of current identifier and find the example of two lines with different locks,
    * one of them must be 'write'
    */
-  private void createVisualization(SingleIdentifier id, UsageInfo usage, Writer writer) throws IOException {
-    LinkedList<TreeLeaf> leafStack = new LinkedList<>();
-    TreeLeaf currentLeaf;
+  private void createVisualization(final SingleIdentifier id, final UsageInfo usage, final Writer writer) throws IOException {
+    final LinkedList<Iterator<TreeLeaf>> leafStack = new LinkedList<>();
+    TreeLeaf currentCallstackNode;
+    Iterator<TreeLeaf> currentIterator;
 
     TreeLeaf.clearTrunkState();
     LockStatisticsState Locks = usage.getLockState();
     if (Locks != null) {
-      for (LockStatisticsLock lock : Locks.getLocks()) {
-        for (AccessPoint accessPoint : lock.getAccessPoints()) {
-          currentLeaf = createTree(accessPoint.getCallstack());
-          currentLeaf.add(lock.toString(), accessPoint.getLineInfo().getLine());
+      final Iterator<LockStatisticsLock> lockIterator = Locks.getLockIterator();
+      while(lockIterator.hasNext()) {
+        LockStatisticsLock lock = lockIterator.next();
+        UnmodifiableIterator<AccessPoint> accessPointIterator = lock.getAccessPointIterator();
+        while (accessPointIterator.hasNext()) {
+          AccessPoint accessPoint = accessPointIterator.next();
+          currentCallstackNode = createTree(accessPoint.getCallstack());
+          currentCallstackNode.add(lock.toString(), accessPoint.getLineInfo().getLine());
         }
       }
     }
 
-    currentLeaf = createTree(usage.getCallStack());
-    currentLeaf.addLast(usage.createUsageView(id), usage.getLine().getLine());
+    currentCallstackNode = createTree(usage.getCallStack());
+    currentCallstackNode.add(usage.createUsageView(id), usage.getLine().getLine());
 
     //print this tree with aide of dfs
-    currentLeaf = TreeLeaf.getTrunkState();
+    currentCallstackNode = TreeLeaf.getTrunkState();
     leafStack.clear();
-    if (currentLeaf.children.size() > 0) {
-      leafStack.push(currentLeaf);
-      currentLeaf = currentLeaf.children.getFirst();
+    currentIterator = currentCallstackNode.getChildrenIterator();
+    if (currentIterator.hasNext()) {
+      leafStack.push(currentIterator);
+      currentCallstackNode = currentIterator.next();
     } else {
       logger.log(Level.WARNING, "Empty error path, can't proceed");
       return;
     }
     writer.append("Line 0:     N0 -{/*_____________________*/}-> N0\n");
     writer.append("Line 0:     N0 -{/*" + (Locks == null ? "empty" : Locks.toString()) + "*/}-> N0\n");
-    while (currentLeaf != null) {
-      if (currentLeaf.children.size() > 0) {
-        writer.append(currentLeaf.toString() + "();}-> N0\n");
+    while (currentCallstackNode != null) {
+      writer.append(currentCallstackNode.toString());
+      currentIterator = currentCallstackNode.getChildrenIterator();
+      if (currentIterator.hasNext()) {
         writer.append("Line 0:     N0 -{Function start dummy edge}-> N0" + "\n");
-        leafStack.push(currentLeaf);
-        currentLeaf = currentLeaf.children.getFirst();
+        leafStack.push(currentIterator);
+        currentCallstackNode = currentIterator.next();
       } else {
-        writer.append(currentLeaf.toString() + "}-> N0\n");
-        currentLeaf = findFork(writer, currentLeaf, leafStack);
+        currentCallstackNode = findFork(writer, leafStack);
       }
     }
   }
 
-  private TreeLeaf findFork(Writer writer, TreeLeaf pCurrentLeaf, LinkedList<TreeLeaf> leafStack) throws IOException {
-    TreeLeaf tmpLeaf, currentLeaf = pCurrentLeaf;
+  private TreeLeaf findFork(final Writer writer, final LinkedList<Iterator<TreeLeaf>> leafStack) throws IOException {
+    Iterator<TreeLeaf> tmpIterator;
 
-    while (true) {
-      tmpLeaf = leafStack.pop();
-      if (tmpLeaf.children.size() > 1  && !tmpLeaf.children.getLast().equals(currentLeaf)) {
-        leafStack.push(tmpLeaf);
-        currentLeaf = tmpLeaf.children.get(tmpLeaf.children.indexOf(currentLeaf) + 1);
-        break;
-      }
-      if (tmpLeaf.equals(TreeLeaf.getTrunkState())) {
-        currentLeaf = null;
-        break;
+    //The first element is root, not an ordinary callstack node
+    while (leafStack.size() > 1) {
+      tmpIterator = leafStack.peek();
+      if (tmpIterator.hasNext()) {
+        return tmpIterator.next();
+      } else {
+        leafStack.removeFirst();
       }
       writer.append("Line 0:     N0 -{return;}-> N0\n");
-      currentLeaf = tmpLeaf;
     }
-    return currentLeaf;
+    return null;
   }
 
-  private TreeLeaf createTree(CallstackState state) {
-    LinkedList<CallstackState> tmpList = revertCallstack(state);
-    TreeLeaf currentLeaf;
-    CallstackState tmpState;
+  private TreeLeaf createTree(final CallstackState state) {
+    final LinkedList<CallstackState> tmpList = revertCallstack(state);
 
     //add to tree of calls this path
-    currentLeaf = TreeLeaf.getTrunkState();
-    tmpState = tmpList.getFirst();
+    TreeLeaf currentLeaf = TreeLeaf.getTrunkState();
+    CallstackState tmpState = tmpList.getFirst();
     if (!tmpState.getCallNode().getFunctionName().equals(tmpState.getCurrentFunction())) {
-      currentLeaf = currentLeaf.add(tmpList.getFirst().getCallNode().getFunctionName(), 0);
+      currentLeaf = currentLeaf.add(tmpList.getFirst().getCallNode().getFunctionName() + "()", 0);
     }
     for (CallstackState callstack : tmpList) {
-      currentLeaf = currentLeaf.addLast(callstack.getCurrentFunction(), callstack.getCallNode().getLeavingEdge(0).getLineNumber());
+      currentLeaf = currentLeaf.add(callstack.getCurrentFunction() + "()",
+          callstack.getCallNode().getLeavingEdge(0).getLineNumber());
     }
     return currentLeaf;
   }
 
   private LinkedList<CallstackState> revertCallstack(CallstackState tmpState) {
-    LinkedList<CallstackState> tmpList = new LinkedList<>();
+    final LinkedList<CallstackState> tmpList = new LinkedList<>();
 
     while (tmpState != null) {
       tmpList.push(tmpState);
@@ -214,12 +214,25 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
     return tmpList;
   }
+  
+  private void countFailureUsages(UsageList l) {
+    int startNum = totalFailureUsages;
+    for (UsageInfo uinfo : l) {
+      if (uinfo.failureFlag) {
+        totalFailureUsages++;
+      }
+    }
+    if (totalFailureUsages > startNum) {
+      totalUnsafesWithFailureUsages++;
+    }
+  }
 
-  private void createVisualization(SingleIdentifier id, Writer writer) throws IOException {
-    UsageSet uinfo = Stat.get(id);
+  private void createVisualization(final SingleIdentifier id, final Writer writer) throws IOException {
+    final UsageList uinfo = container.getUsages(id);
     if (uinfo == null || uinfo.size() == 0) {
       return;
     }
+    countFailureUsages(uinfo);
     totalUsages += uinfo.size();
     if (uinfo.size() > maxNumberOfUsages) {
       maxNumberOfUsages = uinfo.size();
@@ -244,6 +257,11 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       Pair<UsageInfo, UsageInfo> tmpPair = unsafeDetector.getUnsafePair(uinfo);
       createVisualization(id, tmpPair.getFirst(), writer);
       createVisualization(id, tmpPair.getSecond(), writer);
+      if (tmpPair.getFirst().failureFlag && tmpPair.getSecond().failureFlag) {
+        totalFailureUnsafes++;
+      } else if (tmpPair.getFirst().failureFlag || tmpPair.getSecond().failureFlag) {
+        totalUnsafesWithFailureUsageInPair++;
+      }
       if (printAllUnsafeUsages) {
         writer.append("Line 0:     N0 -{_____________________}-> N0" + "\n");
         writer.append("Line 0:     N0 -{All usages:}-> N0" + "\n");
@@ -258,23 +276,23 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   }
 
   @Override
-  public void printStatistics(PrintStream out, Result result, ReachedSet reached) {
-		Writer writer = null;
+  public void printStatistics(final PrintStream out, final Result result, final ReachedSet reached) {
 		printStatisticsTimer.start();
-		UsageContainer container = AbstractStates.extractStateByType(reached.getFirstState(), UsageStatisticsState.class)
+		container = AbstractStates.extractStateByType(reached.getFirstState(), UsageStatisticsState.class)
 		    .getContainer();
-		Stat = container.getStatistics();
-		List<SingleIdentifier> unsafes = container.getUnsafes();
+		//Stat = container.getStatistics();
+		final int unsafeSize = container.getUnsafeSize();
+
     try {
-      writer = Files.openOutputFile(outputStatFileName);
+      final Writer writer = Files.openOutputFile(outputStatFileName);
       logger.log(Level.FINE, "Print statistics about unsafe cases");
-      printCountStatistics(writer, Stat.keySet());
-      Collection<SingleIdentifier> unsafeCases = unsafes;//unsafeDetector.getUnsafes(Stat);
-      printCountStatistics(writer, unsafeCases);
+      printCountStatistics(writer, container.getGeneralIterator());
+      printCountStatistics(writer, container.getUnsafeIterator());
       printLockStatistics(writer);
       logger.log(Level.FINEST, "Processing unsafe identifiers");
-      for (SingleIdentifier id : unsafeCases) {
-        createVisualization(id, writer);
+      Iterator<SingleIdentifier> unsafeIterator = container.getUnsafeIterator();
+      while (unsafeIterator.hasNext()) {
+        createVisualization(unsafeIterator.next(), writer);
       }
       writer.close();
     } catch(FileNotFoundException e) {
@@ -284,28 +302,23 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       logger.log(Level.SEVERE, e.getMessage());
       return;
     }
-    out.println("Amount of unsafes:             " + unsafes.size());
+    out.println("Amount of unsafes:             " + unsafeSize);
     out.println("Amount of unsafe usages:       " + totalUsages + "(avg. " +
-        (unsafes.size() == 0 ? "0" : (totalUsages/unsafes.size()))
+        (unsafeSize == 0 ? "0" : (totalUsages/unsafeSize))
         + ", max " + maxNumberOfUsages + ")");
-    int allUsages = 0, maxUsage = 0;
-    for (SingleIdentifier id : Stat.keySet()) {
-      allUsages += Stat.get(id).size();
-      if (maxUsage < Stat.get(id).size()) {
-        maxUsage = Stat.get(id).size();
-      }
-    }
-    out.println("Total amount of variables:     " + Stat.keySet().size());
-    out.println("Total amount of usages:        " + allUsages + "(avg. " +
-        (Stat.keySet().size() == 0 ? "0" : (allUsages/Stat.keySet().size()))
-        + ", max " + maxUsage + ")");
+    out.println("Amount of unsafes with both failures in pair               " + totalFailureUnsafes);
+    out.println("Amount of unsafes with one failure in pair                 " + totalUnsafesWithFailureUsageInPair);
+    out.println("Amount of unsafes with at least once failure in usage list " + totalUnsafesWithFailureUsages);
+    out.println("Amount of usages with failure                              " + totalFailureUsages);
+    container.printUsagesStatistics(out);
     out.println("Time for transfer relation:    " + transferRelationTimer);
     printStatisticsTimer.stop();
     out.println("Time for printing statistics:  " + printStatisticsTimer);
+    out.println("Time for reseting unsafes: " + container.resetTimer);
   }
 
-  private void printLockStatistics(Writer writer) throws IOException {
-    List<LockStatisticsLock> mutexes = findAllLocks();
+  private void printLockStatistics(final Writer writer) throws IOException {
+    final List<LockStatisticsLock> mutexes = findAllLocks();
 
     Collections.sort(mutexes);
     writer.append(mutexes.size() + "\n");
@@ -314,11 +327,13 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
   }
 
-  private void printCountStatistics(Writer writer, Collection<SingleIdentifier> idSet) throws IOException {
+  private void printCountStatistics(final Writer writer, final Iterator<SingleIdentifier> idIterator) throws IOException {
     int global = 0, local = 0, fields = 0;
     int globalPointer = 0, localPointer = 0, fieldPointer = 0;
+    SingleIdentifier id;
 
-    for (SingleIdentifier id : idSet) {
+    while (idIterator.hasNext()) {
+      id = idIterator.next();
       if (id instanceof GlobalVariableIdentifier) {
         if (id.getDereference() == 0) {
           global++;

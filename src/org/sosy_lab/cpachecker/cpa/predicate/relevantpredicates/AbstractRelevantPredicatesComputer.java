@@ -60,7 +60,6 @@ public abstract class AbstractRelevantPredicatesComputer<T> implements RelevantP
   }
 
   private boolean isRelevant0(T pPrecomputeResult, AbstractionPredicate pPredicate) {
-
     // lookup in cache
     Pair<T, AbstractionPredicate> key = Pair.of(pPrecomputeResult, pPredicate);
     Boolean cacheResult = relevantPredicates.get(key);
@@ -75,9 +74,6 @@ public abstract class AbstractRelevantPredicatesComputer<T> implements RelevantP
     } else {
       String predicateString = pPredicate.getSymbolicAtom().toString();
       if (predicateString.contains("false") || predicateString.contains("retval")  || predicateString.contains("nondet")) {
-        result = true;
-      } else if (predicateString.contains("(*")) {
-        //TODO This is quick fix of bug in struct representation
         result = true;
       } else {
         result = isRelevant(pPrecomputeResult, pPredicate);

@@ -34,6 +34,7 @@ import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
+import org.sosy_lab.cpachecker.cfa.ast.IAExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CAssignment;
 import org.sosy_lab.cpachecker.cfa.ast.c.CDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
@@ -48,6 +49,7 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CParameterDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CVariableDeclaration;
+import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
@@ -140,7 +142,7 @@ public class LocalTransferRelation implements TransferRelation {
       // if edge is a statement edge, e.g. a = b + c
       case StatementEdge: {
         CStatementEdge statementEdge = (CStatementEdge) pCfaEdge;
-        handleStatement(newState, statementEdge.getStatement(), pCfaEdge);
+        handleStatement(newState, statementEdge.getStatement());
         break;
       }
 
@@ -164,12 +166,14 @@ public class LocalTransferRelation implements TransferRelation {
   private void parseAllocatedFunctions(Configuration config) {
     String num;
     allocateInfo = new HashMap<>();
-    for (String funcName : allocate) {
-      num = config.getProperty(funcName + ".parameter");
-      if (num == null) {
-        allocateInfo.put(funcName, 0);
-      } else {
-        allocateInfo.put(funcName, Integer.parseInt(num));
+    if (allocate != null) {
+      for (String funcName : allocate) {
+        num = config.getProperty(funcName + ".parameter");
+        if (num == null) {
+          allocateInfo.put(funcName, 0);
+        } else {
+          allocateInfo.put(funcName, Integer.parseInt(num));
+        }
       }
     }
   }
@@ -194,33 +198,26 @@ public class LocalTransferRelation implements TransferRelation {
     if (exprOnSummary instanceof CFunctionCallAssignmentStatement) {
       CFunctionCallAssignmentStatement assignExp = ((CFunctionCallAssignmentStatement)exprOnSummary);
       String funcName = assignExp.getRightHandSide().getFunctionNameExpression().toASTString();
-      boolean isAllocatedFunction = allocate.contains(funcName);
+      boolean isAllocatedFunction = (allocate == null ? false : allocate.contains(funcName));
 
-      if (returnType != null || isAllocatedFunction) {
-        CExpression op1 = assignExp.getLeftHandSide();
-        CType type = op1.getExpressionType();
-        //find type in old state...
-        int dereference = findDereference(type);
-        AbstractIdentifier returnId = createId(op1, dereference);
+      CExpression op1 = assignExp.getLeftHandSide();
+      CType type = op1.getExpressionType();
+      //find type in old state...
+      int dereference = findDereference(type);
+      AbstractIdentifier returnId = createId(op1, dereference);
 
-        if (isAllocatedFunction) {
-          int num = allocateInfo.get(funcName);
-          if (num == 0) {
-            //local data are returned from function
-            if (!returnId.isGlobal()) {
-              newElement.forceSetLocal(returnId);
-            }
-          } else if (num > 0) {
-            handleFunctionCallExpression(newElement, assignExp.getRightHandSide());
+      if (isAllocatedFunction) {
+        int num = allocateInfo.get(funcName);
+        if (num == 0) {
+          //local data are returned from function
+          if (!returnId.isGlobal()) {
+            newElement.forceSetLocal(returnId);
           }
-        } else {
-          newElement.set(returnId, returnType);
+        } else if (num > 0) {
+          handleFunctionCallExpression(newElement, assignExp.getRightHandSide());
         }
-      }
-    } else if (exprOnSummary instanceof CFunctionCallStatement) {
-      String funcName = exprOnSummary.getFunctionCallExpression().toASTString();
-      if (allocate != null && allocate.contains(funcName)) {
-        handleFunctionCallExpression(newElement, exprOnSummary.getFunctionCallExpression());
+      } else {
+        newElement.set(returnId, returnType);
       }
     }
     return newElement;
@@ -269,7 +266,7 @@ public class LocalTransferRelation implements TransferRelation {
     return newState;
   }
 
-  private void handleStatement(LocalState pSuccessor, CStatement pStatement, CFAEdge pCfaEdge) throws HandleCodeException {
+  private void handleStatement(LocalState pSuccessor, CStatement pStatement) throws HandleCodeException {
     if (pStatement instanceof CAssignment) {
       // assignment like "a = b" or "a = foo()"
       CAssignment assignment = (CAssignment)pStatement;

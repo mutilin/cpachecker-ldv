@@ -257,6 +257,17 @@ public class PredicateAbstractionManager {
     final SSAMap ssa = pathFormula.getSsa();
 
     ImmutableSet<AbstractionPredicate> predicates = getRelevantPredicates(pPredicates, f, ssa);
+    
+    if (fmgr.useBitwiseAxioms()) {
+      for (AbstractionPredicate predicate : predicates) {
+        BooleanFormula bitwiseAxioms = fmgr.getBitwiseAxioms(predicate.getSymbolicAtom());
+        if (!bfmgr.isTrue(bitwiseAxioms)) {
+          f = bfmgr.and(f, bitwiseAxioms);
+  
+          logger.log(Level.ALL, "DEBUG_3", "ADDED BITWISE AXIOMS:", bitwiseAxioms);
+        }
+      }
+    }
     // Try to reuse stored abstractions
     if (reuseAbstractionsFrom != null
         && !abstractionReuseDisabledBecauseOfAmbiguity) {
@@ -540,16 +551,7 @@ public class PredicateAbstractionManager {
         // Predicates without variables occur (for example, talking about UFs).
         // We do not know whether they are relevant, so we have to add them.
         predicateBuilder.add(predicate);
-      } else if (predicateTerm.toString().contains("(*")) {
-        predicateBuilder.add(predicate);
       } else {
-
-        String predicateString = predicateTerm.toString();
-        predicateString = predicateString.replace("`=_rat`", "");
-        if (!predicateString.matches(".*[a-z].*")) {
-          //System.out.println("Add heuristic's predicate: " + predicateTerm.toString());
-          predicateBuilder.add(predicate);
-        }
         logger.log(Level.FINEST, "Ignoring predicate about variables", predVariables);
       }
     }
