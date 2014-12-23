@@ -238,8 +238,6 @@ public class PredicateCPARefiner extends AbstractARGBasedRefiner implements Stat
             p
             );
       }
-      System.out.println("Total number of predicates: "
-        + (p.getFunctionPredicates().size() != 0 ? p.getFunctionPredicates().size() : p.getLocalPredicates().size()));
       totalRefinement.stop();
       return CounterexampleInfo.spurious();
 
