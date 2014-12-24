@@ -103,7 +103,7 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
     for (int d = id.getDereference(); d >= 0; d--) {
       tmpId.setDereference(d);
       if (variableBindingRelation.containsKey(tmpId)) {
-        tmpId = variableBindingRelation.get(tmpId);
+        tmpId = variableBindingRelation.get(tmpId).clone();
         int currentD = tmpId.getDereference();
         tmpId.setDereference(currentD + id.getDereference() - d);
         if (this.containsLinks(tmpId)) {
