@@ -34,6 +34,7 @@ import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.CounterexampleInfo;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
@@ -128,7 +129,13 @@ public abstract class AbstractBAMBasedRefiner extends AbstractARGBasedRefiner {
 
       currentElement = child;
     }
-    path.add(Pair.of(currentElement, extractLocation(currentElement).getLeavingEdge(0)));
+    CFANode node = extractLocation(currentElement);
+    if (node.getNumLeavingEdges() > 0) {
+    	//It may be the last node, which has no leaving edges
+      path.add(Pair.of(currentElement, node.getLeavingEdge(0)));
+    } else {
+      path.add(Pair.of(currentElement, node.getEnteringEdge(0)));
+    }
     return path;
   }
 
