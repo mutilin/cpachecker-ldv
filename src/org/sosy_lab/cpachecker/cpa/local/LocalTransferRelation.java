@@ -214,7 +214,7 @@ public class LocalTransferRelation implements TransferRelation {
             newElement.forceSetLocal(returnId);
           }
         } else if (num > 0) {
-          handleFunctionCallExpression(newElement, assignExp.getRightHandSide());
+          handleAllocatedFunction(newElement, assignExp.getRightHandSide());
         }
       } else {
         newElement.set(returnId, returnType);
@@ -223,7 +223,7 @@ public class LocalTransferRelation implements TransferRelation {
     return newElement;
   }
 
-  private void handleFunctionCallExpression(LocalState pSuccessor, CFunctionCallExpression right) throws HandleCodeException {
+  private void handleAllocatedFunction(LocalState pSuccessor, CFunctionCallExpression right) throws HandleCodeException {
     String funcName = right.getFunctionNameExpression().toASTString();
     int num = allocateInfo.get(funcName);
     if (num > 0) {
@@ -310,15 +310,32 @@ public class LocalTransferRelation implements TransferRelation {
         AbstractIdentifier rightId = createId((CExpression)right, rightDereference);
         //assume(pSuccessor, leftId, rightId);
         if (leftId.isGlobal() && !(leftId instanceof SingleIdentifier && LocalCPA.localVariables.contains(((SingleIdentifier)leftId).getName()))) {
-          //if (!(rightId instanceof ConstantIdentifier)) {
+          if (!(rightId instanceof ConstantIdentifier)) {
             //Variable is global, not memory location!
-          //So, we should set the type of 'right' to global
+            //So, we should set the type of 'right' to global
             pSuccessor.set(rightId, DataType.GLOBAL);
-          //}
+          }
         } else {
           DataType type = pSuccessor.getType(rightId);
           pSuccessor.set(leftId, type);
         }
+      } else if (right instanceof CFunctionCallExpression) {
+	    	String funcName = ((CFunctionCallExpression)right).getFunctionNameExpression().toASTString();
+	    	boolean isAllocatedFunction = (allocate == null ? false : allocate.contains(funcName));
+	    	if (isAllocatedFunction) {
+	    		int num = allocateInfo.get(funcName);
+	        if (num == 0) {
+	          //local data are returned from function
+	          if (!leftId.isGlobal()) {
+	          	pSuccessor.forceSetLocal(leftId);
+	          }
+	        } else if (num > 0) {
+	        	handleAllocatedFunction(pSuccessor, (CFunctionCallExpression) right);
+	        }
+	    	} else {
+	    	  //unknown function
+	    	  pSuccessor.set(leftId, null);
+	    	}
       }
     }
   }
