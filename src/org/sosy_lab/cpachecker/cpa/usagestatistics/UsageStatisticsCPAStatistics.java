@@ -83,6 +83,10 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   private int totalFailureUnsafes = 0;
   private int totalUnsafesWithFailureUsages = 0;
   private int totalUnsafesWithFailureUsageInPair = 0;
+  private int trueUnsafes = 0;
+  private int trueUsagesInTrueUnsafe = 0;
+  private int trueUsagesInAllUnsafes = 0;
+  private int maxTrueUsages = 0;
 
   private UsageContainer container;
 
@@ -125,84 +129,78 @@ public class UsageStatisticsCPAStatistics implements Statistics {
    * one of them must be 'write'
    */
   private void createVisualization(final SingleIdentifier id, final UsageInfo usage, final Writer writer) throws IOException {
-    final LinkedList<Iterator<TreeLeaf>> leafStack = new LinkedList<>();
-    TreeLeaf currentCallstackNode;
-    Iterator<TreeLeaf> currentIterator;
+    final LinkedList<Iterator<CallTreeNode>> nodeStack = new LinkedList<>();
+    CallTreeNode currentCallstackNode;
+    Iterator<CallTreeNode> currentIterator;
 
-    TreeLeaf.clearTrunkState();
+    CallTreeNode.clearTrunkState();
     LockStatisticsState Locks = usage.getLockState();
-    if (Locks != null) {
-      final Iterator<LockStatisticsLock> lockIterator = Locks.getLockIterator();
-      while(lockIterator.hasNext()) {
-        LockStatisticsLock lock = lockIterator.next();
-        UnmodifiableIterator<AccessPoint> accessPointIterator = lock.getAccessPointIterator();
-        while (accessPointIterator.hasNext()) {
-          AccessPoint accessPoint = accessPointIterator.next();
-          currentCallstackNode = createTree(accessPoint.getCallstack());
-          currentCallstackNode.add(lock.toString(), accessPoint.getLineInfo().getLine());
-        }
-      }
-    }
+    
+    assert Locks != null;
+	  final Iterator<LockStatisticsLock> lockIterator = Locks.getLockIterator();
+	  while(lockIterator.hasNext()) {
+	    LockStatisticsLock lock = lockIterator.next();
+	    UnmodifiableIterator<AccessPoint> accessPointIterator = lock.getAccessPointIterator();
+	    while (accessPointIterator.hasNext()) {
+	      AccessPoint accessPoint = accessPointIterator.next();
+	      currentCallstackNode = createTree(accessPoint.getCallstack());
+	      currentCallstackNode.add(lock, accessPoint);
+	    }
+	  }
 
     currentCallstackNode = createTree(usage.getCallStack());
-    currentCallstackNode.add(usage.createUsageView(id), usage.getLine().getLine());
+    currentCallstackNode.add(usage, id);
 
     //print this tree with aide of dfs
-    currentCallstackNode = TreeLeaf.getTrunkState();
-    leafStack.clear();
+    currentCallstackNode = CallTreeNode.getTrunkState();
     currentIterator = currentCallstackNode.getChildrenIterator();
     if (currentIterator.hasNext()) {
-      leafStack.push(currentIterator);
+      nodeStack.push(currentIterator);
       currentCallstackNode = currentIterator.next();
     } else {
       logger.log(Level.WARNING, "Empty error path, can't proceed");
       return;
     }
     writer.append("Line 0:     N0 -{/*_____________________*/}-> N0\n");
-    writer.append("Line 0:     N0 -{/*" + (Locks == null ? "empty" : Locks.toString()) + "*/}-> N0\n");
+    writer.append("Line 0:     N0 -{/*" + Locks.toString() + "*/}-> N0\n");
     while (currentCallstackNode != null) {
       writer.append(currentCallstackNode.toString());
       currentIterator = currentCallstackNode.getChildrenIterator();
       if (currentIterator.hasNext()) {
         writer.append("Line 0:     N0 -{Function start dummy edge}-> N0" + "\n");
-        leafStack.push(currentIterator);
+        nodeStack.push(currentIterator);
         currentCallstackNode = currentIterator.next();
       } else {
-        currentCallstackNode = findFork(writer, leafStack);
+        currentCallstackNode = findFork(writer, nodeStack);
       }
     }
   }
 
-  private TreeLeaf findFork(final Writer writer, final LinkedList<Iterator<TreeLeaf>> leafStack) throws IOException {
-    Iterator<TreeLeaf> tmpIterator;
+  private CallTreeNode findFork(final Writer writer, final LinkedList<Iterator<CallTreeNode>> callTreeStack) throws IOException {
+    Iterator<CallTreeNode> tmpIterator;
 
     //The first element is root, not an ordinary callstack node
-    while (leafStack.size() > 1) {
-      tmpIterator = leafStack.peek();
+    while (callTreeStack.size() > 1) {
+      tmpIterator = callTreeStack.peek();
       if (tmpIterator.hasNext()) {
         return tmpIterator.next();
       } else {
-        leafStack.removeFirst();
+        callTreeStack.removeFirst();
       }
       writer.append("Line 0:     N0 -{return;}-> N0\n");
     }
     return null;
   }
 
-  private TreeLeaf createTree(final CallstackState state) {
+  private CallTreeNode createTree(final CallstackState state) {
     final LinkedList<CallstackState> tmpList = revertCallstack(state);
 
     //add to tree of calls this path
-    TreeLeaf currentLeaf = TreeLeaf.getTrunkState();
-    CallstackState tmpState = tmpList.getFirst();
-    if (!tmpState.getCallNode().getFunctionName().equals(tmpState.getCurrentFunction())) {
-      currentLeaf = currentLeaf.add(tmpList.getFirst().getCallNode().getFunctionName() + "()", 0);
-    }
+    CallTreeNode currentNode = CallTreeNode.getTrunkState();
     for (CallstackState callstack : tmpList) {
-      currentLeaf = currentLeaf.add(callstack.getCurrentFunction() + "()",
-          callstack.getCallNode().getLeavingEdge(0).getLineNumber());
+      currentNode = currentNode.add(callstack);
     }
-    return currentLeaf;
+    return currentNode;
   }
 
   private LinkedList<CallstackState> revertCallstack(CallstackState tmpState) {
@@ -215,14 +213,25 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     return tmpList;
   }
   
-  private void countFailureUsages(UsageList l) {
-    int startNum = totalFailureUsages;
+  private void countUsageStatistics(UsageList l) {
+    int startFailureNum = totalFailureUsages;
+    int startTrueNum = trueUsagesInTrueUnsafe;
+    
     for (UsageInfo uinfo : l) {
       if (uinfo.failureFlag) {
         totalFailureUsages++;
+      } else if (uinfo.isRefined()) {
+      	trueUsagesInAllUnsafes++;
+      	if (l.isTrueUnsafe()) {
+      	  trueUsagesInTrueUnsafe++;
+      	}
       }
     }
-    if (totalFailureUsages > startNum) {
+    int d = trueUsagesInTrueUnsafe - startTrueNum;
+    if (d > maxTrueUsages) {
+    	maxTrueUsages = d;
+    }
+    if (totalFailureUsages > startFailureNum) {
       totalUnsafesWithFailureUsages++;
     }
   }
@@ -232,7 +241,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     if (uinfo == null || uinfo.size() == 0) {
       return;
     }
-    countFailureUsages(uinfo);
+    countUsageStatistics(uinfo);
     totalUsages += uinfo.size();
     if (uinfo.size() > maxNumberOfUsages) {
       maxNumberOfUsages = uinfo.size();
@@ -249,6 +258,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     writer.append(id.getDereference() + "\n");
     writer.append(id.getType().toASTString(id.getName()) + "\n");
     if (uinfo.isTrueUnsafe()) {
+    	trueUnsafes++;
       writer.append("Line 0:     N0 -{/*Is true unsafe:*/}-> N0" + "\n");
     }
     writer.append("Line 0:     N0 -{/*Number of usages:" + uinfo.size() + "*/}-> N0" + "\n");
@@ -302,14 +312,19 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       logger.log(Level.SEVERE, e.getMessage());
       return;
     }
-    out.println("Amount of unsafes:             " + unsafeSize);
-    out.println("Amount of unsafe usages:       " + totalUsages + "(avg. " +
+    out.println("Amount of unsafes:             														" + unsafeSize);
+    out.println("Amount of unsafe usages:       														" + totalUsages + "(avg. " +
         (unsafeSize == 0 ? "0" : (totalUsages/unsafeSize))
-        + ", max " + maxNumberOfUsages + ")");
-    out.println("Amount of unsafes with both failures in pair               " + totalFailureUnsafes);
-    out.println("Amount of unsafes with one failure in pair                 " + totalUnsafesWithFailureUsageInPair);
+        + ", max. " + maxNumberOfUsages + ")");
+    out.println("Amount of true unsafes:        														" + trueUnsafes);
+    out.println("Amount of true usages in true unsafes: 										" + trueUsagesInTrueUnsafe + "(avg. " +
+        (unsafeSize == 0 ? "0" : (trueUsagesInTrueUnsafe/unsafeSize))
+        + ", max. " + maxTrueUsages + ")");
+    out.println("Amount of true usages in all unsafes: 											" + trueUsagesInAllUnsafes);
+    out.println("Amount of unsafes with both failures in pair:              " + totalFailureUnsafes);
+    out.println("Amount of unsafes with one failure in pair:                " + totalUnsafesWithFailureUsageInPair);
     out.println("Amount of unsafes with at least once failure in usage list " + totalUnsafesWithFailureUsages);
-    out.println("Amount of usages with failure                              " + totalFailureUsages);
+    out.println("Amount of usages with failure:                             " + totalFailureUsages);
     container.printUsagesStatistics(out);
     out.println("Time for transfer relation:    " + transferRelationTimer);
     printStatisticsTimer.stop();
