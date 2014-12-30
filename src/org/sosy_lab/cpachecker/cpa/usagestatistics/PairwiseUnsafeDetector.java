@@ -64,12 +64,10 @@ public class PairwiseUnsafeDetector implements UnsafeDetector {
 
   @Override
   public Pair<UsageInfo, UsageInfo> getUnsafePair(UsageList uinfo) throws HandleCodeException {
-    Collections.sort(uinfo, new UsageInfo.UsageComparator());
+    //Collections.sort(uinfo, new UsageInfo.UsageComparator());
 
-    for (int i = 0; i < uinfo.size(); i++) {
-      UsageInfo info1 = uinfo.get(i);
-      for (int j = i + 1; j < uinfo.size(); j++) {
-        UsageInfo info2 = uinfo.get(j);
+    for (UsageInfo info1 : uinfo) {
+      for (UsageInfo info2 : uinfo) {
         if (!info1.intersect(info2) && !info1.equals(info2)) {
           return Pair.of(info1, info2);
         }
@@ -97,14 +95,11 @@ public class PairwiseUnsafeDetector implements UnsafeDetector {
     if (pList.isTrueUnsafe()) {
       return true;
     }
-    UsageInfo uinfo, uinfo2;
-    for (int i = 0; i < pList.size(); i++) {
-      uinfo = pList.get(i);
+    for (UsageInfo uinfo : pList) {
       if (!uinfo.isRefined() && mode == SearchMode.TRUE) {
         continue;
       }
-      for (int j = i + 1; j < pList.size(); j++) {
-        uinfo2 = pList.get(j);
+      for (UsageInfo uinfo2 : pList) {
         if (uinfo2.isRefined() && mode == SearchMode.FALSE ||
             !uinfo2.isRefined() && mode == SearchMode.TRUE) {
           continue;

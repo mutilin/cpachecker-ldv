@@ -30,6 +30,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.logging.Level;
 
@@ -74,16 +75,31 @@ public class UsageContainer {
         //don't spend time
         return;
       }
-      if (uset.contains(usage)) {
-        UsageInfo oldUsage = uset.get(uset.indexOf(usage));
-        if (oldUsage.isRefined()) {
-          //May be, we should replace it to have correct keyState
-          //uset.remove(oldUsage);
-          return;
-        } else if (oldUsage.getCallStack().equals(usage.getCallStack())){
-          //TODO May be, if this usage isn't refined and still here, it hasn't got pair to be an unsafe. And we may not to update it
-          uset.remove(oldUsage);
+      //if (uset.contains(usage)) {
+      UsageInfo oldUsage = null;// = uset.get(uset.indexOf(usage));
+      SortedSet<UsageInfo> tmpSet = uset.tailSet(usage);
+      if (tmpSet != null && !tmpSet.isEmpty()) {
+        oldUsage = tmpSet.first();
+        if (oldUsage.equals(usage)) {
+          if (oldUsage.isRefined()) {
+            //May be, we should replace it to have correct keyState
+            //uset.remove(oldUsage);
+            return;
+          } else {
+            //TODO May be, if this usage isn't refined and still here, it hasn't got pair to be an unsafe. And we may not to update it
+            uset.remove(oldUsage);
+          }
         }
+        /*for (UsageInfo tmp : tmpSet) {
+          if (tmp.equals(usage)) {
+            oldUsage = tmp;
+            break;
+          }
+        }
+        if (oldUsage == null) {
+          System.out.println("Error");
+          return;
+        }*/
       }
     }
     uset.add(usage);
@@ -143,7 +159,7 @@ public class UsageContainer {
   }
 
   public void removeState(final UsageStatisticsState pUstate) {
-    List<UsageInfo> uset;
+    UsageList uset;
     //Not a set! Some usages and sets can be equals, but referes to different ids
     List<UsageInfo> toDelete = new LinkedList<>();
     for (SingleIdentifier id : Stat.keySet()) {

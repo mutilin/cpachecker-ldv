@@ -25,9 +25,12 @@ package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
 import java.io.PrintStream;
 import java.util.Collection;
+import java.util.List;
 import java.util.logging.Level;
 
+import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
+import org.sosy_lab.common.io.Path;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
@@ -46,6 +49,7 @@ import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.CPAs;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 
 
 public class UsageStatisticsRefiner extends BAMPredicateRefiner implements StatisticsProvider {
@@ -72,6 +76,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
 
   final Stats pStat = new Stats();
   private final LogManager logger;
+  private InterpolantCache iCache = new InterpolantCache();
 
   public UsageStatisticsRefiner(ConfigurableProgramAnalysis pCpa) throws CPAException, InvalidConfigurationException {
     super(pCpa);
@@ -88,6 +93,8 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
   public boolean performRefinement(ReachedSet pReached) throws CPAException, InterruptedException {
     final UsageContainer container =
         AbstractStates.extractStateByType(pReached.getFirstState(), UsageStatisticsState.class).getContainer();
+    
+    InterpolantCache newCache = new InterpolantCache();
 
     final RefineableUsageComputer computer = new RefineableUsageComputer(container, logger);
 
@@ -107,7 +114,19 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
         pStat.Refinement.start();
         CounterexampleInfo counterexample = super.performRefinement0(
             new BAMReachedSet(transfer, new ARGReachedSet(pReached), pPath, pathStateToReachedState), pPath);
-        computer.setResultOfRefinement(target, !counterexample.isSpurious());
+        if (counterexample.isSpurious()) {
+          List<BooleanFormula> interpolants = (List<BooleanFormula>) counterexample.getAllFurtherInformation().iterator().next().getFirst();
+          if (iCache.contains(target, interpolants)) {
+          	System.out.println("Repeat");
+          	computer.setResultOfRefinement(target, true);
+            target.failureFlag = true;
+          } else {
+          	newCache.add(target, interpolants);
+          	computer.setResultOfRefinement(target, false);
+          }
+        } else {
+          computer.setResultOfRefinement(target, !counterexample.isSpurious());
+        }
       } catch (IllegalStateException e) {
         //msat_solver return -1 <=> unknown
         //consider its as true;
@@ -120,19 +139,17 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
 
       pStat.UnsafeCheck.start();
     }
+    iCache = newCache;
+    computer.printTimer();
     pStat.UnsafeCheck.stopIfRunning();
     return refinementFinish;
   }
 
   protected ARGPath computePath(ARGState pLastElement, CallstackState stack) throws InterruptedException, CPATransferException {
-    if (pLastElement == null || pLastElement.isDestroyed()) {
+    assert (pLastElement != null && !pLastElement.isDestroyed());
       //we delete this state from other unsafe
-      return null;
-    }
     ARGState subgraph = transfer.findPath(pLastElement, pathStateToReachedState, stack);
-    if (subgraph == null) {
-      return null;
-    }
+    assert (subgraph != null);
     return computeCounterexample(subgraph);
   }
 

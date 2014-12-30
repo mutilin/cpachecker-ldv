@@ -104,7 +104,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
     Iterator<SingleIdentifier> generalIterator = container.getGeneralIterator();
     while (generalIterator.hasNext()) {
-      List<UsageInfo> uset = container.getUsages(generalIterator.next());
+      UsageList uset = container.getUsages(generalIterator.next());
 
       for (UsageInfo uinfo : uset){
         if (uinfo.getLockState() == null) {
@@ -312,12 +312,12 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       logger.log(Level.SEVERE, e.getMessage());
       return;
     }
-    out.println("Amount of unsafes:             														" + unsafeSize);
-    out.println("Amount of unsafe usages:       														" + totalUsages + "(avg. " +
+    out.println("Amount of unsafes:                                         " + unsafeSize);
+    out.println("Amount of unsafe usages:                                   " + totalUsages + "(avg. " +
         (unsafeSize == 0 ? "0" : (totalUsages/unsafeSize))
         + ", max. " + maxNumberOfUsages + ")");
-    out.println("Amount of true unsafes:        														" + trueUnsafes);
-    out.println("Amount of true usages in true unsafes: 										" + trueUsagesInTrueUnsafe + "(avg. " +
+    out.println("Amount of true unsafes:                                    " + trueUnsafes);
+    out.println("Amount of true usages in true unsafes:                     " + trueUsagesInTrueUnsafe + "(avg. " +
         (unsafeSize == 0 ? "0" : (trueUsagesInTrueUnsafe/unsafeSize))
         + ", max. " + maxTrueUsages + ")");
     out.println("Amount of true usages in all unsafes: 											" + trueUsagesInAllUnsafes);

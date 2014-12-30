@@ -52,15 +52,21 @@ public class CounterexampleInfo {
     targetPath = pTargetPath;
     model = pModel;
 
-    if (!spurious) {
+   // if (!spurious) {
       furtherInfo = Lists.newArrayListWithExpectedSize(1);
-    } else {
+   /* } else {
       furtherInfo = null;
-    }
+    }*/
   }
 
   public static CounterexampleInfo spurious() {
     return SPURIOUS;
+  }
+  
+  public static CounterexampleInfo spurious(Object data) {
+  	CounterexampleInfo result = new CounterexampleInfo(true, null, null);
+  	result.furtherInfo.add(Pair.of(data, (Path)null));
+  	return result;
   }
 
   public static CounterexampleInfo feasible(ARGPath pTargetPath, Model pModel) {
@@ -103,7 +109,7 @@ public class CounterexampleInfo {
    * @return
    */
   public Collection<Pair<Object, Path>> getAllFurtherInformation() {
-    checkState(!spurious);
+    //checkState(!spurious);
 
     return Collections.unmodifiableCollection(furtherInfo);
   }

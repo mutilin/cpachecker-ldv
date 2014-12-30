@@ -255,11 +255,24 @@ public class UsageInfo implements Comparable<UsageInfo> {
   @Override
   public int compareTo(UsageInfo pO) {
 
-    int result = this.locks.getSize() - pO.locks.getSize();
+    if (this.isRefined != pO.isRefined) {
+      if (isRefined) {
+        //Refined usages are more prefereable
+        return -1;
+      } else {
+        return 1;
+      }
+    }
+    
+    int result = this.locks.diff(pO.locks);
     if (result != 0) {
       //Usages without locks are more convenient to analyze
       return -result;
     }
+    /*result = this.locks.toString().compareTo(pO.locks.toString());
+    if (result != 0) {
+      return -result;
+    }*/
     result = this.getCallStack().getDepth() - pO.getCallStack().getDepth();
     if (result != 0) {
       //Experiments show that callstacks should be ordered as it is done now
@@ -267,6 +280,19 @@ public class UsageInfo implements Comparable<UsageInfo> {
     }
 
     result = this.line.getLine() - pO.line.getLine();
-    return result;
+    if (result != 0) {
+      return result;
+    }
+    //Some nodes can be from one line, but different nodes
+    result = this.line.getNode().getNodeNumber() - pO.line.getNode().getNodeNumber();
+    if (result != 0) {
+      return result;
+    }
+    if (this.accessType == Access.WRITE && pO.accessType == Access.READ) {
+      return -1;
+    } else if (pO.accessType == Access.WRITE && this.accessType == Access.READ) {
+      return 1;
+    }
+    return this.info.getEdgeType().ordinal() - pO.info.getEdgeType().ordinal();
   }
 }
