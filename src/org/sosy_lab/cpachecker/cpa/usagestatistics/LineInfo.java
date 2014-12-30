@@ -58,7 +58,7 @@ public class LineInfo {
     final int prime = 31;
     int result = 1;
     result = prime * result + line;
-    result = prime * result + ((node == null) ? 0 : node.hashCode());
+    result = prime * result + ((node == null) ? 0 : node.getNodeNumber());
     return result;
   }
 
@@ -76,7 +76,7 @@ public class LineInfo {
     if (node == null) {
       if (other.node != null)
         return false;
-    } else if (!node.equals(other.node))
+    } else if (node.getNodeNumber() != other.node.getNodeNumber())
       return false;
     return true;
   }
