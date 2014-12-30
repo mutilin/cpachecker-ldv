@@ -27,11 +27,11 @@ package org.sosy_lab.cpachecker.cpa.usagestatistics;
 public class EdgeInfo {
 
   public static enum EdgeType {
-    FUNCTION_CALL,
+    ASSIGNMENT,
     DECLARATION,
     ASSUMPTION,
-    ASSIGNMENT,
-    STATEMENT;
+    STATEMENT,
+    FUNCTION_CALL;
 
     public String toASTString() {
       return name().toLowerCase();
