@@ -157,6 +157,49 @@ public final class CallstackState implements AbstractState, Partitionable, Abstr
   }
 
   @Override
+  public int hashCode() {
+    final int prime = 31;
+    int result = 1;
+    result = prime * result
+        + ((callerNode == null) ? 0 : callerNode.hashCode());
+    result = prime * result
+        + ((currentFunction == null) ? 0 : currentFunction.hashCode());
+    result = prime * result + depth;
+    result = prime * result
+        + ((previousState == null) ? 0 : previousState.hashCode());
+    return result;
+  }
+
+  @Override
+  public boolean equals(Object obj) {
+    if (this == obj)
+      return true;
+    if (obj == null)
+      return false;
+    if (getClass() != obj.getClass())
+      return false;
+    CallstackState other = (CallstackState) obj;
+    if (callerNode == null) {
+      if (other.callerNode != null)
+        return false;
+    } else if (!callerNode.equals(other.callerNode))
+      return false;
+    if (currentFunction == null) {
+      if (other.currentFunction != null)
+        return false;
+    } else if (!currentFunction.equals(other.currentFunction))
+      return false;
+    if (depth != other.depth)
+      return false;
+    if (previousState == null) {
+      if (other.previousState != null)
+        return false;
+    } else if (!previousState.equals(other.previousState))
+      return false;
+    return true;
+  }
+
+  @Override
   public CallstackState clone() {
     if (this.previousState != null) {
       return new CallstackState(this.previousState.clone(), this.currentFunction, this.callerNode);
