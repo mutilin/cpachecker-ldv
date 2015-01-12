@@ -67,7 +67,7 @@ public class PairwiseUnsafeDetector implements UnsafeDetector {
     //Collections.sort(uinfo, new UsageInfo.UsageComparator());
 
     for (UsageInfo info1 : uinfo) {
-      for (UsageInfo info2 : uinfo) {
+      for (UsageInfo info2 : uinfo.tailSet(info1, false)) {
         if (!info1.intersect(info2) && !info1.equals(info2)) {
           return Pair.of(info1, info2);
         }
@@ -99,7 +99,7 @@ public class PairwiseUnsafeDetector implements UnsafeDetector {
       if (!uinfo.isRefined() && mode == SearchMode.TRUE) {
         continue;
       }
-      for (UsageInfo uinfo2 : pList) {
+      for (UsageInfo uinfo2 : pList.tailSet(uinfo, false)) {
         if (uinfo2.isRefined() && mode == SearchMode.FALSE ||
             !uinfo2.isRefined() && mode == SearchMode.TRUE) {
           continue;

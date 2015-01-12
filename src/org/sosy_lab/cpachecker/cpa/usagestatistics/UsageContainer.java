@@ -32,6 +32,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.logging.Level;
 
 import org.sosy_lab.common.configuration.Configuration;
@@ -132,7 +133,7 @@ public class UsageContainer {
   public void resetUnsafes() {
     resetTimer.start();
     unsafes = null;
-    Set<UsageInfo> toDelete = new HashSet<>();
+    Set<UsageInfo> toDelete = new TreeSet<>();
 
     for (SingleIdentifier id : Stat.keySet()) {
       UsageList uset = Stat.get(id);
@@ -147,8 +148,16 @@ public class UsageContainer {
           toDelete.add(uinfo);
         }
       }
-
-      uset.removeAll(toDelete);
+      /*for (UsageInfo uinfo : toDelete) {
+        for (UsageInfo origin : uset) {
+          if (origin.equals(uinfo)) {
+            origin.compareTo(uinfo);
+            break;
+          }
+        }
+        uset.remove(uinfo);
+      }*/
+      boolean b = uset.removeAll(toDelete);
       toDelete.clear();
       if (unsafeDetector.containsTrueUnsafe(uset)) {
         uset.markAsTrueUnsafe();

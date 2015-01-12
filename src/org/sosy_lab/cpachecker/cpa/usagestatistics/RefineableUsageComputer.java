@@ -150,14 +150,30 @@ public class RefineableUsageComputer {
     usageTimer.stop();
     optimizationTimer.start();
     //Optimization: if we know, that usage with locks is true, we don't need to refine the same lock set
+    //Important to found other usage. If there are usages only with the same locks - refine them
+    boolean foundDifferentLocks = false;
+    boolean foundEqualLocks = false;
     for (UsageInfo uinfo : currentRefineableUsageList) {
-      if (uinfo.isRefined()) {
-        if (uinfo.getLockState().isLessOrEqual(target.getLockState()) &&
-            target.getLockState().getSize() > 0 &&
-            //This point is important: we can throw away write access, but then don't find pair of unsafe usages (must be one write access)
-            !(target.getAccess() == Access.WRITE && uinfo.getAccess() == Access.READ)) {
-        	optimizationTimer.stop();
-          return false;
+      if (target.intersect(uinfo)) {
+        if (uinfo.isRefined() &&
+          //This point is important: we can throw away write access, but then don't find pair of unsafe usages (must be one write access)
+          !(target.getAccess() == Access.WRITE && uinfo.getAccess() == Access.READ)) {
+        	if (foundDifferentLocks) {
+        	  optimizationTimer.stop();
+            return false;
+        	} else {
+        	  foundEqualLocks = true;
+        	}
+        }
+      }
+      if (!target.intersect(uinfo)) {
+        if (!uinfo.isRefined()) {
+          if (foundEqualLocks) {
+            optimizationTimer.stop();
+            return false;
+          } else {
+            foundDifferentLocks = true;
+          }
         }
       }
     }

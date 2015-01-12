@@ -37,7 +37,7 @@ import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 public class UsageInfo implements Comparable<UsageInfo> {
 
-  public static class UsageComparator implements Comparator<UsageInfo> {
+ /* public static class UsageComparator implements Comparator<UsageInfo> {
 
     @Override
     public int compare(UsageInfo pO1, UsageInfo pO2) {
@@ -56,7 +56,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
 
       return pO1.locks.diff(pO2.locks);
     }
-  }
+  }*/
 
   public static enum Access {
     WRITE,
@@ -145,7 +145,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
     return false;
   }
 
-  @Override
+  /*@Override
   public int hashCode() {
     final int prime = 31;
     int result = 1;
@@ -202,7 +202,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
       return false;
     }
     return true;
-  }
+  }*/
 
   @Override
   public String toString(){
@@ -255,24 +255,23 @@ public class UsageInfo implements Comparable<UsageInfo> {
   @Override
   public int compareTo(UsageInfo pO) {
 
-    if (this.isRefined != pO.isRefined) {
+    if (this == pO) {
+      return 0;
+    }
+    /*if (this.isRefined != pO.isRefined) {
       if (isRefined) {
         //Refined usages are more prefereable
         return -1;
       } else {
         return 1;
       }
-    }
+    }*/
     
-    int result = this.locks.diff(pO.locks);
+    int result = this.locks.compareTo(pO.locks);
     if (result != 0) {
       //Usages without locks are more convenient to analyze
       return -result;
     }
-    /*result = this.locks.toString().compareTo(pO.locks.toString());
-    if (result != 0) {
-      return -result;
-    }*/
     result = this.getCallStack().getDepth() - pO.getCallStack().getDepth();
     if (result != 0) {
       //Experiments show that callstacks should be ordered as it is done now
@@ -288,11 +287,10 @@ public class UsageInfo implements Comparable<UsageInfo> {
     if (result != 0) {
       return result;
     }
-    if (this.accessType == Access.WRITE && pO.accessType == Access.READ) {
-      return -1;
-    } else if (pO.accessType == Access.WRITE && this.accessType == Access.READ) {
-      return 1;
+    result = this.accessType.compareTo(pO.accessType);
+    if (result != 0) {
+      return result;
     }
-    return this.info.getEdgeType().ordinal() - pO.info.getEdgeType().ordinal();
+    return this.info.getEdgeType().compareTo(pO.info.getEdgeType());
   }
 }
