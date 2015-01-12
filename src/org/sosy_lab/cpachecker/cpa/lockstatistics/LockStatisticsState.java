@@ -41,7 +41,7 @@ import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier.LockType;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.LineInfo;
 
-public class LockStatisticsState implements AbstractState, Serializable {
+public class LockStatisticsState implements Comparable<LockStatisticsState>, AbstractState, Serializable {
   private static final long serialVersionUID = -3152134511524554357L;
 
   private final Set<LockStatisticsLock> locks;
@@ -380,7 +380,7 @@ public class LockStatisticsState implements AbstractState, Serializable {
    * @param other The other LockStatisticsState
    * @return Difference between two states
    */
-  public int diff(LockStatisticsState other) {
+  public int compareTo(LockStatisticsState other) {
     int result = 0;
 
     result = other.getSize() - this.getSize(); //decreasing queue
