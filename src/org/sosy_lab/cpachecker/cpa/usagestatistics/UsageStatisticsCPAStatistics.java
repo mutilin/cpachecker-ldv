@@ -63,7 +63,7 @@ import com.google.common.collect.UnmodifiableIterator;
 @Options(prefix="cpa.usagestatistics")
 public class UsageStatisticsCPAStatistics implements Statistics {
 
-  private final UnsafeDetector unsafeDetector;
+  //private final UnsafeDetector unsafeDetector;
 
   @Option(name="localanalysis", description="should we use local analysis?")
   private boolean localAnalysis = false;
@@ -95,7 +95,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
   public UsageStatisticsCPAStatistics(Configuration config, LogManager pLogger) throws InvalidConfigurationException{
     config.inject(this);
-    unsafeDetector = new PairwiseUnsafeDetector(config);
+    //unsafeDetector = new PairwiseUnsafeDetector(config);
     logger = pLogger;
   }
 
@@ -105,18 +105,39 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     Iterator<SingleIdentifier> generalIterator = container.getGeneralIterator();
     while (generalIterator.hasNext()) {
       UsageList uset = container.getUsages(generalIterator.next());
-
-      for (UsageInfo uinfo : uset){
-        if (uinfo.getLockState() == null) {
-          continue;
+      Iterator<UsagePoint> pointIterator = uset.getPointIterator();
+      while (pointIterator.hasNext()) {
+        UsagePoint point = pointIterator.next();
+        UsageInfoSet uiset = uset.getUsageInfo(point);
+        for (UsageInfo uinfo : uiset.getUsages()){
+          if (uinfo.getLockState() == null) {
+            continue;
+          }
+          Iterator<LockStatisticsLock> lockIterator = uinfo.getLockState().getLockIterator();
+      	  while (lockIterator.hasNext()) {
+      	    LockStatisticsLock lock = lockIterator.next();
+      	    //existsIn() isn't based on equals(), don't remove it
+        		if( !lock.existsIn(locks)) {
+        	      locks.add(lock);
+        		}
+          }
         }
-        Iterator<LockStatisticsLock> lockIterator = uinfo.getLockState().getLockIterator();
-    	  while (lockIterator.hasNext()) {
-    	    LockStatisticsLock lock = lockIterator.next();
-    	    //existsIn() isn't based on equals(), don't remove it
-    		if( !lock.existsIn(locks)) {
-    	      locks.add(lock);
-    		}
+        Iterator<UsagePoint> childrenIterator = point.getCoveredUsages().iterator();
+        while (childrenIterator.hasNext()) {
+          point = childrenIterator.next();
+          for (UsageInfo uinfo : uset.getUsageInfo(point).getUsages()){
+            if (uinfo.getLockState() == null) {
+              continue;
+            }
+            Iterator<LockStatisticsLock> lockIterator = uinfo.getLockState().getLockIterator();
+            while (lockIterator.hasNext()) {
+              LockStatisticsLock lock = lockIterator.next();
+              //existsIn() isn't based on equals(), don't remove it
+              if( !lock.existsIn(locks)) {
+                  locks.add(lock);
+              }
+            }
+          }
         }
       }
     }
@@ -217,14 +238,18 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     int startFailureNum = totalFailureUsages;
     int startTrueNum = trueUsagesInTrueUnsafe;
     
-    for (UsageInfo uinfo : l) {
-      if (uinfo.failureFlag) {
-        totalFailureUsages++;
-      } else if (uinfo.isRefined()) {
-      	trueUsagesInAllUnsafes++;
-      	if (l.isTrueUnsafe()) {
-      	  trueUsagesInTrueUnsafe++;
-      	}
+    Iterator<UsagePoint> pointIterator = l.getPointIterator();
+    while (pointIterator.hasNext()) {
+      UsagePoint point = pointIterator.next();
+      for (UsageInfo uinfo : l.getUsageInfo(point).getUsages()){
+        if (uinfo.failureFlag) {
+          totalFailureUsages++;
+        } else if (uinfo.isRefined()) {
+        	trueUsagesInAllUnsafes++;
+        	if (l.isTrueUnsafe()) {
+        	  trueUsagesInTrueUnsafe++;
+        	}
+        }
       }
     }
     int d = trueUsagesInTrueUnsafe - startTrueNum;
@@ -263,25 +288,24 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
     writer.append("Line 0:     N0 -{/*Number of usages:" + uinfo.size() + "*/}-> N0" + "\n");
     writer.append("Line 0:     N0 -{/*Two examples:*/}-> N0" + "\n");
-    try {
-      Pair<UsageInfo, UsageInfo> tmpPair = unsafeDetector.getUnsafePair(uinfo);
-      createVisualization(id, tmpPair.getFirst(), writer);
-      createVisualization(id, tmpPair.getSecond(), writer);
-      if (tmpPair.getFirst().failureFlag && tmpPair.getSecond().failureFlag) {
-        totalFailureUnsafes++;
-      } else if (tmpPair.getFirst().failureFlag || tmpPair.getSecond().failureFlag) {
-        totalUnsafesWithFailureUsageInPair++;
-      }
-      if (printAllUnsafeUsages) {
-        writer.append("Line 0:     N0 -{_____________________}-> N0" + "\n");
-        writer.append("Line 0:     N0 -{All usages:}-> N0" + "\n");
-        for (UsageInfo ui : uinfo) {
+    Pair<UsageInfo, UsageInfo> tmpPair = uinfo.getUnsafePair();
+    createVisualization(id, tmpPair.getSecond(), writer);
+    createVisualization(id, tmpPair.getFirst(), writer);
+    if (tmpPair.getFirst().failureFlag && tmpPair.getSecond().failureFlag) {
+      totalFailureUnsafes++;
+    } else if (tmpPair.getFirst().failureFlag || tmpPair.getSecond().failureFlag) {
+      totalUnsafesWithFailureUsageInPair++;
+    }
+    if (printAllUnsafeUsages) {
+      writer.append("Line 0:     N0 -{_____________________}-> N0" + "\n");
+      writer.append("Line 0:     N0 -{All usages:}-> N0" + "\n");
+      Iterator<UsagePoint> pointIterator = uinfo.getPointIterator();
+      while (pointIterator.hasNext()) {
+        UsagePoint point = pointIterator.next();
+        for (UsageInfo ui : uinfo.getUsageInfo(point).getUsages()){
           createVisualization(id, ui, writer);
         }
       }
-    } catch (HandleCodeException e) {
-      logger.log(Level.WARNING, "Can't find unsafes in " + id.getName());
-      return;
     }
   }
 

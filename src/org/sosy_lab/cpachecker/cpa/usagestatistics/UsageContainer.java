@@ -24,29 +24,20 @@
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
 import java.io.PrintStream;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.SortedSet;
 import java.util.TreeMap;
-import java.util.TreeSet;
 import java.util.logging.Level;
 
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
-import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 public class UsageContainer {
-
-  private final PairwiseUnsafeDetector unsafeDetector;
-
   private final Map<SingleIdentifier, UsageList> Stat;
 
   public List<SingleIdentifier> unsafes = null;
@@ -59,7 +50,6 @@ public class UsageContainer {
   int totalIds = 0;
 
   public UsageContainer(Configuration config, LogManager l) throws InvalidConfigurationException {
-    unsafeDetector = new PairwiseUnsafeDetector(config);
     Stat = new TreeMap<>();
     logger = l;
   }
@@ -72,36 +62,6 @@ public class UsageContainer {
       Stat.put(id, uset);
     } else {
       uset = Stat.get(id);
-      if (uset.isTrueUnsafe()) {
-        //don't spend time
-        return;
-      }
-      //if (uset.contains(usage)) {
-      UsageInfo oldUsage = null;// = uset.get(uset.indexOf(usage));
-      SortedSet<UsageInfo> tmpSet = uset.tailSet(usage);
-      if (tmpSet != null && !tmpSet.isEmpty()) {
-        oldUsage = tmpSet.first();
-        if (oldUsage.equals(usage)) {
-          if (oldUsage.isRefined()) {
-            //May be, we should replace it to have correct keyState
-            //uset.remove(oldUsage);
-            return;
-          } else {
-            //TODO May be, if this usage isn't refined and still here, it hasn't got pair to be an unsafe. And we may not to update it
-            uset.remove(oldUsage);
-          }
-        }
-        /*for (UsageInfo tmp : tmpSet) {
-          if (tmp.equals(usage)) {
-            oldUsage = tmp;
-            break;
-          }
-        }
-        if (oldUsage == null) {
-          System.out.println("Error");
-          return;
-        }*/
-      }
     }
     uset.add(usage);
   }
@@ -109,9 +69,14 @@ public class UsageContainer {
   private void getUnsafesIfNecessary() {
     if (unsafes == null) {
       unsafeUsages = 0;
-      unsafes = unsafeDetector.getUnsafes(Stat);
+      unsafes = new LinkedList<>();
+      //unsafes = unsafeDetector.getUnsafes(Stat);
       for (SingleIdentifier id : Stat.keySet()) {
-        unsafeUsages += Stat.get(id).size();
+        UsageList tmpList = Stat.get(id);
+        if (tmpList.isUnsafe()) {
+          unsafes.add(id);
+          unsafeUsages += Stat.get(id).size();
+        }
       }
     }
   }
@@ -133,35 +98,10 @@ public class UsageContainer {
   public void resetUnsafes() {
     resetTimer.start();
     unsafes = null;
-    Set<UsageInfo> toDelete = new TreeSet<>();
 
     for (SingleIdentifier id : Stat.keySet()) {
       UsageList uset = Stat.get(id);
-      //All false unsafes were deleted during refinement
-      for (UsageInfo uinfo : uset) {
-        /* This is done to free memory
-         * otherwise all ARG will be stored on the next stage of analysis
-         */
-        if (uinfo.isRefined()) {
-          uinfo.setKeyState(null);
-        } else {
-          toDelete.add(uinfo);
-        }
-      }
-      /*for (UsageInfo uinfo : toDelete) {
-        for (UsageInfo origin : uset) {
-          if (origin.equals(uinfo)) {
-            origin.compareTo(uinfo);
-            break;
-          }
-        }
-        uset.remove(uinfo);
-      }*/
-      boolean b = uset.removeAll(toDelete);
-      toDelete.clear();
-      if (unsafeDetector.containsTrueUnsafe(uset)) {
-        uset.markAsTrueUnsafe();
-      }
+      uset.reset();
     }
     logger.log(Level.FINE, "Unsafes are reseted");
     resetTimer.stop();
@@ -170,27 +110,11 @@ public class UsageContainer {
   public void removeState(final UsageStatisticsState pUstate) {
     UsageList uset;
     //Not a set! Some usages and sets can be equals, but referes to different ids
-    List<UsageInfo> toDelete = new LinkedList<>();
     for (SingleIdentifier id : Stat.keySet()) {
       uset = Stat.get(id);
-      for (UsageInfo uinfo : uset) {
-        AbstractState keyState = uinfo.getKeyState();
-        assert (keyState != null);
-        if (AbstractStates.extractStateByType(keyState, UsageStatisticsState.class).equals(pUstate)) {
-          if (!uinfo.isRefined()) {
-            toDelete.add(uinfo);
-          }
-        }
-      }
-      uset.removeAll(toDelete);
-      toDelete.clear();
+      uset.remove(pUstate);
     }
     logger.log(Level.ALL, "All unsafes related to key state " + pUstate + " were removed from reached set");
-  }
-
-  public void remove(SingleIdentifier pRefinementId, UsageInfo pTarget) {
-    Stat.get(pRefinementId).remove(pTarget);
-    logger.log(Level.ALL, "Remove " + pTarget + " identifier " + pRefinementId + " was removed from statistics");
   }
 
   public UsageList getUsages(SingleIdentifier id) {

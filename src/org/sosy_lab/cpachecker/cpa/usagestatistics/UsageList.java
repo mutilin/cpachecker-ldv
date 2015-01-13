@@ -23,18 +23,141 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Set;
 import java.util.TreeSet;
 
+import org.sosy_lab.common.Pair;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
 
-public class UsageList extends TreeSet<UsageInfo> {
-  private static final long serialVersionUID = 1L;
+public class UsageList {
+  private final Set<UsagePoint> disjointUsages;
+  private final Map<UsagePoint, UsageInfoSet> detailInformation;
   private boolean isTrueUnsafe = false;
   
+  public UsageList() {
+    disjointUsages = new TreeSet<>();
+    detailInformation = new HashMap<>();
+  }
+  
+  public void add(UsageInfo newInfo) {
+    UsageInfoSet targetSet;
+    UsagePoint newPoint = newInfo.getUsagePoint();
+    if (disjointUsages.contains(newPoint)) {
+      targetSet = detailInformation.get(newPoint);
+    } else {
+      targetSet = new UsageInfoSet();
+      detailInformation.put(newPoint, targetSet);
+      add(newPoint);
+    }
+    targetSet.add(newInfo);
+  }
+  
+  private void add(UsagePoint newPoint) {
+    //Put newPoint in the right place in tree
+    for (UsagePoint point : disjointUsages) {
+      if (newPoint.isHigherOrEqual(point)) {
+        //We have checked, that new point isn't contained in the set
+        assert !newPoint.equals(point);
+        disjointUsages.remove(point);
+        newPoint.addCoveredUsage(point);
+        //TODO May be we should check all usages and build full tree
+        break;
+      } else if (point.isHigherOrEqual(newPoint)) {
+        //We have checked, that new point isn't contained in the set
+        assert !newPoint.equals(point);
+        point.addCoveredUsage(newPoint);
+        return;
+      }
+    }
+    disjointUsages.add(newPoint);
+  }
+  
+  public boolean isUnsafe() {
+    if (disjointUsages.size() > 1 && disjointUsages.iterator().next().access == Access.WRITE) {
+      return true;
+    } else {
+      return false;
+    }
+  }
+  
+  public Pair<UsageInfo, UsageInfo> getUnsafePair() {
+    assert isUnsafe();
+    
+    Iterator<UsagePoint> iterator = disjointUsages.iterator();
+    UsageInfoSet firstSet = detailInformation.get(iterator.next());
+    UsageInfoSet secondSet = detailInformation.get(iterator.next());
+    return Pair.of(firstSet.getOneExample(), secondSet.getOneExample());
+  }
+  
   public boolean isTrueUnsafe() {
-    return isTrueUnsafe;
+    if (!isTrueUnsafe) {
+      if (!isUnsafe()) {
+        return false;
+      }
+      
+      Iterator<UsagePoint> iterator = disjointUsages.iterator();
+      UsagePoint firstPoint = iterator.next();
+      UsagePoint secondPoint = iterator.next();
+      
+      boolean result = (firstPoint.isTrue() && secondPoint.isTrue());
+      if (result) {
+        isTrueUnsafe = true;
+      }
+      return result;
+    } else {
+      return true;
+    }
   }
 
-  public void markAsTrueUnsafe() {
-    isTrueUnsafe = true;
+  public int size() {
+    int result = 0;
+    
+    for (UsagePoint point : detailInformation.keySet()) {
+      result += detailInformation.get(point).size();
+    }
+    
+    return result;
+  }
+  
+  public void reset() {
+    Set<UsagePoint> toDelete = new HashSet<>();
+    for (UsagePoint point : disjointUsages) {
+      if (!point.isTrue()) {
+        toDelete.add(point);
+      }
+    }
+    disjointUsages.removeAll(toDelete);
+    for (UsagePoint point : detailInformation.keySet()) {
+      detailInformation.get(point).reset();
+    }
+  }
+
+  public void remove(UsageStatisticsState pUstate) {
+    for (UsagePoint point : detailInformation.keySet()) {
+      detailInformation.get(point).remove(pUstate);
+    }
+  }
+
+  public Iterator<UsagePoint> getPointIterator() {
+    return disjointUsages.iterator();
+  }
+
+  public UsageInfoSet getUsageInfo(UsagePoint next) {
+    return detailInformation.get(next);
+  }
+
+  public void remove(UsagePoint currentUsagePoint) {
+    UsageInfoSet tmpSet = detailInformation.get(currentUsagePoint);
+    assert tmpSet.hasNoRefinedUsages();
+    
+    detailInformation.remove(currentUsagePoint);
+    disjointUsages.remove(currentUsagePoint);
+    for (UsagePoint point : currentUsagePoint.getCoveredUsages()) {
+      add(point);
+    }
   }
 }

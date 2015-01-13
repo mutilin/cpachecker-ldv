@@ -23,13 +23,10 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.logging.Level;
 
 import org.sosy_lab.common.log.LogManager;
-import org.sosy_lab.common.time.Timer;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 
@@ -39,28 +36,18 @@ public class RefineableUsageComputer {
   private final UsageCache cache;
   private final Iterator<SingleIdentifier> idIterator;
   private Iterator<UsageInfo>  usageIterator;
-  private final UnsafeDetector unsafeDetector;
+  private Iterator<UsagePoint>  usagePointIterator;
   private UsageList currentRefineableUsageList;
+  private UsageInfoSet currentRefineableUsageInfoSet;
+  private UsagePoint currentUsagePoint;
   private final LogManager logger;
   //Self-checking
   private boolean waitRefinementResult;
   
-  public final Timer listTimer = new Timer();
-  public final Timer listTimerInit = new Timer();
-  public final Timer usageTimer = new Timer();
-  public final Timer optimizationTimer = new Timer();
-
   RefineableUsageComputer(UsageContainer c, LogManager l) {
     container = c;
     cache = new UsageCallstackCache();
     idIterator = container.getUnsafeIterator();
-    if (idIterator.hasNext()) {
-      UsageList originUsageList = container.getUsages(idIterator.next());
-      //Collections.sort(originUsageList);
-      currentRefineableUsageList = (UsageList) originUsageList.clone();
-      usageIterator = originUsageList.iterator();
-    }
-    unsafeDetector = new PairwiseUnsafeDetector(null);
     logger = l;
     waitRefinementResult = false;
   }
@@ -72,11 +59,15 @@ public class RefineableUsageComputer {
     if (!result) {
       logger.log(Level.INFO, "Usage " + uinfo + " is not reachable, remove it from container");
       cache.add(uinfo);
-      currentRefineableUsageList.remove(uinfo);
     } else {
       logger.log(Level.INFO, "Usage " + uinfo + " is reachable, mark it as true");
       //TODO Not necessary to refine all usages, contained the same lock set
-      uinfo.setRefineFlag();
+      currentRefineableUsageInfoSet.markAsRefined(uinfo);
+      currentUsagePoint.markAsTrue(); 
+      if (currentRefineableUsageList.isTrueUnsafe()) {
+        usagePointIterator = null;
+      }
+      usageIterator = null;
     }
     waitRefinementResult = false;
   }
@@ -87,30 +78,29 @@ public class RefineableUsageComputer {
 
     assert (!waitRefinementResult);
 
-    if (usageIterator == null || idIterator == null) {
-      logger.log(Level.WARNING, "No unsafes were found");
-      return null;
-    }
-
     while (resultUsage == null) {
-      //We check refineablility on TestList, because we cannot delete from iteriable one
-    	listTimerInit.start();
-      while (!usageIterator.hasNext() || !isRefineableUsageList(currentRefineableUsageList)) {
-        listTimerInit.stop();
-        if (idIterator.hasNext()) {
-          listTimer.start();
-          SingleIdentifier id = idIterator.next();
-          UsageList originUsageList = container.getUsages(id);
-          //Collections.sort(originUsageList);
-          currentRefineableUsageList = (UsageList) originUsageList.clone();
-          usageIterator = originUsageList.iterator();
-          listTimer.stop();
-        } else {
-          return null;
+      while (usageIterator == null || !usageIterator.hasNext()) {
+        if (currentUsagePoint != null && !currentUsagePoint.isTrue()) {
+          currentRefineableUsageList.remove(currentUsagePoint);
+          usagePointIterator = currentRefineableUsageList.getPointIterator();
         }
-        listTimerInit.start();
+        while (usagePointIterator == null || !usagePointIterator.hasNext()) {
+          if (idIterator.hasNext()) {
+            SingleIdentifier id = idIterator.next();
+            currentRefineableUsageList = container.getUsages(id);
+            usagePointIterator = currentRefineableUsageList.getPointIterator();
+          } else {
+            return null;
+          }
+        }
+        currentUsagePoint = usagePointIterator.next();
+        if (currentUsagePoint.isTrue()) {
+          usageIterator = null;
+          continue;
+        }
+        currentRefineableUsageInfoSet = currentRefineableUsageList.getUsageInfo(currentUsagePoint);
+        usageIterator = currentRefineableUsageInfoSet.getIterator();
       }
-      listTimerInit.stop();
       potentialUsage = usageIterator.next();
       if (isRefineableUsage(potentialUsage)) {
         resultUsage = potentialUsage;
@@ -121,70 +111,15 @@ public class RefineableUsageComputer {
     return resultUsage;
   }
 
-  private boolean isRefineableUsageList(UsageList ulist) {
-    if (ulist.isTrueUnsafe()) {
-      return false;
-    } else if (!unsafeDetector.containsUnrefinedUnsafeUsage(ulist)) {
-      //These false-checks are 10-times more often, then true-checks
-      return false;
-    } else if (unsafeDetector.containsTrueUnsafe(ulist)) {
-      return false;
-    }
-    return true;
-  }
-
   private boolean isRefineableUsage(UsageInfo target) {
     //target can be read-accessed and hasn't got any pair usage for unsafe, so this check is necessary
-  	usageTimer.start();
-    if (!unsafeDetector.isUnsafeCase(currentRefineableUsageList, target) ||
-        target.isRefined()) {
-    	usageTimer.stop();
+    if (target.isRefined()) {
       return false;
     }
 
     if (cache.contains(target)) {
-      currentRefineableUsageList.remove(target);
-      usageTimer.stop();
       return false;
     }
-    usageTimer.stop();
-    optimizationTimer.start();
-    //Optimization: if we know, that usage with locks is true, we don't need to refine the same lock set
-    //Important to found other usage. If there are usages only with the same locks - refine them
-    boolean foundDifferentLocks = false;
-    boolean foundEqualLocks = false;
-    for (UsageInfo uinfo : currentRefineableUsageList) {
-      if (target.intersect(uinfo)) {
-        if (uinfo.isRefined() &&
-          //This point is important: we can throw away write access, but then don't find pair of unsafe usages (must be one write access)
-          !(target.getAccess() == Access.WRITE && uinfo.getAccess() == Access.READ)) {
-        	if (foundDifferentLocks) {
-        	  optimizationTimer.stop();
-            return false;
-        	} else {
-        	  foundEqualLocks = true;
-        	}
-        }
-      }
-      if (!target.intersect(uinfo)) {
-        if (!uinfo.isRefined()) {
-          if (foundEqualLocks) {
-            optimizationTimer.stop();
-            return false;
-          } else {
-            foundDifferentLocks = true;
-          }
-        }
-      }
-    }
-    optimizationTimer.stop();
     return true;
-  }
-  
-  public void printTimer() {
-    System.out.println("Time for list check										" + listTimer);
-    System.out.println("Time for list init                    " + listTimerInit);
-    System.out.println("Time for usage check									" + usageTimer);
-    System.out.println("Time for optimization									" + optimizationTimer);
   }
 }

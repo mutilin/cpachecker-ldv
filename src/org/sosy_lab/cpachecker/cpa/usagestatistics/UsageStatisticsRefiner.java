@@ -140,7 +140,6 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       pStat.UnsafeCheck.start();
     }
     iCache = newCache;
-    computer.printTimer();
     pStat.UnsafeCheck.stopIfRunning();
     return refinementFinish;
   }

@@ -23,8 +23,6 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
-import java.util.Comparator;
-
 import javax.annotation.Nonnull;
 
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
@@ -36,27 +34,6 @@ import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 
 public class UsageInfo implements Comparable<UsageInfo> {
-
- /* public static class UsageComparator implements Comparator<UsageInfo> {
-
-    @Override
-    public int compare(UsageInfo pO1, UsageInfo pO2) {
-
-      if (pO1 == null && pO2 == null) {
-        return 0;
-      } else if (pO1 == null || pO2 == null) {
-        return 20;
-      }
-
-      if (pO1.locks == null && pO2.locks == null) {
-        return 0;
-      } else if (pO1.locks == null || pO2.locks == null) {
-        return 20;
-      }
-
-      return pO1.locks.diff(pO2.locks);
-    }
-  }*/
 
   public static enum Access {
     WRITE,
@@ -144,8 +121,16 @@ public class UsageInfo implements Comparable<UsageInfo> {
     }
     return false;
   }
+  
+  public UsagePoint getUsagePoint() {
+    if (this.locks.getSize() > 0) {
+      return new UsagePoint(locks.getLockIdentifiers(), accessType);
+    } else {
+      return new UsagePoint(accessType, this);
+    }
+  }
 
-  /*@Override
+  @Override
   public int hashCode() {
     final int prime = 31;
     int result = 1;
@@ -202,7 +187,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
       return false;
     }
     return true;
-  }*/
+  }
 
   @Override
   public String toString(){
@@ -258,14 +243,6 @@ public class UsageInfo implements Comparable<UsageInfo> {
     if (this == pO) {
       return 0;
     }
-    /*if (this.isRefined != pO.isRefined) {
-      if (isRefined) {
-        //Refined usages are more prefereable
-        return -1;
-      } else {
-        return 1;
-      }
-    }*/
     
     int result = this.locks.compareTo(pO.locks);
     if (result != 0) {
@@ -291,6 +268,18 @@ public class UsageInfo implements Comparable<UsageInfo> {
     if (result != 0) {
       return result;
     }
-    return this.info.getEdgeType().compareTo(pO.info.getEdgeType());
+    /*if (this.keyState == null) {
+      //Refined
+      if (pO.keyState == null) {
+        return 0;
+      } else {
+        return -1;
+      }
+    } else if (pO.keyState == null) {
+      return 1;
+    }
+    return ((ARGState)this.keyState).getStateId() - ((ARGState)pO.keyState).getStateId();*///this.info.getEdgeType().compareTo(pO.info.getEdgeType());
+    //We can't use key states for ordering, because the treeSets can't understand, that old refined usage with zero key state is the same as new one
+    return 0;
   }
 }
