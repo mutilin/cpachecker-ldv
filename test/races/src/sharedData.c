@@ -1,3 +1,5 @@
+//Now the tool can't understand, that in 49 line there is a shared data
+
 struct point {
   int *x;
   int y;

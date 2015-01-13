@@ -18,8 +18,20 @@ intLock[1]
 0
 int *a
 Line 0:     N0 -{/*Is true unsafe:*/}-> N0
-Line 0:     N0 -{/*Number of usages:2*/}-> N0
+Line 0:     N0 -{/*Number of usages:3*/}-> N0
 Line 0:     N0 -{/*Two examples:*/}-> N0
+Line 0:     N0 -{/*_____________________*/}-> N0
+Line 0:     N0 -{/*Without locks*/}-> N0
+Line 0:     N0 -{ldv_main()}-> N0
+Line 0:     N0 -{Function start dummy edge}-> N0
+Line 46:     N0 -{main()}-> N0
+Line 0:     N0 -{Function start dummy edge}-> N0
+Line 41:     N0 -{f()}-> N0
+Line 0:     N0 -{Function start dummy edge}-> N0
+Line 26:     N0 -{if ((?.a)) {}}-> N0
+Line 0:     N0 -{return;}-> N0
+Line 0:     N0 -{return;}-> N0
+Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{/*_____________________*/}-> N0
 Line 0:     N0 -{/*Without locks*/}-> N0
 Line 0:     N0 -{ldv_main()}-> N0
@@ -29,23 +41,11 @@ Line 0:     N0 -{Function start dummy edge}-> N0
 Line 40:     N0 -{(?.a) = ...;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
-Line 0:     N0 -{/*_____________________*/}-> N0
-Line 0:     N0 -{/*Without locks*/}-> N0
-Line 0:     N0 -{ldv_main()}-> N0
-Line 0:     N0 -{Function start dummy edge}-> N0
-Line 46:     N0 -{main()}-> N0
-Line 0:     N0 -{Function start dummy edge}-> N0
-Line 41:     N0 -{f()}-> N0
-Line 0:     N0 -{Function start dummy edge}-> N0
-Line 22:     N0 -{if ((?.a)) {}}-> N0
-Line 0:     N0 -{return;}-> N0
-Line 0:     N0 -{return;}-> N0
-Line 0:     N0 -{return;}-> N0
 #
 0
 int global
 Line 0:     N0 -{/*Is true unsafe:*/}-> N0
-Line 0:     N0 -{/*Number of usages:2*/}-> N0
+Line 0:     N0 -{/*Number of usages:4*/}-> N0
 Line 0:     N0 -{/*Two examples:*/}-> N0
 Line 0:     N0 -{/*_____________________*/}-> N0
 Line 0:     N0 -{/*Without locks*/}-> N0
@@ -53,7 +53,10 @@ Line 0:     N0 -{ldv_main()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
 Line 46:     N0 -{main()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 38:     N0 -{global = ...;}-> N0
+Line 41:     N0 -{f()}-> N0
+Line 0:     N0 -{Function start dummy edge}-> N0
+Line 18:     N0 -{if (global) {}}-> N0
+Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{/*_____________________*/}-> N0
@@ -62,10 +65,7 @@ Line 0:     N0 -{ldv_main()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
 Line 46:     N0 -{main()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 41:     N0 -{f()}-> N0
-Line 0:     N0 -{Function start dummy edge}-> N0
-Line 13:     N0 -{if (global) {}}-> N0
-Line 0:     N0 -{return;}-> N0
+Line 38:     N0 -{global = ...;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
 #

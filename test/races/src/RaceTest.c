@@ -5,8 +5,6 @@ int false_unsafe, false_unsafe2;
  __inline static void *tryLock(int id___0) 
 { 
   int idx ;
-
-  {
   if (id___0 == 0) {
     return (0);
   }
@@ -17,14 +15,11 @@ int false_unsafe, false_unsafe2;
   kernDispatchEnable();
   return 0;
 }
-}
 
 __inline static int get(int mutex ) 
 { 
   int rt, mtx, tmp___1 ;
-  void *tmp___0 ;
 
-  {
   if (mutex == 0) {
     return (0);
   }
@@ -34,7 +29,6 @@ __inline static int get(int mutex )
   } 
   tmp___1 = init(mutex);
   return (tmp___1);
-}
 }
  
 __inline static int check(int code ) 
@@ -51,13 +45,10 @@ __inline static int check(int code )
 
 __inline static int init(int mutex ) 
 { 
-  int mtx ;
-  int rt ;
+  int mtx, rt ;
 
-  {
   if (mutex == (unsigned int )(138 << 24)) {
     if (rt) {
-	  invisible_unsafe = 0;
       return (0);
     }
     kernDispatchDisable();
@@ -68,7 +59,6 @@ __inline static int init(int mutex )
   }
   invisible_unsafe = 0;
   return (0);
-}
 }
 
 int difficult_function() {
@@ -106,14 +96,9 @@ int g() {
 	global = 1;
 }
 
-int h() {
-	true_unsafe = 1;
-}
-
 int main(int i) {
 	difficult_function();
 	g();
-	h();
 	f(i);
 }
 

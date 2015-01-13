@@ -24,18 +24,18 @@ Line 0:     N0 -{/*_____________________*/}-> N0
 Line 0:     N0 -{/*kernDispatchDisable[1]*/}-> N0
 Line 0:     N0 -{ldv_main()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 121:     N0 -{main()}-> N0
+Line 106:     N0 -{main()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 114:     N0 -{difficult_function()}-> N0
+Line 100:     N0 -{difficult_function()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 77:     N0 -{get()}-> N0
+Line 67:     N0 -{get()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 35:     N0 -{init()}-> N0
+Line 30:     N0 -{init()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 63:     N0 -{kernDispatchDisable[1]}-> N0
+Line 54:     N0 -{kernDispatchDisable[1]}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
-Line 82:     N0 -{invisible_unsafe = ...;}-> N0
+Line 72:     N0 -{invisible_unsafe = ...;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
@@ -43,13 +43,13 @@ Line 0:     N0 -{/*_____________________*/}-> N0
 Line 0:     N0 -{/*Without locks*/}-> N0
 Line 0:     N0 -{ldv_main()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 121:     N0 -{main()}-> N0
+Line 106:     N0 -{main()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 114:     N0 -{difficult_function()}-> N0
+Line 100:     N0 -{difficult_function()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 77:     N0 -{get()}-> N0
+Line 67:     N0 -{get()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 35:     N0 -{init()}-> N0
+Line 30:     N0 -{init()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
 Line 60:     N0 -{invisible_unsafe = ...;}-> N0
 Line 0:     N0 -{return;}-> N0
@@ -67,18 +67,18 @@ Line 0:     N0 -{/*_____________________*/}-> N0
 Line 0:     N0 -{/*kernDispatchDisable[1]*/}-> N0
 Line 0:     N0 -{ldv_main()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 121:     N0 -{main()}-> N0
+Line 106:     N0 -{main()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 114:     N0 -{difficult_function()}-> N0
+Line 100:     N0 -{difficult_function()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 77:     N0 -{get()}-> N0
+Line 67:     N0 -{get()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 35:     N0 -{init()}-> N0
+Line 30:     N0 -{init()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 63:     N0 -{kernDispatchDisable[1]}-> N0
+Line 54:     N0 -{kernDispatchDisable[1]}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
-Line 83:     N0 -{true_unsafe = ...;}-> N0
+Line 73:     N0 -{true_unsafe = ...;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
@@ -86,11 +86,11 @@ Line 0:     N0 -{/*_____________________*/}-> N0
 Line 0:     N0 -{/*Without locks*/}-> N0
 Line 0:     N0 -{ldv_main()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 121:     N0 -{main()}-> N0
+Line 106:     N0 -{main()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 116:     N0 -{h()}-> N0
+Line 100:     N0 -{difficult_function()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 110:     N0 -{true_unsafe = ...;}-> N0
+Line 81:     N0 -{true_unsafe = ...;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0

@@ -19,7 +19,7 @@ kernDispatchDisable[1]
 0
 struct testStruct *a
 Line 0:     N0 -{/*Is true unsafe:*/}-> N0
-Line 0:     N0 -{/*Number of usages:2*/}-> N0
+Line 0:     N0 -{/*Number of usages:4*/}-> N0
 Line 0:     N0 -{/*Two examples:*/}-> N0
 Line 0:     N0 -{/*_____________________*/}-> N0
 Line 0:     N0 -{/*intLock[1]*/}-> N0
@@ -41,16 +41,6 @@ Line 0:     N0 -{/*Is true unsafe:*/}-> N0
 Line 0:     N0 -{/*Number of usages:3*/}-> N0
 Line 0:     N0 -{/*Two examples:*/}-> N0
 Line 0:     N0 -{/*_____________________*/}-> N0
-Line 0:     N0 -{/*intLock[1]*/}-> N0
-Line 0:     N0 -{ldv_main()}-> N0
-Line 0:     N0 -{Function start dummy edge}-> N0
-Line 31:     N0 -{f()}-> N0
-Line 0:     N0 -{Function start dummy edge}-> N0
-Line 14:     N0 -{intLock[1]}-> N0
-Line 15:     N0 -{*c = ...;}-> N0
-Line 0:     N0 -{return;}-> N0
-Line 0:     N0 -{return;}-> N0
-Line 0:     N0 -{/*_____________________*/}-> N0
 Line 0:     N0 -{/*kernDispatchDisable[1]*/}-> N0
 Line 0:     N0 -{ldv_main()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
@@ -58,5 +48,15 @@ Line 31:     N0 -{f()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
 Line 16:     N0 -{kernDispatchDisable[1]}-> N0
 Line 19:     N0 -{*c = ...;}-> N0
+Line 0:     N0 -{return;}-> N0
+Line 0:     N0 -{return;}-> N0
+Line 0:     N0 -{/*_____________________*/}-> N0
+Line 0:     N0 -{/*intLock[1]*/}-> N0
+Line 0:     N0 -{ldv_main()}-> N0
+Line 0:     N0 -{Function start dummy edge}-> N0
+Line 31:     N0 -{f()}-> N0
+Line 0:     N0 -{Function start dummy edge}-> N0
+Line 14:     N0 -{intLock[1]}-> N0
+Line 15:     N0 -{*c = ...;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
