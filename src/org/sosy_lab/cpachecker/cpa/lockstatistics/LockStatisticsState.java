@@ -65,6 +65,15 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
     //Special hash for BAM, in other cases use iterator
     return locks;
   }
+  
+  public Set<LockIdentifier> getLockIdentifiers() {
+    Set<LockIdentifier> result = new TreeSet<>();
+    
+    for (LockStatisticsLock lock : locks) {
+      result.add(lock.getLockIdentifier());
+    }
+    return result;
+  }
 
   public Iterator<LockStatisticsLock> getLockIterator() {
     return locks.iterator();
@@ -359,7 +368,7 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
    * @param other the other element
    * @return true, if this element is less or equal than the other element, based on the order imposed by the lattice
    */
-  public boolean isLessOrEqual(LockStatisticsState other) {
+  public boolean isCoveredBy(LockStatisticsState other) {
     //This method is useful for refinement optimization
 
     if (locks.size() == 0 && other.locks.size() > 0) {

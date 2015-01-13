@@ -61,6 +61,10 @@ public class LockStatisticsLock implements Comparable<LockStatisticsLock> {
   public int getAccessCounter() {
     return accessPoints.size();
   }
+  
+  public LockIdentifier getLockIdentifier() {
+    return lockId;
+  }
 
   /**
    * This function clean variable name from brackets and cil's '___0'
