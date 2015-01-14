@@ -123,7 +123,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
   }
   
   public UsagePoint getUsagePoint() {
-    if (this.locks.getSize() > 0) {
+    if (this.locks.getSize() > 0 || this.accessType == Access.READ) {
       return new UsagePoint(locks.getLockIdentifiers(), accessType);
     } else {
       return new UsagePoint(accessType, this);

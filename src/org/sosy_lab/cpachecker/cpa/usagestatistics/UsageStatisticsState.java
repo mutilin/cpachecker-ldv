@@ -30,6 +30,7 @@ import java.util.Map;
 import org.sosy_lab.cpachecker.core.defaults.AbstractSingleWrapperState;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Targetable;
+import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
@@ -225,15 +226,24 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
     return container.refinementRequired() || super.isTarget();
   }*/
 
-  public void saveUnsafesInContainer() {
-    for (SingleIdentifier id : recentUsages.keySet()) {
-      for (UsageInfo uinfo : recentUsages.get(id)) {
-        container.add(id, uinfo);
+  public void saveUnsafesInContainerIfNecessary(AbstractState abstractState) {
+    ARGState argState = AbstractStates.extractStateByType(abstractState, ARGState.class);
+    PredicateAbstractState state = AbstractStates.extractStateByType(argState, PredicateAbstractState.class);
+    if (state == null || !state.getAbstractionFormula().isFalse() && state.isAbstractionState()) {
+      for (SingleIdentifier id : recentUsages.keySet()) {
+        for (UsageInfo uinfo : recentUsages.get(id)) {
+          if (uinfo.getKeyState() == null) {
+            //We can add the same usage at merge points. Let the final key state be the first one.
+            uinfo.setKeyState(argState);
+            container.add(id, uinfo);
+          }
+        }
       }
+      clearUsagesIfNeed();
     }
   }
 
-  public void updateKeyState(final AbstractState pState) {
+  /*public void updateKeyState(final AbstractState pState) {
     for (SingleIdentifier id : recentUsages.keySet()) {
       for (UsageInfo uinfo : recentUsages.get(id)) {
         if (uinfo.getKeyState() == null) {
@@ -241,5 +251,5 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
         }
       }
     }
-  }
+  }*/
 }

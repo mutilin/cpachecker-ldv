@@ -48,8 +48,7 @@ public class USReachedSet extends PartitionedReachedSet {
     super.add(pState, pPrecision);
 
     UsageStatisticsState USstate = AbstractStates.extractStateByType(pState, UsageStatisticsState.class);
-    USstate.updateKeyState(pState);
-    USstate.clearUsagesIfNeed();
+    USstate.saveUnsafesInContainerIfNecessary(pState);
   }
 
   @Override

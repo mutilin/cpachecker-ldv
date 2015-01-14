@@ -65,11 +65,6 @@ class UsageStatisticsPrecisionAdjustment implements PrecisionAdjustment {
     Precision newWrappedPrecision = unwrappedResult.getSecond();
     Action action = unwrappedResult.getThird();
 
-    PredicateAbstractState state = AbstractStates.extractStateByType(newElement, PredicateAbstractState.class);
-    if (state == null || !state.getAbstractionFormula().isFalse() && state.isAbstractionState()) {
-      element.saveUnsafesInContainer();
-    }
-
     if ((oldElement == newElement) && (oldWrappedPrecision == newWrappedPrecision)) {
       // nothing has changed
       return Triple.of(pElement, oldPrecision, action);

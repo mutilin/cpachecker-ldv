@@ -85,4 +85,8 @@ public class UsageInfoSet {
     result.addAll(unrefinedUsages);
     return ImmutableSet.copyOf(result);
   }
+  
+  public boolean isTrue() {
+    return !refinedUsages.isEmpty();
+  }
 }

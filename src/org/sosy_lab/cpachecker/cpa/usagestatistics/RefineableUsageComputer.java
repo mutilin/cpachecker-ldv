@@ -82,7 +82,12 @@ public class RefineableUsageComputer {
       while (usageIterator == null || !usageIterator.hasNext()) {
         if (currentUsagePoint != null && !currentUsagePoint.isTrue()) {
           currentRefineableUsageList.remove(currentUsagePoint);
-          usagePointIterator = currentRefineableUsageList.getPointIterator();
+          if (!currentRefineableUsageList.isUnsafe()) {
+            //May be we remove all 'write' accesses, so move to other id
+            usagePointIterator = null;
+          } else {
+            usagePointIterator = currentRefineableUsageList.getPointIterator();
+          }
         }
         while (usagePointIterator == null || !usagePointIterator.hasNext()) {
           if (idIterator.hasNext()) {

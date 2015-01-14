@@ -363,7 +363,7 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
             //removing this if-condition increase the number of predicates by 1000 at 10 circles
             //Do not remove!
             UsageStatisticsState USstate = AbstractStates.extractStateByType(successor, UsageStatisticsState.class);
-            USstate.updateKeyState(((ARGState)successor).getCoveringState());
+            USstate.saveUnsafesInContainerIfNecessary(successor);
           }
 
         } else {

@@ -125,7 +125,13 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         Iterator<UsagePoint> childrenIterator = point.getCoveredUsages().iterator();
         while (childrenIterator.hasNext()) {
           point = childrenIterator.next();
-          for (UsageInfo uinfo : uset.getUsageInfo(point).getUsages()){
+          uiset = uset.getUsageInfo(point);
+          if (uiset == null) {
+            //TODO Think about
+            System.out.println("Can't find point " + point);
+            continue;
+          }
+          for (UsageInfo uinfo : uiset.getUsages()){
             if (uinfo.getLockState() == null) {
               continue;
             }

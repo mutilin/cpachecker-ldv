@@ -46,31 +46,36 @@ public class UsageList {
   public void add(UsageInfo newInfo) {
     UsageInfoSet targetSet;
     UsagePoint newPoint = newInfo.getUsagePoint();
-    if (disjointUsages.contains(newPoint)) {
+    if (detailInformation.containsKey(newPoint)) {
       targetSet = detailInformation.get(newPoint);
+      if (targetSet.isTrue()) {
+        newPoint.markAsTrue();
+      }
     } else {
       targetSet = new UsageInfoSet();
       detailInformation.put(newPoint, targetSet);
-      add(newPoint);
     }
+    add(newPoint);
     targetSet.add(newInfo);
   }
   
   private void add(UsagePoint newPoint) {
-    //Put newPoint in the right place in tree
-    for (UsagePoint point : disjointUsages) {
-      if (newPoint.isHigherOrEqual(point)) {
-        //We have checked, that new point isn't contained in the set
-        assert !newPoint.equals(point);
-        disjointUsages.remove(point);
-        newPoint.addCoveredUsage(point);
-        //TODO May be we should check all usages and build full tree
-        break;
-      } else if (point.isHigherOrEqual(newPoint)) {
-        //We have checked, that new point isn't contained in the set
-        assert !newPoint.equals(point);
-        point.addCoveredUsage(newPoint);
-        return;
+    if (!disjointUsages.contains(newPoint)) {
+      //Put newPoint in the right place in tree
+      for (UsagePoint point : disjointUsages) {
+        if (newPoint.isHigherOrEqual(point)) {
+          //We have checked, that new point isn't contained in the set
+          assert !newPoint.equals(point);
+          disjointUsages.remove(point);
+          newPoint.addCoveredUsage(point);
+          //TODO May be we should check all usages and build full tree
+          break;
+        } else if (point.isHigherOrEqual(newPoint)) {
+          //We have checked, that new point isn't contained in the set
+          assert !newPoint.equals(point);
+          point.addCoveredUsage(newPoint);
+          return;
+        }
       }
     }
     disjointUsages.add(newPoint);
