@@ -28,7 +28,7 @@ Line 46:     N0 -{main()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
 Line 41:     N0 -{f()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 26:     N0 -{if ((?.a)) {}}-> N0
+Line 22:     N0 -{if ((?.a)) {}}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
@@ -53,10 +53,7 @@ Line 0:     N0 -{ldv_main()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
 Line 46:     N0 -{main()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 41:     N0 -{f()}-> N0
-Line 0:     N0 -{Function start dummy edge}-> N0
-Line 18:     N0 -{if (global) {}}-> N0
-Line 0:     N0 -{return;}-> N0
+Line 41:     N0 -{f(global);}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{/*_____________________*/}-> N0

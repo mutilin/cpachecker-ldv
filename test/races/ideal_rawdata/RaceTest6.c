@@ -26,7 +26,7 @@ Line 0:     N0 -{ldv_main()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
 Line 21:     N0 -{print()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 6:     N0 -{f(global);}-> N0
+Line 5:     N0 -{if (global) {}}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{/*_____________________*/}-> N0

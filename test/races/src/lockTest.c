@@ -1,3 +1,6 @@
+/* The main aim of this test is to check handling of variable links
+ */
+
 struct testStruct {
   int a;
   int b;
@@ -39,6 +42,7 @@ int ldv_main()
   } 
   temp2 = sdlFirst(temp);
   temp2 = sdlFirst(temp2);
+  //Important: there two links possible: temp and s->a
   *temp2 = 1;
   
   //Check parameter locks

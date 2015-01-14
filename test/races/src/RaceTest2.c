@@ -1,25 +1,19 @@
-int false_unsafe;
+int unsafe;
 int global;
 
 int main() {
     int undef, tmp;
     if (undef) {
-		//global = 1;
         intLock();
     }
-    //tmp++;
+    tmp++;
     if (undef) {
-		//global = 0;
         intUnlock();
     }
 }
 
 int f() {
-	/*if (global != 0) {
-	ERROR:
-	goto ERROR;
-}*/
-	false_unsafe++;
+	unsafe++;
 }
 
 int ldv_main() {

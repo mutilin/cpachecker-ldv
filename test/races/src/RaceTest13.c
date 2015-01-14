@@ -1,19 +1,19 @@
-int false_unsafe;
+int unsafe;
 int global;
 int (*p)();
 
 int main() {
-    global++;
+    global = 1;
     p = &g;
     (*p)();
 }
 
 int f() {
-	false_unsafe++;
+	unsafe++;
 }
 
 int g() {
-	global++;
+	global = 1;
 }
 
 int ldv_main() {
