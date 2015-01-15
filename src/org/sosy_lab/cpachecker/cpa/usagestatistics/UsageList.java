@@ -31,15 +31,16 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import org.sosy_lab.common.Pair;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
 
 public class UsageList {
-  private final Set<UsagePoint> disjointUsages;
+  private final Set<UsagePoint> topUsages;
   private final Map<UsagePoint, UsageInfoSet> detailInformation;
   private boolean isTrueUnsafe = false;
   
   public UsageList() {
-    disjointUsages = new TreeSet<>();
+    topUsages = new TreeSet<>();
     detailInformation = new HashMap<>();
   }
   
@@ -60,16 +61,15 @@ public class UsageList {
   }
   
   private void add(UsagePoint newPoint) {
-    if (!disjointUsages.contains(newPoint)) {
+    Set<UsagePoint> toDelete = new HashSet<>();
+    if (!topUsages.contains(newPoint)) {
       //Put newPoint in the right place in tree
-      for (UsagePoint point : disjointUsages) {
+      for (UsagePoint point : topUsages) {
         if (newPoint.isHigherOrEqual(point)) {
           //We have checked, that new point isn't contained in the set
           assert !newPoint.equals(point);
-          disjointUsages.remove(point);
+          toDelete.add(point);
           newPoint.addCoveredUsage(point);
-          //TODO May be we should check all usages and build full tree
-          break;
         } else if (point.isHigherOrEqual(newPoint)) {
           //We have checked, that new point isn't contained in the set
           assert !newPoint.equals(point);
@@ -77,24 +77,40 @@ public class UsageList {
           return;
         }
       }
+      topUsages.removeAll(toDelete);
+      topUsages.add(newPoint);
     }
-    disjointUsages.add(newPoint);
   }
   
   public boolean isUnsafe() {
-    if (disjointUsages.size() > 1 && disjointUsages.iterator().next().access == Access.WRITE) {
-      return true;
-    } else {
-      return false;
+    if (topUsages.size() > 1) {
+      Iterator<UsagePoint> iterator = topUsages.iterator();
+      UsagePoint point = iterator.next();
+      if (point.access == Access.WRITE) {
+        Set<LockIdentifier> lockSet = new HashSet<>(point.locks);
+        while (iterator.hasNext() && !lockSet.isEmpty()) {
+          lockSet.retainAll(iterator.next().locks);
+        }
+        if (lockSet.isEmpty()) {
+          return true;
+        }
+      }
     }
+    return false;
   }
   
   public Pair<UsageInfo, UsageInfo> getUnsafePair() {
     assert isUnsafe();
     
-    Iterator<UsagePoint> iterator = disjointUsages.iterator();
+    Iterator<UsagePoint> iterator = topUsages.iterator();
     UsageInfoSet firstSet = detailInformation.get(iterator.next());
-    UsageInfoSet secondSet = detailInformation.get(iterator.next());
+    UsageInfoSet secondSet;
+    if (iterator.hasNext()) {
+      secondSet = detailInformation.get(iterator.next());
+    } else {
+      //One write usage is also unsafe, as we consider the function to be able to run in parallel with itself
+      secondSet = firstSet;
+    }
     return Pair.of(firstSet.getOneExample(), secondSet.getOneExample());
   }
   
@@ -104,11 +120,13 @@ public class UsageList {
         return false;
       }
       
-      Iterator<UsagePoint> iterator = disjointUsages.iterator();
-      UsagePoint firstPoint = iterator.next();
-      UsagePoint secondPoint = iterator.next();
+      Iterator<UsagePoint> iterator = topUsages.iterator();
+      boolean result = iterator.next().isTrue();
+      if (iterator.hasNext()) {
+        //One write usage is also unsafe, as we consider the function to be able to run in parallel with itself
+        result &= iterator.next().isTrue();
+      }
       
-      boolean result = (firstPoint.isTrue() && secondPoint.isTrue());
       if (result) {
         isTrueUnsafe = true;
       }
@@ -130,12 +148,12 @@ public class UsageList {
   
   public void reset() {
     Set<UsagePoint> toDelete = new HashSet<>();
-    for (UsagePoint point : disjointUsages) {
+    for (UsagePoint point : topUsages) {
       if (!point.isTrue()) {
         toDelete.add(point);
       }
     }
-    disjointUsages.removeAll(toDelete);
+    topUsages.removeAll(toDelete);
     for (UsagePoint point : detailInformation.keySet()) {
       detailInformation.get(point).reset();
     }
@@ -148,7 +166,7 @@ public class UsageList {
   }
 
   public Iterator<UsagePoint> getPointIterator() {
-    return disjointUsages.iterator();
+    return topUsages.iterator();
   }
 
   public UsageInfoSet getUsageInfo(UsagePoint next) {
@@ -160,7 +178,7 @@ public class UsageList {
     assert tmpSet.hasNoRefinedUsages();
     
     detailInformation.remove(currentUsagePoint);
-    disjointUsages.remove(currentUsagePoint);
+    topUsages.remove(currentUsagePoint);
     for (UsagePoint point : currentUsagePoint.getCoveredUsages()) {
       add(point);
     }

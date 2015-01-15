@@ -348,9 +348,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         + ", max. " + maxNumberOfUsages + ")");
     out.println("Amount of true unsafes:                                    " + trueUnsafes);
     out.println("Amount of true usages in true unsafes:                     " + trueUsagesInTrueUnsafe + "(avg. " +
-        (unsafeSize == 0 ? "0" : (trueUsagesInTrueUnsafe/unsafeSize))
+        (unsafeSize == 0 ? "0" : (trueUsagesInTrueUnsafe/trueUnsafes))
         + ", max. " + maxTrueUsages + ")");
-    out.println("Amount of true usages in all unsafes: 											" + trueUsagesInAllUnsafes);
+    out.println("Amount of true usages in all unsafes:                      " + trueUsagesInAllUnsafes);
     out.println("Amount of unsafes with both failures in pair:              " + totalFailureUnsafes);
     out.println("Amount of unsafes with one failure in pair:                " + totalUnsafesWithFailureUsageInPair);
     out.println("Amount of unsafes with at least once failure in usage list " + totalUnsafesWithFailureUsages);

@@ -89,7 +89,7 @@ public class RefineableUsageComputer {
             usagePointIterator = currentRefineableUsageList.getPointIterator();
           }
         }
-        while (usagePointIterator == null || !usagePointIterator.hasNext()) {
+        while (usagePointIterator == null || !usagePointIterator.hasNext() || !currentRefineableUsageList.isUnsafe()) {
           if (idIterator.hasNext()) {
             SingleIdentifier id = idIterator.next();
             currentRefineableUsageList = container.getUsages(id);
@@ -99,6 +99,7 @@ public class RefineableUsageComputer {
           }
         }
         currentUsagePoint = usagePointIterator.next();
+        System.out.println("Consider " + currentUsagePoint);
         if (currentUsagePoint.isTrue()) {
           usageIterator = null;
           continue;
