@@ -168,6 +168,10 @@ public class UsageList {
   public Iterator<UsagePoint> getPointIterator() {
     return topUsages.iterator();
   }
+  
+  public int getNumberOfTopUsagePoints() {
+    return topUsages.size();
+  }
 
   public UsageInfoSet getUsageInfo(UsagePoint next) {
     return detailInformation.get(next);

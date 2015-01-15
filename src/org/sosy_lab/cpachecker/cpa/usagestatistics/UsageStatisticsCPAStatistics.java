@@ -77,6 +77,8 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
   private final LogManager logger;
   private int totalUsages = 0;
+  private int totalNumberOfUsagePoints = 0;
+  private int maxNumberOfUsagePoints = 0;
   private int maxNumberOfUsages = 0;
   
   private int totalFailureUsages = 0;
@@ -247,6 +249,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     Iterator<UsagePoint> pointIterator = l.getPointIterator();
     while (pointIterator.hasNext()) {
       UsagePoint point = pointIterator.next();
+      totalNumberOfUsagePoints++;
       for (UsageInfo uinfo : l.getUsageInfo(point).getUsages()){
         if (uinfo.failureFlag) {
           totalFailureUsages++;
@@ -261,6 +264,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     int d = trueUsagesInTrueUnsafe - startTrueNum;
     if (d > maxTrueUsages) {
     	maxTrueUsages = d;
+    }
+    if (maxNumberOfUsagePoints < l.getNumberOfTopUsagePoints()) {
+      maxNumberOfUsagePoints = l.getNumberOfTopUsagePoints();
     }
     if (totalFailureUsages > startFailureNum) {
       totalUnsafesWithFailureUsages++;
@@ -295,8 +301,8 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     writer.append("Line 0:     N0 -{/*Number of usages:" + uinfo.size() + "*/}-> N0" + "\n");
     writer.append("Line 0:     N0 -{/*Two examples:*/}-> N0" + "\n");
     Pair<UsageInfo, UsageInfo> tmpPair = uinfo.getUnsafePair();
-    createVisualization(id, tmpPair.getSecond(), writer);
     createVisualization(id, tmpPair.getFirst(), writer);
+    createVisualization(id, tmpPair.getSecond(), writer);
     if (tmpPair.getFirst().failureFlag && tmpPair.getSecond().failureFlag) {
       totalFailureUnsafes++;
     } else if (tmpPair.getFirst().failureFlag || tmpPair.getSecond().failureFlag) {
@@ -346,9 +352,12 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     out.println("Amount of unsafe usages:                                   " + totalUsages + "(avg. " +
         (unsafeSize == 0 ? "0" : (totalUsages/unsafeSize))
         + ", max. " + maxNumberOfUsages + ")");
+    out.println("Amount of unsafe usage points:                             " + totalNumberOfUsagePoints + "(avg. " +
+        (unsafeSize == 0 ? "0" : (totalNumberOfUsagePoints/unsafeSize))
+        + ", max. " + maxNumberOfUsagePoints + ")");
     out.println("Amount of true unsafes:                                    " + trueUnsafes);
     out.println("Amount of true usages in true unsafes:                     " + trueUsagesInTrueUnsafe + "(avg. " +
-        (unsafeSize == 0 ? "0" : (trueUsagesInTrueUnsafe/trueUnsafes))
+        (trueUnsafes == 0 ? "0" : (trueUsagesInTrueUnsafe/trueUnsafes))
         + ", max. " + maxTrueUsages + ")");
     out.println("Amount of true usages in all unsafes:                      " + trueUsagesInAllUnsafes);
     out.println("Amount of unsafes with both failures in pair:              " + totalFailureUnsafes);
@@ -357,9 +366,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     out.println("Amount of usages with failure:                             " + totalFailureUsages);
     container.printUsagesStatistics(out);
     out.println("Time for transfer relation:    " + transferRelationTimer);
+    out.println("Time for reseting unsafes: " + container.resetTimer);
     printStatisticsTimer.stop();
     out.println("Time for printing statistics:  " + printStatisticsTimer);
-    out.println("Time for reseting unsafes: " + container.resetTimer);
   }
 
   private void printLockStatistics(final Writer writer) throws IOException {
