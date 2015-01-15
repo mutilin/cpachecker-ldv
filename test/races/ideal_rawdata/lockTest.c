@@ -25,13 +25,13 @@ Line 0:     N0 -{/*_____________________*/}-> N0
 Line 0:     N0 -{/*Without locks*/}-> N0
 Line 0:     N0 -{ldv_main()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 43:     N0 -{f((?.a));}-> N0
+Line 46:     N0 -{(?.a) = ...;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{/*_____________________*/}-> N0
 Line 0:     N0 -{/*Without locks*/}-> N0
 Line 0:     N0 -{ldv_main()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 46:     N0 -{(?.a) = ...;}-> N0
+Line 43:     N0 -{f((?.a));}-> N0
 Line 0:     N0 -{return;}-> N0
 ##f
 1
@@ -40,16 +40,6 @@ Line 0:     N0 -{/*Is true unsafe:*/}-> N0
 Line 0:     N0 -{/*Number of usages:3*/}-> N0
 Line 0:     N0 -{/*Two examples:*/}-> N0
 Line 0:     N0 -{/*_____________________*/}-> N0
-Line 0:     N0 -{/*kernDispatchDisable[1]*/}-> N0
-Line 0:     N0 -{ldv_main()}-> N0
-Line 0:     N0 -{Function start dummy edge}-> N0
-Line 34:     N0 -{f()}-> N0
-Line 0:     N0 -{Function start dummy edge}-> N0
-Line 19:     N0 -{kernDispatchDisable[1]}-> N0
-Line 22:     N0 -{*c = ...;}-> N0
-Line 0:     N0 -{return;}-> N0
-Line 0:     N0 -{return;}-> N0
-Line 0:     N0 -{/*_____________________*/}-> N0
 Line 0:     N0 -{/*intLock[1]*/}-> N0
 Line 0:     N0 -{ldv_main()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
@@ -57,6 +47,16 @@ Line 34:     N0 -{f()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
 Line 17:     N0 -{intLock[1]}-> N0
 Line 18:     N0 -{*c = ...;}-> N0
+Line 0:     N0 -{return;}-> N0
+Line 0:     N0 -{return;}-> N0
+Line 0:     N0 -{/*_____________________*/}-> N0
+Line 0:     N0 -{/*kernDispatchDisable[1]*/}-> N0
+Line 0:     N0 -{ldv_main()}-> N0
+Line 0:     N0 -{Function start dummy edge}-> N0
+Line 34:     N0 -{f()}-> N0
+Line 0:     N0 -{Function start dummy edge}-> N0
+Line 19:     N0 -{kernDispatchDisable[1]}-> N0
+Line 22:     N0 -{*c = ...;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
 ##ldv_main
@@ -69,11 +69,11 @@ Line 0:     N0 -{/*_____________________*/}-> N0
 Line 0:     N0 -{/*Without locks*/}-> N0
 Line 0:     N0 -{ldv_main()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 43:     N0 -{f(*temp);}-> N0
+Line 46:     N0 -{*temp = ...;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{/*_____________________*/}-> N0
 Line 0:     N0 -{/*Without locks*/}-> N0
 Line 0:     N0 -{ldv_main()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 46:     N0 -{*temp = ...;}-> N0
+Line 43:     N0 -{f(*temp);}-> N0
 Line 0:     N0 -{return;}-> N0

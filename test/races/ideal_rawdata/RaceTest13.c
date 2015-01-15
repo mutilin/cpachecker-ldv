@@ -25,7 +25,7 @@ Line 0:     N0 -{ldv_main()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
 Line 20:     N0 -{f()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 12:     N0 -{... = unsafe;}-> N0
+Line 12:     N0 -{unsafe = ...;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{/*_____________________*/}-> N0
@@ -34,6 +34,6 @@ Line 0:     N0 -{ldv_main()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
 Line 20:     N0 -{f()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 12:     N0 -{unsafe = ...;}-> N0
+Line 12:     N0 -{... = unsafe;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
