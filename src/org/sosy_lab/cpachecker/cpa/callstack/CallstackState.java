@@ -156,7 +156,7 @@ public final class CallstackState implements AbstractState, Partitionable, Abstr
     return true;
   }
 
-  @Override
+  /*@Override
   public int hashCode() {
     final int prime = 31;
     int result = 1;
@@ -197,7 +197,7 @@ public final class CallstackState implements AbstractState, Partitionable, Abstr
     } else if (!previousState.equals(other.previousState))
       return false;
     return true;
-  }
+  }*/
 
   @Override
   public CallstackState clone() {
