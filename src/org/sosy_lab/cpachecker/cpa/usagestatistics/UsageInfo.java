@@ -62,6 +62,8 @@ public class UsageInfo implements Comparable<UsageInfo> {
   private final Access accessType;
   private boolean isRefined;
   public boolean failureFlag;
+  
+  private static final boolean mergeUsagesWithEqualCallstacks = false;
 
   public UsageInfo(@Nonnull Access atype, @Nonnull LineInfo l,
   								 @Nonnull EdgeInfo t, @Nonnull LockStatisticsState lock,
@@ -123,7 +125,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
   }
   
   public UsagePoint getUsagePoint() {
-    if (this.locks.getSize() > 0 || this.accessType == Access.READ) {
+    if (this.locks.getSize() > 0 || !mergeUsagesWithEqualCallstacks && this.accessType == Access.READ) {
       return new UsagePoint(locks.getLockIdentifiers(), accessType);
     } else {
       return new UsagePoint(accessType, this);
@@ -135,7 +137,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
     final int prime = 31;
     int result = 1;
     result = prime * result + ((accessType == null) ? 0 : accessType.hashCode());
-    result = prime * result + ((callstack == null) ? 0 : callstack.hashCode());
+    result = prime * result + ((callstack == null) ? 0 : callstack.hashCodeWithoutNode());
     result = prime * result + ((line == null) ? 0 : line.hashCode());
     result = prime * result + ((locks == null) ? 0 : locks.hashCode());
     result = prime * result + ((info == null) ? 0 : info.hashCode());
@@ -162,7 +164,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
       if (other.callstack != null) {
         return false;
       }
-    } else if (!callstack.equals(other.callstack)) {
+    } else if (!callstack.equalsWithoutNode(other.callstack)) {
       return false;
     }
     if (line == null) {

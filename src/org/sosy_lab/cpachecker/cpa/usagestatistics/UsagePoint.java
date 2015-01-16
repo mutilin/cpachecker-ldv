@@ -17,20 +17,20 @@ public class UsagePoint implements Comparable<UsagePoint> {
   private final Set<UsagePoint> coveredUsages;
   private boolean isTrue;
     
-  public UsagePoint(Set<LockIdentifier> pLocks, Access pAccess) {
+  private UsagePoint(Set<LockIdentifier> pLocks, Access pAccess, UsageInfo pInfo) {
     locks = ImmutableSet.copyOf(pLocks);
     access = pAccess;
     coveredUsages = new HashSet<>();
     isTrue = false;
-    keyUsage = null;
-  }
-  public UsagePoint(Access pAccess, UsageInfo pInfo) {
-    assert pAccess == Access.WRITE;
-    locks = ImmutableSet.copyOf(new TreeSet<LockIdentifier>());
-    access = pAccess;
-    coveredUsages = new HashSet<>();
-    isTrue = false;
     keyUsage = pInfo;
+  }
+  
+  public UsagePoint(Set<LockIdentifier> pLocks, Access pAccess) {
+    this(pLocks, pAccess, null);
+  }
+  
+  public UsagePoint(Access pAccess, UsageInfo pInfo) {
+    this(new TreeSet<LockIdentifier>(), pAccess, pInfo);
   }
   
   public boolean addCoveredUsage(UsagePoint newChild) {
@@ -97,8 +97,9 @@ public class UsagePoint implements Comparable<UsagePoint> {
     if (result != 0) {
       return result;
     }
-    if (locks.size() > 0 || access == Access.READ) {
-      return locks.toString().compareTo(o.locks.toString());
+    result = locks.toString().compareTo(o.locks.toString());
+    if (result != 0 || keyUsage == null) {
+      return result;
     } else {
       return keyUsage.compareTo(o.keyUsage);
     }
@@ -107,14 +108,18 @@ public class UsagePoint implements Comparable<UsagePoint> {
   public boolean isHigherOrEqual(UsagePoint o) {
     // access 'write' is higher than 'read', but only for nonempty locksets
     if (o.locks.containsAll(locks) && access.ordinal() <= o.access.ordinal()) {
-      if (locks.size() > 0 || access == Access.READ) {
+      if (locks.size() > 0/* || access == Access.READ*/) {
         return true;
       } else {
         if (keyUsage != null
          && o.keyUsage != null
-         && keyUsage.getCallStack().equals(o.keyUsage.getCallStack())) {
-          //Ordering by line number is very important, do not remove
-          return (keyUsage.getLine().getLine() - o.keyUsage.getLine().getLine() >= 0);
+         && keyUsage.getCallStack().equalsWithoutNode(o.keyUsage.getCallStack())) {
+          if (access.ordinal() < o.access.ordinal()) {
+            //write accesses are always higher than read ones (if we merge read accesses)
+            return true;
+          }
+          //This ordering is very important, do not remove
+          return (keyUsage.compareTo(o.keyUsage) <= 0);
         }
         return false;
       }
