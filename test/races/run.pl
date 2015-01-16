@@ -54,16 +54,22 @@ foreach my $test_file (glob($prefix."/test/races/src/*.c"))
         print "WARNING: Tool failed on test $name!\n";
     }
 }
-print "INFO: Passed tests: $passed_tests\n";
+print "\n";
+print "RESULT: Test set is finished\n";
+print "RESULT: Passed tests: $passed_tests\n";
 if ( $failed_tests > 0) {
-    print "INFO: Failed tests: $failed_tests\n";
+    print "RESULT: Failed tests: $failed_tests\n";
     print "@failed_test_names\n";
 }
 if ($new_tests > 0) {
-    print "INFO: New tests: $new_tests\n";
+    print "RESULT: New tests: $new_tests\n";
     print "@new_test_names\n";
 }
 if ($tool_failures > 0) {
-    print "INFO: Tool failures: $tool_failures\n";
+    print "RESULT: Tool failures: $tool_failures\n";
     print "@tool_failure_names\n";
 }
+print "You may look the difference, like\n";
+print "meld output/unsafe_rawdata_NAME_OF_TEST.new ideal_verdict/NAME_OF_TEST.c\n";
+print "The log of every test launch is located in output/log_NAME_OF_TEST\n";
+print "Thank you for usage the service of our test system, houp to meet you again. Good luck!\n";
