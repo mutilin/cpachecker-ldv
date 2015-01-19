@@ -36,7 +36,7 @@ public class UsagePoint implements Comparable<UsagePoint> {
   public boolean addCoveredUsage(UsagePoint newChild) {
     if (!coveredUsages.contains(newChild)) {
       for (UsagePoint usage : coveredUsages) {
-        if (usage.isHigherOrEqual(newChild)) {
+        if (usage.isHigher(newChild)) {
           assert !usage.equals(newChild);
           return usage.addCoveredUsage(newChild);
         }
@@ -88,8 +88,12 @@ public class UsagePoint implements Comparable<UsagePoint> {
   
   @Override
   public int compareTo(UsagePoint o) {
+    int result = (isTrue == o.isTrue) ? 0 : (isTrue ? -1 : 1);
+    if (result != 0) {
+      return result;
+    }
     //It is very important to compare at first the accesses, because an algorithm base on this suggestion
-    int result = access.compareTo(o.access);
+    result = access.compareTo(o.access);
     if (result != 0) {
       return result;
     }
@@ -105,7 +109,7 @@ public class UsagePoint implements Comparable<UsagePoint> {
     }
   }
   
-  public boolean isHigherOrEqual(UsagePoint o) {
+  public boolean isHigher(UsagePoint o) {
     // access 'write' is higher than 'read', but only for nonempty locksets
     if (o.locks.containsAll(locks) && access.ordinal() <= o.access.ordinal()) {
       if (locks.size() > 0/* || access == Access.READ*/) {

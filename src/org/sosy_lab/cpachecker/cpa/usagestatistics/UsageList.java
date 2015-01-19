@@ -44,6 +44,11 @@ public class UsageList {
     detailInformation = new HashMap<>();
   }
   
+  private UsageList(Set<UsagePoint> top, Map<UsagePoint, UsageInfoSet> detail) {
+    topUsages = top;
+    detailInformation = detail;
+  }
+  
   public void add(UsageInfo newInfo) {
     UsageInfoSet targetSet;
     UsagePoint newPoint = newInfo.getUsagePoint();
@@ -65,14 +70,13 @@ public class UsageList {
     if (!topUsages.contains(newPoint)) {
       //Put newPoint in the right place in tree
       for (UsagePoint point : topUsages) {
-        if (newPoint.isHigherOrEqual(point)) {
+        if (newPoint.isHigher(point)) {
           //We have checked, that new point isn't contained in the set
-          assert !newPoint.equals(point);
+          assert newPoint.compareTo(point) != 0;
           toDelete.add(point);
           newPoint.addCoveredUsage(point);
-        } else if (point.isHigherOrEqual(newPoint)) {
+        } else if (point.isHigher(newPoint)) {
           //We have checked, that new point isn't contained in the set
-          assert !newPoint.equals(point);
           point.addCoveredUsage(newPoint);
           return;
         }
@@ -83,7 +87,7 @@ public class UsageList {
   }
   
   public boolean isUnsafe() {
-    if (topUsages.size() > 1) {
+    if (topUsages.size() >= 1) {
       Iterator<UsagePoint> iterator = topUsages.iterator();
       UsagePoint point = iterator.next();
       if (point.access == Access.WRITE) {
@@ -147,7 +151,7 @@ public class UsageList {
   }
   
   public void reset() {
-    Set<UsagePoint> toDelete = new HashSet<>();
+    Set<UsagePoint> toDelete = new TreeSet<>();
     for (UsagePoint point : topUsages) {
       if (!point.isTrue()) {
         toDelete.add(point);
@@ -156,6 +160,9 @@ public class UsageList {
     topUsages.removeAll(toDelete);
     for (UsagePoint point : detailInformation.keySet()) {
       detailInformation.get(point).reset();
+      if (point.keyUsage != null) {
+        point.keyUsage.resetKeyState();
+      }
     }
   }
 
@@ -177,6 +184,18 @@ public class UsageList {
     return detailInformation.get(next);
   }
 
+  public void markAsTrue(UsagePoint p) {
+    assert topUsages.contains(p);
+    
+    topUsages.remove(p);
+    p.markAsTrue();
+    topUsages.add(p);
+  }
+  
+  public UsageList clone() {
+    return new UsageList(new TreeSet<>(topUsages), new HashMap<>(detailInformation));
+  }
+  
   public void remove(UsagePoint currentUsagePoint) {
     UsageInfoSet tmpSet = detailInformation.get(currentUsagePoint);
     assert tmpSet.hasNoRefinedUsages();

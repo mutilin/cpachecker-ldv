@@ -63,7 +63,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
   private boolean isRefined;
   public boolean failureFlag;
   
-  private static final boolean mergeUsagesWithEqualCallstacks = false;
+  private static final boolean mergeUsagesWithEqualCallstacks = true;
 
   public UsageInfo(@Nonnull Access atype, @Nonnull LineInfo l,
   								 @Nonnull EdgeInfo t, @Nonnull LockStatisticsState lock,
@@ -225,6 +225,10 @@ public class UsageInfo implements Comparable<UsageInfo> {
 
   public void setKeyState(AbstractState state) {
     keyState = state;
+  }
+  
+  public void resetKeyState() {
+    keyState = null;
   }
 
   public AbstractState getKeyState() {

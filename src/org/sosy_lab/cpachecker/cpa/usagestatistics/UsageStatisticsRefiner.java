@@ -79,7 +79,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
 
   final Stats pStat = new Stats();
   private final LogManager logger;
-  private InterpolantCache iCache = new InterpolantCache();
+ // private InterpolantCache iCache = new InterpolantCache();
 
   public UsageStatisticsRefiner(ConfigurableProgramAnalysis pCpa) throws CPAException, InvalidConfigurationException {
     super(pCpa);
@@ -97,7 +97,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     final UsageContainer container =
         AbstractStates.extractStateByType(pReached.getFirstState(), UsageStatisticsState.class).getContainer();
     
-    InterpolantCache newCache = new InterpolantCache();
+    //InterpolantCache newCache = new InterpolantCache();
 
     final RefineableUsageComputer computer = new RefineableUsageComputer(container, logger);
 
@@ -106,11 +106,15 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     System.out.println("Unsafes: " + container.getUnsafeSize());
     Iterator<SingleIdentifier> iterator = container.getUnsafeIterator();
     int trueU = 0;
+    StringBuilder sb = new StringBuilder();
     while (iterator.hasNext()) {
-      if (container.getUsages(iterator.next()).isTrueUnsafe()) {
+      SingleIdentifier id = iterator.next();
+      sb.append(id.getName() + ", ");
+      if (container.getUsages(id).isTrueUnsafe()) {
         trueU++;
       }
     }
+    System.out.println("Unsafes: " + sb.toString());
     System.out.println("True unsafes: " + trueU);
     boolean refinementFinish = false;
     UsageInfo target = null;
@@ -127,7 +131,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
         pStat.Refinement.start();
         CounterexampleInfo counterexample = super.performRefinement0(
             new BAMReachedSet(transfer, new ARGReachedSet(pReached), pPath, pathStateToReachedState), pPath);
-        if (counterexample.isSpurious()) {
+        /*if (counterexample.isSpurious()) {
           List<BooleanFormula> interpolants = (List<BooleanFormula>) counterexample.getAllFurtherInformation().iterator().next().getFirst();
           if (iCache.contains(target, interpolants)) {
           	System.out.println("Repeat");
@@ -137,9 +141,9 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
           	newCache.add(target, interpolants);
           	computer.setResultOfRefinement(target, false);
           }
-        } else {
+        } else {*/
           computer.setResultOfRefinement(target, !counterexample.isSpurious());
-        }
+        //}
       } catch (IllegalStateException e) {
         //msat_solver return -1 <=> unknown
         //consider its as true;
@@ -152,7 +156,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
 
       pStat.UnsafeCheck.start();
     }
-    iCache = newCache;
+    //iCache = newCache;
     pStat.UnsafeCheck.stopIfRunning();
     return refinementFinish;
   }

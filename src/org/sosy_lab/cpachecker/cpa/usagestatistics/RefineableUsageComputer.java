@@ -61,9 +61,8 @@ public class RefineableUsageComputer {
       cache.add(uinfo);
     } else {
       logger.log(Level.INFO, "Usage " + uinfo + " is reachable, mark it as true");
-      //TODO Not necessary to refine all usages, contained the same lock set
       currentRefineableUsageInfoSet.markAsRefined(uinfo);
-      currentUsagePoint.markAsTrue(); 
+      currentRefineableUsageList.markAsTrue(currentUsagePoint); 
       if (currentRefineableUsageList.isTrueUnsafe()) {
         usagePointIterator = null;
       }
@@ -86,14 +85,14 @@ public class RefineableUsageComputer {
             //May be we remove all 'write' accesses, so move to other id
             usagePointIterator = null;
           } else {
-            usagePointIterator = currentRefineableUsageList.getPointIterator();
+            usagePointIterator = currentRefineableUsageList.clone().getPointIterator();
           }
         }
         while (usagePointIterator == null || !usagePointIterator.hasNext() || !currentRefineableUsageList.isUnsafe()) {
           if (idIterator.hasNext()) {
             SingleIdentifier id = idIterator.next();
             currentRefineableUsageList = container.getUsages(id);
-            usagePointIterator = currentRefineableUsageList.getPointIterator();
+            usagePointIterator = currentRefineableUsageList.clone().getPointIterator();
           } else {
             return null;
           }

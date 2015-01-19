@@ -41,7 +41,7 @@ public class UsageInfoSet {
    */
   public void reset() {
     for (UsageInfo uinfo : refinedUsages) {
-      uinfo.setKeyState(null);
+      uinfo.resetKeyState();
     }
     //TODO It seems, that the size is already 0. Check it.
     unrefinedUsages.clear();
@@ -81,8 +81,9 @@ public class UsageInfoSet {
   }
   
   public ImmutableSet<UsageInfo> getUsages() {
-    Set<UsageInfo> result = new TreeSet<>(refinedUsages);
-    result.addAll(unrefinedUsages);
+    //Important! These usages are disordered by refinement result, we cannot say, that the true ones are the first
+    Set<UsageInfo> result = new TreeSet<>(unrefinedUsages);
+    result.addAll(refinedUsages);
     return ImmutableSet.copyOf(result);
   }
   
