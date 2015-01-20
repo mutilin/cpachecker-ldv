@@ -66,22 +66,19 @@ public class UsageList {
   }
   
   private void add(UsagePoint newPoint) {
-    Set<UsagePoint> toDelete = new HashSet<>();
     if (!topUsages.contains(newPoint)) {
       //Put newPoint in the right place in tree
-      for (UsagePoint point : topUsages) {
+      Iterator<UsagePoint> iterator = topUsages.iterator();
+      while (iterator.hasNext()) {
+        UsagePoint point = iterator.next();
         if (newPoint.isHigher(point)) {
-          //We have checked, that new point isn't contained in the set
-          assert newPoint.compareTo(point) != 0;
-          toDelete.add(point);
+          iterator.remove();
           newPoint.addCoveredUsage(point);
         } else if (point.isHigher(newPoint)) {
-          //We have checked, that new point isn't contained in the set
           point.addCoveredUsage(newPoint);
           return;
         }
       }
-      topUsages.removeAll(toDelete);
       topUsages.add(newPoint);
     }
   }
@@ -151,13 +148,13 @@ public class UsageList {
   }
   
   public void reset() {
-    Set<UsagePoint> toDelete = new TreeSet<>();
-    for (UsagePoint point : topUsages) {
+    Iterator<UsagePoint> iterator = topUsages.iterator();
+    while (iterator.hasNext()) {
+      UsagePoint point = iterator.next();
       if (!point.isTrue()) {
-        toDelete.add(point);
+        iterator.remove();
       }
     }
-    topUsages.removeAll(toDelete);
     for (UsagePoint point : detailInformation.keySet()) {
       detailInformation.get(point).reset();
       if (point.keyUsage != null) {
@@ -184,8 +181,13 @@ public class UsageList {
     return detailInformation.get(next);
   }
 
-  public void markAsTrue(UsagePoint p) {
+  public void markAsTrue(UsageInfo uinfo) {
+    
+    UsagePoint p = uinfo.getUsagePoint();
     assert topUsages.contains(p);
+    
+    UsageInfoSet targetUsageInfoSet = detailInformation.get(p);
+    targetUsageInfoSet.markAsRefined(uinfo);
     
     topUsages.remove(p);
     p.markAsTrue();

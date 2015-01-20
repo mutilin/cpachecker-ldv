@@ -63,7 +63,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
   private boolean isRefined;
   public boolean failureFlag;
   
-  private static final boolean mergeUsagesWithEqualCallstacks = true;
+  private static final boolean mergeUsagesWithEqualCallstacks = false;
 
   public UsageInfo(@Nonnull Access atype, @Nonnull LineInfo l,
   								 @Nonnull EdgeInfo t, @Nonnull LockStatisticsState lock,

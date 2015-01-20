@@ -1,6 +1,5 @@
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
 import java.util.TreeSet;
@@ -48,18 +47,17 @@ public class UsageInfoSet {
   }
 
   public void remove(UsageStatisticsState pUstate) {
-    Set<UsageInfo> toDelete = new HashSet<>();
-    for (UsageInfo uinfo : unrefinedUsages) {
+    Iterator<UsageInfo> iterator = unrefinedUsages.iterator();
+    while (iterator.hasNext()) {
+      UsageInfo uinfo = iterator.next();
       AbstractState keyState = uinfo.getKeyState();
       assert (keyState != null);
       if (AbstractStates.extractStateByType(keyState, UsageStatisticsState.class).equals(pUstate)) {
         if (!uinfo.isRefined()) {
-          toDelete.add(uinfo);
+          iterator.remove();
         }
       }
     }
-    unrefinedUsages.removeAll(toDelete);
-    toDelete.clear();
   }
   
   public UsageInfo getOneExample() {

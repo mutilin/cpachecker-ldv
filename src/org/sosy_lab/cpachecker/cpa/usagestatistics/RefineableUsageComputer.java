@@ -38,7 +38,6 @@ public class RefineableUsageComputer {
   private Iterator<UsageInfo>  usageIterator;
   private Iterator<UsagePoint>  usagePointIterator;
   private UsageList currentRefineableUsageList;
-  private UsageInfoSet currentRefineableUsageInfoSet;
   private UsagePoint currentUsagePoint;
   private final LogManager logger;
   //Self-checking
@@ -58,11 +57,20 @@ public class RefineableUsageComputer {
 
     if (!result) {
       logger.log(Level.INFO, "Usage " + uinfo + " is not reachable, remove it from container");
-      cache.add(uinfo);
+      cache.add(uinfo); 
+      if (!usageIterator.hasNext()) {
+        //There are no usages in the point
+        currentRefineableUsageList.remove(currentUsagePoint);
+        if (!currentRefineableUsageList.isUnsafe()) {
+          //May be we remove all 'write' accesses, so move to other id
+          usagePointIterator = null;
+        } else {
+          usagePointIterator = currentRefineableUsageList.clone().getPointIterator();
+        }
+      }
     } else {
       logger.log(Level.INFO, "Usage " + uinfo + " is reachable, mark it as true");
-      currentRefineableUsageInfoSet.markAsRefined(uinfo);
-      currentRefineableUsageList.markAsTrue(currentUsagePoint); 
+      currentRefineableUsageList.markAsTrue(uinfo); 
       if (currentRefineableUsageList.isTrueUnsafe()) {
         usagePointIterator = null;
       }
@@ -74,37 +82,32 @@ public class RefineableUsageComputer {
   public UsageInfo getNextRefineableUsage() {
     UsageInfo potentialUsage = null;
     UsageInfo resultUsage = null;
+    UsageInfoSet refineableUsageInfoSet;
 
     assert (!waitRefinementResult);
 
     while (resultUsage == null) {
       while (usageIterator == null || !usageIterator.hasNext()) {
-        if (currentUsagePoint != null && !currentUsagePoint.isTrue()) {
-          currentRefineableUsageList.remove(currentUsagePoint);
-          if (!currentRefineableUsageList.isUnsafe()) {
-            //May be we remove all 'write' accesses, so move to other id
-            usagePointIterator = null;
-          } else {
-            usagePointIterator = currentRefineableUsageList.clone().getPointIterator();
-          }
-        }
-        while (usagePointIterator == null || !usagePointIterator.hasNext() || !currentRefineableUsageList.isUnsafe()) {
+        while (usagePointIterator == null || !usagePointIterator.hasNext()) {
           if (idIterator.hasNext()) {
             SingleIdentifier id = idIterator.next();
             currentRefineableUsageList = container.getUsages(id);
+            if (!currentRefineableUsageList.isUnsafe()) {
+              continue;
+            }
             usagePointIterator = currentRefineableUsageList.clone().getPointIterator();
           } else {
             return null;
           }
         }
         currentUsagePoint = usagePointIterator.next();
-        System.out.println("Consider " + currentUsagePoint);
+        //System.out.println("Consider " + currentUsagePoint);
         if (currentUsagePoint.isTrue()) {
           usageIterator = null;
           continue;
         }
-        currentRefineableUsageInfoSet = currentRefineableUsageList.getUsageInfo(currentUsagePoint);
-        usageIterator = currentRefineableUsageInfoSet.getIterator();
+        refineableUsageInfoSet = currentRefineableUsageList.getUsageInfo(currentUsagePoint);
+        usageIterator = refineableUsageInfoSet.getIterator();
       }
       potentialUsage = usageIterator.next();
       if (isRefineableUsage(potentialUsage)) {

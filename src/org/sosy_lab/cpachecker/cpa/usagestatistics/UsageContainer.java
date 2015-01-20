@@ -70,7 +70,6 @@ public class UsageContainer {
     if (unsafes == null) {
       unsafeUsages = 0;
       unsafes = new LinkedList<>();
-      //unsafes = unsafeDetector.getUnsafes(Stat);
       for (SingleIdentifier id : Stat.keySet()) {
         UsageList tmpList = Stat.get(id);
         if (tmpList.isUnsafe()) {
