@@ -1,6 +1,6 @@
 int invisible_unsafe, global;
 int true_unsafe;
-int false_unsafe, false_unsafe2;
+int unsafe, false_unsafe2;
 
  __inline static void *tryLock(int id___0) 
 { 
@@ -63,7 +63,6 @@ __inline static int init(int mutex )
 
 int difficult_function() {
 	int ret, param, mutex;
-    false_unsafe = 1;
     ret = get(mutex);
     if (ret == 0) {
       return 28;
@@ -77,13 +76,13 @@ restart:
   if (ret == 27) {
     goto restart;
   }
-  false_unsafe = 1;
+  unsafe = 1;
   true_unsafe = 0;
 }
 
 
 int f(int i) {
-	if (i > 0) {
+	if (i >= 0) {
       intLock();
       false_unsafe2 = 1;
       intUnlock();

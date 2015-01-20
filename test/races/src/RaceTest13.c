@@ -3,7 +3,6 @@ int global;
 int (*p)();
 
 int main() {
-    global = 1;
     p = &g;
     (*p)();
 }

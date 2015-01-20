@@ -23,20 +23,20 @@ Line 0:     N0 -{/*_____________________*/}-> N0
 Line 0:     N0 -{/*Without locks*/}-> N0
 Line 0:     N0 -{ldv_main()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 33:     N0 -{f()}-> N0
+Line 32:     N0 -{f()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 12:     N0 -{global = ...;}-> N0
+Line 11:     N0 -{global = ...;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{/*_____________________*/}-> N0
 Line 0:     N0 -{/*Without locks*/}-> N0
 Line 0:     N0 -{ldv_main()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 33:     N0 -{f()}-> N0
+Line 32:     N0 -{f()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 17:     N0 -{func()}-> N0
+Line 16:     N0 -{func()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 27:     N0 -{global = ...;}-> N0
+Line 26:     N0 -{global = ...;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0

@@ -46,8 +46,8 @@ int ldv_main()
   *temp2 = 1;
   
   //Check parameter locks
-  queLock(a);
+  queLOCK(a);
   p = 1;
-  queUnlock(q);  
+  queUNLOCK(q);  
   p = 2;
 }

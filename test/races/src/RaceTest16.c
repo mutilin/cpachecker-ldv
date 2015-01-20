@@ -8,7 +8,6 @@ int f(int t )
   int oldflags ;
   int s ;
   if (oldflags > 36) {
-    unsafe = 0;
     global = 1;
     if (oldflags == 9) {
         func(0);

@@ -12,9 +12,10 @@
 1
 0
 3
-2
+3
 intLock[1]
 kernDispatchDisable[1]
+queLOCK(a)[1]
 ###
 0
 struct testStruct *a
