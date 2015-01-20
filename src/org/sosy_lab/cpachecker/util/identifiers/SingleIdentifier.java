@@ -130,7 +130,7 @@ public abstract class SingleIdentifier implements AbstractIdentifier{
   public AbstractIdentifier containsIn(Collection<? extends AbstractIdentifier> set) {
     GeneralIdentifier generalId = this.getGeneralId();
     if (set.contains(generalId)) {
-      return generalId;
+      return this;
     } else {
       return null;
     }
