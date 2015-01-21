@@ -80,54 +80,34 @@ public class RefineableUsageComputer {
   }
 
   public UsageInfo getNextRefineableUsage() {
-    UsageInfo potentialUsage = null;
     UsageInfo resultUsage = null;
-    UsageInfoSet refineableUsageInfoSet;
 
     assert (!waitRefinementResult);
 
-    while (resultUsage == null) {
+    do {
       while (usageIterator == null || !usageIterator.hasNext()) {
-        while (usagePointIterator == null || !usagePointIterator.hasNext()) {
-          if (idIterator.hasNext()) {
-            SingleIdentifier id = idIterator.next();
-            currentRefineableUsageList = container.getUsages(id);
-            if (!currentRefineableUsageList.isUnsafe()) {
-              continue;
+        do {
+          while (usagePointIterator == null || !usagePointIterator.hasNext()) {
+            if (idIterator.hasNext()) {
+              SingleIdentifier id = idIterator.next();
+              currentRefineableUsageList = container.getUsages(id);
+              if (!currentRefineableUsageList.isUnsafe()) {
+                continue;
+              }
+              usagePointIterator = currentRefineableUsageList.clone().getPointIterator();
+            } else {
+              return null;
             }
-            usagePointIterator = currentRefineableUsageList.clone().getPointIterator();
-          } else {
-            return null;
           }
-        }
-        currentUsagePoint = usagePointIterator.next();
-        //System.out.println("Consider " + currentUsagePoint);
-        if (currentUsagePoint.isTrue()) {
-          usageIterator = null;
-          continue;
-        }
-        refineableUsageInfoSet = currentRefineableUsageList.getUsageInfo(currentUsagePoint);
+          currentUsagePoint = usagePointIterator.next();
+        } while (currentUsagePoint.isTrue());
+        UsageInfoSet refineableUsageInfoSet = currentRefineableUsageList.getUsageInfo(currentUsagePoint);
         usageIterator = refineableUsageInfoSet.getIterator();
       }
-      potentialUsage = usageIterator.next();
-      if (isRefineableUsage(potentialUsage)) {
-        resultUsage = potentialUsage;
-      }
-    }
+      resultUsage = usageIterator.next();
+    } while (cache.contains(resultUsage));
 
     waitRefinementResult = true;
     return resultUsage;
-  }
-
-  private boolean isRefineableUsage(UsageInfo target) {
-    //target can be read-accessed and hasn't got any pair usage for unsafe, so this check is necessary
-    if (target.isRefined()) {
-      return false;
-    }
-
-    if (cache.contains(target)) {
-      return false;
-    }
-    return true;
   }
 }

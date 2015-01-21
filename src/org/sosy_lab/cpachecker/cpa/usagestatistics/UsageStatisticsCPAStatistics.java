@@ -31,6 +31,8 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.logging.Level;
 
 import org.sosy_lab.common.Pair;
@@ -63,11 +65,6 @@ import com.google.common.collect.UnmodifiableIterator;
 @Options(prefix="cpa.usagestatistics")
 public class UsageStatisticsCPAStatistics implements Statistics {
 
-  //private final UnsafeDetector unsafeDetector;
-
-  @Option(name="localanalysis", description="should we use local analysis?")
-  private boolean localAnalysis = false;
-
   @Option(name="output", description="path to write results")
   @FileOption(FileOption.Type.OUTPUT_FILE)
   private Path outputStatFileName = Paths.get("unsafe_rawdata");
@@ -97,12 +94,11 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
   public UsageStatisticsCPAStatistics(Configuration config, LogManager pLogger) throws InvalidConfigurationException{
     config.inject(this);
-    //unsafeDetector = new PairwiseUnsafeDetector(config);
     logger = pLogger;
   }
 
-  private List<LockStatisticsLock> findAllLocks() {
-    List<LockStatisticsLock> locks = new LinkedList<>();
+  private Set<LockStatisticsLock> findAllLocks() {
+    Set<LockStatisticsLock> locks = new TreeSet<>();
 
     Iterator<SingleIdentifier> generalIterator = container.getGeneralIterator();
     while (generalIterator.hasNext()) {
@@ -298,7 +294,8 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     	trueUnsafes++;
       writer.append("Line 0:     N0 -{/*Is true unsafe:*/}-> N0" + "\n");
     }
-    writer.append("Line 0:     N0 -{/*Number of usages:" + uinfo.size() + "*/}-> N0" + "\n");
+    writer.append("Line 0:     N0 -{/*Number of usage points:" + uinfo.getNumberOfTopUsagePoints() + "*/}-> N0" + "\n");
+    writer.append("Line 0:     N0 -{/*Number of usages      :" + uinfo.size() + "*/}-> N0" + "\n");
     writer.append("Line 0:     N0 -{/*Two examples:*/}-> N0" + "\n");
     Pair<UsageInfo, UsageInfo> tmpPair = uinfo.getUnsafePair();
     createVisualization(id, tmpPair.getFirst(), writer);
@@ -326,7 +323,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 		printStatisticsTimer.start();
 		container = AbstractStates.extractStateByType(reached.getFirstState(), UsageStatisticsState.class)
 		    .getContainer();
-		//Stat = container.getStatistics();
 		final int unsafeSize = container.getUnsafeSize();
 
     try {
@@ -362,7 +358,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     out.println("Amount of true usages in all unsafes:                      " + trueUsagesInAllUnsafes);
     out.println("Amount of unsafes with both failures in pair:              " + totalFailureUnsafes);
     out.println("Amount of unsafes with one failure in pair:                " + totalUnsafesWithFailureUsageInPair);
-    out.println("Amount of unsafes with at least once failure in usage list " + totalUnsafesWithFailureUsages);
+    out.println("Amount of unsafes with at least once failure in usage list:" + totalUnsafesWithFailureUsages);
     out.println("Amount of usages with failure:                             " + totalFailureUsages);
     container.printUsagesStatistics(out);
     out.println("Time for transfer relation:    " + transferRelationTimer);
@@ -372,9 +368,8 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   }
 
   private void printLockStatistics(final Writer writer) throws IOException {
-    final List<LockStatisticsLock> mutexes = findAllLocks();
+    final Set<LockStatisticsLock> mutexes = findAllLocks();
 
-    Collections.sort(mutexes);
     writer.append(mutexes.size() + "\n");
     for (LockStatisticsLock lock : mutexes) {
       writer.append(lock.toString() + "\n");

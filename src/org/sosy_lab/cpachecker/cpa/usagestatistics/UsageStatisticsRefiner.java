@@ -29,9 +29,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.logging.Level;
 
-import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
-import org.sosy_lab.common.io.Path;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
@@ -62,12 +60,14 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     public final Timer ComputePath = new Timer();
     public final Timer Refinement = new Timer();
     public final Timer UnsafeCheck = new Timer();
+    public final Timer CacheTime = new Timer();
 
     @Override
     public void printStatistics(PrintStream pOut, Result pResult, ReachedSet pReached) {
       pOut.println("Time for choosing target usage      " + UnsafeCheck);
       pOut.println("Time for computing path             " + ComputePath);
       pOut.println("Time for refinement                 " + Refinement);
+      pOut.println("Time for cache                      " + CacheTime);
     }
 
     @Override
@@ -79,7 +79,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
 
   final Stats pStat = new Stats();
   private final LogManager logger;
- // private InterpolantCache iCache = new InterpolantCache();
+  private InterpolantCache iCache = new InterpolantCache();
 
   public UsageStatisticsRefiner(ConfigurableProgramAnalysis pCpa) throws CPAException, InvalidConfigurationException {
     super(pCpa);
@@ -97,7 +97,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     final UsageContainer container =
         AbstractStates.extractStateByType(pReached.getFirstState(), UsageStatisticsState.class).getContainer();
     
-    //InterpolantCache newCache = new InterpolantCache();
+    InterpolantCache newCache = new InterpolantCache();
 
     final RefineableUsageComputer computer = new RefineableUsageComputer(container, logger);
 
@@ -131,19 +131,21 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
         pStat.Refinement.start();
         CounterexampleInfo counterexample = super.performRefinement0(
             new BAMReachedSet(transfer, new ARGReachedSet(pReached), pPath, pathStateToReachedState), pPath);
-        /*if (counterexample.isSpurious()) {
-          List<BooleanFormula> interpolants = (List<BooleanFormula>) counterexample.getAllFurtherInformation().iterator().next().getFirst();
-          if (iCache.contains(target, interpolants)) {
+        if (counterexample.isSpurious()) {
+          List<BooleanFormula> formulas = (List<BooleanFormula>) counterexample.getAllFurtherInformation().iterator().next().getFirst();
+          pStat.CacheTime.start();
+          if (iCache.contains(target, formulas)) {
           	System.out.println("Repeat");
           	computer.setResultOfRefinement(target, true);
             target.failureFlag = true;
           } else {
-          	newCache.add(target, interpolants);
+          	newCache.add(target, formulas);
           	computer.setResultOfRefinement(target, false);
           }
-        } else {*/
+          pStat.CacheTime.stop();
+        } else {
           computer.setResultOfRefinement(target, !counterexample.isSpurious());
-        //}
+        }
       } catch (IllegalStateException e) {
         //msat_solver return -1 <=> unknown
         //consider its as true;
@@ -156,7 +158,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
 
       pStat.UnsafeCheck.start();
     }
-    //iCache = newCache;
+    iCache = newCache;
     pStat.UnsafeCheck.stopIfRunning();
     return refinementFinish;
   }

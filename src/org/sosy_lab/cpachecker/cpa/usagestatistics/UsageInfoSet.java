@@ -53,9 +53,7 @@ public class UsageInfoSet {
       AbstractState keyState = uinfo.getKeyState();
       assert (keyState != null);
       if (AbstractStates.extractStateByType(keyState, UsageStatisticsState.class).equals(pUstate)) {
-        if (!uinfo.isRefined()) {
-          iterator.remove();
-        }
+        iterator.remove();
       }
     }
   }
