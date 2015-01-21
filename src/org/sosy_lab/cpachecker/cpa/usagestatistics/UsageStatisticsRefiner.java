@@ -91,14 +91,13 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
   }
 
   int i = 0;
-  int findUnknown = 0;
   @Override
   public boolean performRefinement(ReachedSet pReached) throws CPAException, InterruptedException {
     final UsageContainer container =
         AbstractStates.extractStateByType(pReached.getFirstState(), UsageStatisticsState.class).getContainer();
     
-    InterpolantCache newCache = new InterpolantCache();
-
+    //InterpolantCache newCache = new InterpolantCache();
+    iCache.initKeySet();
     final RefineableUsageComputer computer = new RefineableUsageComputer(container, logger);
 
     logger.log(Level.INFO, ("Perform US refinement: " + i++));
@@ -139,7 +138,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
           	computer.setResultOfRefinement(target, true);
             target.failureFlag = true;
           } else {
-          	newCache.add(target, formulas);
+            iCache.add(target, formulas);
           	computer.setResultOfRefinement(target, false);
           }
           pStat.CacheTime.stop();
@@ -158,7 +157,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
 
       pStat.UnsafeCheck.start();
     }
-    iCache = newCache;
+    iCache.removeUnusedCacheEntries();
     pStat.UnsafeCheck.stopIfRunning();
     return refinementFinish;
   }
