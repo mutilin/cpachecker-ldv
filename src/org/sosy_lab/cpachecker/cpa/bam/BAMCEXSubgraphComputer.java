@@ -219,21 +219,12 @@ public class BAMCEXSubgraphComputer {
     BackwardARGState newTreeTarget = new BackwardARGState(target);
     pPathElementToReachedState.put(newTreeTarget, target);
     elementsMap.put(target, newTreeTarget);
-    ARGState currentState = target, tmpChild;
+    ARGState currentState = target;
 
     //Find path to nearest abstraction state
     PredicateAbstractState pState = AbstractStates.extractStateByType(currentState, PredicateAbstractState.class);
-    while (!pState.isAbstractionState()) {
-      //assert currentState.getChildren().size() == 1;
-      tmpChild = currentState.getChildren().iterator().next();
-      BackwardARGState newState = new BackwardARGState(tmpChild);
-      elementsMap.put(tmpChild, newState);
-      pPathElementToReachedState.put(newState, tmpChild);
-      newState.addParent(elementsMap.get(currentState));
-      currentState = tmpChild;
-      pState = AbstractStates.extractStateByType(currentState, PredicateAbstractState.class);
-    }
-
+    assert (pState.isAbstractionState());
+    
     openElements.push(target);
     while (!openElements.empty()) {
       ARGState currentElement = openElements.pop();
