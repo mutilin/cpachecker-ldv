@@ -10,28 +10,29 @@ import org.sosy_lab.cpachecker.util.AbstractStates;
 import com.google.common.collect.ImmutableSet;
 
 public class UsageInfoSet {
-  private final Set<UsageInfo> refinedUsages;
+  //We need only one refined usage to say that this point is true;
+  private UsageInfo refinedUsage;
   private final Set<UsageInfo> unrefinedUsages;
   
   public UsageInfoSet() {
-    refinedUsages = new TreeSet<>();
+    refinedUsage = null;
     unrefinedUsages = new TreeSet<>();
   }
 
   public void add(UsageInfo newInfo) {
     assert !newInfo.isRefined();
-    if (refinedUsages.contains(newInfo)) {
+    if (newInfo.equals(refinedUsage)) {
       return;
     }
     unrefinedUsages.add(newInfo);
   }
 
   public int size() {
-    return refinedUsages.size() + unrefinedUsages.size();
+    return unrefinedUsages.size() + (refinedUsage == null ? 0 : 1);
   }
   
   public boolean hasNoRefinedUsages() {
-    return refinedUsages.isEmpty();
+    return refinedUsage == null;
   }
   
   /**
@@ -39,8 +40,8 @@ public class UsageInfoSet {
    * otherwise all ARG will be stored on the next stage of analysis
    */
   public void reset() {
-    for (UsageInfo uinfo : refinedUsages) {
-      uinfo.resetKeyState();
+    if (refinedUsage != null) {
+      refinedUsage.resetKeyState();
     }
     //TODO It seems, that the size is already 0. Check it.
     unrefinedUsages.clear();
@@ -59,8 +60,8 @@ public class UsageInfoSet {
   }
   
   public UsageInfo getOneExample() {
-    if (refinedUsages.size() > 0) {
-      return refinedUsages.iterator().next();
+    if (refinedUsage != null) {
+      return refinedUsage;
     } else {
       return unrefinedUsages.iterator().next();
     }
@@ -73,17 +74,19 @@ public class UsageInfoSet {
   public void markAsRefined(UsageInfo uinfo) {
     unrefinedUsages.remove(uinfo);
     uinfo.setRefineFlag();
-    refinedUsages.add(uinfo);
+    refinedUsage = uinfo;
   }
   
   public ImmutableSet<UsageInfo> getUsages() {
     //Important! These usages are disordered by refinement result, we cannot say, that the true ones are the first
     Set<UsageInfo> result = new TreeSet<>(unrefinedUsages);
-    result.addAll(refinedUsages);
+    if (refinedUsage != null) {
+      result.add(refinedUsage);
+    }
     return ImmutableSet.copyOf(result);
   }
   
   public boolean isTrue() {
-    return !refinedUsages.isEmpty();
+    return refinedUsage != null;
   }
 }
