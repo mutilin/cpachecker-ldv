@@ -66,6 +66,7 @@ public class LocalState implements AbstractState {
 
   private LocalState(Map<AbstractIdentifier, DataType> oldMap, LocalState state) {
     DataInfo = new HashMap<>(oldMap);
+    //Strange, but 'new TreeMap<>(oldMap)' lost some values: "id -> null" appears
     previousState = state;
   }
 
@@ -98,10 +99,15 @@ public class LocalState implements AbstractState {
       }
       return;
     }
-    if (infoId == name) {
+    if (name.equals(infoId)) {
       DataInfo.put(name, type);
     } else {
-      DataInfo.put(name, DataType.max(type, lastType));
+      DataType max = DataType.max(type, lastType);
+      if (max == null) {
+        DataInfo.remove(name);
+      } else {
+        DataInfo.put(name, max);
+      }
     }
   }
 
