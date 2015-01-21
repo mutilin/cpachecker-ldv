@@ -124,11 +124,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         while (childrenIterator.hasNext()) {
           point = childrenIterator.next();
           uiset = uset.getUsageInfo(point);
-          if (uiset == null) {
-            //TODO Think about
-            System.out.println("Can't find point " + point);
-            continue;
-          }
           for (UsageInfo uinfo : uiset.getUsages()){
             if (uinfo.getLockState() == null) {
               continue;
@@ -361,10 +356,10 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     out.println("Amount of unsafes with at least once failure in usage list:" + totalUnsafesWithFailureUsages);
     out.println("Amount of usages with failure:                             " + totalFailureUsages);
     container.printUsagesStatistics(out);
-    out.println("Time for transfer relation:    " + transferRelationTimer);
-    out.println("Time for reseting unsafes: " + container.resetTimer);
+    out.println("Time for transfer relation:         " + transferRelationTimer);
+    out.println("Time for reseting unsafes:          " + container.resetTimer);
     printStatisticsTimer.stop();
-    out.println("Time for printing statistics:  " + printStatisticsTimer);
+    out.println("Time for printing statistics:       " + printStatisticsTimer);
   }
 
   private void printLockStatistics(final Writer writer) throws IOException {

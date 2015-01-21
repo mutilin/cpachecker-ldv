@@ -129,8 +129,8 @@ public class UsageContainer {
         maxUsage = Stat.get(id).size();
       }
     }
-    out.println("Total amount of variables:     " + generalSize);
-    out.println("Total amount of usages:        " + allUsages + "(avg. " +
+    out.println("Total amount of variables:                " + generalSize);
+    out.println("Total amount of usages:                   " + allUsages + "(avg. " +
         (generalSize == 0 ? "0" : (allUsages/generalSize)) + ", max " + maxUsage + ")");
   }
 }
