@@ -205,10 +205,10 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
       List<AbstractState> result = new ArrayList<>();
       for (CFAEdge e : CFAUtils.leavingEdges(node)) {
 
-        if (e instanceof CFunctionCallEdge && e.getSuccessor().getFunctionName().equals("kvprintf")) {
+        /*if (e instanceof CFunctionCallEdge && e.getSuccessor().getFunctionName().equals("kvprintf")) {
           callstackTransfer.setFlag();
           return attachAdditionalInfoToCallNodes(wrappedTransfer.getAbstractSuccessors(pState, pPrecision, getSummaryEdge(node)));
-        }
+        }*/
         if (isRecursionEdge(e)) {
           callstackTransfer.setFlag();
           result.addAll(getAbstractSuccessors0(pState, pPrecision, getSummaryEdge(node)));
