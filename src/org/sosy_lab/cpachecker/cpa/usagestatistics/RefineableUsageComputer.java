@@ -91,7 +91,7 @@ public class RefineableUsageComputer {
             if (idIterator.hasNext()) {
               SingleIdentifier id = idIterator.next();
               currentRefineableUsageList = container.getUsages(id);
-              if (!currentRefineableUsageList.isUnsafe()) {
+              if (!currentRefineableUsageList.isUnsafe() || currentRefineableUsageList.isTrueUnsafe()) {
                 continue;
               }
               usagePointIterator = currentRefineableUsageList.clone().getPointIterator();
