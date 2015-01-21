@@ -108,8 +108,18 @@ public class LocalVariableIdentifier extends VariableIdentifier {
       if (result != 0) {
         return result;
       }
-      result = this.function.compareTo(((LocalVariableIdentifier) pO).function);
-      return result;
+      if (function != null) {
+        if (((LocalVariableIdentifier) pO).function != null) {
+          result = this.function.compareTo(((LocalVariableIdentifier) pO).function);
+          return result;
+        } else {
+          return 1;
+        }
+      } else if (((LocalVariableIdentifier) pO).function != null) {
+        return -1;
+      } else {
+        return 0;
+      }
     } else if (pO instanceof GlobalVariableIdentifier){
       return -1;
     } else {

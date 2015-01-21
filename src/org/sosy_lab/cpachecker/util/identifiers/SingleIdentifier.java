@@ -129,7 +129,7 @@ public abstract class SingleIdentifier implements AbstractIdentifier{
   @Override
   public AbstractIdentifier containsIn(Collection<? extends AbstractIdentifier> set) {
     GeneralIdentifier generalId = this.getGeneralId();
-    if (set.contains(generalId)) {
+    if (generalId != null && set.contains(generalId)) {
       return this;
     } else {
       return null;
@@ -145,9 +145,17 @@ public abstract class SingleIdentifier implements AbstractIdentifier{
       if (result != 0) {
         return result;
       }
-      result = this.type.toASTString("").compareTo(((SingleIdentifier)pO).type.toASTString(""));
-      if (result != 0) {
-        return result;
+      if (this.type != null) {
+        if (((SingleIdentifier)pO).type != null) {
+          result = this.type.toASTString("").compareTo(((SingleIdentifier)pO).type.toASTString(""));
+          if (result != 0) {
+            return result;
+          }
+        } else {
+          return 1;
+        }
+      } else if (((SingleIdentifier)pO).type != null) {
+        return -1;
       }
       return this.dereference - ((SingleIdentifier)pO).dereference;
     }
