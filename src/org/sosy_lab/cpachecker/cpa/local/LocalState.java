@@ -92,22 +92,17 @@ public class LocalState implements AbstractState {
       }
       return;
     }
-    DataType lastType = DataInfo.get(infoId);
-    if (type == null) {
-      if (name.equals(infoId)) {
-        DataInfo.remove(name);
-      }
-      return;
-    }
+    DataType result;
     if (name.equals(infoId)) {
-      DataInfo.put(name, type);
+      result = type;
     } else {
-      DataType max = DataType.max(type, lastType);
-      if (max == null) {
-        DataInfo.remove(name);
-      } else {
-        DataInfo.put(name, max);
-      }
+      DataType lastType = DataInfo.get(infoId);
+      result = DataType.max(type, lastType);
+    }
+    if (result == null) {
+      DataInfo.remove(name);
+    } else {
+      DataInfo.put(name, result);
     }
   }
 

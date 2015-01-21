@@ -226,9 +226,6 @@ public class PredicateCPARefiner extends AbstractARGBasedRefiner implements Stat
       logger.log(Level.FINEST, "Error trace is spurious, refining the abstraction");
 
       boolean repeatedCounterexample = formulas.equals(lastErrorPath);
-     /* if (repeatedCounterexample) {
-      	System.out.println("Repeated");
-      }*/
       lastErrorPath = formulas;
 
       strategy.performRefinement(pReached, abstractionStatesTrace, counterexample.getInterpolants(), repeatedCounterexample);

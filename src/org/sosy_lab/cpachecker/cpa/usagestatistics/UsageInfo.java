@@ -274,18 +274,9 @@ public class UsageInfo implements Comparable<UsageInfo> {
     if (result != 0) {
       return result;
     }
-    /*if (this.keyState == null) {
-      //Refined
-      if (pO.keyState == null) {
-        return 0;
-      } else {
-        return -1;
-      }
-    } else if (pO.keyState == null) {
-      return 1;
-    }
-    return ((ARGState)this.keyState).getStateId() - ((ARGState)pO.keyState).getStateId();*///this.info.getEdgeType().compareTo(pO.info.getEdgeType());
-    //We can't use key states for ordering, because the treeSets can't understand, that old refined usage with zero key state is the same as new one
+    /* We can't use key states for ordering, because the treeSets can't understand,
+     * that old refined usage with zero key state is the same as new one
+     */
     return 0;
   }
 }

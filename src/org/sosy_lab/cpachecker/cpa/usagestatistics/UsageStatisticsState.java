@@ -242,14 +242,4 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
       clearUsagesIfNeed();
     }
   }
-
-  /*public void updateKeyState(final AbstractState pState) {
-    for (SingleIdentifier id : recentUsages.keySet()) {
-      for (UsageInfo uinfo : recentUsages.get(id)) {
-        if (uinfo.getKeyState() == null) {
-          uinfo.setKeyState(pState);
-        }
-      }
-    }
-  }*/
 }

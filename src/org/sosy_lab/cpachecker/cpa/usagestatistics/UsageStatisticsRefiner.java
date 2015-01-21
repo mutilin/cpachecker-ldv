@@ -96,25 +96,12 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     final UsageContainer container =
         AbstractStates.extractStateByType(pReached.getFirstState(), UsageStatisticsState.class).getContainer();
     
-    //InterpolantCache newCache = new InterpolantCache();
     iCache.initKeySet();
     final RefineableUsageComputer computer = new RefineableUsageComputer(container, logger);
 
     logger.log(Level.INFO, ("Perform US refinement: " + i++));
     System.out.println("Time: " + MainCPAStatistics.programTime);
     System.out.println("Unsafes: " + container.getUnsafeSize());
-    Iterator<SingleIdentifier> iterator = container.getUnsafeIterator();
-    int trueU = 0;
-    StringBuilder sb = new StringBuilder();
-    while (iterator.hasNext()) {
-      SingleIdentifier id = iterator.next();
-      sb.append(id.getName() + ", ");
-      if (container.getUsages(id).isTrueUnsafe()) {
-        trueU++;
-      }
-    }
-    System.out.println("Unsafes: " + sb.toString());
-    System.out.println("True unsafes: " + trueU);
     boolean refinementFinish = false;
     UsageInfo target = null;
     pStat.UnsafeCheck.start();
@@ -134,7 +121,6 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
           List<BooleanFormula> formulas = (List<BooleanFormula>) counterexample.getAllFurtherInformation().iterator().next().getFirst();
           pStat.CacheTime.start();
           if (iCache.contains(target, formulas)) {
-          	System.out.println("Repeat");
           	computer.setResultOfRefinement(target, true);
             target.failureFlag = true;
           } else {
