@@ -260,7 +260,6 @@ public class UsageInfo implements Comparable<UsageInfo> {
       //Experiments show that callstacks should be ordered as it is done now
       return result;
     }
-
     result = this.line.getLine() - pO.line.getLine();
     if (result != 0) {
       return result;
@@ -273,6 +272,21 @@ public class UsageInfo implements Comparable<UsageInfo> {
     result = this.accessType.compareTo(pO.accessType);
     if (result != 0) {
       return result;
+    }
+
+    if (!this.getCallStack().equalsWithoutNode(pO.getCallStack())) {
+      //we should somehow order them 
+      CallstackState currentStack1 = getCallStack();
+      CallstackState currentStack2 = pO.getCallStack();
+      while (currentStack1 != null) {
+        result = currentStack1.getCurrentFunction().compareTo(currentStack2.getCurrentFunction());
+        if (result != 0) {
+          return result;
+        }
+        currentStack1 = currentStack1.getPreviousState();
+        currentStack2 = currentStack2.getPreviousState();
+      }
+     // return this.getCallStack().hashCodeWithoutNode() - pO.getCallStack().hashCodeWithoutNode();
     }
     /* We can't use key states for ordering, because the treeSets can't understand,
      * that old refined usage with zero key state is the same as new one

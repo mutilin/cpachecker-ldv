@@ -36,6 +36,7 @@ import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.CounterexampleInfo;
 import org.sosy_lab.cpachecker.core.MainCPAStatistics;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
+import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Refiner;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
@@ -45,10 +46,12 @@ import org.sosy_lab.cpachecker.cpa.arg.ARGReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateRefiner;
+import org.sosy_lab.cpachecker.cpa.predicate.PredicatePrecision;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.CPAs;
+import org.sosy_lab.cpachecker.util.Precisions;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 
@@ -91,17 +94,44 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
   }
 
   int i = 0;
+  int counter = 0;
+  int lastFalseUnsafeSize = -1;
+  int lastTrueUnsafes = -1;
+  private static final int HARDCODED_NUMBER_FOR_START_CLEANING_PRECISION = 10;
   @Override
   public boolean performRefinement(ReachedSet pReached) throws CPAException, InterruptedException {
     final UsageContainer container =
         AbstractStates.extractStateByType(pReached.getFirstState(), UsageStatisticsState.class).getContainer();
-    
+
     iCache.initKeySet();
     final RefineableUsageComputer computer = new RefineableUsageComputer(container, logger);
 
     logger.log(Level.INFO, ("Perform US refinement: " + i++));
     System.out.println("Time: " + MainCPAStatistics.programTime);
-    System.out.println("Unsafes: " + container.getUnsafeSize());
+    int originUnsafeSize = container.getUnsafeSize();
+    System.out.println("Unsafes: " + originUnsafeSize); 
+    if (lastFalseUnsafeSize == -1) {
+      lastFalseUnsafeSize = originUnsafeSize;
+    } else {
+      counter = lastFalseUnsafeSize - originUnsafeSize;
+    }
+    Iterator<SingleIdentifier> iterator = container.getUnsafeIterator();
+    int originTrueUnsafeSize = 0;
+    //int currentFalseUnsafeSize = 0;
+    StringBuilder sb = new StringBuilder();
+    while (iterator.hasNext()) {
+      SingleIdentifier id = iterator.next();
+      sb.append(id.getName() + ", ");
+      UnrefinedUsagePointSet list = container.getUsages(id);
+      if (list.isTrueUnsafe()) {
+    	  originTrueUnsafeSize++;
+      }/* else if (list.isFalseUnsafe()) {
+        currentFalseUnsafeSize++;
+      }*/
+    }
+    System.out.println("Origine unsafe list: " + sb.toString());
+    System.out.println("True unsafes:        " + originTrueUnsafeSize);
+    //System.out.println("False unsafes:       " + currentFalseUnsafeSize);
     boolean refinementFinish = false;
     UsageInfo target = null;
     pStat.UnsafeCheck.start();
@@ -143,6 +173,26 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
 
       pStat.UnsafeCheck.start();
     }
+    int newTrueUnsafeSize = 0;
+    iterator = container.getUnsafeIterator();
+     while (iterator.hasNext()) {
+      SingleIdentifier id = iterator.next();
+      UnrefinedUsagePointSet list = container.getUsages(id);
+      if (list.isTrueUnsafe()) {
+        newTrueUnsafeSize++;
+      }
+    }
+    counter += (newTrueUnsafeSize -lastTrueUnsafes);
+    if (counter >= HARDCODED_NUMBER_FOR_START_CLEANING_PRECISION) {
+      Precision p = pReached.getPrecision(pReached.getFirstState());
+      PredicatePrecision predicates = Precisions.extractPrecisionByType(p, PredicatePrecision.class);
+      System.out.println("Clean: " + predicates.getLocalPredicates().size());
+      pReached.updatePrecision(pReached.getFirstState(),
+          Precisions.replaceByType(p, PredicatePrecision.empty(), PredicatePrecision.class));
+      iCache.reset();
+      lastFalseUnsafeSize = originUnsafeSize;
+      lastTrueUnsafes = newTrueUnsafeSize;
+    } 
     iCache.removeUnusedCacheEntries();
     pStat.UnsafeCheck.stopIfRunning();
     return refinementFinish;

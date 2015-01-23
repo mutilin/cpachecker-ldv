@@ -37,7 +37,7 @@ public class RefineableUsageComputer {
   private final Iterator<SingleIdentifier> idIterator;
   private Iterator<UsageInfo>  usageIterator;
   private Iterator<UsagePoint>  usagePointIterator;
-  private UsageList currentRefineableUsageList;
+  private UnrefinedUsagePointSet currentRefineableUsageList;
   private UsagePoint currentUsagePoint;
   private final LogManager logger;
   //Self-checking
@@ -91,7 +91,8 @@ public class RefineableUsageComputer {
             if (idIterator.hasNext()) {
               SingleIdentifier id = idIterator.next();
               currentRefineableUsageList = container.getUsages(id);
-              if (!currentRefineableUsageList.isUnsafe() || currentRefineableUsageList.isTrueUnsafe()) {
+              if (currentRefineableUsageList.isTrueUnsafe() || 
+            		currentRefineableUsageList.isFalseUnsafe() || !currentRefineableUsageList.isUnsafe()) {
                 continue;
               }
               usagePointIterator = currentRefineableUsageList.clone().getPointIterator();
@@ -101,12 +102,15 @@ public class RefineableUsageComputer {
           }
           currentUsagePoint = usagePointIterator.next();
         } while (currentUsagePoint.isTrue());
-        UsageInfoSet refineableUsageInfoSet = currentRefineableUsageList.getUsageInfo(currentUsagePoint);
-        usageIterator = refineableUsageInfoSet.getIterator();
+        AbstractUsageInfoSet refineableUsageInfoSet = currentRefineableUsageList.getUsageInfo(currentUsagePoint);
+        if (refineableUsageInfoSet.isTrue()) {
+          //Strange, if the point isn't true, but the set is
+          continue;
+        }
+        usageIterator = ((UnrefinedUsageInfoSet)refineableUsageInfoSet).getIterator();
       }
       resultUsage = usageIterator.next();
     } while (cache.contains(resultUsage));
-
     waitRefinementResult = true;
     return resultUsage;
   }

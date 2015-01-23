@@ -1,5 +1,6 @@
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -33,5 +34,10 @@ public class InterpolantCache {
   	  return true;
   	}
     return false;
+  }
+  
+  public void reset() {
+    visitedFunctions.clear();
+    unusedKeySet = Collections.emptySet();
   }
 }

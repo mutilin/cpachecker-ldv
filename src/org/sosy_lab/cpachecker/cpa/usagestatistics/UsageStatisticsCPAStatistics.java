@@ -102,11 +102,11 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
     Iterator<SingleIdentifier> generalIterator = container.getGeneralIterator();
     while (generalIterator.hasNext()) {
-      UsageList uset = container.getUsages(generalIterator.next());
+      UnrefinedUsagePointSet uset = container.getUsages(generalIterator.next());
       Iterator<UsagePoint> pointIterator = uset.getPointIterator();
       while (pointIterator.hasNext()) {
         UsagePoint point = pointIterator.next();
-        UsageInfoSet uiset = uset.getUsageInfo(point);
+        AbstractUsageInfoSet uiset = uset.getUsageInfo(point);
         for (UsageInfo uinfo : uiset.getUsages()){
           if (uinfo.getLockState() == null) {
             continue;
@@ -124,6 +124,10 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         while (childrenIterator.hasNext()) {
           point = childrenIterator.next();
           uiset = uset.getUsageInfo(point);
+          if (uiset == null) {
+            //TODO Think about it later
+            continue;
+          }
           for (UsageInfo uinfo : uiset.getUsages()){
             if (uinfo.getLockState() == null) {
               continue;
@@ -233,7 +237,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     return tmpList;
   }
   
-  private void countUsageStatistics(UsageList l) {
+  private void countUsageStatistics(UnrefinedUsagePointSet l) {
     int startFailureNum = totalFailureUsages;
     int startTrueNum = trueUsagesInTrueUnsafe;
     
@@ -241,7 +245,16 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     while (pointIterator.hasNext()) {
       UsagePoint point = pointIterator.next();
       totalNumberOfUsagePoints++;
-      for (UsageInfo uinfo : l.getUsageInfo(point).getUsages()){
+      AbstractUsageInfoSet uset = l.getUsageInfo(point);
+      if (uset.isTrue()) {
+        //Refined and contains only one usage, which realizes this point
+        trueUsagesInAllUnsafes++;
+        if (l.isTrueUnsafe()) {
+          trueUsagesInTrueUnsafe++;
+        }
+        continue;
+      }
+      for (UsageInfo uinfo : uset.getUsages()){
         if (uinfo.failureFlag) {
           totalFailureUsages++;
         } else if (uinfo.isRefined()) {
@@ -265,7 +278,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   }
 
   private void createVisualization(final SingleIdentifier id, final Writer writer) throws IOException {
-    final UsageList uinfo = container.getUsages(id);
+    final UnrefinedUsagePointSet uinfo = container.getUsages(id);
     if (uinfo == null || uinfo.size() == 0) {
       return;
     }

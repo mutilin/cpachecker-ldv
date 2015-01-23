@@ -6,6 +6,7 @@ import java.util.TreeSet;
 
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
+import org.sosy_lab.cpachecker.util.coverage.CoverageInformation;
 
 import com.google.common.collect.ImmutableSet;
 
@@ -48,6 +49,20 @@ public class UsagePoint implements Comparable<UsagePoint> {
   
   public Set<UsagePoint> getCoveredUsages() {
     return coveredUsages;
+  }
+  
+  public boolean removeRecursively(UsagePoint target) {
+    if (getCoveredUsages().contains(target)) {
+      coveredUsages.remove(target);
+      coveredUsages.addAll(target.getCoveredUsages());
+      return true;
+    }
+    for (UsagePoint point : getCoveredUsages()) {
+      if (removeRecursively(point)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   @Override

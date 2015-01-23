@@ -38,7 +38,7 @@ import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 public class UsageContainer {
-  private final Map<SingleIdentifier, UsageList> Stat;
+  private final Map<SingleIdentifier, UnrefinedUsagePointSet> Stat;
 
   public List<SingleIdentifier> unsafes = null;
 
@@ -55,13 +55,17 @@ public class UsageContainer {
   }
 
   public void add(final SingleIdentifier id, final UsageInfo usage) {
-    UsageList uset;
+    UnrefinedUsagePointSet uset;
 
     if (!Stat.containsKey(id)) {
-      uset = new UsageList();
+      uset = new UnrefinedUsagePointSet();
       Stat.put(id, uset);
     } else {
       uset = Stat.get(id);
+      if (uset.isFalseUnsafe() || uset.isTrueUnsafe()) {
+        //When we clean precision we can add smth false
+        return;
+      }
     }
     uset.add(usage);
   }
@@ -71,10 +75,13 @@ public class UsageContainer {
       unsafeUsages = 0;
       unsafes = new LinkedList<>();
       for (SingleIdentifier id : Stat.keySet()) {
-        UsageList tmpList = Stat.get(id);
+        UnrefinedUsagePointSet tmpList = Stat.get(id);
+        tmpList.checkAllEmptyPoints();
         if (tmpList.isUnsafe()) {
           unsafes.add(id);
           unsafeUsages += Stat.get(id).size();
+        } else {
+          tmpList.setFalseUnsafe();
         }
       }
     }
@@ -99,7 +106,7 @@ public class UsageContainer {
     unsafes = null;
 
     for (SingleIdentifier id : Stat.keySet()) {
-      UsageList uset = Stat.get(id);
+      UnrefinedUsagePointSet uset = Stat.get(id);
       uset.reset();
     }
     logger.log(Level.FINE, "Unsafes are reseted");
@@ -107,7 +114,7 @@ public class UsageContainer {
   }
 
   public void removeState(final UsageStatisticsState pUstate) {
-    UsageList uset;
+    UnrefinedUsagePointSet uset;
     //Not a set! Some usages and sets can be equals, but referes to different ids
     for (SingleIdentifier id : Stat.keySet()) {
       uset = Stat.get(id);
@@ -116,7 +123,7 @@ public class UsageContainer {
     logger.log(Level.ALL, "All unsafes related to key state " + pUstate + " were removed from reached set");
   }
 
-  public UsageList getUsages(SingleIdentifier id) {
+  public UnrefinedUsagePointSet getUsages(SingleIdentifier id) {
     return Stat.get(id);
   }
 
