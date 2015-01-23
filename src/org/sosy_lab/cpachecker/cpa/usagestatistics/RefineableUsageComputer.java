@@ -71,7 +71,8 @@ public class RefineableUsageComputer {
     } else {
       logger.log(Level.INFO, "Usage " + uinfo + " is reachable, mark it as true");
       currentRefineableUsageList.markAsTrue(uinfo); 
-      if (currentRefineableUsageList.isTrueUnsafe()) {
+      if (currentRefineableUsageList.checkTrueUnsafe()) {
+        container.setAsRefined(currentRefineableUsageList);
         usagePointIterator = null;
       }
       usageIterator = null;
@@ -90,9 +91,13 @@ public class RefineableUsageComputer {
           while (usagePointIterator == null || !usagePointIterator.hasNext()) {
             if (idIterator.hasNext()) {
               SingleIdentifier id = idIterator.next();
-              currentRefineableUsageList = container.getUsages(id);
-              if (currentRefineableUsageList.isTrueUnsafe() || 
-            		currentRefineableUsageList.isFalseUnsafe() || !currentRefineableUsageList.isUnsafe()) {
+              AbstractUsagePointSet potentialUsagePointSet = container.getUsages(id);
+              if (potentialUsagePointSet.isTrueUnsafe()) {
+                continue;
+              }
+              currentRefineableUsageList = (UnrefinedUsagePointSet) potentialUsagePointSet;
+              if (!currentRefineableUsageList.isUnsafe()) {
+                //May be we refine and delete some usages 
                 continue;
               }
               usagePointIterator = currentRefineableUsageList.clone().getPointIterator();

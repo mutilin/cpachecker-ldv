@@ -39,8 +39,6 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
   private final Set<UsagePoint> topUsages;
   private final Map<UsagePoint, AbstractUsageInfoSet> detailInformation;
   private final Set<UsagePoint> falsePoints;
-  private boolean isTrueUnsafe = false;
-  private boolean isFalseUnsafe = false;
   
   public UnrefinedUsagePointSet() {
     topUsages = new TreeSet<>();
@@ -94,9 +92,9 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     }
   }
   
-  public boolean isUnsafe() {
-    if (topUsages.size() >= 1) {
-      Iterator<UsagePoint> iterator = topUsages.iterator();
+  private boolean isUnsafe(Set<UsagePoint> points) {
+    if (points.size() >= 1) {
+      Iterator<UsagePoint> iterator = points.iterator();
       UsagePoint point = iterator.next();
       if (point.access == Access.WRITE) {
         Set<LockIdentifier> lockSet = new HashSet<>(point.locks);
@@ -127,26 +125,27 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     return Pair.of(firstSet.getOneExample(), secondSet.getOneExample());
   }
   
-  public boolean isTrueUnsafe() {
-    if (!isTrueUnsafe) {
-      if (!isUnsafe()) {
-        return false;
-      }
-      
-      Iterator<UsagePoint> iterator = topUsages.iterator();
-      boolean result = iterator.next().isTrue();
-      if (iterator.hasNext()) {
-        //One write usage is also unsafe, as we consider the function to be able to run in parallel with itself
-        result &= iterator.next().isTrue();
-      }
-      
-      if (result) {
-        isTrueUnsafe = true;
-      }
-      return result;
-    } else {
-      return true;
+  public boolean checkTrueUnsafe() {
+    if (!isUnsafe()) {
+      return false;
     }
+    
+    Iterator<UsagePoint> iterator = topUsages.iterator();
+    Set<UsagePoint> refinedPoints = new TreeSet<>();
+    UsagePoint tmpPoint = iterator.next();
+    while (tmpPoint.isTrue()) {
+      refinedPoints.add(tmpPoint);
+      if (iterator.hasNext()) {
+        tmpPoint = iterator.next();
+      } else {
+        break;
+      }
+    }
+    return isUnsafe(refinedPoints);
+  }
+  
+  public boolean isTrueUnsafe() {
+    return false;
   }
 
   public int size() {
@@ -191,14 +190,6 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
 
   public AbstractUsageInfoSet getUsageInfo(UsagePoint next) {
     return detailInformation.get(next);
-  }
-  
-  public void setFalseUnsafe() {
-	  isFalseUnsafe = true;
-  }
-  
-  public boolean isFalseUnsafe() {
-	  return isFalseUnsafe;
   }
 
   public void markAsTrue(UsageInfo uinfo) {
@@ -246,5 +237,23 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
       remove(point);
       falsePoints.add(point);
     }
+  }
+
+  public RefinedUsagePointSet asTrueUnsafe() {
+    Iterator<UsagePoint> iterator = topUsages.iterator();
+    UsagePoint first = iterator.next();
+    if (iterator.hasNext()) {
+      UsagePoint second = iterator.next();
+      if (second.isTrue()) {
+        return RefinedUsagePointSet.create((RefinedUsageInfoSet)detailInformation.get(first),
+            (RefinedUsageInfoSet)detailInformation.get(second));
+      }
+    }
+    return RefinedUsagePointSet.create((RefinedUsageInfoSet)detailInformation.get(first));
+  }
+
+  @Override
+  public boolean isUnsafe() {
+    return isUnsafe(topUsages);
   }
 }

@@ -122,7 +122,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     while (iterator.hasNext()) {
       SingleIdentifier id = iterator.next();
       sb.append(id.getName() + ", ");
-      UnrefinedUsagePointSet list = container.getUsages(id);
+      AbstractUsagePointSet list = container.getUsages(id);
       if (list.isTrueUnsafe()) {
     	  originTrueUnsafeSize++;
       }/* else if (list.isFalseUnsafe()) {
@@ -138,7 +138,6 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     while ((target = computer.getNextRefineableUsage()) != null) {
       pStat.UnsafeCheck.stopIfRunning();
       pathStateToReachedState.clear();
-      refinementFinish = true;
       pStat.ComputePath.start();
       ARGPath pPath = computePath((ARGState)target.getKeyState(), target.getCallStack());
       pStat.ComputePath.stopIfRunning();
@@ -147,6 +146,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
         pStat.Refinement.start();
         CounterexampleInfo counterexample = super.performRefinement0(
             new BAMReachedSet(transfer, new ARGReachedSet(pReached), pPath, pathStateToReachedState), pPath);
+        refinementFinish |= counterexample.isSpurious();
         if (counterexample.isSpurious()) {
           List<BooleanFormula> formulas = (List<BooleanFormula>) counterexample.getAllFurtherInformation().iterator().next().getFirst();
           pStat.CacheTime.start();
@@ -177,7 +177,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     iterator = container.getUnsafeIterator();
      while (iterator.hasNext()) {
       SingleIdentifier id = iterator.next();
-      UnrefinedUsagePointSet list = container.getUsages(id);
+      AbstractUsagePointSet list = container.getUsages(id);
       if (list.isTrueUnsafe()) {
         newTrueUnsafeSize++;
       }

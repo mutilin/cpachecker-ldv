@@ -53,7 +53,7 @@ public class USReachedSet extends PartitionedReachedSet {
 
   @Override
   public void clear() {
-    AbstractStates.extractStateByType(getFirstState(), UsageStatisticsState.class).getContainer().resetUnsafes();
+    AbstractStates.extractStateByType(getFirstState(), UsageStatisticsState.class).getContainer().resetUnrefinedUnsafes();
     super.clear();
   }
 }

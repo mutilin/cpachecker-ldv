@@ -102,7 +102,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
     Iterator<SingleIdentifier> generalIterator = container.getGeneralIterator();
     while (generalIterator.hasNext()) {
-      UnrefinedUsagePointSet uset = container.getUsages(generalIterator.next());
+      AbstractUsagePointSet uset = container.getUsages(generalIterator.next());
       Iterator<UsagePoint> pointIterator = uset.getPointIterator();
       while (pointIterator.hasNext()) {
         UsagePoint point = pointIterator.next();
@@ -237,7 +237,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     return tmpList;
   }
   
-  private void countUsageStatistics(UnrefinedUsagePointSet l) {
+  private void countUsageStatistics(AbstractUsagePointSet l) {
     int startFailureNum = totalFailureUsages;
     int startTrueNum = trueUsagesInTrueUnsafe;
     
@@ -278,7 +278,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   }
 
   private void createVisualization(final SingleIdentifier id, final Writer writer) throws IOException {
-    final UnrefinedUsagePointSet uinfo = container.getUsages(id);
+    final AbstractUsagePointSet uinfo = container.getUsages(id);
     if (uinfo == null || uinfo.size() == 0) {
       return;
     }
