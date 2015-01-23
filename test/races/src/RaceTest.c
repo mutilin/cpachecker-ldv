@@ -1,4 +1,4 @@
-int invisible_unsafe, global;
+int false_unsafe, global;
 int true_unsafe;
 int unsafe, false_unsafe2;
 
@@ -57,7 +57,6 @@ __inline static int init(int mutex )
     } 
     kernDispatchEnable();
   }
-  invisible_unsafe = 0;
   return (0);
 }
 
@@ -68,7 +67,7 @@ int difficult_function() {
       return 28;
     }
 restart: 
-    invisible_unsafe = 0;
+    false_unsafe = 0;
     true_unsafe = 0;
   
   kernDispatchEnable();
