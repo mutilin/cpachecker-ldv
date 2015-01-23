@@ -398,13 +398,16 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
       return result;
     }
 
-    for (LockStatisticsLock lock : this.locks) {
-      result -= lock.norm();
+    Iterator<LockStatisticsLock> iterator1 = locks.iterator();
+    Iterator<LockStatisticsLock> iterator2 = other.locks.iterator();
+    //Sizes are equal
+    while (iterator1.hasNext()) {
+      result = iterator1.next().compareTo(iterator2.next());
+      if (result != 0) {
+        return result;
+      }
     }
-    for (LockStatisticsLock lock : other.locks) {
-      result += lock.norm();
-    }
-    return result;
+    return 0;
   }
 
   public boolean intersects(LockStatisticsState pLocks) {
