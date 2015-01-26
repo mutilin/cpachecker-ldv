@@ -46,7 +46,7 @@ public class RefineableUsageComputer {
   RefineableUsageComputer(UsageContainer c, LogManager l) {
     container = c;
     cache = new UsageCallstackCache();
-    idIterator = container.getUnsafeIterator();
+    idIterator = container.getUnrefinedUnsafeIterator();
     logger = l;
     waitRefinementResult = false;
   }
@@ -92,14 +92,9 @@ public class RefineableUsageComputer {
             if (idIterator.hasNext()) {
               SingleIdentifier id = idIterator.next();
               AbstractUsagePointSet potentialUsagePointSet = container.getUsages(id);
-              if (potentialUsagePointSet.isTrueUnsafe()) {
-                continue;
-              }
+              assert (!potentialUsagePointSet.isTrueUnsafe());
               currentRefineableUsageList = (UnrefinedUsagePointSet) potentialUsagePointSet;
-              if (!currentRefineableUsageList.isUnsafe()) {
-                //May be we refine and delete some usages 
-                continue;
-              }
+              assert (currentRefineableUsageList.isUnsafe());
               usagePointIterator = currentRefineableUsageList.clone().getPointIterator();
             } else {
               return null;

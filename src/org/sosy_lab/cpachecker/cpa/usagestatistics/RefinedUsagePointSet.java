@@ -103,16 +103,6 @@ public class RefinedUsagePointSet implements AbstractUsagePointSet {
   }
 
   @Override
-  public void add(UsageInfo usage) {
-    // Do nothing, this is already true    
-  }
-
-  @Override
-  public void reset() {
-    // Do nothing - there are no unrefined usages
-  }
-
-  @Override
   public void remove(UsageStatisticsState pUstate) {
     // Do nothing, we don't delete true usages
   }

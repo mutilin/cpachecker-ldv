@@ -13,7 +13,5 @@ public interface AbstractUsagePointSet {
   public abstract AbstractUsageInfoSet getUsageInfo(UsagePoint point);
   public abstract int getNumberOfTopUsagePoints();
   public abstract Pair<UsageInfo, UsageInfo> getUnsafePair();
-  public abstract void add(UsageInfo usage);
-  public abstract void reset();
   public abstract void remove(UsageStatisticsState pUstate);
 }

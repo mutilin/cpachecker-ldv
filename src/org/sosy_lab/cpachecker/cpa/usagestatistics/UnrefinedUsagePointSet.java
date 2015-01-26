@@ -27,7 +27,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -37,38 +36,32 @@ import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
 
 public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
   private final Set<UsagePoint> topUsages;
-  private final Map<UsagePoint, AbstractUsageInfoSet> detailInformation;
-  private final Set<UsagePoint> falsePoints;
+  private final Map<UsagePoint, UnrefinedUsageInfoSet> unrefinedInformation;
+  private final Map<UsagePoint, RefinedUsageInfoSet> refinedInformation;
   
   public UnrefinedUsagePointSet() {
     topUsages = new TreeSet<>();
-    detailInformation = new HashMap<>();
-    falsePoints = new TreeSet<>();
+    unrefinedInformation = new HashMap<>();
+    refinedInformation = new HashMap<>();
   }
   
-  private UnrefinedUsagePointSet(Set<UsagePoint> top, Map<UsagePoint, AbstractUsageInfoSet> detail, Set<UsagePoint> fPoints) {
+  private UnrefinedUsagePointSet(Set<UsagePoint> top, Map<UsagePoint, UnrefinedUsageInfoSet> detail, Map<UsagePoint, RefinedUsageInfoSet> trueUsages) {
     topUsages = top;
-    detailInformation = detail;
-    falsePoints = fPoints;
+    unrefinedInformation = detail;
+    refinedInformation = trueUsages;
   }
   
   public void add(UsageInfo newInfo) {
-    AbstractUsageInfoSet tmpSet;
     UnrefinedUsageInfoSet targetSet;
     UsagePoint newPoint = newInfo.getUsagePoint();
-    if (falsePoints.contains(newPoint)) {
+    if (refinedInformation.containsKey(newPoint)) {
       return;
     }
-    if (detailInformation.containsKey(newPoint)) {
-      tmpSet = detailInformation.get(newPoint);
-      if (!(tmpSet instanceof UnrefinedUsageInfoSet)) {
-        //Do not add to true or false points: when we clean precision, we can add smth false
-        return;
-      } 
-      targetSet = (UnrefinedUsageInfoSet) tmpSet;
+    if (unrefinedInformation.containsKey(newPoint)) {
+      targetSet = unrefinedInformation.get(newPoint);
     } else {
       targetSet = new UnrefinedUsageInfoSet();
-      detailInformation.put(newPoint, targetSet);
+      unrefinedInformation.put(newPoint, targetSet);
     }
     add(newPoint);
     targetSet.add(newInfo);
@@ -101,23 +94,29 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
         while (iterator.hasNext() && !lockSet.isEmpty()) {
           lockSet.retainAll(iterator.next().locks);
         }
-        if (lockSet.isEmpty()) {
-          return true;
-        }
+        return lockSet.isEmpty();
       }
     }
     return false;
+  }
+  
+  private AbstractUsageInfoSet get(UsagePoint point) {
+    if (point.isTrue()) {
+      return refinedInformation.get(point);
+    } else {
+      return unrefinedInformation.get(point);
+    }
   }
   
   public Pair<UsageInfo, UsageInfo> getUnsafePair() {
     assert isUnsafe();
     
     Iterator<UsagePoint> iterator = topUsages.iterator();
-    AbstractUsageInfoSet firstSet = detailInformation.get(iterator.next());
+    AbstractUsageInfoSet firstSet = get(iterator.next());
     AbstractUsageInfoSet secondSet;
     if (iterator.hasNext()) {
       UsagePoint point = iterator.next();
-      secondSet = detailInformation.get(point);
+      secondSet = get(point);
     } else {
       //One write usage is also unsafe, as we consider the function to be able to run in parallel with itself
       secondSet = firstSet;
@@ -151,8 +150,11 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
   public int size() {
     int result = 0;
     
-    for (UsagePoint point : detailInformation.keySet()) {
-      result += detailInformation.get(point).size();
+    for (UsagePoint point : refinedInformation.keySet()) {
+      result += refinedInformation.get(point).size();
+    }
+    for (UsagePoint point : unrefinedInformation.keySet()) {
+      result += unrefinedInformation.get(point).size();
     }
     
     return result;
@@ -166,17 +168,12 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
         iterator.remove();
       }
     }
-    for (UsagePoint point : detailInformation.keySet()) {
-      detailInformation.get(point).reset();
-      if (point.keyUsage != null) {
-        point.keyUsage.resetKeyState();
-      }
-    }
+    unrefinedInformation.clear();
   }
 
   public void remove(UsageStatisticsState pUstate) {
-    for (UsagePoint point : detailInformation.keySet()) {
-      detailInformation.get(point).remove(pUstate);
+    for (UsagePoint point : unrefinedInformation.keySet()) {
+      unrefinedInformation.get(point).remove(pUstate);
     }
   }
 
@@ -189,7 +186,7 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
   }
 
   public AbstractUsageInfoSet getUsageInfo(UsagePoint next) {
-    return detailInformation.get(next);
+    return get(next);
   }
 
   public void markAsTrue(UsageInfo uinfo) {
@@ -200,56 +197,32 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     topUsages.remove(p);
     p.markAsTrue();
     topUsages.add(p);
-    detailInformation.put(p, new RefinedUsageInfoSet(uinfo));
+    refinedInformation.put(p, new RefinedUsageInfoSet(uinfo));
   }
   
   public UnrefinedUsagePointSet clone() {
-    return new UnrefinedUsagePointSet(new TreeSet<>(topUsages), new HashMap<>(detailInformation), new TreeSet<>(falsePoints));
+    return new UnrefinedUsagePointSet(new TreeSet<>(topUsages), new HashMap<>(unrefinedInformation), new HashMap<>(refinedInformation));
   }
   
   public void remove(UsagePoint currentUsagePoint) {
-    detailInformation.remove(currentUsagePoint);
-    if (topUsages.contains(currentUsagePoint)) {
-      topUsages.remove(currentUsagePoint);
-      for (UsagePoint point : currentUsagePoint.getCoveredUsages()) {
-        if (!falsePoints.contains(point)) {
-          add(point);
-        }
-      }
-    } else {
-      for (UsagePoint point : topUsages) {
-        point.removeRecursively(currentUsagePoint);
-      }
-    }
-  }
-
-  public void checkAllEmptyPoints() {
-    //We can't delete directly, use special method 'remove()'
-    Set<UsagePoint> toDelete = new HashSet<>();
-    for (UsagePoint point : detailInformation.keySet()) {
-      AbstractUsageInfoSet set = detailInformation.get(point);
-      if (set.size() == 0) {
-        //On current stage of refinement there are not usages added, so this point is considered to be false
-        toDelete.add(point);
-      }
-    }
-    for (UsagePoint point : toDelete) {
-      remove(point);
-      falsePoints.add(point);
+    unrefinedInformation.remove(currentUsagePoint);
+    topUsages.remove(currentUsagePoint);
+    for (UsagePoint point : currentUsagePoint.getCoveredUsages()) {
+      add(point);
     }
   }
 
   public RefinedUsagePointSet asTrueUnsafe() {
+    //TODO Wrong! First two refined usages may not create an unsafe pair
     Iterator<UsagePoint> iterator = topUsages.iterator();
     UsagePoint first = iterator.next();
     if (iterator.hasNext()) {
       UsagePoint second = iterator.next();
       if (second.isTrue()) {
-        return RefinedUsagePointSet.create((RefinedUsageInfoSet)detailInformation.get(first),
-            (RefinedUsageInfoSet)detailInformation.get(second));
+        return RefinedUsagePointSet.create(refinedInformation.get(first), refinedInformation.get(second));
       }
     }
-    return RefinedUsagePointSet.create((RefinedUsageInfoSet)detailInformation.get(first));
+    return RefinedUsagePointSet.create(refinedInformation.get(first));
   }
 
   @Override

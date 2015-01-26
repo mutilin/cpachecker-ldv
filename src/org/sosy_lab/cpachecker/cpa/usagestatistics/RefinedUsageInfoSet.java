@@ -8,6 +8,7 @@ public class RefinedUsageInfoSet implements AbstractUsageInfoSet {
 
   public RefinedUsageInfoSet(UsageInfo uinfo) {
     refinedUsage = uinfo;
+    refinedUsage.resetKeyState();
   }
   
   @Override
@@ -22,11 +23,6 @@ public class RefinedUsageInfoSet implements AbstractUsageInfoSet {
   @Override
   public int size() {
     return 1;
-  }
-
-  @Override
-  public void reset() {
-    refinedUsage.resetKeyState();
   }
 
   @Override
