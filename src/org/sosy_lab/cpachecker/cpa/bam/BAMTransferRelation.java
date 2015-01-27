@@ -73,6 +73,7 @@ import org.sosy_lab.cpachecker.cpa.callstack.CallstackTransferRelation;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsCPA;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsPrecision;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsReducer;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsTransferRelation;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
@@ -214,8 +215,7 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
         Collection<? extends AbstractState> tmpResult = getAbstractSuccessors0(pState, pPrecision, e);
         result.addAll(tmpResult);
         if (e instanceof CFunctionReturnEdge && tmpResult.size() > 0) {
-          setLockStatisticsPrecision(AbstractStates.extractStateByType(tmpResult.iterator().next(), CallstackState.class),
-              pPrecision);
+          setLockStatisticsPrecision(AbstractStates.extractStateByType(tmpResult.iterator().next(), CallstackState.class));
         }
       }
       return result;
@@ -227,7 +227,7 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
       // the latter is not supported yet, but in the the former case we can classically do the post operation
       if (BlockStack.size() == 0) {
         BlockStack.add(currentBlock);
-        setLockStatisticsPrecision(AbstractStates.extractStateByType(pState, CallstackState.class), pPrecision);
+        setLockStatisticsPrecision(AbstractStates.extractStateByType(pState, CallstackState.class));
       }
       return wrappedTransfer.getAbstractSuccessors(pState, pPrecision, null); // edge is null
     }
@@ -344,23 +344,20 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
       forwardPrecisionToExpandedPrecision.put(expandedState, expandedPrecision);
     }
     BlockStack.removeLast();
-    setLockStatisticsPrecision(AbstractStates.extractStateByType(state, CallstackState.class).getPreviousState(), precision);
+    setLockStatisticsPrecision(AbstractStates.extractStateByType(state, CallstackState.class).getPreviousState());
     return expandedResult;
   }
 
-  private void setLockStatisticsPrecision(final CallstackState state, Precision pPrecision) {
-    if (pPrecision instanceof WrapperPrecision) {
-      LockStatisticsPrecision lockPrecision = ((WrapperPrecision) pPrecision).retrieveWrappedPrecision(LockStatisticsPrecision.class);
-
-      if (lockPrecision != null) {
-        try {
+  private void setLockStatisticsPrecision(final CallstackState state) {
+      try {
+        LockStatisticsCPA lockCPA = CPAs.retrieveCPA(bamCPA, LockStatisticsCPA.class);
+        if (lockCPA != null) {
           CallstackState fullState = restoreCallstack(state);
-          lockPrecision.setPreciseState(fullState);
-        } catch (HandleCodeException e) {
-          logger.log(Level.WARNING, "Can't restore callstack");
+          ((LockStatisticsTransferRelation)lockCPA.getTransferRelation()).setCallstackState(fullState);
         }
+      } catch (HandleCodeException e) {
+        logger.log(Level.WARNING, "Can't restore callstack");
       }
-    }
   }
 
   private boolean isRecursionEdge(CFAEdge e) {
@@ -404,7 +401,7 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
 
     final Collection<Pair<AbstractState, Precision>> result;
 
-    setLockStatisticsPrecision(AbstractStates.extractStateByType(initialState, CallstackState.class), reducedInitialPrecision);
+    setLockStatisticsPrecision(AbstractStates.extractStateByType(initialState, CallstackState.class));
     if (returnStates != null) {
       assert reached != null;
       // cache hit, return element from cache

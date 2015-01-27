@@ -66,9 +66,11 @@ import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackTransferRelation;
+import org.sosy_lab.cpachecker.cpa.composite.CompositeTransferRelation;
 import org.sosy_lab.cpachecker.cpa.local.LocalState.DataType;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsPrecision;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsTransferRelation;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.BinderFunctionInfo.LinkerInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.EdgeInfo.EdgeType;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
@@ -103,15 +105,18 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
   private Set<String> abortfunctions;
 
   private final CallstackTransferRelation callstackTransfer;
+  private final LockStatisticsTransferRelation lockstatTransfer;
 
   private Map<String, BinderFunctionInfo> binderFunctionInfo;
   private final LogManager logger;
 
   public UsageStatisticsTransferRelation(TransferRelation pWrappedTransfer,
-      Configuration config, LogManager pLogger, UsageStatisticsCPAStatistics s, CallstackTransferRelation transfer) throws InvalidConfigurationException {
+      Configuration config, LogManager pLogger, UsageStatisticsCPAStatistics s,
+      CallstackTransferRelation transfer, LockStatisticsTransferRelation lTransfer) throws InvalidConfigurationException {
     config.inject(this);
     wrappedTransfer = pWrappedTransfer;
     callstackTransfer = transfer;
+    lockstatTransfer = lTransfer;
     statistics = s;
 
     binderFunctionInfo = new HashMap<>();
@@ -456,8 +461,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       logger.log(Level.FINER, singleId + " is considered to be local, so it wasn't add to statistics");
       return;
     }
-
-    CallstackState fullCallstack = pPrecision.retrieveWrappedPrecision(LockStatisticsPrecision.class).getPreciseState();
+    CallstackState fullCallstack = lockstatTransfer.getFullCallstack();
 
     if (fullCallstack == null) {
       //No ABM, so get real callstack
