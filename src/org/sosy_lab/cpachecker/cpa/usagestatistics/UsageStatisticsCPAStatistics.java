@@ -55,6 +55,7 @@ import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsLock;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.AbstractUsageInfoSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.AbstractUsagePointSet;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.RefinedUsageInfoSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsageContainer;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsagePoint;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
@@ -250,22 +251,20 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       UsagePoint point = pointIterator.next();
       totalNumberOfUsagePoints++;
       AbstractUsageInfoSet uset = l.getUsageInfo(point);
-      if (uset.isTrue()) {
+      if (point.isTrue()) {
         //Refined and contains only one usage, which realizes this point
         trueUsagesInAllUnsafes++;
         if (l.isTrueUnsafe()) {
           trueUsagesInTrueUnsafe++;
+        }
+        if (uset.getOneExample().failureFlag) {
+          totalFailureUsages++;
         }
         continue;
       }
       for (UsageInfo uinfo : uset.getUsages()){
         if (uinfo.failureFlag) {
           totalFailureUsages++;
-        } else if (uinfo.isRefined()) {
-        	trueUsagesInAllUnsafes++;
-        	if (l.isTrueUnsafe()) {
-        	  trueUsagesInTrueUnsafe++;
-        	}
         }
       }
     }

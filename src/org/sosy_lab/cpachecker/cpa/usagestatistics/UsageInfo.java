@@ -61,7 +61,6 @@ public class UsageInfo implements Comparable<UsageInfo> {
   private final CallstackState callstack;
   private AbstractState keyState;
   private final Access accessType;
-  private boolean isRefined;
   public boolean failureFlag;
   
   private static final boolean mergeUsagesWithEqualCallstacks = false;
@@ -75,7 +74,6 @@ public class UsageInfo implements Comparable<UsageInfo> {
     callstack = call;
     accessType = atype;
     keyState = null;
-    isRefined = false;
     failureFlag = false;
   }
 
@@ -234,14 +232,6 @@ public class UsageInfo implements Comparable<UsageInfo> {
 
   public AbstractState getKeyState() {
     return keyState;
-  }
-
-  public void setRefineFlag() {
-    isRefined = true;
-  }
-
-  public boolean isRefined() {
-    return isRefined;
   }
 
   @Override
