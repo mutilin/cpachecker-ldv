@@ -214,6 +214,7 @@ public class BAMCache {
     preciseReachedCache.clear();
     unpreciseReachedCache.clear();
     returnCache.clear();
+    blockARGCache.clear();
   }
 
   public boolean containsPreciseKey(AbstractState stateKey, Precision precisionKey, Block context) {
