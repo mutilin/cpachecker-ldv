@@ -53,6 +53,8 @@ import org.sosy_lab.cpachecker.core.interfaces.StopOperator;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackCPA;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackTransferRelation;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsCPA;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsTransferRelation;
 import org.sosy_lab.cpachecker.util.CPAs;
 @Options(prefix="cpa.usagestatistics")
 public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements ConfigurableProgramAnalysisWithBAM {
@@ -107,7 +109,8 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
     }
     logger = pLogger;
     this.transferRelation = new UsageStatisticsTransferRelation(pCpa.getTransferRelation(), pConfig, pLogger, statistics
-        , (CallstackTransferRelation) (CPAs.retrieveCPA(this, CallstackCPA.class)).getTransferRelation());
+        , (CallstackTransferRelation) (CPAs.retrieveCPA(this, CallstackCPA.class)).getTransferRelation()
+        , (LockStatisticsTransferRelation) (CPAs.retrieveCPA(this, LockStatisticsCPA.class)).getTransferRelation());
 
     String tmpString = pConfig.getProperty("precision.path");
     if (tmpString != null) {
