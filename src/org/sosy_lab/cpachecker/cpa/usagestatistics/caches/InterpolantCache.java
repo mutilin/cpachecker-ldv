@@ -1,4 +1,4 @@
-package org.sosy_lab.cpachecker.cpa.usagestatistics;
+package org.sosy_lab.cpachecker.cpa.usagestatistics.caches;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 
 public class InterpolantCache {

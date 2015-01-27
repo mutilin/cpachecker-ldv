@@ -47,6 +47,9 @@ import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateRefiner;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicatePrecision;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.caches.InterpolantCache;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.AbstractUsagePointSet;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsageContainer;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
@@ -97,7 +100,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
   int counter = 0;
   int lastFalseUnsafeSize = -1;
   int lastTrueUnsafes = -1;
-  private static final int HARDCODED_NUMBER_FOR_START_CLEANING_PRECISION = 10;
+  private static final int HARDCODED_NUMBER_FOR_START_CLEANING_PRECISION = Integer.MAX_VALUE;
   @Override
   public boolean performRefinement(ReachedSet pReached) throws CPAException, InterruptedException {
     final UsageContainer container =

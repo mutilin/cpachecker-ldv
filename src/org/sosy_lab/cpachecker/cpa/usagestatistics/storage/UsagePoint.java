@@ -1,10 +1,11 @@
-package org.sosy_lab.cpachecker.cpa.usagestatistics;
+package org.sosy_lab.cpachecker.cpa.usagestatistics.storage;
 
 import java.util.HashSet;
 import java.util.Set;
 import java.util.TreeSet;
 
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
 
 import com.google.common.collect.ImmutableSet;

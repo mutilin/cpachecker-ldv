@@ -1,8 +1,10 @@
-package org.sosy_lab.cpachecker.cpa.usagestatistics;
+package org.sosy_lab.cpachecker.cpa.usagestatistics.storage;
 
 import java.util.Iterator;
 
 import org.sosy_lab.common.Pair;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsState;
 
 public interface AbstractUsagePointSet {
 

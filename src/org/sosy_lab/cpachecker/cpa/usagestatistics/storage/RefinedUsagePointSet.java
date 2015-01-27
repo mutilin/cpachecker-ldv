@@ -1,4 +1,4 @@
-package org.sosy_lab.cpachecker.cpa.usagestatistics;
+package org.sosy_lab.cpachecker.cpa.usagestatistics.storage;
 
 import java.util.Collections;
 import java.util.HashSet;
@@ -6,6 +6,8 @@ import java.util.Iterator;
 import java.util.Set;
 
 import org.sosy_lab.common.Pair;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsState;
 
 public class RefinedUsagePointSet implements AbstractUsagePointSet {
 

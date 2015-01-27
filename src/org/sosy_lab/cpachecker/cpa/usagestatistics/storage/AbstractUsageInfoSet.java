@@ -1,4 +1,7 @@
-package org.sosy_lab.cpachecker.cpa.usagestatistics;
+package org.sosy_lab.cpachecker.cpa.usagestatistics.storage;
+
+import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsState;
 
 public interface AbstractUsageInfoSet {
   public void remove(UsageStatisticsState state);

@@ -21,7 +21,7 @@
  *  CPAchecker web page:
  *    http://cpachecker.sosy-lab.org
  */
-package org.sosy_lab.cpachecker.cpa.usagestatistics;
+package org.sosy_lab.cpachecker.cpa.usagestatistics.storage;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -32,6 +32,8 @@ import java.util.TreeSet;
 
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
 
 public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
@@ -45,7 +47,8 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     refinedInformation = new HashMap<>();
   }
   
-  private UnrefinedUsagePointSet(Set<UsagePoint> top, Map<UsagePoint, UnrefinedUsageInfoSet> detail, Map<UsagePoint, RefinedUsageInfoSet> trueUsages) {
+  private UnrefinedUsagePointSet(Set<UsagePoint> top, Map<UsagePoint, UnrefinedUsageInfoSet> detail, 
+      Map<UsagePoint, RefinedUsageInfoSet> trueUsages) {
     topUsages = top;
     unrefinedInformation = detail;
     refinedInformation = trueUsages;

@@ -27,6 +27,14 @@ import java.util.Iterator;
 import java.util.logging.Level;
 
 import org.sosy_lab.common.log.LogManager;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.caches.UsageCache;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.caches.UsageCallstackCache;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.AbstractUsageInfoSet;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.AbstractUsagePointSet;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UnrefinedUsageInfoSet;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UnrefinedUsagePointSet;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsageContainer;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsagePoint;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 

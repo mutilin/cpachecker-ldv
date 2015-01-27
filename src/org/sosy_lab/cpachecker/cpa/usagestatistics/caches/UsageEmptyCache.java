@@ -21,29 +21,20 @@
  *  CPAchecker web page:
  *    http://cpachecker.sosy-lab.org
  */
-package org.sosy_lab.cpachecker.cpa.usagestatistics;
+package org.sosy_lab.cpachecker.cpa.usagestatistics.caches;
 
-import java.util.HashSet;
-import java.util.Set;
-
-import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 
 
-public class UsageCallstackCache implements UsageCache {
-  private Set<CallstackState> visitedFunctions = new HashSet<>();
+public class UsageEmptyCache implements UsageCache {
 
   @Override
   public void add(UsageInfo pUinfo) {
-    visitedFunctions.add(pUinfo.getCallStack());
+
   }
 
   @Override
   public boolean contains(UsageInfo pUinfo) {
-    for (CallstackState tmp : visitedFunctions) {
-      if (tmp.equalsWithoutNode(pUinfo.getCallStack())) {
-        return true;
-      }
-    }
     return false;
   }
 

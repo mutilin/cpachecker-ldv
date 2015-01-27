@@ -1,6 +1,9 @@
-package org.sosy_lab.cpachecker.cpa.usagestatistics;
+package org.sosy_lab.cpachecker.cpa.usagestatistics.storage;
 
 import java.util.Collections;
+
+import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsState;
 
 public class RefinedUsageInfoSet implements AbstractUsageInfoSet {
   //We need only one refined usage to say that this point is true;
