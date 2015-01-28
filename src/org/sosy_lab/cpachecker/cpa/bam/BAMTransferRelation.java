@@ -74,12 +74,18 @@ import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsCPA;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsPrecision;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsReducer;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsTransferRelation;
+import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateCPA;
+import org.sosy_lab.cpachecker.cpa.predicate.relevantpredicates.CachingRelevantPredicatesComputer;
+import org.sosy_lab.cpachecker.cpa.predicate.relevantpredicates.RelevantPredicatesComputer;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.CFAUtils;
 import org.sosy_lab.cpachecker.util.CPAs;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.PathFormulaManager;
+import org.sosy_lab.cpachecker.util.predicates.pathformula.CachingPathFormulaManager;
+import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormulaManagerImpl;
 
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Iterables;
@@ -575,6 +581,19 @@ throws InterruptedException, RecursiveAnalysisFailedException {
     argCache.clear();
     abstractStateToReachedSet.clear();
     expandedToReducedCache.clear();
+    BAMPredicateCPA bamcpa = CPAs.retrieveCPA(bamCPA, BAMPredicateCPA.class);
+    if (bamcpa != null) {
+      RelevantPredicatesComputer computer = bamcpa.getRelevantPredicatesComputer();
+      if (computer instanceof CachingRelevantPredicatesComputer) {
+        ((CachingRelevantPredicatesComputer)computer).clear();
+      }
+      PathFormulaManager pmgr = bamcpa.getPathFormulaManager();
+      if (pmgr instanceof CachingPathFormulaManager) {
+        ((CachingPathFormulaManager)pmgr).clearCaches();
+      } else if (pmgr instanceof PathFormulaManagerImpl) {
+        ((PathFormulaManagerImpl)pmgr).clear();
+      }
+    }
   }
 
   Pair<Block, ReachedSet> getCachedReachedSet(ARGState root, Precision rootPrecision) {
