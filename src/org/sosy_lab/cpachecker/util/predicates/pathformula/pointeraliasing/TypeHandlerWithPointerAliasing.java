@@ -152,4 +152,12 @@ public class TypeHandlerWithPointerAliasing extends CtoFormulaTypeHandler {
     sizes.setCount(compositeType, size);
     offsets.put(compositeType, members);
   }
+
+  public void clear() {
+    System.out.println("offsets size = " + offsets.size());
+    //offsets.clear();
+    System.out.println("sizes size = " + sizes.size());
+    //sizes.clear();
+    super.clear();
+  }
 }

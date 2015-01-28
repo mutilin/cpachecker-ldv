@@ -177,4 +177,12 @@ public class CachingPathFormulaManager implements PathFormulaManager {
       PointerTargetSet pts) {
     return delegate.makeNewPathFormula(pOldFormula, pM, pts);
   }
+  
+  public void clearCaches() {
+    andFormulaWithConditionsCache.clear();
+    andFormulaCache.clear();
+    orFormulaCache.clear();
+    emptyFormulaCache.clear();
+    ((PathFormulaManagerImpl)delegate).clear();
+  }
 }

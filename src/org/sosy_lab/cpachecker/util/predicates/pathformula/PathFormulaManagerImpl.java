@@ -562,4 +562,10 @@ public class PathFormulaManagerImpl implements PathFormulaManager {
         pts,
         oldFormula.getLength());
   }
+  
+  public void clear() {
+    if (typeHandler instanceof TypeHandlerWithPointerAliasing) {
+      ((TypeHandlerWithPointerAliasing)typeHandler).clear();
+    }
+  }
 }

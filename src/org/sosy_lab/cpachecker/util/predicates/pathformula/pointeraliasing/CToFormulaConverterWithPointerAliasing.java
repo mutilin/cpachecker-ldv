@@ -720,7 +720,7 @@ public class CToFormulaConverterWithPointerAliasing extends CtoFormulaConverter 
 
   static final String FRESH_INDEX_SEPARATOR = "#";
 
-  private static final Map<CType, String> ufNameCache = new IdentityHashMap<>();
+  public static final Map<CType, String> ufNameCache = new IdentityHashMap<>();
 
 
   // Overrides just for visibility in other classes of this package

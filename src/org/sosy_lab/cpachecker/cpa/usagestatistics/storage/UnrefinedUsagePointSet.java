@@ -37,7 +37,7 @@ import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
 
 public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
-  private final Set<UsagePoint> topUsages;
+  private final TreeSet<UsagePoint> topUsages;
   private final Map<UsagePoint, UnrefinedUsageInfoSet> unrefinedInformation;
   private final Map<UsagePoint, RefinedUsageInfoSet> refinedInformation;
   
@@ -47,7 +47,7 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     refinedInformation = new HashMap<>();
   }
   
-  private UnrefinedUsagePointSet(Set<UsagePoint> top, Map<UsagePoint, UnrefinedUsageInfoSet> detail, 
+  private UnrefinedUsagePointSet(TreeSet<UsagePoint> top, Map<UsagePoint, UnrefinedUsageInfoSet> detail, 
       Map<UsagePoint, RefinedUsageInfoSet> trueUsages) {
     topUsages = top;
     unrefinedInformation = detail;
@@ -103,7 +103,7 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     return false;
   }
   
-  private AbstractUsageInfoSet get(UsagePoint point) {
+  public AbstractUsageInfoSet getUsageInfo(UsagePoint point) {
     if (point.isTrue()) {
       return refinedInformation.get(point);
     } else {
@@ -115,11 +115,11 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     assert isUnsafe();
     
     Iterator<UsagePoint> iterator = topUsages.iterator();
-    AbstractUsageInfoSet firstSet = get(iterator.next());
+    AbstractUsageInfoSet firstSet = getUsageInfo(iterator.next());
     AbstractUsageInfoSet secondSet;
     if (iterator.hasNext()) {
       UsagePoint point = iterator.next();
-      secondSet = get(point);
+      secondSet = getUsageInfo(point);
     } else {
       //One write usage is also unsafe, as we consider the function to be able to run in parallel with itself
       secondSet = firstSet;
@@ -186,10 +186,6 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
   
   public int getNumberOfTopUsagePoints() {
     return topUsages.size();
-  }
-
-  public AbstractUsageInfoSet getUsageInfo(UsagePoint next) {
-    return get(next);
   }
 
   public void markAsTrue(UsageInfo uinfo) {

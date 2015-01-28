@@ -111,11 +111,8 @@ public class RefineableUsageComputer {
           currentUsagePoint = usagePointIterator.next();
         } while (currentUsagePoint.isTrue());
         AbstractUsageInfoSet refineableUsageInfoSet = currentRefineableUsageList.getUsageInfo(currentUsagePoint);
-        if (refineableUsageInfoSet.isTrue()) {
-          //Strange, if the point isn't true, but the set is
-          continue;
-        }
-        usageIterator = ((UnrefinedUsageInfoSet)refineableUsageInfoSet).getIterator();
+        assert (!refineableUsageInfoSet.isTrue());
+        usageIterator = refineableUsageInfoSet.getUsages().iterator();
       }
       resultUsage = usageIterator.next();
     } while (cache.contains(resultUsage));

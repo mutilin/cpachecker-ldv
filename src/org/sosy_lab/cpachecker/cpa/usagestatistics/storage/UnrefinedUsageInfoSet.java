@@ -25,15 +25,6 @@ public class UnrefinedUsageInfoSet implements AbstractUsageInfoSet {
   public int size() {
     return unrefinedUsages.size();
   }
-  
-  /**
-   * Is called after refinement to free memory
-   * otherwise all ARG will be stored on the next stage of analysis
-   */
-  public void reset() {
-    //TODO It seems, that the size is already 0. Check it.
-    unrefinedUsages.clear();
-  }
 
   public void remove(UsageStatisticsState pUstate) {
     Iterator<UsageInfo> iterator = unrefinedUsages.iterator();
@@ -49,10 +40,6 @@ public class UnrefinedUsageInfoSet implements AbstractUsageInfoSet {
   
   public UsageInfo getOneExample() {
     return unrefinedUsages.iterator().next();
-  }
-
-  public Iterator<UsageInfo> getIterator() {
-    return unrefinedUsages.iterator();
   }
   
   public ImmutableSet<UsageInfo> getUsages() {

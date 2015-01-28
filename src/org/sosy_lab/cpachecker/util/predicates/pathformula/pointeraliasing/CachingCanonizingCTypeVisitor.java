@@ -241,4 +241,8 @@ class CachingCanonizingCTypeVisitor extends DefaultCTypeVisitor<CType, RuntimeEx
 
   private final Map<CType, CType> typeCache = new HashMap<>();
   private final CTypeTransformerVisitor typeVisitor;
+  public void clear() {
+    //typeCache.clear();
+    System.out.println("typeCache size = " + typeCache.size());
+  }
 }

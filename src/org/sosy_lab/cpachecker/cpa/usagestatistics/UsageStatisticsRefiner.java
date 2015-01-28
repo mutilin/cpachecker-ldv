@@ -57,6 +57,8 @@ import org.sosy_lab.cpachecker.util.CPAs;
 import org.sosy_lab.cpachecker.util.Precisions;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
+import org.sosy_lab.cpachecker.util.predicates.pathformula.pointeraliasing.CToFormulaConverterWithPointerAliasing;
+import org.sosy_lab.cpachecker.util.predicates.pathformula.pointeraliasing.CTypeUtils;
 
 
 public class UsageStatisticsRefiner extends BAMPredicateRefiner implements StatisticsProvider {
@@ -193,6 +195,9 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       pReached.updatePrecision(pReached.getFirstState(),
           Precisions.replaceByType(p, PredicatePrecision.empty(), PredicatePrecision.class));
       iCache.reset();
+      CTypeUtils.clear();
+      //CToFormulaConverterWithPointerAliasing.ufNameCache.clear();
+      System.out.println("ufNameCache size = " + CToFormulaConverterWithPointerAliasing.ufNameCache.size());
       lastFalseUnsafeSize = originUnsafeSize;
       lastTrueUnsafes = newTrueUnsafeSize;
     } 

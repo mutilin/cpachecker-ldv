@@ -41,14 +41,6 @@ public class RefinedUsagePointSet implements AbstractUsagePointSet {
       }
       return null;
     }
-    
-    @Override
-    public Iterator<UsagePoint> getPointIterator() {
-      Set<UsagePoint> result = new HashSet<>();
-      result.add(target.getOneExample().getUsagePoint());
-      result.add(target2.getOneExample().getUsagePoint());
-      return result.iterator();
-    }
   }
   
   protected final RefinedUsageInfoSet target;
@@ -78,11 +70,6 @@ public class RefinedUsagePointSet implements AbstractUsagePointSet {
   @Override
   public int size() {
     return 1;
-  }
-
-  @Override
-  public Iterator<UsagePoint> getPointIterator() {
-    return Collections.singleton(target.getOneExample().getUsagePoint()).iterator();
   }
 
   @Override

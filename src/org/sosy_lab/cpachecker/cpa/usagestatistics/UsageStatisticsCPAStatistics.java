@@ -56,6 +56,8 @@ import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.AbstractUsageInfoSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.AbstractUsagePointSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.RefinedUsageInfoSet;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.RefinedUsagePointSet;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UnrefinedUsagePointSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsageContainer;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsagePoint;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
@@ -102,7 +104,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     logger = pLogger;
   }
 
-  private Set<LockStatisticsLock> findAllLocks() {
+  /*private Set<LockStatisticsLock> findAllLocks() {
     Set<LockStatisticsLock> locks = new TreeSet<>();
 
     Iterator<SingleIdentifier> generalIterator = container.getGeneralIterator();
@@ -151,7 +153,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
 
     return locks;
-  }
+  }*/
 
   /*
    * looks through all unsafe cases of current identifier and find the example of two lines with different locks,
@@ -242,7 +244,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     return tmpList;
   }
   
-  private void countUsageStatistics(AbstractUsagePointSet l) {
+  private void countUsageStatistics(UnrefinedUsagePointSet l) {
     int startFailureNum = totalFailureUsages;
     int startTrueNum = trueUsagesInTrueUnsafe;
     
@@ -279,13 +281,51 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       totalUnsafesWithFailureUsages++;
     }
   }
+  
+  private void countUsageStatistics(RefinedUsagePointSet l) {
+    int startFailureNum = totalFailureUsages;
+    int startTrueNum = trueUsagesInTrueUnsafe;
+    
+    Pair<UsageInfo, UsageInfo> unsafe = l.getUnsafePair();
+    UsageInfo first = unsafe.getFirst();
+    UsageInfo second = unsafe.getSecond();
+    if (first.failureFlag) {
+      totalFailureUsages++;
+    }
+    if (first == second) {
+      totalNumberOfUsagePoints++;
+      trueUsagesInAllUnsafes++;
+      trueUsagesInTrueUnsafe++;
+    } else {
+      totalNumberOfUsagePoints += 2;
+      trueUsagesInAllUnsafes += 2;
+      trueUsagesInTrueUnsafe += 2;
+      if (second.failureFlag) {
+        totalFailureUsages++;
+      }
+    }
+    int d = trueUsagesInTrueUnsafe - startTrueNum;
+    if (d > maxTrueUsages) {
+      maxTrueUsages = d;
+    }
+    if (maxNumberOfUsagePoints < l.getNumberOfTopUsagePoints()) {
+      maxNumberOfUsagePoints = l.getNumberOfTopUsagePoints();
+    }
+    if (totalFailureUsages > startFailureNum) {
+      totalUnsafesWithFailureUsages++;
+    }
+  }
 
   private void createVisualization(final SingleIdentifier id, final Writer writer) throws IOException {
     final AbstractUsagePointSet uinfo = container.getUsages(id);
     if (uinfo == null || uinfo.size() == 0) {
       return;
     }
-    countUsageStatistics(uinfo);
+    if (uinfo instanceof UnrefinedUsagePointSet) {
+      countUsageStatistics((UnrefinedUsagePointSet)uinfo);
+    } else if (uinfo instanceof RefinedUsagePointSet) {
+      countUsageStatistics((RefinedUsagePointSet)uinfo);
+    }
     totalUsages += uinfo.size();
     if (uinfo.size() > maxNumberOfUsages) {
       maxNumberOfUsages = uinfo.size();
@@ -316,7 +356,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     } else if (tmpPair.getFirst().failureFlag || tmpPair.getSecond().failureFlag) {
       totalUnsafesWithFailureUsageInPair++;
     }
-    if (printAllUnsafeUsages) {
+    /*if (printAllUnsafeUsages) {
       writer.append("Line 0:     N0 -{_____________________}-> N0" + "\n");
       writer.append("Line 0:     N0 -{All usages:}-> N0" + "\n");
       Iterator<UsagePoint> pointIterator = uinfo.getPointIterator();
@@ -326,7 +366,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
           createVisualization(id, ui, writer);
         }
       }
-    }
+    }*/
   }
 
   @Override
@@ -341,7 +381,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       logger.log(Level.FINE, "Print statistics about unsafe cases");
       printCountStatistics(writer, container.getGeneralIterator());
       printCountStatistics(writer, container.getUnsafeIterator());
-      printLockStatistics(writer);
+      //printLockStatistics(writer);
       logger.log(Level.FINEST, "Processing unsafe identifiers");
       Iterator<SingleIdentifier> unsafeIterator = container.getUnsafeIterator();
       while (unsafeIterator.hasNext()) {
@@ -378,14 +418,14 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     out.println("Time for printing statistics:       " + printStatisticsTimer);
   }
 
-  private void printLockStatistics(final Writer writer) throws IOException {
+  /*private void printLockStatistics(final Writer writer) throws IOException {
     final Set<LockStatisticsLock> mutexes = findAllLocks();
 
     writer.append(mutexes.size() + "\n");
     for (LockStatisticsLock lock : mutexes) {
       writer.append(lock.toString() + "\n");
     }
-  }
+  }*/
 
   private void printCountStatistics(final Writer writer, final Iterator<SingleIdentifier> idIterator) throws IOException {
     int global = 0, local = 0, fields = 0;

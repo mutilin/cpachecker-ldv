@@ -110,4 +110,14 @@ public class CachingRelevantPredicatesComputer implements RefineableRelevantPred
       pCache.remove(key);
     }
   }
+
+  public void clear() {
+    System.out.println("Relevant cache: " + relevantCache.size());
+    //relevantCache.clear();
+    System.out.println("Irrelevant cache: " + relevantCache.size());
+    //irrelevantCache.clear();
+    if (delegate instanceof AbstractRelevantPredicatesComputer<?>) {
+      ((AbstractRelevantPredicatesComputer<?>)delegate).clear();
+    }
+  }
 }

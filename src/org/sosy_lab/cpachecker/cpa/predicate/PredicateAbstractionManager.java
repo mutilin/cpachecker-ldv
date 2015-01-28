@@ -229,6 +229,10 @@ public class PredicateAbstractionManager {
       extractPredicates(instanceFm);
     }
   }
+  
+  public int getSize() {
+    return abstractionCache.size();
+  }
 
   /**
    * Compute an abstraction of the conjunction of an AbstractionFormula and
