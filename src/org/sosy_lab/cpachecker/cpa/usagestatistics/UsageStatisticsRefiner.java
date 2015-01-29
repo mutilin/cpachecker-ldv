@@ -35,7 +35,6 @@ import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.CounterexampleInfo;
 import org.sosy_lab.cpachecker.core.MainCPAStatistics;
-import org.sosy_lab.cpachecker.core.algorithm.CPAAlgorithm;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Refiner;
@@ -47,11 +46,8 @@ import org.sosy_lab.cpachecker.cpa.arg.ARGReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateCPA;
-import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateReducer;
 import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateRefiner;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicatePrecision;
-import org.sosy_lab.cpachecker.cpa.predicate.relevantpredicates.CachingRelevantPredicatesComputer;
-import org.sosy_lab.cpachecker.cpa.predicate.relevantpredicates.RelevantPredicatesComputer;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.caches.InterpolantCache;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.AbstractUsagePointSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsageContainer;
@@ -62,11 +58,6 @@ import org.sosy_lab.cpachecker.util.CPAs;
 import org.sosy_lab.cpachecker.util.Precisions;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
-import org.sosy_lab.cpachecker.util.predicates.interfaces.PathFormulaManager;
-import org.sosy_lab.cpachecker.util.predicates.pathformula.CachingPathFormulaManager;
-import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormulaManagerImpl;
-import org.sosy_lab.cpachecker.util.predicates.pathformula.pointeraliasing.CToFormulaConverterWithPointerAliasing;
-import org.sosy_lab.cpachecker.util.predicates.pathformula.pointeraliasing.CTypeUtils;
 
 
 public class UsageStatisticsRefiner extends BAMPredicateRefiner implements StatisticsProvider {
@@ -109,7 +100,6 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
   }
 
   int i = 0;
-  int counter = 0;
   int lastFalseUnsafeSize = -1;
   int lastTrueUnsafes = -1;
   private static final int HARDCODED_NUMBER_FOR_START_CLEANING_PRECISION = 10;
@@ -122,31 +112,11 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     final RefineableUsageComputer computer = new RefineableUsageComputer(container, logger);
 
     logger.log(Level.INFO, ("Perform US refinement: " + i++));
-    System.out.println("Time: " + MainCPAStatistics.programTime);
     int originUnsafeSize = container.getUnsafeSize();
-    System.out.println("Unsafes: " + originUnsafeSize); 
     if (lastFalseUnsafeSize == -1) {
       lastFalseUnsafeSize = originUnsafeSize;
-    } else {
-      counter = lastFalseUnsafeSize - originUnsafeSize;
     }
-    Iterator<SingleIdentifier> iterator = container.getUnsafeIterator();
-    int originTrueUnsafeSize = 0;
-    //int currentFalseUnsafeSize = 0;
-    StringBuilder sb = new StringBuilder();
-    while (iterator.hasNext()) {
-      SingleIdentifier id = iterator.next();
-      sb.append(id.getName() + ", ");
-      AbstractUsagePointSet list = container.getUsages(id);
-      if (list.isTrueUnsafe()) {
-    	  originTrueUnsafeSize++;
-      }/* else if (list.isFalseUnsafe()) {
-        currentFalseUnsafeSize++;
-      }*/
-    }
-    System.out.println("Origine unsafe list: " + sb.toString());
-    System.out.println("True unsafes:        " + originTrueUnsafeSize);
-    //System.out.println("False unsafes:       " + currentFalseUnsafeSize);
+    int counter = lastFalseUnsafeSize - originUnsafeSize;
     boolean refinementFinish = false;
     UsageInfo target = null;
     pStat.UnsafeCheck.start();
@@ -188,14 +158,10 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
 
       pStat.UnsafeCheck.start();
     }
-    int newTrueUnsafeSize = 0;
-    iterator = container.getUnsafeIterator();
-     while (iterator.hasNext()) {
-      SingleIdentifier id = iterator.next();
-      AbstractUsagePointSet list = container.getUsages(id);
-      if (list.isTrueUnsafe()) {
-        newTrueUnsafeSize++;
-      }
+    int newTrueUnsafeSize = container.getTrueUnsafeSize();
+    if (lastTrueUnsafes == -1) {
+      //It's normal, if in the first iteration the true unsafes are not involved in counter
+      lastTrueUnsafes = newTrueUnsafeSize;
     }
     counter += (newTrueUnsafeSize -lastTrueUnsafes);
     if (counter >= HARDCODED_NUMBER_FOR_START_CLEANING_PRECISION) {

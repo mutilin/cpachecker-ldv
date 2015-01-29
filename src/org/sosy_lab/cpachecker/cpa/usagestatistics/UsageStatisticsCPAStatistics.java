@@ -104,57 +104,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     logger = pLogger;
   }
 
-  /*private Set<LockStatisticsLock> findAllLocks() {
-    Set<LockStatisticsLock> locks = new TreeSet<>();
-
-    Iterator<SingleIdentifier> generalIterator = container.getGeneralIterator();
-    while (generalIterator.hasNext()) {
-      AbstractUsagePointSet uset = container.getUsages(generalIterator.next());
-      Iterator<UsagePoint> pointIterator = uset.getPointIterator();
-      while (pointIterator.hasNext()) {
-        UsagePoint point = pointIterator.next();
-        AbstractUsageInfoSet uiset = uset.getUsageInfo(point);
-        for (UsageInfo uinfo : uiset.getUsages()){
-          if (uinfo.getLockState() == null) {
-            continue;
-          }
-          Iterator<LockStatisticsLock> lockIterator = uinfo.getLockState().getLockIterator();
-      	  while (lockIterator.hasNext()) {
-      	    LockStatisticsLock lock = lockIterator.next();
-      	    //existsIn() isn't based on equals(), don't remove it
-        		if( !lock.existsIn(locks)) {
-        	      locks.add(lock);
-        		}
-          }
-        }
-        Iterator<UsagePoint> childrenIterator = point.getCoveredUsages().iterator();
-        while (childrenIterator.hasNext()) {
-          point = childrenIterator.next();
-          uiset = uset.getUsageInfo(point);
-          if (uiset == null) {
-            //TODO Think about it later
-            continue;
-          }
-          for (UsageInfo uinfo : uiset.getUsages()){
-            if (uinfo.getLockState() == null) {
-              continue;
-            }
-            Iterator<LockStatisticsLock> lockIterator = uinfo.getLockState().getLockIterator();
-            while (lockIterator.hasNext()) {
-              LockStatisticsLock lock = lockIterator.next();
-              //existsIn() isn't based on equals(), don't remove it
-              if( !lock.existsIn(locks)) {
-                  locks.add(lock);
-              }
-            }
-          }
-        }
-      }
-    }
-
-    return locks;
-  }*/
-
   /*
    * looks through all unsafe cases of current identifier and find the example of two lines with different locks,
    * one of them must be 'write'
@@ -245,9 +194,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   }
   
   private void countUsageStatistics(UnrefinedUsagePointSet l) {
-    int startFailureNum = totalFailureUsages;
-    int startTrueNum = trueUsagesInTrueUnsafe;
-    
     Iterator<UsagePoint> pointIterator = l.getPointIterator();
     while (pointIterator.hasNext()) {
       UsagePoint point = pointIterator.next();
@@ -270,40 +216,33 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         }
       }
     }
-    int d = trueUsagesInTrueUnsafe - startTrueNum;
-    if (d > maxTrueUsages) {
-    	maxTrueUsages = d;
-    }
-    if (maxNumberOfUsagePoints < l.getNumberOfTopUsagePoints()) {
-      maxNumberOfUsagePoints = l.getNumberOfTopUsagePoints();
-    }
-    if (totalFailureUsages > startFailureNum) {
-      totalUnsafesWithFailureUsages++;
-    }
   }
   
   private void countUsageStatistics(RefinedUsagePointSet l) {
-    int startFailureNum = totalFailureUsages;
-    int startTrueNum = trueUsagesInTrueUnsafe;
-    
     Pair<UsageInfo, UsageInfo> unsafe = l.getUnsafePair();
     UsageInfo first = unsafe.getFirst();
     UsageInfo second = unsafe.getSecond();
     if (first.failureFlag) {
       totalFailureUsages++;
     }
-    if (first == second) {
-      totalNumberOfUsagePoints++;
-      trueUsagesInAllUnsafes++;
-      trueUsagesInTrueUnsafe++;
-    } else {
-      totalNumberOfUsagePoints += 2;
-      trueUsagesInAllUnsafes += 2;
-      trueUsagesInTrueUnsafe += 2;
-      if (second.failureFlag) {
-        totalFailureUsages++;
-      }
+    if (second.failureFlag && first != second) {
+      totalFailureUsages++;
     }
+    totalNumberOfUsagePoints += l.size();
+    trueUsagesInAllUnsafes += l.size();
+    trueUsagesInTrueUnsafe += l.size();
+  }
+  
+  private void countStatistics(AbstractUsagePointSet l) {
+    int startFailureNum = totalFailureUsages;
+    int startTrueNum = trueUsagesInTrueUnsafe;
+    
+    if (l instanceof UnrefinedUsagePointSet) {
+      countUsageStatistics((UnrefinedUsagePointSet)l);
+    } else if (l instanceof RefinedUsagePointSet) {
+      countUsageStatistics((RefinedUsagePointSet)l);
+    }
+    
     int d = trueUsagesInTrueUnsafe - startTrueNum;
     if (d > maxTrueUsages) {
       maxTrueUsages = d;
@@ -321,11 +260,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     if (uinfo == null || uinfo.size() == 0) {
       return;
     }
-    if (uinfo instanceof UnrefinedUsagePointSet) {
-      countUsageStatistics((UnrefinedUsagePointSet)uinfo);
-    } else if (uinfo instanceof RefinedUsagePointSet) {
-      countUsageStatistics((RefinedUsagePointSet)uinfo);
-    }
+    countStatistics(uinfo);
     totalUsages += uinfo.size();
     if (uinfo.size() > maxNumberOfUsages) {
       maxNumberOfUsages = uinfo.size();
@@ -417,15 +352,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     printStatisticsTimer.stop();
     out.println("Time for printing statistics:       " + printStatisticsTimer);
   }
-
-  /*private void printLockStatistics(final Writer writer) throws IOException {
-    final Set<LockStatisticsLock> mutexes = findAllLocks();
-
-    writer.append(mutexes.size() + "\n");
-    for (LockStatisticsLock lock : mutexes) {
-      writer.append(lock.toString() + "\n");
-    }
-  }*/
 
   private void printCountStatistics(final Writer writer, final Iterator<SingleIdentifier> idIterator) throws IOException {
     int global = 0, local = 0, fields = 0;

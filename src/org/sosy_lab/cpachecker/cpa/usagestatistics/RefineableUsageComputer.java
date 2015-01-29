@@ -30,19 +30,16 @@ import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.caches.UsageCache;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.caches.UsageCallstackCache;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.AbstractUsageInfoSet;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.AbstractUsagePointSet;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UnrefinedUsageInfoSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UnrefinedUsagePointSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsageContainer;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsagePoint;
-import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 
 public class RefineableUsageComputer {
 
   private final UsageContainer container;
   private final UsageCache cache;
-  private final Iterator<SingleIdentifier> idIterator;
+  private final Iterator<UnrefinedUsagePointSet> unrefinedUsagePointSetIterator;
   private Iterator<UsageInfo>  usageIterator;
   private Iterator<UsagePoint>  usagePointIterator;
   private UnrefinedUsagePointSet currentRefineableUsageList;
@@ -54,7 +51,7 @@ public class RefineableUsageComputer {
   RefineableUsageComputer(UsageContainer c, LogManager l) {
     container = c;
     cache = new UsageCallstackCache();
-    idIterator = container.getUnrefinedUnsafeIterator();
+    unrefinedUsagePointSetIterator = container.getUnrefinedUnsafes().iterator();
     logger = l;
     waitRefinementResult = false;
   }
@@ -97,11 +94,8 @@ public class RefineableUsageComputer {
       while (usageIterator == null || !usageIterator.hasNext()) {
         do {
           while (usagePointIterator == null || !usagePointIterator.hasNext()) {
-            if (idIterator.hasNext()) {
-              SingleIdentifier id = idIterator.next();
-              AbstractUsagePointSet potentialUsagePointSet = container.getUsages(id);
-              assert (!potentialUsagePointSet.isTrueUnsafe());
-              currentRefineableUsageList = (UnrefinedUsagePointSet) potentialUsagePointSet;
+            if (unrefinedUsagePointSetIterator.hasNext()) {
+              currentRefineableUsageList = unrefinedUsagePointSetIterator.next();
               assert (currentRefineableUsageList.isUnsafe());
               usagePointIterator = currentRefineableUsageList.clone().getPointIterator();
             } else {

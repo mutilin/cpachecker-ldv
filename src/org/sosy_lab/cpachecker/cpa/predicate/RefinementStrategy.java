@@ -190,8 +190,6 @@ public abstract class RefinementStrategy {
           differentNontrivialItps++;
         }
       }
-      System.out.println("State: " + AbstractStates.extractLocation(w) + /*"(" +
-      +          AbstractStates.extractLocation(w).getLineNumber() + ")" + */" <-> " + itp);
       lastItp = itp;
 
       nonTrivialStates++;

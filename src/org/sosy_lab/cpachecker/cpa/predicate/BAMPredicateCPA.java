@@ -88,7 +88,7 @@ public class BAMPredicateCPA extends PredicateCPA implements ConfigurableProgram
     stats = new BAMPredicateCPAStatistics(reducer);
   }
 
-  public RelevantPredicatesComputer getRelevantPredicatesComputer() {
+  RelevantPredicatesComputer getRelevantPredicatesComputer() {
     return relevantPredicatesComputer;
   }
 

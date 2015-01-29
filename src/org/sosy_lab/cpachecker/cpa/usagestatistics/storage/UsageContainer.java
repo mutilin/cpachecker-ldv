@@ -24,6 +24,7 @@
 package org.sosy_lab.cpachecker.cpa.usagestatistics.storage;
 
 import java.io.PrintStream;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
@@ -122,12 +123,19 @@ public class UsageContainer {
     getUnsafesIfNecessary();
     return unrefinedStat.size() + refinedStat.size();
   }
+  
+  public int getTrueUnsafeSize() {
+    return refinedStat.size();
+  }
+  
+  public int getFalseUnsafeSize() {
+    return falseUnsafes.size();
+  }
 
   public void resetUnrefinedUnsafes() {
     resetTimer.start();
     unsafeUsages = -1;
-    for (SingleIdentifier id : unrefinedStat.keySet()) {
-      UnrefinedUsagePointSet uset = unrefinedStat.get(id);
+    for (UnrefinedUsagePointSet uset : unrefinedStat.values()) {
       uset.reset();
     }
     logger.log(Level.FINE, "Unsafes are reseted");
@@ -135,10 +143,7 @@ public class UsageContainer {
   }
 
   public void removeState(final UsageStatisticsState pUstate) {
-    UnrefinedUsagePointSet uset;
-    //Not a set! Some usages and sets can be equals, but referes to different ids
-    for (SingleIdentifier id : unrefinedStat.keySet()) {
-      uset = unrefinedStat.get(id);
+    for (UnrefinedUsagePointSet uset : unrefinedStat.values()) {
       uset.remove(pUstate);
     }
     logger.log(Level.ALL, "All unsafes related to key state " + pUstate + " were removed from reached set");
@@ -150,6 +155,10 @@ public class UsageContainer {
     }  else {
       return refinedStat.get(id);
     }
+  }
+  
+  public Collection<UnrefinedUsagePointSet> getUnrefinedUnsafes() {
+    return unrefinedStat.values();
   }
   
   public void setAsRefined(UnrefinedUsagePointSet set) {
@@ -166,15 +175,23 @@ public class UsageContainer {
 
   public void printUsagesStatistics(final PrintStream out) {
     int allUsages = 0, maxUsage = 0;
-    final int generalSize = unrefinedStat.keySet().size();
-    for (SingleIdentifier id : unrefinedStat.keySet()) {
-      allUsages += unrefinedStat.get(id).size();
-      if (maxUsage < unrefinedStat.get(id).size()) {
-        maxUsage = unrefinedStat.get(id).size();
+    final int generalUnrefinedSize = unrefinedStat.keySet().size();
+    for (UnrefinedUsagePointSet uset : unrefinedStat.values()) {
+      allUsages += uset.size();
+      if (maxUsage < uset.size()) {
+        maxUsage = uset.size();
       }
     }
-    out.println("Total amount of variables:                " + generalSize);
-    out.println("Total amount of usages:                   " + allUsages + "(avg. " +
-        (generalSize == 0 ? "0" : (allUsages/generalSize)) + ", max " + maxUsage + ")");
+    out.println("Total amount of unrefined variables:              " + generalUnrefinedSize);
+    out.println("Total amount of unrefined usages:                 " + allUsages + "(avg. " +
+        (generalUnrefinedSize == 0 ? "0" : (allUsages/generalUnrefinedSize)) + ", max " + maxUsage + ")");
+    final int generalRefinedSize = refinedStat.keySet().size();
+    allUsages = 0;
+    for (RefinedUsagePointSet uset : refinedStat.values()) {
+      allUsages += uset.size();
+    }
+    out.println("Total amount of refined variables:                " + generalRefinedSize);
+    out.println("Total amount of refined usages:                   " + allUsages + "(avg. " +
+        (generalUnrefinedSize == 0 ? "0" : (allUsages/generalRefinedSize)) + ")");
   }
 }

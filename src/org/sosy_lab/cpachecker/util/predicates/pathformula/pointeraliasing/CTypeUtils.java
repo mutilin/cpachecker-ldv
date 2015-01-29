@@ -164,8 +164,4 @@ public class CTypeUtils {
   public static String typeToString(final CType type) {
     return simplifyType(type).toString();
   }
-  
-  public static void clear() {
-    typeVisitor.clear();
-  }
 }
