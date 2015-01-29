@@ -23,6 +23,7 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.logging.Level;
 
@@ -51,7 +52,7 @@ public class RefineableUsageComputer {
   RefineableUsageComputer(UsageContainer c, LogManager l) {
     container = c;
     cache = new UsageCallstackCache();
-    unrefinedUsagePointSetIterator = container.getUnrefinedUnsafes().iterator();
+    unrefinedUsagePointSetIterator = new HashSet<>(container.getUnrefinedUnsafes()).iterator();
     logger = l;
     waitRefinementResult = false;
   }
