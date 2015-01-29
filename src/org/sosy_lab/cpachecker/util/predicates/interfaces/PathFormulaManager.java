@@ -94,4 +94,6 @@ public interface PathFormulaManager {
   Map<Integer, Boolean> getBranchingPredicateValuesFromModel(Model pModel);
   
   PointerTargetSetManager getPtsManager();
+  
+  public void clearCaches();
 }

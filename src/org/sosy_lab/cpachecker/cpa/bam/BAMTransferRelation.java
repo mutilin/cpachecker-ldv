@@ -581,19 +581,6 @@ throws InterruptedException, RecursiveAnalysisFailedException {
     argCache.clear();
     abstractStateToReachedSet.clear();
     expandedToReducedCache.clear();
-    BAMPredicateCPA bamcpa = CPAs.retrieveCPA(bamCPA, BAMPredicateCPA.class);
-    if (bamcpa != null) {
-      RelevantPredicatesComputer computer = bamcpa.getRelevantPredicatesComputer();
-      if (computer instanceof CachingRelevantPredicatesComputer) {
-        ((CachingRelevantPredicatesComputer)computer).clear();
-      }
-      PathFormulaManager pmgr = bamcpa.getPathFormulaManager();
-      if (pmgr instanceof CachingPathFormulaManager) {
-        ((CachingPathFormulaManager)pmgr).clearCaches();
-      } else if (pmgr instanceof PathFormulaManagerImpl) {
-        ((PathFormulaManagerImpl)pmgr).clear();
-      }
-    }
   }
 
   Pair<Block, ReachedSet> getCachedReachedSet(ARGState root, Precision rootPrecision) {

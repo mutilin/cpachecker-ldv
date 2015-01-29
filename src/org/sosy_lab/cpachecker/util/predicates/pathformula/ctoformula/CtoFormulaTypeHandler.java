@@ -107,6 +107,5 @@ public class CtoFormulaTypeHandler {
   }
   public void clear() {
     typeCache.clear();
-    //System.out.println("typeCache size = " + typeCache.size());
   }
 }

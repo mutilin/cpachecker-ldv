@@ -112,12 +112,8 @@ public class CachingRelevantPredicatesComputer implements RefineableRelevantPred
   }
 
   public void clear() {
-    System.out.println("Relevant cache: " + relevantCache.size());
-    //relevantCache.clear();
-    System.out.println("Irrelevant cache: " + relevantCache.size());
-    //irrelevantCache.clear();
-    if (delegate instanceof AbstractRelevantPredicatesComputer<?>) {
-      ((AbstractRelevantPredicatesComputer<?>)delegate).clear();
-    }
+    relevantCache.clear();
+    irrelevantCache.clear();
+    delegate.clear();
   }
 }

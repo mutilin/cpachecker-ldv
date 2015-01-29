@@ -61,4 +61,8 @@ public class RefineableOccurrenceComputer extends OccurrenceComputer implements 
     definitelyRelevantPredicates.put(pBlock, pPredicate);
     CachingRelevantPredicatesComputer.removeCacheEntriesForBlock(pBlock, relevantPredicates);
   }
+  
+  public void clear() {
+    definitelyRelevantPredicates.clear();
+  }
 }

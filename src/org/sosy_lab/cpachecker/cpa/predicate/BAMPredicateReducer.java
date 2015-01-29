@@ -190,7 +190,7 @@ public class BAMPredicateReducer implements Reducer {
 
   public void clearCaches() {
     reduceCache.clear();
-    System.out.println("Predicate abstractions: " + pamgr.getSize());
+    pamgr.clear();
   }
 
   @Override

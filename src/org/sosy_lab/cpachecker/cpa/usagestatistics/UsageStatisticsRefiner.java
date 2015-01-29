@@ -35,6 +35,7 @@ import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.CounterexampleInfo;
 import org.sosy_lab.cpachecker.core.MainCPAStatistics;
+import org.sosy_lab.cpachecker.core.algorithm.CPAAlgorithm;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Refiner;
@@ -45,8 +46,12 @@ import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
 import org.sosy_lab.cpachecker.cpa.arg.ARGReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
+import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateCPA;
+import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateReducer;
 import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateRefiner;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicatePrecision;
+import org.sosy_lab.cpachecker.cpa.predicate.relevantpredicates.CachingRelevantPredicatesComputer;
+import org.sosy_lab.cpachecker.cpa.predicate.relevantpredicates.RelevantPredicatesComputer;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.caches.InterpolantCache;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.AbstractUsagePointSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsageContainer;
@@ -57,6 +62,9 @@ import org.sosy_lab.cpachecker.util.CPAs;
 import org.sosy_lab.cpachecker.util.Precisions;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.PathFormulaManager;
+import org.sosy_lab.cpachecker.util.predicates.pathformula.CachingPathFormulaManager;
+import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormulaManagerImpl;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.pointeraliasing.CToFormulaConverterWithPointerAliasing;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.pointeraliasing.CTypeUtils;
 
@@ -86,12 +94,14 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
   }
 
   final Stats pStat = new Stats();
+  private final UsageStatisticsCPA cpa;
   private final LogManager logger;
   private InterpolantCache iCache = new InterpolantCache();
 
   public UsageStatisticsRefiner(ConfigurableProgramAnalysis pCpa) throws CPAException, InvalidConfigurationException {
     super(pCpa);
-    logger = CPAs.retrieveCPA(pCpa, UsageStatisticsCPA.class).getLogger();
+    cpa = CPAs.retrieveCPA(pCpa, UsageStatisticsCPA.class);
+    logger = cpa.getLogger();
   }
 
   public static Refiner create(ConfigurableProgramAnalysis pCpa) throws CPAException, InvalidConfigurationException {
@@ -102,7 +112,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
   int counter = 0;
   int lastFalseUnsafeSize = -1;
   int lastTrueUnsafes = -1;
-  private static final int HARDCODED_NUMBER_FOR_START_CLEANING_PRECISION = Integer.MAX_VALUE;
+  private static final int HARDCODED_NUMBER_FOR_START_CLEANING_PRECISION = 10;
   @Override
   public boolean performRefinement(ReachedSet pReached) throws CPAException, InterruptedException {
     final UsageContainer container =
@@ -195,9 +205,10 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       pReached.updatePrecision(pReached.getFirstState(),
           Precisions.replaceByType(p, PredicatePrecision.empty(), PredicatePrecision.class));
       iCache.reset();
-      CTypeUtils.clear();
-      //CToFormulaConverterWithPointerAliasing.ufNameCache.clear();
-      System.out.println("ufNameCache size = " + CToFormulaConverterWithPointerAliasing.ufNameCache.size());
+      BAMPredicateCPA bamcpa = CPAs.retrieveCPA(cpa, BAMPredicateCPA.class);
+      if (bamcpa != null) {
+        bamcpa.clearAllCaches();
+      }
       lastFalseUnsafeSize = originUnsafeSize;
       lastTrueUnsafes = newTrueUnsafeSize;
     } 

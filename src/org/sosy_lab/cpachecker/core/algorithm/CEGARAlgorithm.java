@@ -256,7 +256,6 @@ public class CEGARAlgorithm implements Algorithm, StatisticsProvider {
           // if refinement was successful and initial reached set was empty (i.e. stopAfterError=true)
           if (refinementSuccessful && initialReachedSetSize == 1) {
             ((BAMTransferRelation)(((CPAAlgorithm)algorithm).cpa).getTransferRelation()).clearCaches();
-            ((BAMPredicateReducer)CPAs.retrieveCPA(((CPAAlgorithm)algorithm).cpa, BAMPredicateCPA.class).getReducer()).clearCaches();
             ARGState firstState = (ARGState) reached.getFirstState();
             CFANode firstNode = AbstractStates.extractLocation(firstState);
             Precision precision = reached.getPrecision(firstState);

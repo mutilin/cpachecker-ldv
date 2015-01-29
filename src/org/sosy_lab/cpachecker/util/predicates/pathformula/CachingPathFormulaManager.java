@@ -183,6 +183,6 @@ public class CachingPathFormulaManager implements PathFormulaManager {
     andFormulaCache.clear();
     orFormulaCache.clear();
     emptyFormulaCache.clear();
-    ((PathFormulaManagerImpl)delegate).clear();
+    delegate.clearCaches();
   }
 }

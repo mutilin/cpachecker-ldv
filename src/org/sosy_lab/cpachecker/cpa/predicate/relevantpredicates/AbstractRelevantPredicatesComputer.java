@@ -98,7 +98,6 @@ public abstract class AbstractRelevantPredicatesComputer<T> implements RelevantP
   }
   
   public void clear() {
-    System.out.println("Relevant predicates: " + relevantPredicates.size());
-    //relevantPredicates.clear();
+    relevantPredicates.clear();
   }
 }

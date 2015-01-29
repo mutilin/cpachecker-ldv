@@ -230,8 +230,8 @@ public class PredicateAbstractionManager {
     }
   }
   
-  public int getSize() {
-    return abstractionCache.size();
+  public void clear() {
+    abstractionCache.clear();
   }
 
   /**

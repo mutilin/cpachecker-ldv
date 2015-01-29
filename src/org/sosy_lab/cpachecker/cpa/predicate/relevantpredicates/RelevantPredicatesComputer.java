@@ -36,4 +36,5 @@ import org.sosy_lab.cpachecker.util.predicates.AbstractionPredicate;
 public interface RelevantPredicatesComputer {
   public Set<AbstractionPredicate> getIrrelevantPredicates(Block context, Collection<AbstractionPredicate> predicates);
   public Set<AbstractionPredicate> getRelevantPredicates(Block context, Collection<AbstractionPredicate> predicates);
+  public void clear();
 }
