@@ -231,7 +231,9 @@ public class PredicateAbstractionManager {
   }
   
   public void clear() {
-    abstractionCache.clear();
+    if (abstractionCache != null) {
+      abstractionCache.clear();
+    }
   }
 
   /**
