@@ -6,6 +6,7 @@ use strict;
 
 my $visualize_fname;
 my $cilpath;
+my $old_version;
 my $root_html_file = "Unsafes.html";
 
 sub usage{ 
@@ -18,6 +19,8 @@ Script, which generates html-file with the list of unsafe reports
 
 Usage:
         gen-unsafes-report.pl --trace=path-to-unsafes-trace-file --cil=path-to-cil-file 
+        
+        For old format with general statistics use option --o
 
 Example: gen-unsafes-report.pl --trace=../test/results/unsafe_rawdata --cil=../cil.out.i 
 
@@ -28,6 +31,7 @@ usage_ends
 GetOptions(
         'trace|t=s'=>\$visualize_fname,
         'cil|c=s'=>\$cilpath,
+        'old|o'=>\$old_version,
 ) or usage("Unrecognized options!");
 
 usage("Can't find CPAChecker trace!") unless $visualize_fname;
@@ -37,13 +41,22 @@ open(my $html_result, ">", $root_html_file) or usage("Can't open file for write"
 usage("Can't find cil-file") unless $cilpath;
 
 my $line;
-my $simple_global_var = <$visualize_fh>;
-my $pointer_global_var = <$visualize_fh>;
-my $simple_local_var = <$visualize_fh>;
-my $pointer_local_var = <$visualize_fh>;
-my $simple_field_var = <$visualize_fh>;
-my $pointer_field_var = <$visualize_fh>;
-my $total_var = <$visualize_fh>;
+my $simple_global_var;
+my $pointer_global_var;
+my $simple_local_var;
+my $pointer_local_var;
+my $simple_field_var;
+my $pointer_field_var;
+my $total_var;
+if (defined($old_version)) {
+    $simple_global_var = <$visualize_fh>;
+    $pointer_global_var = <$visualize_fh>;
+    $simple_local_var = <$visualize_fh>;
+    $pointer_local_var = <$visualize_fh>;
+    $simple_field_var = <$visualize_fh>;
+    $pointer_field_var = <$visualize_fh>;
+    $total_var = <$visualize_fh>;
+}
 my $simple_global_unsafe = <$visualize_fh>;
 my $pointer_global_unsafe = <$visualize_fh>;
 my $simple_local_unsafe = <$visualize_fh>;
@@ -52,26 +65,68 @@ my $simple_field_unsafe = <$visualize_fh>;
 my $pointer_field_unsafe = <$visualize_fh>;
 my $total_unsafe = <$visualize_fh>;
 my $pointer;
-print ($html_result "<table rules=\"all\" width=\"60%\"><tr><td align=\"center\">Statistics</td><td><b>General</b></td><td><b>Unsafe</b></td></tr>");
-print ($html_result "<tr><td><b>Global variables:</b></td><td><b>".($simple_global_var + $pointer_global_var)."</b></td><td><b>".($simple_global_unsafe + $pointer_global_unsafe)."</b></td></tr>");
-print ($html_result "<tr><td align=\"center\">Simple:</td><td>$simple_global_var</td><td>$simple_global_unsafe</td></tr>");
-print ($html_result "<tr><td align=\"center\">Pointer:</td><td>$pointer_global_var</td><td>$pointer_global_unsafe</td></tr>");
-print ($html_result "<tr><td><b>Local variables:</td><td><b>".($simple_local_var + $pointer_local_var)."</b></td><td><b>".($simple_local_unsafe + $pointer_local_unsafe)."</b></td></tr>");
-print ($html_result "<tr><td align=\"center\">Simple:</td><td>$simple_local_var</td><td>$simple_local_unsafe</td></tr>");
-print ($html_result "<tr><td align=\"center\">Pointer:</td><td>$pointer_local_var</td><td>$pointer_local_unsafe</td></tr>");
-print ($html_result "<tr><td><b>Structure fields:</td><td><b>".($simple_field_var + $pointer_field_var)."</b></td><td><b>".($simple_field_unsafe + $pointer_field_unsafe)."</b></td></tr>");
-print ($html_result "<tr><td align=\"center\">Simple:</td><td>$simple_field_var</td><td>$simple_field_unsafe</td></tr>");
-print ($html_result "<tr><td align=\"center\">Pointer:</td><td>$pointer_field_var</td><td>$pointer_field_unsafe</td></tr>");
-print ($html_result "<tr><td></td><td></td><td></td></tr>");
-print ($html_result "<tr><td><b>Total variables:</b></td><td>$total_var</td><td>$total_unsafe</td></tr>");
-print ($html_result "<tr><td></td><td></td><td></td></tr></table><br>");
-my $number = <$visualize_fh>;
-print ($html_result "Finded locks:<ol>");
-for(my $i = 0; $i < $number; $i++) {
-	$line = <$visualize_fh>;
-	print ($html_result "<li>$line</li>");
+print ($html_result "<table rules=\"all\" width=\"60%\"><tr><td align=\"center\">Statistics</td><td><b>Unsafe</b></td>");
+if (defined($old_version)) {
+  print ($html_result "<td><b>General</b></td>");
 }
-print ($html_result "</ol><p>");
+print ($html_result "</tr><tr><td><b>Global variables:</b></td><td><b>".($simple_global_unsafe + $pointer_global_unsafe)."</b></td>");
+if (defined($old_version)) {
+  print ($html_result "<td><b>".($simple_global_var + $pointer_global_var)."</b></td>");
+}
+print ($html_result "</tr><tr><td align=\"center\">Simple:</td><td>$simple_global_unsafe</td>");
+if (defined($old_version)) {
+  print ($html_result "<td>$simple_global_var</td>");
+}
+print ($html_result "</tr><tr><td align=\"center\">Pointer:</td><td>$pointer_global_unsafe</td>");
+if (defined($old_version)) {
+  print ($html_result "<td>$pointer_global_var</td>");
+}
+print ($html_result "</tr><tr><td><b>Local variables:</td><td><b>".($simple_local_unsafe + $pointer_local_unsafe)."</b></td>");
+if (defined($old_version)) {
+  print ($html_result "<td><b>".($simple_local_var + $pointer_local_var)."</b></td>");
+}
+print ($html_result "</tr><tr><td align=\"center\">Simple:</td><td>$simple_local_unsafe</td>");
+if (defined($old_version)) {
+  print ($html_result "<td>$simple_local_var</td>");
+}
+print ($html_result "</tr><tr><td align=\"center\">Pointer:</td><td>$pointer_local_unsafe</td>");
+if (defined($old_version)) {
+  print ($html_result "<td>$pointer_local_var</td>");
+}
+print ($html_result "</tr><tr><td><b>Structure fields:</td><td><b>".($simple_field_unsafe + $pointer_field_unsafe)."</b></td>");
+if (defined($old_version)) {
+  print ($html_result "<td><b>".($simple_field_var + $pointer_field_var)."</b></td>");
+}
+print ($html_result "</tr><tr><td align=\"center\">Simple:</td><td>$simple_field_unsafe</td>");
+if (defined($old_version)) {
+  print ($html_result "<td>$simple_field_var</td>");
+}
+print ($html_result "</tr><tr><td align=\"center\">Pointer:</td><td>$pointer_field_unsafe</td>");
+if (defined($old_version)) {
+  print ($html_result "<td>$pointer_field_var</td>");
+}
+print ($html_result "</tr><tr><td></td><td></td>");
+if (defined($old_version)) {
+  print ($html_result "<td></td>");
+}
+print ($html_result "</tr><tr><td><b>Total variables:</b></td><td>$total_unsafe</td>");
+if (defined($old_version)) {
+  print ($html_result "<td>$total_var</td>");
+}
+print ($html_result "</tr><tr><td></td><td></td>");
+if (defined($old_version)) {
+  print ($html_result "</td><td>");
+}
+print ($html_result "</tr></table><br>");
+if (defined($old_version)) {
+    my $number = <$visualize_fh>;
+    print ($html_result "Finded locks:<ol>");
+    for(my $i = 0; $i < $number; $i++) {
+        $line = <$visualize_fh>;
+        print ($html_result "<li>$line</li>");
+    }
+    print ($html_result "</ol><p>");
+}
 
 print ($html_result "<b>List of unsafes:</b><ol>");
 my $currentUnsafe;
