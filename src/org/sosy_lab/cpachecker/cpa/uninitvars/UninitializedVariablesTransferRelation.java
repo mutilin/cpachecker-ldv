@@ -30,6 +30,8 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 
+import javax.annotation.Nullable;
+
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.ast.c.CArraySubscriptExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CAssignment;
@@ -67,9 +69,9 @@ import org.sosy_lab.cpachecker.cfa.types.c.CCompositeType.CCompositeTypeMemberDe
 import org.sosy_lab.cpachecker.cfa.types.c.CFunctionType;
 import org.sosy_lab.cpachecker.cfa.types.c.CStorageClass;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
+import org.sosy_lab.cpachecker.core.defaults.SingleEdgeTransferRelation;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
-import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.cpa.uninitvars.UninitializedVariablesState.ElementProperty;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCCodeException;
@@ -79,7 +81,7 @@ import org.sosy_lab.cpachecker.exceptions.UnrecognizedCFAEdgeException;
  * Needs typesCPA to properly deal with field references.
  * If run without typesCPA, uninitialized field references may not be detected.
  */
-public class UninitializedVariablesTransferRelation implements TransferRelation {
+public class UninitializedVariablesTransferRelation extends SingleEdgeTransferRelation {
 
   private Set<String> globalVars; // set of all global variable names
 
@@ -111,7 +113,7 @@ public class UninitializedVariablesTransferRelation implements TransferRelation 
     case ReturnStatementEdge:
       //this is the return-statement of a function
       //set a local variable tracking the return statement's initialization status
-      if (isExpressionUninitialized(successor, ((CReturnStatementEdge)cfaEdge).getExpression(), cfaEdge)) {
+      if (isExpressionUninitialized(successor, ((CReturnStatementEdge)cfaEdge).getExpression().orNull(), cfaEdge)) {
         setUninitialized(successor, "CPAchecker_UninitVars_FunctionReturn");
       } else {
         setInitialized(successor, "CPAchecker_UninitVars_FunctionReturn");
@@ -379,7 +381,7 @@ public class UninitializedVariablesTransferRelation implements TransferRelation 
   }
 
   private boolean isExpressionUninitialized(UninitializedVariablesState element,
-                                            CRightHandSide expression,
+                                            @Nullable CRightHandSide expression,
                                             CFAEdge cfaEdge) throws UnrecognizedCCodeException {
     if (expression == null) {
       // e.g. empty parameter list
@@ -475,7 +477,7 @@ public class UninitializedVariablesTransferRelation implements TransferRelation 
   }
 
   @Override
-  public Collection<AbstractState> getAbstractSuccessors(
+  public Collection<AbstractState> getAbstractSuccessorsForEdge(
                                            AbstractState element,
                                            Precision precision, CFAEdge cfaEdge)
                        throws CPATransferException {

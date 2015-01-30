@@ -1,3 +1,26 @@
+/*
+ *  CPAchecker is a tool for configurable software verification.
+ *  This file is part of CPAchecker.
+ *
+ *  Copyright (C) 2007-2014  Dirk Beyer
+ *  All rights reserved.
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ *
+ *  CPAchecker web page:
+ *    http://cpachecker.sosy-lab.org
+ */
 package org.sosy_lab.cpachecker.cpa.bam;
 
 import static com.google.common.base.Preconditions.checkNotNull;
@@ -24,10 +47,10 @@ import com.google.common.base.Preconditions;
 @Options(prefix = "cpa.bam")
 public class BAMCache {
 
-  @Option(description = "if enabled, cache queries also consider blocks with non-matching precision for reuse.")
+  @Option(secure=true, description = "if enabled, cache queries also consider blocks with non-matching precision for reuse.")
   private boolean aggressiveCaching = true;
 
-  @Option(description = "if enabled, the reached set cache is analysed for each cache miss to find the cause of the miss.")
+  @Option(secure=true, description = "if enabled, the reached set cache is analysed for each cache miss to find the cause of the miss.")
   boolean gatherCacheMissStatistics = false;
 
   final Timer hashingTimer = new Timer();
@@ -72,7 +95,8 @@ public class BAMCache {
   public void put(AbstractState stateKey, Precision precisionKey, Block context, Collection<AbstractState> item,
                    ARGState rootOfBlock) {
     AbstractStateHash hash = getHashCode(stateKey, precisionKey, context);
-    assert allStatesContainedInReachedSet(item, preciseReachedCache.get(hash));
+    assert preciseReachedCache.get(hash) != null : "key not found in cache";
+    assert allStatesContainedInReachedSet(item, preciseReachedCache.get(hash)) : "output-states must be in reached-set";
     returnCache.put(hash, item);
     blockARGCache.put(hash, rootOfBlock);
     setLastAnalyzedBlock(hash);

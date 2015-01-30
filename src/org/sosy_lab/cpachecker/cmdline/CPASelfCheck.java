@@ -51,14 +51,13 @@ import org.sosy_lab.cpachecker.core.interfaces.CPAFactory;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.MergeOperator;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
+import org.sosy_lab.cpachecker.core.interfaces.StateSpacePartition;
 import org.sosy_lab.cpachecker.core.interfaces.StopOperator;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.ParserException;
-import org.sosy_lab.cpachecker.util.CFAUtils.Loop;
 import org.sosy_lab.cpachecker.util.VariableClassification;
 
 import com.google.common.base.Optional;
-import com.google.common.collect.ImmutableMultimap;
 import com.google.common.reflect.ClassPath;
 import com.google.common.reflect.ClassPath.ClassInfo;
 
@@ -104,7 +103,7 @@ public class CPASelfCheck {
       assert cpaInst != null;
 
       try {
-        cpaInst.getInitialState(main);
+        cpaInst.getInitialState(main, StateSpacePartition.getDefaultPartition());
 
         boolean ok = true;
         // check domain and lattice
@@ -134,8 +133,7 @@ public class CPASelfCheck {
     CSourceOriginMapping sourceOriginMapping = new CSourceOriginMapping();
     ParseResult cfas = parser.parseString("", code, sourceOriginMapping);
     MutableCFA cfa = new MutableCFA(MachineModel.LINUX32, cfas.getFunctions(), cfas.getCFANodes(), cfas.getFunctions().get("main"), Language.C);
-    return cfa.makeImmutableCFA(Optional.<ImmutableMultimap<String, Loop>>absent(),
-        Optional.<VariableClassification>absent());
+    return cfa.makeImmutableCFA(Optional.<VariableClassification>absent());
   }
 
   private static ConfigurableProgramAnalysis tryToInstantiate(Class<ConfigurableProgramAnalysis> pCpa,
@@ -160,7 +158,7 @@ public class CPASelfCheck {
   private static boolean checkJoin(Class<ConfigurableProgramAnalysis> pCpa,
                                 ConfigurableProgramAnalysis pCpaInst, FunctionEntryNode pMain) throws CPAException, InterruptedException {
     AbstractDomain d = pCpaInst.getAbstractDomain();
-    AbstractState initial = pCpaInst.getInitialState(pMain);
+    AbstractState initial = pCpaInst.getInitialState(pMain, StateSpacePartition.getDefaultPartition());
 
     return ensure(d.isLessOrEqual(initial, d.join(initial, initial)),
         "Join of same elements is unsound!");
@@ -170,8 +168,8 @@ public class CPASelfCheck {
                                  ConfigurableProgramAnalysis pCpaInst, FunctionEntryNode pMain) throws CPAException, InterruptedException {
     AbstractDomain d = pCpaInst.getAbstractDomain();
     MergeOperator merge = pCpaInst.getMergeOperator();
-    AbstractState initial = pCpaInst.getInitialState(pMain);
-    Precision initialPrec = pCpaInst.getInitialPrecision(pMain);
+    AbstractState initial = pCpaInst.getInitialState(pMain, StateSpacePartition.getDefaultPartition());
+    Precision initialPrec = pCpaInst.getInitialPrecision(pMain, StateSpacePartition.getDefaultPartition());
 
     return ensure(d.isLessOrEqual(initial, merge.merge(initial, initial, initialPrec)),
         "Merging same elements was unsound!");
@@ -183,8 +181,8 @@ public class CPASelfCheck {
                                             ConfigurableProgramAnalysis pCpaInst, FunctionEntryNode pMain) throws CPAException, InterruptedException {
     StopOperator stop = pCpaInst.getStopOperator();
     HashSet<AbstractState> reached = new HashSet<>();
-    AbstractState initial = pCpaInst.getInitialState(pMain);
-    Precision initialPrec = pCpaInst.getInitialPrecision(pMain);
+    AbstractState initial = pCpaInst.getInitialState(pMain, StateSpacePartition.getDefaultPartition());
+    Precision initialPrec = pCpaInst.getInitialPrecision(pMain, StateSpacePartition.getDefaultPartition());
 
     return ensure(!stop.stop(initial, reached, initialPrec), "Stopped on empty set!");
   }
@@ -193,9 +191,9 @@ public class CPASelfCheck {
                                        ConfigurableProgramAnalysis pCpaInst, FunctionEntryNode pMain) throws CPAException, InterruptedException {
     StopOperator stop = pCpaInst.getStopOperator();
     HashSet<AbstractState> reached = new HashSet<>();
-    AbstractState initial = pCpaInst.getInitialState(pMain);
+    AbstractState initial = pCpaInst.getInitialState(pMain, StateSpacePartition.getDefaultPartition());
     reached.add(initial);
-    Precision initialPrec = pCpaInst.getInitialPrecision(pMain);
+    Precision initialPrec = pCpaInst.getInitialPrecision(pMain, StateSpacePartition.getDefaultPartition());
 
     return ensure(stop.stop(initial, reached, initialPrec), "Did not stop on same element!");
   }

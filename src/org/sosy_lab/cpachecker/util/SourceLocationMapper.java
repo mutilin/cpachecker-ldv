@@ -110,8 +110,8 @@ public class SourceLocationMapper {
     tokenNumberToLineNumberMap.put(tokenNumber, lineNumber);
   }
 
-  private static void collectLine (final SortedSet<Integer> target, final FileLocation loc, boolean overApproximateTokens) {
-    if (loc != null) {
+  private static void collectLine(final SortedSet<Integer> target, final FileLocation loc, boolean overApproximateTokens) {
+    if (loc != null && !loc.equals(FileLocation.DUMMY)) {
       if (overApproximateTokens) {
         int lowerBound = loc.getStartingLineNumber();
         int upperBound = loc.getEndingLineNumber();
@@ -171,6 +171,24 @@ public class SourceLocationMapper {
         }
       }
     }
+
+    @Override
+    public int hashCode() {
+      return 31 * (31 + column) + row;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      if (this == obj) {
+        return true;
+      }
+      if (!(obj instanceof RowAndColumn)) {
+        return false;
+      }
+      RowAndColumn other = (RowAndColumn) obj;
+      return row == other.row
+          && column == other.column;
+    }
   }
 
   public static synchronized Set<RowAndColumn> collectRowsAndColsFrom(CAstNode astNode, boolean overApproximateTokens) {
@@ -227,9 +245,8 @@ public class SourceLocationMapper {
           result.add(retStmt.getRawAST().get());
         }
 
-        CExpression expr = retStmt.getExpression();
-        if (expr != null) {
-          result.add(expr);
+        if (retStmt.getExpression().isPresent()) {
+          result.add(retStmt.getExpression().get());
         }
       break;
       case StatementEdge:
@@ -249,6 +266,8 @@ public class SourceLocationMapper {
       result.addAll(collectFileLocationsFrom(n));
     }
 
+    result.add(pEdge.getFileLocation());
+
     return result;
   }
 
@@ -259,6 +278,11 @@ public class SourceLocationMapper {
     for (CAstNode n: astNodes) {
       result.addAll(collectRowsAndColsFrom(n, overApproximateTokens));
     }
+
+    RowAndColumn rc = new RowAndColumn(
+        pEdge.getFileLocation().getStartingLineNumber(),
+        pEdge.getFileLocation().getNodeOffset());
+    result.add(rc);
 
     return result;
   }
@@ -287,7 +311,6 @@ public class SourceLocationMapper {
     while (!edges.isEmpty()) {
       CFAEdge edge = edges.pop();
       CFANode startNode = edge.getPredecessor();
-      CFANode endNode = edge.getSuccessor();
 
       if (overApproximateTokens) {
         result.add(edge.getLineNumber());
@@ -337,10 +360,10 @@ public class SourceLocationMapper {
         result.add(((CFunctionReturnEdge) edge).getLineNumber());
       break;
       case ReturnStatementEdge:
-        CExpression expr = ((CReturnStatementEdge) edge).getExpression();
         result.add(((CReturnStatementEdge) edge).getLineNumber());
-        if (expr != null) {
-          astNodes.add(expr);
+        Optional<CExpression> expr = ((CReturnStatementEdge) edge).getExpression();
+        if (expr.isPresent()) {
+          astNodes.add(expr.get());
         }
       break;
       case StatementEdge:
@@ -348,7 +371,7 @@ public class SourceLocationMapper {
       break;
       }
 
-      while(!astNodes.isEmpty()) {
+      while (!astNodes.isEmpty()) {
         CAstNode node = astNodes.pop();
         result.addAll(collectTokensFrom(node, overApproximateTokens));
       }
@@ -415,9 +438,9 @@ public class SourceLocationMapper {
       case FunctionReturnEdge:
       break;
       case ReturnStatementEdge:
-        CExpression expr = ((CReturnStatementEdge) edge).getExpression();
-        if (expr != null) {
-          idExs.addAll(expr.accept(visitor));
+        Optional<CExpression> expr = ((CReturnStatementEdge) edge).getExpression();
+        if (expr.isPresent()) {
+          idExs.addAll(expr.get().accept(visitor));
         }
       break;
       case StatementEdge:
@@ -427,7 +450,9 @@ public class SourceLocationMapper {
     }
 
     for (CIdExpression e: idExs) {
-      result.add(e.getDeclaration().getQualifiedName());
+      if (e.getDeclaration() != null) {
+        result.add(e.getDeclaration().getQualifiedName());
+      }
     }
 
     return result;

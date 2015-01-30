@@ -37,6 +37,7 @@ import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
 import org.sosy_lab.cpachecker.core.ShutdownNotifier;
 import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
+import org.sosy_lab.cpachecker.core.defaults.DelegateAbstractDomain;
 import org.sosy_lab.cpachecker.core.defaults.MergeJoinOperator;
 import org.sosy_lab.cpachecker.core.defaults.MergeSepOperator;
 import org.sosy_lab.cpachecker.core.defaults.SingletonPrecision;
@@ -50,6 +51,7 @@ import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.MergeOperator;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustment;
+import org.sosy_lab.cpachecker.core.interfaces.StateSpacePartition;
 import org.sosy_lab.cpachecker.core.interfaces.StopOperator;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.util.reachingdef.ReachingDefUtils;
@@ -67,15 +69,15 @@ public class ReachingDefCPA implements ConfigurableProgramAnalysis {
 
   private LogManager logger;
 
-  private ReachingDefDomain domain;
+  private AbstractDomain domain;
 
   private ReachingDefTransferRelation transfer;
 
-  @Option(name="merge", toUppercase=true, values={"SEP", "JOIN", "IGNORECALLSTACK"},
+  @Option(secure=true, name="merge", toUppercase=true, values={"SEP", "JOIN", "IGNORECALLSTACK"},
       description="which merge operator to use for ReachingDefCPA")
   private String mergeType = "JOIN";
 
-  @Option(name="stop", toUppercase=true, values={"SEP", "JOIN", "IGNORECALLSTACK"},
+  @Option(secure=true, name="stop", toUppercase=true, values={"SEP", "JOIN", "IGNORECALLSTACK"},
       description="which stop operator to use for ReachingDefCPA")
   private String stopType = "SEP";
 
@@ -90,7 +92,7 @@ public class ReachingDefCPA implements ConfigurableProgramAnalysis {
     config.inject(this);
     this.logger = logger;
 
-    domain = new ReachingDefDomain();
+    domain = DelegateAbstractDomain.<ReachingDefState>getInstance();
     transfer = new ReachingDefTransferRelation(logger, shutdownNotifier);
 
     if (stopType.equals("SEP")) {
@@ -101,7 +103,7 @@ public class ReachingDefCPA implements ConfigurableProgramAnalysis {
       stop = new StopIgnoringCallstack();
     }
     if (mergeType.equals("SEP")) {
-      merge = new MergeSepOperator();
+      merge = MergeSepOperator.getInstance();
     } else if (mergeType.equals("JOIN")) {
       merge = new MergeJoinOperator(domain);
     } else {
@@ -135,18 +137,18 @@ public class ReachingDefCPA implements ConfigurableProgramAnalysis {
   }
 
   @Override
-  public AbstractState getInitialState(CFANode node) {
+  public AbstractState getInitialState(CFANode pNode, StateSpacePartition pPartition) {
     logger.log(Level.FINE, "Start extracting all declared variables in program.",
         "Distinguish between local and global variables.");
-    Pair<Set<String>, Map<FunctionEntryNode, Set<String>>> result = ReachingDefUtils.getAllVariables(node);
+    Pair<Set<String>, Map<FunctionEntryNode, Set<String>>> result = ReachingDefUtils.getAllVariables(pNode);
     logger.log(Level.FINE, "Extracted all declared variables.", "Create initial state.");
     transfer.provideLocalVariablesOfFunctions(result.getSecond());
-    transfer.setMainFunctionNode(node);
+    transfer.setMainFunctionNode(pNode);
     return new ReachingDefState(result.getFirst());
   }
 
   @Override
-  public Precision getInitialPrecision(CFANode pNode) {
+  public Precision getInitialPrecision(CFANode pNode, StateSpacePartition pPartition) {
     return SingletonPrecision.getInstance();
   }
 

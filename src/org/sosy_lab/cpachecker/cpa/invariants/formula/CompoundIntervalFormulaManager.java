@@ -35,6 +35,7 @@ import java.util.Queue;
 import java.util.Set;
 
 import org.sosy_lab.cpachecker.cpa.invariants.CompoundInterval;
+import org.sosy_lab.cpachecker.cpa.invariants.NonRecursiveEnvironment;
 
 import com.google.common.collect.FluentIterable;
 
@@ -69,6 +70,10 @@ public enum CompoundIntervalFormulaManager {
   private static final SplitConjunctionsVisitor<CompoundInterval> SPLIT_CONJUNCTIONS_VISITOR = new SplitConjunctionsVisitor<>();
 
   private static final SplitDisjunctionsVisitor<CompoundInterval> SPLIT_DISJUNCTIONS_VISITOR = new SplitDisjunctionsVisitor<>();
+
+  public static Set<String> collectVariableNames(InvariantsFormula<CompoundInterval> pFormula) {
+    return pFormula.accept(COLLECT_VARS_VISITOR);
+  }
 
   public static CompoundInterval evaluate(InvariantsFormula<CompoundInterval> pFormula) {
     return pFormula.accept(CACHING_EVALUATION_VISITOR);
@@ -151,7 +156,7 @@ public enum CompoundIntervalFormulaManager {
     }
 
     // Build the environment defined by the assumptions and check whether it contradicts or implies the proposed implication
-    Map<String, InvariantsFormula<CompoundInterval>> tmpEnvironment = pInformationBaseEnvironment;
+    NonRecursiveEnvironment.Builder tmpEnvironment = NonRecursiveEnvironment.Builder.of(pInformationBaseEnvironment);
     PushAssumptionToEnvironmentVisitor patev = new PushAssumptionToEnvironmentVisitor(FORMULA_EVALUATION_VISITOR, tmpEnvironment);
     if (!pEnvironmentComplete) {
       for (InvariantsFormula<CompoundInterval> leftFormula : formulas) {
@@ -173,7 +178,7 @@ public enum CompoundIntervalFormulaManager {
       final Map<String, InvariantsFormula<CompoundInterval>> pCompleteEnvironment,
       final InvariantsFormula<CompoundInterval> pFormula) {
     // Build the environment defined by the proposed implication and check for contradictions
-    Map<String, InvariantsFormula<CompoundInterval>> tmpEnvironment2 = new HashMap<>();
+    NonRecursiveEnvironment.Builder tmpEnvironment2 = new NonRecursiveEnvironment.Builder();
     CachingEvaluationVisitor<CompoundInterval> cachingEvaluationVisitor = new CachingEvaluationVisitor<>(pCompleteEnvironment, FORMULA_EVALUATION_VISITOR);
     outer:
     for (InvariantsFormula<CompoundInterval> formula2Part : pFormula.accept(SPLIT_CONJUNCTIONS_VISITOR)) {
@@ -467,21 +472,7 @@ public enum CompoundIntervalFormulaManager {
    * the given operands.
    */
   public InvariantsFormula<CompoundInterval> greaterThan(InvariantsFormula<CompoundInterval> pOperand1, InvariantsFormula<CompoundInterval> pOperand2) {
-    if (isDefinitelyBottom(pOperand1) || isDefinitelyBottom(pOperand2)) {
-      return BOTTOM;
-    }
-    if (isDefinitelyTop(pOperand1) || isDefinitelyTop(pOperand2)) {
-      return TOP;
-    }
-    if (pOperand1 instanceof Union<?>) {
-      Union<CompoundInterval> union = (Union<CompoundInterval>) pOperand1;
-      return logicalOr(greaterThan(union.getOperand1(), pOperand2), greaterThan(union.getOperand2(), pOperand2));
-    }
-    if (pOperand2 instanceof Union<?>) {
-      Union<CompoundInterval> union = (Union<CompoundInterval>) pOperand2;
-      return logicalOr(greaterThan(pOperand1, union.getOperand1()), greaterThan(pOperand1, union.getOperand2()));
-    }
-    return InvariantsFormulaManager.INSTANCE.greaterThan(pOperand1, pOperand2);
+    return lessThan(pOperand2, pOperand1);
   }
 
   /**
@@ -495,21 +486,7 @@ public enum CompoundIntervalFormulaManager {
    * inequation over the given operands.
    */
   public InvariantsFormula<CompoundInterval> greaterThanOrEqual(InvariantsFormula<CompoundInterval> pOperand1, InvariantsFormula<CompoundInterval> pOperand2) {
-    if (isDefinitelyBottom(pOperand1) || isDefinitelyBottom(pOperand2)) {
-      return BOTTOM;
-    }
-    if (isDefinitelyTop(pOperand1) || isDefinitelyTop(pOperand2)) {
-      return TOP;
-    }
-    if (pOperand1 instanceof Union<?>) {
-      Union<CompoundInterval> union = (Union<CompoundInterval>) pOperand1;
-      return logicalOr(greaterThanOrEqual(union.getOperand1(), pOperand2), greaterThanOrEqual(union.getOperand2(), pOperand2));
-    }
-    if (pOperand2 instanceof Union<?>) {
-      Union<CompoundInterval> union = (Union<CompoundInterval>) pOperand2;
-      return logicalOr(greaterThanOrEqual(pOperand1, union.getOperand1()), greaterThanOrEqual(pOperand1, union.getOperand2()));
-    }
-    return InvariantsFormulaManager.INSTANCE.greaterThanOrEqual(pOperand1, pOperand2);
+    return lessThanOrEqual(pOperand2, pOperand1);
   }
 
   /**
@@ -594,7 +571,7 @@ public enum CompoundIntervalFormulaManager {
     if (isDefinitelyTop(pOperand1) && isDefinitelyTop(pOperand2)) {
       return TOP;
     }
-    Map<String, InvariantsFormula<CompoundInterval>> tmpEnvironment = new HashMap<>();
+    NonRecursiveEnvironment.Builder tmpEnvironment = new NonRecursiveEnvironment.Builder();
     PushAssumptionToEnvironmentVisitor patev = new PushAssumptionToEnvironmentVisitor(FORMULA_EVALUATION_VISITOR, tmpEnvironment);
     if (!pOperand1.accept(patev, CompoundInterval.logicalTrue())) {
       return FALSE;
@@ -968,6 +945,16 @@ public enum CompoundIntervalFormulaManager {
    */
   public Variable<CompoundInterval> asVariable(String pName) {
     return InvariantsFormulaManager.INSTANCE.asVariable(pName);
+  }
+
+  public InvariantsFormula<CompoundInterval> exclude(InvariantsFormula<CompoundInterval> pToExclude) {
+    if (pToExclude instanceof Constant) {
+      Constant<CompoundInterval> c = (Constant<CompoundInterval>) pToExclude;
+      if (c.getValue().isSingleton()) {
+        return asConstant(c.getValue().invert());
+      }
+    }
+    return InvariantsFormulaManager.INSTANCE.exclude(pToExclude);
   }
 
 }

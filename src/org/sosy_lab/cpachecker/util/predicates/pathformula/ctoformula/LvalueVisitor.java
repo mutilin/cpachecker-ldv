@@ -45,7 +45,7 @@ import org.sosy_lab.cpachecker.util.predicates.pathformula.pointeraliasing.Point
 
 import com.google.common.base.Optional;
 
-class LvalueVisitor extends DefaultCExpressionVisitor<Formula, UnrecognizedCCodeException> {
+public class LvalueVisitor extends DefaultCExpressionVisitor<Formula, UnrecognizedCCodeException> {
 
   private final CtoFormulaConverter conv;
   private final CFAEdge       edge;
@@ -55,8 +55,9 @@ class LvalueVisitor extends DefaultCExpressionVisitor<Formula, UnrecognizedCCode
   private final Constraints   constraints;
   private final ErrorConditions errorConditions;
 
-  LvalueVisitor(CtoFormulaConverter pConv, CFAEdge pEdge, String pFunction, SSAMapBuilder pSsa,
+  protected LvalueVisitor(CtoFormulaConverter pConv, CFAEdge pEdge, String pFunction, SSAMapBuilder pSsa,
       PointerTargetSetBuilder pPts, Constraints pConstraints, ErrorConditions pErrorConditions) {
+
     conv = pConv;
     edge = pEdge;
     function = pFunction;
@@ -89,7 +90,7 @@ class LvalueVisitor extends DefaultCExpressionVisitor<Formula, UnrecognizedCCode
 
   @Override
   public Formula visit(CComplexCastExpression pE) throws UnrecognizedCCodeException {
-    if(pE.isImaginaryCast()) {
+    if (pE.isImaginaryCast()) {
       throw new UnrecognizedCCodeException("Unknown lvalue", edge, pE);
     }
     // TODO complex numbers are not supported for evaluation right now
@@ -110,7 +111,7 @@ class LvalueVisitor extends DefaultCExpressionVisitor<Formula, UnrecognizedCCode
         if (decl instanceof CDeclaration && ((CDeclaration)decl).isGlobal()) {
           // this is the reference to a global field variable
           // we don't need to scope the variable reference
-          String var = CtoFormulaConverter.exprToVarName(fexp);
+          String var = CtoFormulaConverter.exprToVarNameUnscoped(fexp);
 
           return conv.makeFreshVariable(var, fexp.getExpressionType(), ssa);
         }

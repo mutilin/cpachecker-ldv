@@ -23,16 +23,31 @@
  */
 package org.sosy_lab.cpachecker.util.predicates.z3;
 
+import static org.sosy_lab.cpachecker.util.predicates.z3.Z3NativeApi.*;
+
+import java.math.BigDecimal;
+
 import org.sosy_lab.cpachecker.util.predicates.interfaces.FormulaType;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.NumeralFormula;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.NumeralFormula.RationalFormula;
 
-public class Z3RationalFormulaManager extends Z3NumeralFormulaManager<NumeralFormula, RationalFormula> {
+class Z3RationalFormulaManager extends Z3NumeralFormulaManager<NumeralFormula, RationalFormula> {
 
-  public Z3RationalFormulaManager(
+  Z3RationalFormulaManager(
           Z3FormulaCreator pCreator,
           Z3FunctionFormulaManager pFunctionManager) {
-    super(pCreator, pFunctionManager, RationalFormula.class);
+    super(pCreator, pFunctionManager);
+  }
+
+  @Override
+  public Long divide(Long pNumber1, Long pNumber2) {
+    long result;
+    if (is_numeral_ast(z3context, pNumber2)) {
+      result = mk_div(z3context, pNumber1, pNumber2);
+    } else {
+      result = super.divide(pNumber1, pNumber2);
+    }
+    return result;
   }
 
   @Override
@@ -42,6 +57,16 @@ public class Z3RationalFormulaManager extends Z3NumeralFormulaManager<NumeralFor
 
   @Override
   protected long getNumeralType() {
-    return getFormulaCreator().getRealType();
+    return getFormulaCreator().getRationalType();
+  }
+
+  @Override
+  protected Long makeNumberImpl(double pNumber) {
+    return makeNumberImpl(Double.toString(pNumber));
+  }
+
+  @Override
+  protected Long makeNumberImpl(BigDecimal pNumber) {
+    return makeNumberImpl(pNumber.toPlainString());
   }
 }

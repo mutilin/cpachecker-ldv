@@ -23,18 +23,18 @@
  */
 package org.sosy_lab.cpachecker.cpa.bam;
 
-import static org.sosy_lab.cpachecker.util.AbstractStates.extractLocation;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.time.Timer;
+<<<<<<< HEAD
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+=======
+>>>>>>> master
 import org.sosy_lab.cpachecker.core.CounterexampleInfo;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
@@ -42,15 +42,19 @@ import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
 import org.sosy_lab.cpachecker.cpa.arg.ARGReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
+import org.sosy_lab.cpachecker.cpa.arg.ARGUtils;
 import org.sosy_lab.cpachecker.cpa.arg.AbstractARGBasedRefiner;
+import org.sosy_lab.cpachecker.cpa.arg.MutableARGPath;
+import org.sosy_lab.cpachecker.cpa.bam.BAMCEXSubgraphComputer.BackwardARGState;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 
 import com.google.common.base.Preconditions;
+import com.google.common.base.Predicate;
 
 /**
  * This is an extension of {@link AbstractARGBasedRefiner} that takes care of
- * flattening the ARG before calling {@link #performRefinement0(ReachedSet)}.
+ * flattening the ARG before calling {@link #performRefinement0(ARGReachedSet, MutableARGPath)}.
  *
  * Warning: Although the ARG is flattened at this point, the elements in it have
  * not been expanded due to performance reasons.
@@ -63,6 +67,8 @@ public abstract class AbstractBAMBasedRefiner extends AbstractARGBasedRefiner {
 
   protected final BAMTransferRelation transfer;
   protected final Map<ARGState, ARGState> pathStateToReachedState = new HashMap<>();
+
+  final static BackwardARGState DUMMY_STATE_FOR_MISSING_BLOCK = new BackwardARGState(new ARGState(null, null));
 
   protected AbstractBAMBasedRefiner(ConfigurableProgramAnalysis pCpa)
       throws InvalidConfigurationException {
@@ -81,7 +87,14 @@ public abstract class AbstractBAMBasedRefiner extends AbstractARGBasedRefiner {
 
   @Override
   protected final CounterexampleInfo performRefinement(ARGReachedSet pReached, ARGPath pPath) throws CPAException, InterruptedException {
+    assert pPath == null || pPath.size() > 0;
+
     if (pPath == null) {
+      // The counter-example-path could not be constructed, because of missing blocks (aka "holes").
+      // We directly return SPURIOUS and let the CPA-algorithm run again.
+      // During the counter-example-path-building we already re-added the start-states of all blocks,
+      // that lead to the missing block, to the waitlists of those blocks.
+      // Thus missing blocks are analyzed and rebuild again in the next CPA-algorithm.
       return CounterexampleInfo.spurious();
     } else {
       return performRefinement0(new BAMReachedSet(transfer, pReached, pPath, pathStateToReachedState), pPath);
@@ -100,7 +113,7 @@ public abstract class AbstractBAMBasedRefiner extends AbstractARGBasedRefiner {
       computeSubtreeTimer.start();
       try {
         subgraph = transfer.computeCounterexampleSubgraph(pLastElement, pReachedSet, pathStateToReachedState);
-        if (subgraph == null) {
+        if (subgraph == DUMMY_STATE_FOR_MISSING_BLOCK) {
           return null;
         }
       } finally {
@@ -109,7 +122,7 @@ public abstract class AbstractBAMBasedRefiner extends AbstractARGBasedRefiner {
 
       computeCounterexampleTimer.start();
       try {
-        return computeCounterexample(subgraph);
+        return ARGUtils.getRandomPath(subgraph);
       } finally {
         computeCounterexampleTimer.stop();
       }
@@ -117,6 +130,7 @@ public abstract class AbstractBAMBasedRefiner extends AbstractARGBasedRefiner {
       computePathTimer.stop();
     }
   }
+
 
   protected ARGPath computeCounterexample(ARGState root) {
     ARGPath path = new ARGPath();
@@ -154,16 +168,16 @@ public abstract class AbstractBAMBasedRefiner extends AbstractARGBasedRefiner {
 
     @Override
     public void removeSubtree(ARGState element, Precision newPrecision,
-        Class<? extends Precision> pPrecisionType) {
+        Predicate<? super Precision> pPrecisionType) {
       ArrayList<Precision> listP = new ArrayList<>();
       listP.add(newPrecision);
-      ArrayList<Class<? extends Precision>> listPT = new ArrayList<>();
+      ArrayList<Predicate<? super Precision>> listPT = new ArrayList<>();
       listPT.add(pPrecisionType);
       removeSubtree(element, listP, listPT);
     }
 
     @Override
-    public void removeSubtree(ARGState element, List<Precision> newPrecisions, List<Class<? extends Precision>> pPrecisionTypes) {
+    public void removeSubtree(ARGState element, List<Precision> newPrecisions, List<Predicate<? super Precision>> pPrecisionTypes) {
       Preconditions.checkArgument(newPrecisions.size()==pPrecisionTypes.size());
       transfer.removeSubtree(delegate, path, element, newPrecisions, pPrecisionTypes, pathStateToReachedState);
     }

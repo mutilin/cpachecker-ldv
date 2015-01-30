@@ -30,6 +30,7 @@ import java.util.List;
 
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
@@ -45,14 +46,23 @@ public class LocationTransferRelation implements TransferRelation {
     factory = pFactory;
   }
 
-  private Collection<LocationState> getAbstractSuccessor(AbstractState element,
-      CFAEdge cfaEdge, Precision prec) throws CPATransferException {
+  @Override
+  public Collection<LocationState> getAbstractSuccessorsForEdge(
+      AbstractState element, Precision prec, CFAEdge cfaEdge) {
 
     LocationState inputElement = (LocationState) element;
     CFANode node = inputElement.getLocationNode();
 
     if (CFAUtils.allLeavingEdges(node).contains(cfaEdge)) {
       return Collections.singleton(factory.getState(cfaEdge.getSuccessor()));
+
+    } else if (node.getNumLeavingEdges() == 1
+        && node.getLeavingEdge(0) instanceof MultiEdge) {
+      // maybe we are "entering" a MultiEdge via it's first component edge
+      MultiEdge multiEdge = (MultiEdge)node.getLeavingEdge(0);
+      if (multiEdge.getEdges().get(0).equals(cfaEdge)) {
+        return Collections.singleton(factory.getState(cfaEdge.getSuccessor()));
+      }
     }
 
     return Collections.emptySet();
@@ -60,11 +70,7 @@ public class LocationTransferRelation implements TransferRelation {
 
   @Override
   public Collection<LocationState> getAbstractSuccessors(AbstractState element,
-      Precision prec, CFAEdge cfaEdge) throws CPATransferException {
-
-    if (cfaEdge != null) {
-      return getAbstractSuccessor(element, cfaEdge, prec);
-    }
+      Precision prec) throws CPATransferException {
 
     CFANode node = ((LocationState)element).getLocationNode();
 

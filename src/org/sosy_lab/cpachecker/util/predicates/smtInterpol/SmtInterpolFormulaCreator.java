@@ -23,19 +23,28 @@
  */
 package org.sosy_lab.cpachecker.util.predicates.smtInterpol;
 
-import org.sosy_lab.cpachecker.util.predicates.interfaces.basicimpl.AbstractFormulaCreator;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.FormulaType;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.basicimpl.FormulaCreator;
 
 import de.uni_freiburg.informatik.ultimate.logic.Sort;
 import de.uni_freiburg.informatik.ultimate.logic.Term;
 
-class SmtInterpolFormulaCreator extends AbstractFormulaCreator<Term, Sort, SmtInterpolEnvironment> {
+class SmtInterpolFormulaCreator extends FormulaCreator<Term, Sort, SmtInterpolEnvironment> {
 
-  SmtInterpolFormulaCreator(
-      SmtInterpolEnvironment pMathsatEnv,
-      Sort pBoolType,
-      Sort pIntegerType,
-      Sort pRealType) {
-    super(pMathsatEnv, pBoolType, pIntegerType, pRealType);
+  SmtInterpolFormulaCreator(SmtInterpolEnvironment env) {
+    super(env, env.getBooleanSort(), env.getIntegerSort(), env.getRealSort());
+  }
+
+  @Override
+  public FormulaType<?> getFormulaType(Term pFormula) {
+    if (SmtInterpolUtil.isBoolean(pFormula)) {
+      return FormulaType.BooleanType;
+    } else if (SmtInterpolUtil.hasIntegerType(pFormula)) {
+      return FormulaType.IntegerType;
+    } else if (SmtInterpolUtil.hasRationalType(pFormula)) {
+      return FormulaType.RationalType;
+    }
+    throw new IllegalArgumentException("Unknown formula type");
   }
 
   @Override
@@ -46,7 +55,17 @@ class SmtInterpolFormulaCreator extends AbstractFormulaCreator<Term, Sort, SmtIn
   }
 
   @Override
-  public Sort getBittype(int pBitwidth) {
+  public Sort getBitvectorType(int pBitwidth) {
     throw new UnsupportedOperationException("Bitvector theory is not supported by SmtInterpol");
+  }
+
+  @Override
+  public Sort getFloatingPointType(FormulaType.FloatingPointType type) {
+    throw new UnsupportedOperationException("FloatingPoint theory is not supported by SmtInterpol");
+  }
+
+  @Override
+  public Sort getArrayType(Sort pIndexType, Sort pElementType) {
+    throw new IllegalArgumentException("SmtInterpol.getArrayType(): Implement me!");
   }
 }

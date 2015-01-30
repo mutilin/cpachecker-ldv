@@ -32,10 +32,10 @@ import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.ast.c.CAstNode;
+import org.sosy_lab.cpachecker.cfa.parser.Scope;
 import org.sosy_lab.cpachecker.cfa.parser.eclipse.EclipseParsers;
 import org.sosy_lab.cpachecker.cfa.types.MachineModel;
 import org.sosy_lab.cpachecker.exceptions.CParserException;
-import org.sosy_lab.cpachecker.exceptions.ParserException;
 
 /**
  * Abstraction of a C parser that creates CFAs from C code.
@@ -49,27 +49,21 @@ public interface CParser extends Parser {
 
   public static class FileToParse {
     private final String fileName;
-    private final String staticVariablePrefix;
 
-    public FileToParse(String pFileName, String pStaticVariablePrefix) {
+    public FileToParse(String pFileName) {
       this.fileName = pFileName;
-      this.staticVariablePrefix = pStaticVariablePrefix;
     }
 
     public String getFileName() {
       return fileName;
-    }
-
-    public String getStaticVariablePrefix() {
-      return staticVariablePrefix;
     }
   }
 
   public static class FileContentToParse extends FileToParse {
     private final String fileContent;
 
-    public FileContentToParse(String pFileName, String pFileContent, String pStaticVariablePrefix) {
-      super(pFileName, pStaticVariablePrefix);
+    public FileContentToParse(String pFileName, String pFileContent) {
+      super(pFileName);
       this.fileContent = pFileContent;
     }
 
@@ -81,14 +75,14 @@ public interface CParser extends Parser {
   /**
    * Parse the content of files into a single CFA.
    *
-   * @param fileNames  The List of files to parse. The first part of the pair
+   * @param filenames  The List of files to parse. The first part of the pair
    *                   should be the filename, the second part should be the
    *                   prefix which will be appended to static variables
    * @param sourceOriginMapping A mapping from real input file locations to original file locations (before pre-processing).
    * @return The CFA.
    * @throws IOException If file cannot be read.
    * @throws InterruptedException
-   * @throws ParserException If parser or CFA builder cannot handle the C code.
+   * @throws CParserException If parser or CFA builder cannot handle the C code.
    */
   ParseResult parseFile(List<FileToParse> filenames, CSourceOriginMapping sourceOriginMapping) throws CParserException, IOException, InvalidConfigurationException, InterruptedException;
 
@@ -100,7 +94,7 @@ public interface CParser extends Parser {
    *                   prefix which will be appended to static variables
    * @param sourceOriginMapping A mapping from real input file locations to original file locations (before pre-processing).
    * @return The CFA.
-   * @throws ParserException If parser or CFA builder cannot handle the C code.
+   * @throws CParserException If parser or CFA builder cannot handle the C code.
    */
   ParseResult parseString(List<FileContentToParse> code, CSourceOriginMapping sourceOriginMapping) throws CParserException, InvalidConfigurationException;
 
@@ -117,10 +111,11 @@ public interface CParser extends Parser {
    * This method guarantees that the AST does not contain CProblem nodes.
    *
    * @param code The code snippet as described above.
+   * @param scope The scope is needed to resolve the type bindings in the statement.
    * @return The AST for the statement.
-   * @throws ParserException If parsing fails.
+   * @throws CParserException If parsing fails.
    */
-  CAstNode parseSingleStatement(String code) throws CParserException, InvalidConfigurationException;
+  CAstNode parseSingleStatement(String code, Scope scope) throws CParserException, InvalidConfigurationException;
 
   /**
    * Method for parsing a block of statements that contains exactly one function with exactly
@@ -135,10 +130,11 @@ public interface CParser extends Parser {
    * This method guarantees that the AST does not contain CProblem nodes.
    *
    * @param code The code snippet as described above.
+   * @param scope The scope is needed to resolve the type bindings in the statement.
    * @return The list of ASTs for the statement.
-   * @throws ParserException If parsing fails.
+   * @throws CParserException If parsing fails.
    */
-  List<CAstNode> parseStatements(String code) throws CParserException, InvalidConfigurationException;
+  List<CAstNode> parseStatements(String code, Scope scope) throws CParserException, InvalidConfigurationException;
 
   /**
    * Enum for clients of this class to choose the C dialect the parser uses.
@@ -152,7 +148,7 @@ public interface CParser extends Parser {
   @Options(prefix="parser")
   public final static class ParserOptions {
 
-    @Option(description="C dialect for parser")
+    @Option(secure=true, description="C dialect for parser")
     private Dialect dialect = Dialect.GNUC;
 
     private ParserOptions() { }

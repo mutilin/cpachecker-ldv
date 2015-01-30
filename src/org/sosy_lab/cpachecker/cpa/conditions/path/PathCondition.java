@@ -34,7 +34,7 @@ import org.sosy_lab.cpachecker.core.interfaces.conditions.AvoidanceReportingStat
  * Implementations of this interface can be used with the {@link PathConditionsCPA}.
  * For this to work, they need to have a public constructor with two parameters
  * of types {@link org.sosy_lab.common.configuration.Configuration} and
- * {@link org.sosy_lab.common.LogManager}, respectively.
+ * {@link org.sosy_lab.common.log.LogManager}, respectively.
  *
  * In order to cut off a path, conditions need to return an element from
  * {@link PathCondition#getAbstractSuccessor(AbstractState, CFAEdge)} whose
@@ -53,10 +53,10 @@ public interface PathCondition {
   AvoidanceReportingState getInitialState(CFANode pNode);
 
   /**
-   * Get the successor element for an edge.
+   * Get the successor state for an edge.
    * @see org.sosy_lab.cpachecker.core.interfaces.TransferRelation#getAbstractSuccessors(AbstractState, org.sosy_lab.cpachecker.core.interfaces.Precision, CFAEdge)
    */
-  AvoidanceReportingState getAbstractSuccessor(AbstractState pElement, CFAEdge pEdge);
+  AvoidanceReportingState getAbstractSuccessor(AbstractState pState, CFAEdge pEdge);
 
   /**
    * Adjust the precision of this condition, i.e., by increasing a threshold value.

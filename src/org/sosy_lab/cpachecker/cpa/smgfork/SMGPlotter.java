@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 
 import org.sosy_lab.common.io.Files;
@@ -35,6 +36,7 @@ import org.sosy_lab.common.io.Path;
 import org.sosy_lab.common.io.Paths;
 import org.sosy_lab.cpachecker.cpa.smgfork.SMGTransferRelation.SMGKnownExpValue;
 import org.sosy_lab.cpachecker.cpa.smgfork.SMGTransferRelation.SMGKnownSymValue;
+import org.sosy_lab.cpachecker.cpa.smgfork.graphs.CLangSMG;
 import org.sosy_lab.cpachecker.cpa.smgfork.objects.SMGObject;
 import org.sosy_lab.cpachecker.cpa.smgfork.objects.SMGObjectVisitor;
 import org.sosy_lab.cpachecker.cpa.smgfork.objects.SMGRegion;
@@ -237,8 +239,9 @@ public final class SMGPlotter {
 
     // I sooo wish for Python list comprehension here...
     ArrayList<String> nodes = new ArrayList<>();
-    for (String key : pNamespace.keySet()) {
-      SMGObject obj = pNamespace.get(key);
+    for (Entry<String, SMGRegion> entry : pNamespace.entrySet()) {
+      String key = entry.getKey();
+      SMGObject obj = entry.getValue();
 
       if (key.equals("node")) {
         // escape Node1
@@ -289,7 +292,7 @@ public final class SMGPlotter {
 
     SMGKnownSymValue symValue =  SMGKnownSymValue.valueOf(value);
 
-    if(explicitValues.containsKey(symValue)) {
+    if (explicitValues.containsKey(symValue)) {
       explicitValue = " : " + String.valueOf(explicitValues.get(symValue).getAsLong());
     }
 

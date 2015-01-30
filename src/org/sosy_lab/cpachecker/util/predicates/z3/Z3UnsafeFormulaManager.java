@@ -26,24 +26,26 @@ package org.sosy_lab.cpachecker.util.predicates.z3;
 import static org.sosy_lab.cpachecker.util.predicates.z3.Z3NativeApi.*;
 import static org.sosy_lab.cpachecker.util.predicates.z3.Z3NativeApiConstants.*;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import org.sosy_lab.cpachecker.util.predicates.interfaces.Formula;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.basicimpl.AbstractUnsafeFormulaManager;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.common.primitives.Longs;
 
-public class Z3UnsafeFormulaManager extends AbstractUnsafeFormulaManager<Long, Long, Long> {
+class Z3UnsafeFormulaManager extends AbstractUnsafeFormulaManager<Long, Long, Long> {
 
-  private Set<Long> uifs = new HashSet<>();
-  private long z3context;
+  private final Set<Long> uifs = new HashSet<>(); // contains used declarations of UIFs
+  private final long z3context;
 
-  public Z3UnsafeFormulaManager(
+  Z3UnsafeFormulaManager(
       Z3FormulaCreator pCreator) {
     super(pCreator);
     this.z3context = pCreator.getEnv();
@@ -53,14 +55,26 @@ public class Z3UnsafeFormulaManager extends AbstractUnsafeFormulaManager<Long, L
       Sets.newHashSet(Z3_OP_AND, Z3_OP_OR, Z3_OP_IMPLIES, Z3_OP_ITE, Z3_OP_NOT);
 
   @Override
-  public Formula encapsulateUnsafe(Long pL) {
-    return new Z3Formula(z3context, pL);
+  public boolean isAtom(Long t) {
+    int astKind = get_ast_kind(z3context, t);
+    switch (astKind) {
+    case Z3_APP_AST:
+      long decl = get_app_decl(z3context, t);
+      return !nonAtomicOpTypes.contains(get_decl_kind(z3context, decl));
+    default:
+      return true;
+    }
   }
 
   @Override
-  public boolean isAtom(Long t) {
+  public boolean isLiteral(Long t) {
     long decl = get_app_decl(z3context, t);
-    return !nonAtomicOpTypes.contains(get_decl_kind(z3context, decl));
+    int declKind = get_decl_kind(z3context, decl);
+    if (declKind == Z3_OP_NOT) {
+      return true;
+    } else {
+      return !nonAtomicOpTypes.contains(declKind);
+    }
   }
 
   @Override
@@ -77,25 +91,46 @@ public class Z3UnsafeFormulaManager extends AbstractUnsafeFormulaManager<Long, L
   public boolean isVariable(Long t) {
     if (isOP(z3context, t, Z3_OP_TRUE) || isOP(z3context, t, Z3_OP_FALSE)) { return false; }
     int astKind = get_ast_kind(z3context, t);
-    return (astKind == Z3_APP_AST) && (getArity(t) == 0);
+    return (astKind == Z3_VAR_AST) || ((astKind == Z3_APP_AST) && (getArity(t) == 0));
+  }
+
+  @Override
+  protected boolean isFreeVariable(Long pT) {
+    if (isOP(z3context, pT, Z3_OP_TRUE) || isOP(z3context, pT, Z3_OP_FALSE)) {
+      return false;
+    }
+
+    int astKind = get_ast_kind(z3context, pT);
+    return ((astKind == Z3_APP_AST) && (getArity(pT) == 0));
+  }
+
+  @Override
+  protected boolean isBoundVariable(Long pT) {
+    int astKind = get_ast_kind(z3context, pT);
+    return (astKind == Z3_VAR_AST);
   }
 
   @Override
   public boolean isUF(Long t) {
-    return uifs.contains(t);
+    return is_app(z3context, t) && uifs.contains(get_app_decl(z3context, t));
   }
 
   @Override
   public String getName(Long t) {
-    long funcDecl = get_app_decl(z3context, t);
-    long symbol = get_decl_name(z3context, funcDecl);
-    switch (get_symbol_kind(z3context, symbol)) {
-    case Z3_INT_SYMBOL:
-      return Integer.toString(get_symbol_int(z3context, symbol));
-    case Z3_STRING_SYMBOL:
-      return get_symbol_string(z3context, symbol);
-    default:
-      throw new AssertionError();
+    int astKind = get_ast_kind(z3context, t);
+    if (astKind == Z3_VAR_AST) {
+      return "?" + get_index_value(z3context, t);
+    } else {
+      long funcDecl = get_app_decl(z3context, t);
+      long symbol = get_decl_name(z3context, funcDecl);
+      switch (get_symbol_kind(z3context, symbol)) {
+      case Z3_INT_SYMBOL:
+        return Integer.toString(get_symbol_int(z3context, symbol));
+      case Z3_STRING_SYMBOL:
+        return get_symbol_string(z3context, symbol);
+      default:
+        throw new AssertionError();
+      }
     }
   }
 
@@ -114,7 +149,7 @@ public class Z3UnsafeFormulaManager extends AbstractUnsafeFormulaManager<Long, L
       long sort = get_sort(z3context, t);
       return getFormulaCreator().makeVariable(sort, pNewName);
 
-    } else if (uifs.contains(t)) {
+    } else if (isUF(t)) {
       int n = get_app_num_args(z3context, t);
       long[] args = new long[n];
       long[] sorts = new long[n];
@@ -140,13 +175,14 @@ public class Z3UnsafeFormulaManager extends AbstractUnsafeFormulaManager<Long, L
       return uif;
 
     } else {
-      throw new IllegalArgumentException("The Term " + t + " has no name!");
+      throw new IllegalArgumentException("Cannot replace name '" + pNewName
+              + "' in term '" + ast_to_string(z3context, t) + "'.");
     }
   }
 
   public long createUIFCallImpl(long pNewFunc, long[] args) {
     long ufc = mk_app(z3context, pNewFunc, args);
-    uifs.add(ufc);
+    uifs.add(pNewFunc);
     return ufc;
   }
 
@@ -154,4 +190,69 @@ public class Z3UnsafeFormulaManager extends AbstractUnsafeFormulaManager<Long, L
   public boolean isNumber(Long t) {
     return is_numeral_ast(z3context, t);
   }
+
+  @Override
+  protected Long substitute(Long t, List<Long> changeFrom, List<Long> changeTo) {
+    int size = changeFrom.size();
+    Preconditions.checkState(size == changeTo.size());
+    return Z3NativeApi.substitute(
+        z3context,
+        t,
+        size,
+        Longs.toArray(changeFrom),
+        Longs.toArray(changeTo)
+    );
+  }
+
+  @Override
+  protected Long simplify(Long pF) {
+    return Z3NativeApi.simplify(z3context, pF);
+  }
+
+  @Override
+  protected boolean isQuantification(Long pT) {
+    return Z3_QUANTIFIER_AST == get_ast_kind(z3context, pT);
+  }
+
+  @Override
+  protected Long getQuantifiedBody(Long pT) {
+    return get_quantifier_body(z3context, pT);
+  }
+
+  @Override
+  protected Long replaceQuantifiedBody(Long pF, Long pBody) {
+    boolean isForall = is_quantifier_forall(z3context, pF);
+    int boundCount = get_quantifier_num_bound(z3context, pF);
+    ArrayList<Long> boundVars = Lists.newArrayList();
+
+    for (int b=0; b<boundCount; b++) {
+      long varName = get_quantifier_bound_name(z3context, pF, b);
+      long varSort = get_quantifier_bound_sort(z3context, pF, b);
+      long var = mk_const(z3context, varName, varSort);
+      boundVars.add(var);
+      inc_ref(z3context, var);
+    }
+
+    if (isForall) {
+      return Z3NativeApi.mk_forall_const(
+          z3context,
+          0,
+          boundVars.size(),
+          Longs.toArray(boundVars),
+          0,
+          Longs.toArray(Collections.<Long>emptyList()),
+          pBody);
+    } else {
+      return Z3NativeApi.mk_exists_const(
+          z3context,
+          0,
+          boundVars.size(),
+          Longs.toArray(boundVars),
+          0,
+          Longs.toArray(Collections.<Long>emptyList()),
+          pBody);
+
+    }
+  }
+
 }

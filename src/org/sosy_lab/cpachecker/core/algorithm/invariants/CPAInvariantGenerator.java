@@ -57,6 +57,7 @@ import org.sosy_lab.cpachecker.core.ShutdownNotifier;
 import org.sosy_lab.cpachecker.core.algorithm.Algorithm;
 import org.sosy_lab.cpachecker.core.algorithm.CPAAlgorithm;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
+import org.sosy_lab.cpachecker.core.interfaces.StateSpacePartition;
 import org.sosy_lab.cpachecker.core.interfaces.conditions.AdjustableConditionCPA;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSetFactory;
@@ -75,16 +76,16 @@ import com.google.common.base.Throwables;
 @Options(prefix="invariantGeneration")
 public class CPAInvariantGenerator implements InvariantGenerator {
 
-  @Option(name="config",
+  @Option(secure=true, name="config",
           required=true,
           description="configuration file for invariant generation")
   @FileOption(FileOption.Type.REQUIRED_INPUT_FILE)
   private Path configFile;
 
-  @Option(description="generate invariants in parallel to the normal analysis")
+  @Option(secure=true, description="generate invariants in parallel to the normal analysis")
   private boolean async = false;
 
-  @Option(description="adjust invariant generation conditions if supported by the analysis")
+  @Option(secure=true, description="adjust invariant generation conditions if supported by the analysis")
   private boolean adjustConditions = false;
 
   private final Timer invariantGeneration = new Timer();
@@ -98,6 +99,10 @@ public class CPAInvariantGenerator implements InvariantGenerator {
   private final ShutdownNotifier shutdownNotifier;
 
   private Future<UnmodifiableReachedSet> invariantGenerationFuture = null;
+
+  public ConfigurableProgramAnalysis getCPAs() {
+    return invariantCPAs;
+  }
 
   public CPAInvariantGenerator(Configuration config, LogManager pLogger,
       ReachedSetFactory reachedSetFactory, ShutdownNotifier pShutdownNotifier, CFA cfa) throws InvalidConfigurationException, CPAException {
@@ -114,7 +119,7 @@ public class CPAInvariantGenerator implements InvariantGenerator {
       throw new InvalidConfigurationException("could not read configuration file for invariant generation: " + e.getMessage(), e);
     }
 
-    invariantCPAs = new CPABuilder(invariantConfig, logger, shutdownNotifier, reachedSetFactory).buildCPAs(cfa);
+    invariantCPAs = new CPABuilder(invariantConfig, logger, shutdownNotifier, reachedSetFactory).buildCPAWithSpecAutomatas(cfa);
     invariantAlgorithm = CPAAlgorithm.create(invariantCPAs, logger, invariantConfig, shutdownNotifier);
     this.reachedSetFactory = new ReachedSetFactory(invariantConfig, logger);
     reached = reachedSetFactory.create();
@@ -133,6 +138,7 @@ public class CPAInvariantGenerator implements InvariantGenerator {
 
         @Override
         public UnmodifiableReachedSet call() throws Exception {
+          shutdownNotifier.shutdownIfNecessary();
           UnmodifiableReachedSet result = new InvariantGenerationTask(reachedSetFactory, initialLocation).call();
           CPAs.closeCpaIfPossible(invariantCPAs, logger);
           CPAs.closeIfPossible(invariantAlgorithm, logger);
@@ -154,6 +160,7 @@ public class CPAInvariantGenerator implements InvariantGenerator {
   @Override
   public UnmodifiableReachedSet get() throws CPAException, InterruptedException {
     checkState(invariantGenerationFuture != null);
+    shutdownNotifier.shutdownIfNecessary();
     try {
       return invariantGenerationFuture.get();
 
@@ -175,8 +182,8 @@ public class CPAInvariantGenerator implements InvariantGenerator {
     public InvariantGenerationTask(ReachedSetFactory pReachedSetFactory, CFANode pInitialLocation) {
       taskReached = pReachedSetFactory.create();
       synchronized (invariantCPAs) {
-        taskReached.add(invariantCPAs.getInitialState(pInitialLocation),
-            invariantCPAs.getInitialPrecision(pInitialLocation));
+        taskReached.add(invariantCPAs.getInitialState(pInitialLocation, StateSpacePartition.getDefaultPartition()),
+            invariantCPAs.getInitialPrecision(pInitialLocation, StateSpacePartition.getDefaultPartition()));
       }
     }
 
@@ -224,7 +231,9 @@ public class CPAInvariantGenerator implements InvariantGenerator {
 
       };
       currentFuture.set(executorService.submit(initialTask));
-      scheduleTask(pReachedSetFactory, pInitialLocation);
+      if (!shutdownNotifier.shouldShutdown()) {
+        scheduleTask(pReachedSetFactory, pInitialLocation);
+      }
     }
 
     @Override
@@ -271,7 +280,7 @@ public class CPAInvariantGenerator implements InvariantGenerator {
           // wrapping this call itself, so this function must not be called
           // before ref is set to the wrapping future
           currentFuture.set(ref.get());
-          if (adjustConditions()) {
+          if (adjustConditions() && !shutdownNotifier.shouldShutdown()) {
             scheduleTask(pReachedSetFactory, pInitialLocation);
           } else {
             setDone();
@@ -284,14 +293,16 @@ public class CPAInvariantGenerator implements InvariantGenerator {
       // Set the wrapping future as value of the reference
       ref.set(future);
       // From here on it is safe to call the task, so it is submit to a scheduler
-      executorService.submit(new Callable<UnmodifiableReachedSet>() {
+      if (!shutdownNotifier.shouldShutdown() && !executorService.isShutdown()) {
+        ref.set(executorService.submit(new Callable<UnmodifiableReachedSet>() {
 
-        @Override
-        public UnmodifiableReachedSet call() throws Exception {
-          return future.get();
-        }
+          @Override
+          public UnmodifiableReachedSet call() throws ExecutionException, InterruptedException {
+            return future.get();
+          }
 
-      });
+        }));
+      }
       return future;
     }
 

@@ -28,6 +28,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -35,13 +36,16 @@ import java.util.Set;
 import java.util.Stack;
 
 import org.sosy_lab.common.Appenders.AbstractAppender;
+import org.sosy_lab.cpachecker.cfa.ast.java.JFieldDeclaration;
 import org.sosy_lab.cpachecker.cfa.types.java.JClassOrInterfaceType;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
+import org.sosy_lab.cpachecker.core.defaults.LatticeAbstractState;
 
 import com.google.common.base.Joiner;
+import com.google.common.collect.Maps;
 
 
-public class RTTState extends AbstractAppender implements AbstractState {
+public class RTTState extends AbstractAppender implements
+    LatticeAbstractState<RTTState> {
 
 
   public static final String KEYWORD_THIS = "this";
@@ -66,7 +70,9 @@ public class RTTState extends AbstractAppender implements AbstractState {
    */
   private final Map<String, String> classTypeMap;
 
+  private final Set<String> staticFieldVariables = new HashSet<>();
 
+  private final Set<String> nonStaticFieldVariables = new HashSet<>();
 
   /**
    * Marks the current unique Object Scope this states belons to.
@@ -118,6 +124,28 @@ public class RTTState extends AbstractAppender implements AbstractState {
   private void forgetObject(String value) {
     identificationMap.remove(value);
     classTypeMap.remove(value);
+  }
+
+  void addFieldVariable(JFieldDeclaration pFieldDeclaration) {
+    String name = pFieldDeclaration.getName();
+
+    if (pFieldDeclaration.isStatic()) {
+      staticFieldVariables.add(name);
+    } else {
+      nonStaticFieldVariables.add(name);
+    }
+  }
+
+  public boolean isKnown(String pFieldName) {
+    return staticFieldVariables.contains(pFieldName) || nonStaticFieldVariables.contains(pFieldName);
+  }
+
+  public boolean isKnownAsStatic(String pFieldName) {
+    return staticFieldVariables.contains(pFieldName);
+  }
+
+  public boolean isKnownAsDynamic(String pFieldName) {
+    return nonStaticFieldVariables.contains(pFieldName);
   }
 
   /**
@@ -215,12 +243,13 @@ public class RTTState extends AbstractAppender implements AbstractState {
    * @param other the other element to join with this element
    * @return a new state representing the join of this element and the other element
    */
-  RTTState join(RTTState other) {
+  @Override
+  public RTTState join(RTTState other) {
     int size = Math.min(constantsMap.size(), other.constantsMap.size());
 
-    Map<String, String> newConstantsMap = new HashMap<>(size);
-    Map<String, String> newIdentificationMap = new HashMap<>(size);
-    Map<String, String> newClassTypeMap = new HashMap<>(size);
+    Map<String, String> newConstantsMap = Maps.newHashMapWithExpectedSize(size);
+    Map<String, String> newIdentificationMap = new HashMap<>(0);
+    Map<String, String> newClassTypeMap = new HashMap<>(0);
 
 
     for (Map.Entry<String, String> otherEntry : other.constantsMap.entrySet()) {
@@ -258,7 +287,8 @@ public class RTTState extends AbstractAppender implements AbstractState {
    * @param other the other element
    * @return true, if this element is less or equal than the other element, based on the order imposed by the lattice
    */
-  boolean isLessOrEqual(RTTState other) {
+  @Override
+  public boolean isLessOrEqual(RTTState other) {
 
     // this element is not less or equal than the other element, if it contains less elements
     if (constantsMap.size() < other.constantsMap.size()) {

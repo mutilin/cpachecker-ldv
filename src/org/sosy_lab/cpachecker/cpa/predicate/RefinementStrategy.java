@@ -23,9 +23,6 @@
  */
 package org.sosy_lab.cpachecker.cpa.predicate;
 
-import static org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState.getPredicateState;
-import static org.sosy_lab.cpachecker.util.statistics.StatisticsWriter.writingStatisticsTo;
-
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.List;
@@ -40,7 +37,7 @@ import org.sosy_lab.cpachecker.cpa.arg.ARGReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.RefinementFailedException;
-import org.sosy_lab.cpachecker.util.AbstractStates;
+import org.sosy_lab.cpachecker.exceptions.SolverException;
 import org.sosy_lab.cpachecker.util.Precisions;
 import org.sosy_lab.cpachecker.util.predicates.Solver;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
@@ -93,9 +90,9 @@ public abstract class RefinementStrategy {
   private final BooleanFormulaManagerView bfmgr;
   private final Solver solver;
 
-  public RefinementStrategy(BooleanFormulaManagerView pBfmgr, Solver pSolver) {
-    bfmgr = pBfmgr;
+  public RefinementStrategy(Solver pSolver) {
     solver = pSolver;
+    bfmgr = solver.getFormulaManager().getBooleanFormulaManager();
   }
 
   public boolean needsInterpolants() {
@@ -178,6 +175,7 @@ public abstract class RefinementStrategy {
           PredicateAbstractState s = getPredicateState(w);
           BooleanFormula blockFormula = s.getAbstractionFormula().getBlockFormula().getFormula();
           solver.addUnsatisfiableFormulaToCache(blockFormula);
+          // TODO: Move caching to InterpolationManager.buildCounterexampleTrace
         }
         break;
       }
@@ -237,7 +235,7 @@ public abstract class RefinementStrategy {
    * @return True if no refinement was necessary (this implies that refinement
    *          on all of the state's parents is also not necessary)
    */
-  protected abstract boolean performRefinementForState(BooleanFormula interpolant, ARGState state) throws InterruptedException;
+  protected abstract boolean performRefinementForState(BooleanFormula interpolant, ARGState state) throws InterruptedException, SolverException;
 
   /**
    * Do any necessary work after one path has been refined.

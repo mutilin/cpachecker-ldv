@@ -32,16 +32,20 @@ import java.util.Deque;
 import java.util.HashSet;
 import java.util.Set;
 
+import javax.annotation.Nullable;
+
 import org.sosy_lab.common.Appender;
 import org.sosy_lab.common.Appenders;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
+import org.sosy_lab.common.io.PathCounterTemplate;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.core.ShutdownNotifier;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
-import org.sosy_lab.cpachecker.util.predicates.interfaces.Formula;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.InterpolatingProverEnvironment;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.OptEnvironment;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.ProverEnvironment;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.basicimpl.AbstractFormulaManager;
-import org.sosy_lab.cpachecker.util.predicates.smtInterpol.SmtInterpolEnvironment.Type;
 
 import de.uni_freiburg.informatik.ultimate.logic.AnnotatedTerm;
 import de.uni_freiburg.informatik.ultimate.logic.ApplicationTerm;
@@ -54,23 +58,21 @@ import de.uni_freiburg.informatik.ultimate.logic.Term;
 class SmtInterpolFormulaManager extends AbstractFormulaManager<Term, Sort, SmtInterpolEnvironment> {
 
   private SmtInterpolFormulaManager(
-      SmtInterpolEnvironment pEnv,
       SmtInterpolFormulaCreator pCreator,
       SmtInterpolUnsafeFormulaManager pUnsafeManager,
       SmtInterpolFunctionFormulaManager pFunctionManager,
       SmtInterpolBooleanFormulaManager pBooleanManager,
       SmtInterpolIntegerFormulaManager pIntegerManager,
       SmtInterpolRationalFormulaManager pRationalManager) {
-    super(pEnv, pCreator, pUnsafeManager, pFunctionManager, pBooleanManager, pIntegerManager, pRationalManager, null);
+    super(pCreator, pUnsafeManager, pFunctionManager, pBooleanManager, pIntegerManager, pRationalManager, null, null, null, null);
   }
 
   public static SmtInterpolFormulaManager create(Configuration config, LogManager logger,
-      ShutdownNotifier pShutdownNotifier) throws InvalidConfigurationException {
+      ShutdownNotifier pShutdownNotifier, @Nullable PathCounterTemplate smtLogfile)
+          throws InvalidConfigurationException {
 
-    SmtInterpolEnvironment env = new SmtInterpolEnvironment(config, logger, pShutdownNotifier);
-
-    SmtInterpolFormulaCreator creator = new SmtInterpolFormulaCreator(env,
-        env.sort(Type.BOOL), env.sort(Type.INT), env.sort(Type.REAL));
+    SmtInterpolEnvironment env = new SmtInterpolEnvironment(config, logger, pShutdownNotifier, smtLogfile);
+    SmtInterpolFormulaCreator creator = new SmtInterpolFormulaCreator(env);
 
     // Create managers
     SmtInterpolUnsafeFormulaManager unsafeManager = new SmtInterpolUnsafeFormulaManager(creator);
@@ -79,20 +81,27 @@ class SmtInterpolFormulaManager extends AbstractFormulaManager<Term, Sort, SmtIn
     SmtInterpolIntegerFormulaManager integerTheory = new SmtInterpolIntegerFormulaManager(creator, functionTheory);
     SmtInterpolRationalFormulaManager rationalTheory = new SmtInterpolRationalFormulaManager(creator, functionTheory);
 
-    return new SmtInterpolFormulaManager(env, creator, unsafeManager, functionTheory,
+    return new SmtInterpolFormulaManager(creator, unsafeManager, functionTheory,
             booleanTheory, integerTheory, rationalTheory);
   }
 
-  public SmtInterpolInterpolatingProver createInterpolator() {
-    return getEnvironment().getInterpolator(this);
-  }
-
-  SmtInterpolTheoremProver createProver() {
+  @Override
+  public ProverEnvironment newProverEnvironment(boolean pGenerateModels, boolean pGenerateUnsatCore) {
     return getEnvironment().createProver(this);
   }
 
+  @Override
+  public InterpolatingProverEnvironment<?> newProverEnvironmentWithInterpolation(boolean pShared) {
+    return getEnvironment().getInterpolator(this);
+  }
+
+  @Override
+  public OptEnvironment newOptEnvironment() {
+    throw new UnsupportedOperationException("SMTInterpol does not support optimization");
+  }
+
   BooleanFormula encapsulateBooleanFormula(Term t) {
-    return getFormulaCreator().encapsulate(BooleanFormula.class, t);
+    return getFormulaCreator().encapsulateBoolean(t);
   }
 
   @Override
@@ -174,11 +183,5 @@ class SmtInterpolFormulaManager extends AbstractFormulaManager<Term, Sort, SmtIn
   SmtInterpolEnvironment createEnvironment() {
     assert getEnvironment() != null;
     return getEnvironment();
-  }
-
-  @Override
-  protected Term getTerm(Formula pF) {
-    // for visibility
-    return super.getTerm(pF);
   }
 }

@@ -35,27 +35,14 @@ import org.sosy_lab.cpachecker.core.counterexample.Model.Constant;
 import org.sosy_lab.cpachecker.core.counterexample.Model.Function;
 import org.sosy_lab.cpachecker.core.counterexample.Model.TermType;
 import org.sosy_lab.cpachecker.core.counterexample.Model.Variable;
-import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.view.FormulaManagerView;
-import org.sosy_lab.cpachecker.util.predicates.z3.Z3NativeApi.PointerToInt;
+import org.sosy_lab.cpachecker.util.rationals.Rational;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 
-public class Z3Model {
-
-  private final Z3FormulaManager mgr;
-  private final long z3context;
-  private final long z3solver;
-
-  public Z3Model(Z3FormulaManager mgr, long z3context, long z3solver) {
-    this.mgr = mgr;
-    this.z3context = z3context;
-    this.z3solver = z3solver;
-    Preconditions.checkArgument(mgr.getEnvironment() == z3context);
-  }
-
-  private TermType toZ3Type(long sort) {
+class Z3Model {
+  private static TermType toZ3Type(long z3context, long sort) {
     int sortKind = get_sort_kind(z3context, sort);
     switch (sortKind) {
     case Z3_BOOL_SORT:
@@ -72,16 +59,16 @@ public class Z3Model {
     }
   }
 
-  private Constant toVariable(long expr) {
+  private static Constant toVariable(long z3context, long expr) {
     long decl = get_app_decl(z3context, expr);
     long symbol = get_decl_name(z3context, decl);
 
     Preconditions.checkArgument(get_symbol_kind(z3context, symbol) == Z3_STRING_SYMBOL,
-        "Given symbol of expression is no stringSymbol! (" + ast_to_string(z3context, expr) + ")");
+        "Given symbol of expression is no stringSymbol! (%s)", new LazyString(expr, z3context));
 
     String lName = get_symbol_string(z3context, symbol);
     long sort = get_sort(z3context, expr);
-    TermType lType = toZ3Type(sort);
+    TermType lType = toZ3Type(z3context, sort);
 
     Pair<String, Integer> lSplitName = FormulaManagerView.parseName(lName);
     if (lSplitName.getSecond() != null) {
@@ -92,16 +79,16 @@ public class Z3Model {
   }
 
 
-  private Function toFunction(long expr) {
+  private static Function toFunction(long z3context, long expr) {
     long decl = get_app_decl(z3context, expr);
     long symbol = get_decl_name(z3context, decl);
 
     Preconditions.checkArgument(get_symbol_kind(z3context, symbol) == Z3_STRING_SYMBOL,
-        "Given symbol of expression is no stringSymbol! (" + ast_to_string(z3context, expr) + ")");
+        "Given symbol of expression is no stringSymbol! (%s)", new LazyString(expr, z3context));
 
     String lName = get_symbol_string(z3context, symbol);
     long sort = get_sort(z3context, expr);
-    TermType lType = toZ3Type(sort);
+    TermType lType = toZ3Type(z3context, sort);
 
     int lArity = get_app_num_args(z3context, expr);
 
@@ -116,22 +103,16 @@ public class Z3Model {
       int sortKind = get_sort_kind(z3context, argSort);
       switch (sortKind) {
       case Z3_INT_SORT: {
-        PointerToInt p = new PointerToInt();
-        boolean check = get_numeral_int(z3context, arg, p);
-        Preconditions.checkState(check);
-        lValue = p.value;
+        lValue = new BigInteger(get_numeral_string(z3context, arg));
         break;
       }
       case Z3_REAL_SORT: {
-        long numerator = get_numerator(z3context, arg);
-        long denominator = get_denominator(z3context, arg);
-        BigInteger num = BigInteger.valueOf(numerator);
-        BigInteger den = BigInteger.valueOf(denominator);
-        lValue = num.divide(den);
+        String s = get_numeral_string(z3context, arg);
+        lValue = Rational.ofString(s);
         break;
       }
       case Z3_BV_SORT: {
-        lValue = interpreteBitvector(arg);
+        lValue = interpreteBitvector(z3context, arg);
         break;
       }
       default:
@@ -149,22 +130,29 @@ public class Z3Model {
   }
 
 
-  private AssignableTerm toAssignable(long expr) {
+  private static AssignableTerm toAssignable(long z3context, long expr) {
     Preconditions.checkArgument(is_app(z3context, expr),
-        "Given expr is no application! (" + ast_to_string(z3context, expr) + ")");
+        "Given expr is no application! (%s)", new LazyString(expr, z3context));
 
     if (get_app_num_args(z3context, expr) == 0) {
-      return toVariable(expr);
+      return toVariable(z3context, expr);
     } else {
-      return toFunction(expr);
+      return toFunction(z3context, expr);
     }
   }
 
-  public Model createZ3Model() {
+  public static Model createZ3Model(Z3FormulaManager mgr, long z3context, long z3solver) {
     // Preconditions.checkArgument(solver_check(z3context, z3solver) != Z3_L_FALSE,
     // "model is not available for UNSAT"); // TODO expensive check?
-
     long z3model = solver_get_model(z3context, z3solver);
+    return parseZ3Model(mgr, z3context, z3model);
+  }
+
+  public static Model parseZ3Model(
+      Z3FormulaManager mgr,
+      long z3context,
+      long z3model) {
+
     model_inc_ref(z3context, z3model);
 
     mgr.getSmtLogger().logGetModel();
@@ -195,7 +183,7 @@ public class Z3Model {
       long newModelFormula = mk_and(z3context, modelFormula, equivalence);
       inc_ref(z3context, newModelFormula);
 
-      AssignableTerm lAssignable = toAssignable(var);
+      AssignableTerm lAssignable = toAssignable(z3context, var);
 
       Object lValue;
       switch (lAssignable.getType()) {
@@ -204,22 +192,16 @@ public class Z3Model {
         break;
 
       case Integer:
-        PointerToInt p = new PointerToInt();
-        boolean check = get_numeral_int(z3context, value, p);
-        Preconditions.checkState(check);
-        lValue = p.value;
+        lValue = new BigInteger(get_numeral_string(z3context, value));
         break;
 
       case Real:
-        long numerator = get_numerator(z3context, value);
-        long denominator = get_denominator(z3context, value);
-        BigInteger num = BigInteger.valueOf(numerator);
-        BigInteger den = BigInteger.valueOf(denominator);
-        lValue = num.divide(den);
+        String s = get_numeral_string(z3context, value);
+        lValue = Rational.ofString(s);
         break;
 
       case Bitvector:
-        lValue = interpreteBitvector(value);
+        lValue = interpreteBitvector(z3context, value);
         break;
 
       default:
@@ -239,7 +221,7 @@ public class Z3Model {
     }
 
     // TODO unused, remove and cleanup
-    mgr.encapsulate(BooleanFormula.class, modelFormula);
+    mgr.encapsulateBooleanFormula(modelFormula);
 
     // cleanup
     model_dec_ref(z3context, z3model);
@@ -251,7 +233,7 @@ public class Z3Model {
    * (display (_ bv10 6)) -> #b001010, length=6
    * (display (_ bv10 8)) -> #x0a, length=8, 8 modulo 4 == 0
    */
-  private Object interpreteBitvector(long bv) {
+  private static Object interpreteBitvector(long z3context, long bv) {
     long argSort = get_sort(z3context, bv);
     int sortKind = get_sort_kind(z3context, argSort);
     Preconditions.checkArgument(sortKind == Z3_BV_SORT);
@@ -270,4 +252,21 @@ public class Z3Model {
     //    return p.value;
   }
 
+  /** just a wrapper around a value,
+   * this class allows to call the toString-method later. */
+  private static class LazyString {
+
+    final long value;
+    final long z3context;
+
+    LazyString(long v, long pZ3context) {
+      value = v;
+      z3context = pZ3context;
+    }
+
+    @Override
+    public String toString() {
+      return ast_to_string(z3context, value); // this could be an expensive operation!
+    }
+  }
 }

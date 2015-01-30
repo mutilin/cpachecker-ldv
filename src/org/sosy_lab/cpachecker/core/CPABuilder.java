@@ -33,6 +33,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.logging.Level;
 
+import javax.annotation.Nullable;
+
 import org.sosy_lab.common.Classes;
 import org.sosy_lab.common.Classes.UnexpectedCheckedException;
 import org.sosy_lab.common.configuration.Configuration;
@@ -43,6 +45,10 @@ import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.io.Path;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
+import org.sosy_lab.cpachecker.cfa.CProgramScope;
+import org.sosy_lab.cpachecker.cfa.DummyScope;
+import org.sosy_lab.cpachecker.cfa.Language;
+import org.sosy_lab.cpachecker.cfa.parser.Scope;
 import org.sosy_lab.cpachecker.core.interfaces.CPAFactory;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSetFactory;
@@ -68,15 +74,22 @@ public class CPABuilder {
 
   private static final Splitter LIST_SPLITTER = Splitter.on(',').trimResults().omitEmptyStrings();
 
-  @Option(name=CPA_OPTION_NAME,
+  @Option(secure=true, name=CPA_OPTION_NAME,
       description="CPA to use (see doc/Configuration.txt for more documentation on this)")
   private String cpaName = CompositeCPA.class.getCanonicalName();
 
-  @Option(name="specification",
+  @Option(secure=true, name="specification",
       description="comma-separated list of files with specifications that should be checked"
         + "\n(see config/specification/ for examples)")
   @FileOption(FileOption.Type.OPTIONAL_INPUT_FILE)
   private List<Path> specificationFiles = null;
+
+  @Option(secure=true, name="backwardSpecification",
+      description="comma-separated list of files with specifications that should be used "
+      + "\nin a backwards analysis; used if the full analysis consists of a forward AND a backward part!"
+        + "\n(see config/specification/ for examples)")
+  @FileOption(FileOption.Type.OPTIONAL_INPUT_FILE)
+  private List<Path> backwardSpecificationFiles = null;
 
   private final Configuration config;
   private final LogManager logger;
@@ -92,40 +105,74 @@ public class CPABuilder {
     config.inject(this);
   }
 
-  public ConfigurableProgramAnalysis buildCPAs(final CFA cfa) throws InvalidConfigurationException, CPAException {
+  public ConfigurableProgramAnalysis buildCPAWithSpecAutomatas(final CFA cfa)
+      throws InvalidConfigurationException, CPAException {
+
+    // create automata cpas for the specification files given in "specification"
+    return buildCPAs(cfa, specificationFiles);
+  }
+
+  public ConfigurableProgramAnalysis buildCPAWithBackwardSpecAutomatas(final CFA cfa)
+      throws InvalidConfigurationException, CPAException {
+    // create automata cpas for the specification files given in "backwardSpecification"
+    return buildCPAs(cfa, backwardSpecificationFiles);
+  }
+
+  public ConfigurableProgramAnalysis buildCPAs(final CFA cfa, @Nullable final List<Path> specAutomatonFiles)
+      throws InvalidConfigurationException, CPAException {
     Set<String> usedAliases = new HashSet<>();
 
-    // create automata cpas for specification given in specification file
     List<ConfigurableProgramAnalysis> cpas = null;
-    if (specificationFiles != null) {
+
+    // create automata cpas for the specification files given as argument
+    if (specAutomatonFiles != null) {
       cpas = new ArrayList<>();
 
-      for (Path specFile : specificationFiles) {
+      for (Path specFile : specAutomatonFiles) {
         List<Automaton> automata = Collections.emptyList();
-        if (specFile.getPath().endsWith(".graphml")) {
-          AutomatonGraphmlParser graphmlParser = new AutomatonGraphmlParser(config, logger, cfa.getMachineModel());
+        Scope scope = createScope(cfa);
+
+        if (AutomatonGraphmlParser.isGraphmlAutomaton(specFile, logger)) {
+          AutomatonGraphmlParser graphmlParser = new AutomatonGraphmlParser(config, logger, cfa.getMachineModel(), scope);
           automata = graphmlParser.parseAutomatonFile(specFile);
+
         } else {
-          automata = AutomatonParser.parseAutomatonFile(specFile, config, logger, cfa.getMachineModel());
+          automata = AutomatonParser.parseAutomatonFile(specFile, config, logger, cfa.getMachineModel(), scope, cfa.getLanguage());
         }
 
         for (Automaton automaton : automata) {
           String cpaAlias = automaton.getName();
+
           if (!usedAliases.add(cpaAlias)) {
             throw new InvalidConfigurationException("Name " + cpaAlias + " used twice for an automaton.");
           }
 
           CPAFactory factory = ControlAutomatonCPA.factory();
           factory.setConfiguration(Configuration.copyWithNewPrefix(config, cpaAlias));
-          factory.setLogger(logger);
+          factory.setLogger(logger.withComponentName(cpaAlias));
           factory.set(cfa, CFA.class);
           factory.set(automaton, Automaton.class);
+
           cpas.add(factory.createInstance());
+
           logger.log(Level.FINER, "Loaded Automaton\"" + automaton.getName() + "\"");
         }
       }
     }
+
     return buildCPAs(cpaName, CPA_OPTION_NAME, usedAliases, cpas, cfa);
+  }
+
+  private Scope createScope(CFA cfa) {
+    Language usedLanguage = cfa.getLanguage();
+
+    switch (usedLanguage) {
+    case C:
+      return new CProgramScope(cfa, logger);
+
+    default:
+      return DummyScope.getInstance();
+    }
   }
 
   private ConfigurableProgramAnalysis buildCPAs(String optionValue, String optionName, Set<String> usedAliases, List<ConfigurableProgramAnalysis> cpas, final CFA cfa) throws InvalidConfigurationException, CPAException {
@@ -151,7 +198,7 @@ public class CPABuilder {
     // now use factory to get an instance of the CPA
 
     factory.setConfiguration(Configuration.copyWithNewPrefix(config, cpaAlias));
-    factory.setLogger(logger);
+    factory.setLogger(logger.withComponentName(cpaAlias));
     factory.setShutdownNotifier(shutdownNotifier);
     if (reachedSetFactory != null) {
       factory.set(reachedSetFactory, ReachedSetFactory.class);
@@ -216,6 +263,9 @@ public class CPABuilder {
       throw new InvalidConfigurationException(
         "Option " + optionName + " has to be set to a class implementing the ConfigurableProgramAnalysis interface!");
     }
+
+    Classes.produceClassLoadingWarning(logger, cpaClass, ConfigurableProgramAnalysis.class);
+
     return cpaClass;
   }
 

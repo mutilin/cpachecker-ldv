@@ -25,15 +25,13 @@ package org.sosy_lab.cpachecker.core.algorithm.testgen.pathanalysis;
 
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.cpachecker.cfa.CFA;
-import org.sosy_lab.cpachecker.core.ShutdownNotifier;
+import org.sosy_lab.cpachecker.core.AnalysisDirection;
 import org.sosy_lab.cpachecker.core.algorithm.testgen.TestGenAlgorithm.AnalysisStrategySelector;
 import org.sosy_lab.cpachecker.core.algorithm.testgen.TestGenStatistics;
 import org.sosy_lab.cpachecker.core.algorithm.testgen.util.StartupConfig;
-import org.sosy_lab.cpachecker.util.predicates.FormulaManagerFactory;
 import org.sosy_lab.cpachecker.util.predicates.PathChecker;
 import org.sosy_lab.cpachecker.util.predicates.Solver;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.PathFormulaManager;
-import org.sosy_lab.cpachecker.util.predicates.interfaces.view.FormulaManagerView;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormulaManagerImpl;
 
 
@@ -66,7 +64,7 @@ public class PathSelectorFactory {
     return validator;
   }
 
-  public PathSelector createPathSelector(PathValidator pPathValidator, TestGenStatistics stats){
+  public PathSelector createPathSelector(PathValidator pPathValidator, TestGenStatistics stats) {
     return new BasicPathSelector(pPathValidator,startupConfig, stats);
   }
 
@@ -92,13 +90,8 @@ public class PathSelectorFactory {
 
   private PathChecker createPathChecker(CFA pCfa) throws InvalidConfigurationException
   {
-    FormulaManagerFactory formulaManagerFactory =
-        new FormulaManagerFactory(startupConfig.getConfig(), startupConfig.getLog(),
-            ShutdownNotifier.createWithParent(startupConfig.getShutdownNotifier()));
-    FormulaManagerView formulaManager =
-        new FormulaManagerView(formulaManagerFactory.getFormulaManager(), startupConfig.getConfig(), startupConfig.getLog());
-    PathFormulaManager pfMgr = new PathFormulaManagerImpl(formulaManager, startupConfig.getConfig(), startupConfig.getLog(), startupConfig.getShutdownNotifier(), pCfa);
-    Solver solver = new Solver(formulaManager, formulaManagerFactory);
+    Solver solver = Solver.create(startupConfig.getConfig(), startupConfig.getLog(), startupConfig.getShutdownNotifier());
+    PathFormulaManager pfMgr = new PathFormulaManagerImpl(solver.getFormulaManager(), startupConfig.getConfig(), startupConfig.getLog(), startupConfig.getShutdownNotifier(), pCfa, AnalysisDirection.FORWARD);
     PathChecker pathChecker = new PathChecker(startupConfig.getLog(), startupConfig.getShutdownNotifier(), pfMgr, solver, pCfa.getMachineModel());
     return pathChecker;
   }

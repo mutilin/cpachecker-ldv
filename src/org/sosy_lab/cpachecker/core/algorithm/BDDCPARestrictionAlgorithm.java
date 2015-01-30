@@ -32,8 +32,7 @@ import org.sosy_lab.common.configuration.FileOption.Type;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
-import org.sosy_lab.common.io.Path;
-import org.sosy_lab.common.io.Paths;
+import org.sosy_lab.common.io.PathTemplate;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.core.CounterexampleInfo;
@@ -59,9 +58,9 @@ import com.google.common.collect.ImmutableList;
 @Options(prefix="counterexample")
 public class BDDCPARestrictionAlgorithm implements Algorithm, StatisticsProvider {
 
-  @Option(description="The files where the BDDCPARestrictionAlgorithm should write the presence conditions for the counterexamples to.")
+  @Option(secure=true, description="The files where the BDDCPARestrictionAlgorithm should write the presence conditions for the counterexamples to.")
   @FileOption(Type.OUTPUT_FILE)
-  private Path presenceConditionFile = Paths.get("ErrorPath.%d.presenceCondition.txt");
+  private PathTemplate presenceConditionFile = PathTemplate.ofFormatString("ErrorPath.%d.presenceCondition.txt");
 
   private final Algorithm algorithm;
   private final LogManager logger;
@@ -106,15 +105,14 @@ public class BDDCPARestrictionAlgorithm implements Algorithm, StatisticsProvider
       // BDD specials
       final BDDState bddErrorState = AbstractStates.extractStateByType(lastState, BDDState.class);
       final Region errorBdd = bddErrorState.getRegion();
-      final String errorBddStr = manager.dumpRegion(errorBdd);
 
-      logger.log(Level.INFO, "ErrorBDD:", errorBddStr);
+      logger.log(Level.INFO, "ErrorBDD:", manager.dumpRegion(errorBdd));
       errorSummary = manager.makeOr(errorBdd, errorSummary);
 
       if (presenceConditionFile != null && cpa instanceof ARGCPA) {
         CounterexampleInfo counterEx = ((ARGCPA)cpa).getCounterexamples().get(lastState);
         if (counterEx != null) {
-          counterEx.addFurtherInformation(errorBddStr, presenceConditionFile);
+          counterEx.addFurtherInformation(manager.dumpRegion(errorBdd), presenceConditionFile);
         }
       }
 

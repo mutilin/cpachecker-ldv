@@ -31,8 +31,11 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.HashSet;
 import java.util.Set;
 import java.util.logging.Level;
+
+import javax.annotation.Nullable;
 
 import org.sosy_lab.common.AbstractMBean;
 import org.sosy_lab.common.configuration.Configuration;
@@ -46,8 +49,11 @@ import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.CFACreator;
 import org.sosy_lab.cpachecker.cfa.Language;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
+import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
+import org.sosy_lab.cpachecker.core.CoreComponentsFactory.SpecAutomatonCompositionType;
 import org.sosy_lab.cpachecker.core.ShutdownNotifier.ShutdownRequestListener;
 import org.sosy_lab.cpachecker.core.algorithm.Algorithm;
 import org.sosy_lab.cpachecker.core.algorithm.ExternalCBMCAlgorithm;
@@ -55,11 +61,14 @@ import org.sosy_lab.cpachecker.core.algorithm.impact.ImpactAlgorithm;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
+import org.sosy_lab.cpachecker.core.interfaces.StateSpacePartition;
 import org.sosy_lab.cpachecker.core.interfaces.Targetable;
-import org.sosy_lab.cpachecker.core.interfaces.Targetable.ViolatedProperty;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.ParserException;
+import org.sosy_lab.cpachecker.util.LoopStructure;
+import org.sosy_lab.cpachecker.util.LoopStructure.Loop;
+import org.sosy_lab.cpachecker.util.automaton.TargetLocationProvider;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 
 import com.google.common.base.Function;
@@ -67,7 +76,10 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Splitter;
 import com.google.common.base.StandardSystemProperty;
 import com.google.common.base.Strings;
+import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableSet.Builder;
+import com.google.common.collect.Sets;
 import com.google.common.io.Resources;
 
 @Options(prefix="analysis")
@@ -103,19 +115,63 @@ public class CPAchecker {
 
   }
 
-  @Option(description="stop after the first error has been found")
+  @Option(secure=true, description="stop after the first error has been found")
   private boolean stopAfterError = true;
 
-  @Option(name="disable",
+  @Option(secure=true, name="disable",
       description="stop CPAchecker after startup (internal option, not intended for users)")
   private boolean disableAnalysis = false;
 
-  @Option(name="algorithm.CBMC",
+  public static enum InitialStatesFor {
+    /**
+     * Function entry node of the entry function
+     */
+    ENTRY,
+
+    /**
+     * Set of function entry nodes of all functions.
+     */
+    FUNCTION_ENTRIES,
+
+    /**
+     * All locations that are possible targets of the analysis.
+     */
+    TARGET,
+
+    /**
+     * Function exit node of the entry function.
+     */
+    EXIT,
+
+    /**
+     * All function exit nodes of all functions and all loop heads of endless loops.
+     */
+    FUNCTION_SINKS,
+
+    /**
+     * All function exit nodes of the entry function, and all loop heads of endless loops.
+     */
+    PROGRAM_SINKS
+  }
+
+  @Option(secure=true, name="initialStatesFor",
+      description="What CFA nodes should be the starting point of the analysis?")
+  private Set<InitialStatesFor> initialStatesFor = Sets.newHashSet(InitialStatesFor.ENTRY);
+
+  @Option(secure=true,
+      description="Partition the initial states based on the type of location they were created for (see 'initialStatesFor')")
+  private boolean partitionInitialStates = false;
+
+  @Option(secure=true, name="algorithm.CBMC",
       description="use CBMC as an external tool from CPAchecker")
   private boolean runCBMCasExternalTool = false;
 
-  @Option(description="Do not report unknown if analysis terminated, report true (UNSOUND!).")
+  @Option(secure=true, description="Do not report unknown if analysis terminated, report true (UNSOUND!).")
   private boolean unknownAsTrue = false;
+
+  @Option(secure=true, description="Do not report 'False' result, return UNKNOWN instead. "
+      + " Useful for incomplete analysis with no counterexample checking.")
+  private boolean reportFalseAsUnknown = false;
 
   private final LogManager logger;
   private final Configuration config;
@@ -169,7 +225,7 @@ public class CPAchecker {
     MainCPAStatistics stats = null;
     ReachedSet reached = null;
     Result result = Result.NOT_YET_STARTED;
-    Set<ViolatedProperty> violatedProperties = ImmutableSet.of();
+    String violatedPropertyDescription = "";
 
     final ShutdownRequestListener interruptThreadOnShutdown = interruptCurrentThreadOnShutdown();
     shutdownNotifier.register(interruptThreadOnShutdown);
@@ -193,7 +249,14 @@ public class CPAchecker {
         GlobalInfo.getInstance().storeCFA(cfa);
         shutdownNotifier.shutdownIfNecessary();
 
-        ConfigurableProgramAnalysis cpa = factory.createCPA(cfa, stats);
+        final SpecAutomatonCompositionType speComposition =
+            initialStatesFor.contains(InitialStatesFor.TARGET)
+            ? SpecAutomatonCompositionType.BACKWARD_TO_ENTRY_SPEC
+            : SpecAutomatonCompositionType.TARGET_SPEC;
+
+        ConfigurableProgramAnalysis cpa = factory.createCPA(
+            cfa, stats,
+            speComposition);
         GlobalInfo.getInstance().storeCPA(cpa);
 
         algorithm = factory.createAlgorithm(cpa, programDenotation, cfa, stats);
@@ -202,7 +265,7 @@ public class CPAchecker {
           ImpactAlgorithm mcmillan = (ImpactAlgorithm)algorithm;
           reached.add(mcmillan.getInitialState(cfa.getMainFunction()), mcmillan.getInitialPrecision(cfa.getMainFunction()));
         } else {
-          initializeReachedSet(reached, cpa, cfa.getMainFunction());
+          initializeReachedSet(reached, cpa, cfa.getMainFunction(), cfa);
         }
       }
 
@@ -213,7 +276,8 @@ public class CPAchecker {
       // now everything necessary has been instantiated
 
       if (disableAnalysis) {
-        return new CPAcheckerResult(Result.NOT_YET_STARTED, violatedProperties, null, stats);
+        return new CPAcheckerResult(Result.NOT_YET_STARTED,
+            violatedPropertyDescription, null, stats);
       }
 
       // run analysis
@@ -221,10 +285,15 @@ public class CPAchecker {
 
       boolean isComplete = runAlgorithm(algorithm, reached, stats);
 
-      violatedProperties = findViolatedProperties(reached);
-      if (!violatedProperties.isEmpty()) {
-        result = Result.FALSE;
+      violatedPropertyDescription = findViolatedProperties(reached);
+      if (violatedPropertyDescription != null) {
+        if (reportFalseAsUnknown) {
+          result = Result.UNKNOWN;
+        } else {
+          result = Result.FALSE;
+        }
       } else {
+        violatedPropertyDescription = "";
         result = analyzeResult(reached, isComplete);
         if (unknownAsTrue && result == Result.UNKNOWN) {
           result = Result.TRUE;
@@ -261,7 +330,8 @@ public class CPAchecker {
     } finally {
       shutdownNotifier.unregister(interruptThreadOnShutdown);
     }
-    return new CPAcheckerResult(result, violatedProperties, reached, stats);
+    return new CPAcheckerResult(result,
+        violatedPropertyDescription, reached, stats);
   }
 
   private void checkIfOneValidFile(String fileDenotation) throws InvalidConfigurationException {
@@ -340,24 +410,30 @@ public class CPAchecker {
     }
   }
 
-  private Set<ViolatedProperty> findViolatedProperties(final ReachedSet reached) {
-    return from(reached).filter(IS_TARGET_STATE)
-                        .transform(new Function<AbstractState, ViolatedProperty>() {
+  private @Nullable String findViolatedProperties(final ReachedSet reached) {
+    Set<String> descriptions = from(reached).filter(IS_TARGET_STATE)
+                        .transform(new Function<AbstractState, String>() {
                                     @Override
-                                    public ViolatedProperty apply(AbstractState s) {
-                                      return  ((Targetable)s).getViolatedProperty();
+                                    public String apply(AbstractState s) {
+                                      return  ((Targetable)s).getViolatedPropertyDescription();
                                     }
                                   })
-                        .toSet();
+                        .copyInto(new HashSet<String>());
+    if (descriptions.isEmpty()) {
+      // signal no target state -> result safe
+      return null;
+    }
+    descriptions.remove("");
+    return Joiner.on(", ").join(descriptions);
   }
 
-  private Result analyzeResult(final ReachedSet reached, boolean isComplete) {
+  private Result analyzeResult(final ReachedSet reached, boolean isSound) {
     if (reached.hasWaitingState()) {
       logger.log(Level.WARNING, "Analysis not completed: there are still states to be processed.");
       return Result.UNKNOWN;
     }
 
-    if (!isComplete) {
+    if (!isSound) {
       logger.log(Level.WARNING, "Analysis incomplete: no errors found, but not everything could be checked.");
       return Result.UNKNOWN;
     }
@@ -365,15 +441,97 @@ public class CPAchecker {
     return Result.TRUE;
   }
 
+  private void addToInitialReachedSet(
+      final Set<? extends CFANode> pLocations,
+      final Object pPartitionKey,
+      final ReachedSet pReached,
+      final ConfigurableProgramAnalysis pCpa) {
+
+    for (CFANode loc: pLocations) {
+      StateSpacePartition putIntoPartition = partitionInitialStates
+          ? StateSpacePartition.getPartitionWithKey(pPartitionKey)
+          : StateSpacePartition.getDefaultPartition();
+
+      AbstractState initialState = pCpa.getInitialState(loc, putIntoPartition);
+      Precision initialPrecision = pCpa.getInitialPrecision(loc, putIntoPartition);
+
+      pReached.add(initialState, initialPrecision);
+    }
+  }
+
   private void initializeReachedSet(
-      final ReachedSet reached,
-      final ConfigurableProgramAnalysis cpa,
-      final FunctionEntryNode mainFunction) {
+      final ReachedSet pReached,
+      final ConfigurableProgramAnalysis pCpa,
+      final FunctionEntryNode pAnalysisEntryFunction,
+      final CFA pCfa) throws InvalidConfigurationException {
+
     logger.log(Level.FINE, "Creating initial reached set");
 
-    AbstractState initialState = cpa.getInitialState(mainFunction);
-    Precision initialPrecision = cpa.getInitialPrecision(mainFunction);
+    for (InitialStatesFor isf: initialStatesFor) {
+      final ImmutableSet<? extends CFANode> initialLocations;
+      switch (isf) {
+      case ENTRY:
+        initialLocations = ImmutableSet.of(pAnalysisEntryFunction);
+        break;
+      case EXIT:
+        initialLocations = ImmutableSet.of(pAnalysisEntryFunction.getExitNode());
+        break;
+      case FUNCTION_ENTRIES:
+        initialLocations = ImmutableSet.copyOf(pCfa.getAllFunctionHeads());
+        break;
+      case FUNCTION_SINKS:
+        initialLocations = ImmutableSet.<CFANode>builder().addAll(getAllEndlessLoopHeads(pCfa.getLoopStructure().get()))
+                                                          .addAll(getAllFunctionExitNodes(pCfa))
+                                                          .build();
+        break;
+      case PROGRAM_SINKS:
+        Builder<CFANode> builder = ImmutableSet.<CFANode>builder().addAll(getAllEndlessLoopHeads(pCfa.getLoopStructure().get()));
+        if (pCfa.getAllNodes().contains(pAnalysisEntryFunction.getExitNode())) {
+          builder.add(pAnalysisEntryFunction.getExitNode());
+        }
+         initialLocations = builder.build();
+        break;
+      case TARGET:
+        TargetLocationProvider tlp = new TargetLocationProvider(factory.getReachedSetFactory(), shutdownNotifier, logger, config, pCfa);
+        initialLocations = tlp.tryGetAutomatonTargetLocations(pAnalysisEntryFunction);
+        break;
+      default:
+        throw new AssertionError("Unhandled case statement: " + initialStatesFor);
+      }
 
-    reached.add(initialState, initialPrecision);
+      addToInitialReachedSet(initialLocations, isf, pReached, pCpa);
+    }
+
+    if (pReached.getWaitlistSize() == 0) {
+      throw new InvalidConfigurationException("Initialization of the set of initial states failed: No analysis target found!");
+    }
+
+  }
+
+  private Set<CFANode> getAllFunctionExitNodes(CFA cfa) {
+    Set<CFANode> functionExitNodes = new HashSet<>();
+
+    for (FunctionEntryNode node : cfa.getAllFunctionHeads()) {
+      FunctionExitNode exitNode = node.getExitNode();
+      if (cfa.getAllNodes().contains(exitNode)) {
+        functionExitNodes.add(exitNode);
+      }
+    }
+    return functionExitNodes;
+  }
+
+  private Set<CFANode> getAllEndlessLoopHeads(LoopStructure structure) {
+    ImmutableCollection<Loop> loops = structure.getAllLoops();
+    Set<CFANode> loopHeads = new HashSet<>();
+
+    for (Loop l : loops) {
+      if (l.getOutgoingEdges().isEmpty()) {
+        // one loopHead per loop should be enough for finding all locations
+        for (CFANode head : l.getLoopHeads()) {
+          loopHeads.add(head);
+        }
+      }
+    }
+    return loopHeads;
   }
 }

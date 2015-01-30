@@ -23,7 +23,7 @@ CPAchecker web page:
 """
 
 # prepare for Python 3
-from __future__ import absolute_import, print_function, unicode_literals
+from __future__ import absolute_import, division, print_function, unicode_literals
 
 import sys
 sys.dont_write_bytecode = True # prevent creation of .pyc files
@@ -42,7 +42,6 @@ import time
 import urllib2
 
 from . import util as Util
-from . import filewriter as filewriter
 
 
 APPENGINE_SUBMITTER_THREAD = None
@@ -188,7 +187,7 @@ def _handleAppEngineResults(benchmark, outputHandler):
         for run in runSet.runs:
             outputHandler.outputBeforeRun(run)
 
-            (returnValue, output, hasErr, hasTO, isNotSubmt, overQuota) = \
+            (returnValue, hasErr, hasTO, isNotSubmt, overQuota) = \
                 _parseAppEngineResult(run)
 
             if run.wallTime:
@@ -199,7 +198,7 @@ def _handleAppEngineResults(benchmark, outputHandler):
             if isNotSubmt: notSubmitted += 1
             isOverQuota = True if overQuota or isOverQuota else False
 
-            run.afterExecution(returnValue, output, hasTO)
+            run.afterExecution(returnValue, hasTO)
             outputHandler.outputAfterRun(run)
 
         outputHandler.outputAfterRunSet(runSet, wallTime=totalWallTime)
@@ -221,26 +220,16 @@ def _parseAppEngineResult(run):
     error = False
     timeout = False
     notSubmitted = False
-    output = ''
     returnValue = 0
     overQuota = False
 
-    hasLogFile = (os.path.exists(run.logFile) and os.path.isfile(run.logFile))
     hasStdOutFile = (os.path.exists(run.logFile+'.stdOut') and os.path.isfile(run.logFile+'.stdOut'))
     hasErrOutFile = (os.path.exists(run.logFile+'.stdErr') and os.path.isfile(run.logFile+'.stdErr'))
-
-    if hasLogFile:
-        try:
-            with open(run.logFile, 'rt') as outputFile:
-                output = '\n'.join(map(Util.decodeToString, outputFile.readlines()))
-        except IOError as e:
-            logging.warning("Cannot read log file: " + e.strerror)
 
     if hasStdOutFile:
         try:
             with open(run.logFile+'.stdOut', 'rt') as file:
                 lines = file.read()
-                output += '\n'+lines
                 result = json.loads(lines)
                 if result['status'] == 'ERROR':
                     returnValue = 256 # error; returncode != 0
@@ -262,7 +251,6 @@ def _parseAppEngineResult(run):
         try:
             with open(run.logFile+'.stdErr', 'rt') as errFile:
                 lines = errFile.read()
-                output += '\n'+lines
                 if 'NOT SUBMITTED' in lines:
                     returnValue = 6 # aborted
                     notSubmitted = True
@@ -277,7 +265,7 @@ def _parseAppEngineResult(run):
         except:
             pass # can't read err file
 
-    return (returnValue, output, error, timeout, notSubmitted, overQuota)
+    return (returnValue, error, timeout, notSubmitted, overQuota)
 
 
 class _AppEngineSubmitter(threading.Thread):
@@ -401,7 +389,7 @@ class _AppEnginePoller(threading.Thread):
             fileNames.append(file['name'])
 
         try:
-            filewriter.writeFile(json.dumps(task), logFile+'.stdOut')
+            Util.writeFile(json.dumps(task), logFile+'.stdOut')
         except:
             logging.debug('Could not save task '+taskKey)
 
@@ -411,7 +399,7 @@ class _AppEnginePoller(threading.Thread):
                 uri = self.benchmark.config.appengineURI+'/tasks/'+taskKey+'/files/' + APPENGINE_SETTINGS['statisticsFileName']
                 request = urllib2.Request(uri, headers=headers)
                 response = urllib2.urlopen(request).read()
-                filewriter.writeFile(response, logFile)
+                Util.writeFile(response, logFile)
                 statisticsProcessed = True
             except:
                 statisticsProcessed = False
@@ -426,7 +414,7 @@ class _AppEnginePoller(threading.Thread):
                 request = urllib2.Request(uri, headers=headers)
                 response = urllib2.urlopen(request).read()
                 response = 'Task Key: {}\n{}'.format(task['key'], response)
-                filewriter.writeFile(response, logFile+'.stdErr')
+                Util.writeFile(response, logFile+'.stdErr')
             except: pass
 
         headers = {'Content-type':'application/json', 'Accept':'application/json'}

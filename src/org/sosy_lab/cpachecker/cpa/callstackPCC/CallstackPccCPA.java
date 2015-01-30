@@ -32,10 +32,12 @@ import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.defaults.AbstractCPA;
 import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
+import org.sosy_lab.cpachecker.core.defaults.SingletonPrecision;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.CPAFactory;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysisWithBAM;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
+import org.sosy_lab.cpachecker.core.interfaces.StateSpacePartition;
 import org.sosy_lab.cpachecker.core.interfaces.pcc.ProofChecker;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackReducer;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
@@ -61,7 +63,7 @@ public class CallstackPccCPA extends AbstractCPA implements ConfigurableProgramA
   }
 
   @Override
-  public AbstractState getInitialState(CFANode pNode) {
+  public AbstractState getInitialState(CFANode pNode, StateSpacePartition pPartition) {
     return new CallstackPccState(null, pNode.getFunctionName(), pNode);
   }
 
@@ -69,7 +71,8 @@ public class CallstackPccCPA extends AbstractCPA implements ConfigurableProgramA
   public boolean areAbstractSuccessors(AbstractState pElement, CFAEdge pCfaEdge,
       Collection<? extends AbstractState> pSuccessors) throws CPATransferException, InterruptedException {
     Collection<? extends AbstractState> computedSuccessors =
-        getTransferRelation().getAbstractSuccessors(pElement, null, pCfaEdge);
+        getTransferRelation().getAbstractSuccessorsForEdge(
+            pElement, SingletonPrecision.getInstance(), pCfaEdge);
     if (!(pSuccessors instanceof Set) || !(computedSuccessors instanceof Set)
         || pSuccessors.size() != computedSuccessors.size()) { return false; }
     boolean found;

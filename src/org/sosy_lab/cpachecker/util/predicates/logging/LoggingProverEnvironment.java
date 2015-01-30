@@ -36,7 +36,9 @@ import org.sosy_lab.cpachecker.util.predicates.AbstractionManager.RegionCreator;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.ProverEnvironment;
 
-
+/**
+ * Wraps a prover environment with a logging object.
+ */
 public class LoggingProverEnvironment implements ProverEnvironment {
 
   private final ProverEnvironment wrapped;
@@ -49,10 +51,10 @@ public class LoggingProverEnvironment implements ProverEnvironment {
   }
 
   @Override
-  public void push(BooleanFormula f) {
+  public Void push(BooleanFormula f) {
     logger.log(Level.FINE, "up to level " + level++);
     logger.log(Level.FINE, "formula pushed:", f);
-    wrapped.push(f);
+    return wrapped.push(f);
   }
 
   @Override
@@ -62,7 +64,7 @@ public class LoggingProverEnvironment implements ProverEnvironment {
   }
 
   @Override
-  public boolean isUnsat() throws InterruptedException {
+  public boolean isUnsat() throws SolverException, InterruptedException {
     boolean result = wrapped.isUnsat();
     logger.log(Level.FINE, "unsat-check returned:", result);
     return result;
@@ -95,4 +97,5 @@ public class LoggingProverEnvironment implements ProverEnvironment {
     wrapped.close();
     logger.log(Level.FINER, "closed");
   }
+
 }

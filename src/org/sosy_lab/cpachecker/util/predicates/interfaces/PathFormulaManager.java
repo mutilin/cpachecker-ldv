@@ -28,10 +28,12 @@ import java.util.Map;
 import java.util.Set;
 
 import org.sosy_lab.common.Pair;
+import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.core.counterexample.Model;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
+import org.sosy_lab.cpachecker.exceptions.UnrecognizedCCodeException;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.ErrorConditions;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormula;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.SSAMap;
@@ -39,6 +41,14 @@ import org.sosy_lab.cpachecker.util.predicates.pathformula.pointeraliasing.Point
 import org.sosy_lab.cpachecker.util.predicates.pathformula.pointeraliasing.PointerTargetSetManager;
 
 public interface PathFormulaManager {
+
+  public class CheckInfeasibleException extends Exception {
+    private static final long serialVersionUID = -1;
+
+    public CheckInfeasibleException(String message) {
+      super (message);
+    }
+  }
 
   PathFormula makeEmptyPathFormula();
 
@@ -59,10 +69,11 @@ public interface PathFormulaManager {
   PathFormula makeAnd(PathFormula pPathFormula, BooleanFormula pOtherFormula);
 
   PathFormula makeAnd(PathFormula oldFormula, CFAEdge edge) throws CPATransferException, InterruptedException;
+
   Pair<PathFormula, ErrorConditions> makeAndWithErrorConditions(PathFormula oldFormula, CFAEdge edge) throws CPATransferException, InterruptedException;
 
   PathFormula makeNewPathFormula(PathFormula pOldFormula, SSAMap pM);
-  
+
   PathFormula makeNewPathFormula(PathFormula pOldFormula, SSAMap pM, PointerTargetSet pts);
 
   PathFormula makeFormulaForPath(List<CFAEdge> pPath) throws CPATransferException, InterruptedException;
@@ -92,8 +103,38 @@ public interface PathFormulaManager {
    * @return A map from ARG state id to a boolean value indicating direction.
    */
   Map<Integer, Boolean> getBranchingPredicateValuesFromModel(Model pModel);
-  
+
   PointerTargetSetManager getPtsManager();
-  
+
   public void clearCaches();
+
+  /**
+   * Convert a simple C expression to a formula consistent with the
+   * current state of the {@code pFormula}.
+   *
+   * @param pFormula Current {@link PathFormula}.
+   * @param expr Expression to convert.
+   * @param edge Reference edge, used for log messages only.
+   * @return Created formula.
+   * @throws UnrecognizedCCodeException
+   */
+  public Formula expressionToFormula(PathFormula pFormula,
+      CIdExpression expr,
+      CFAEdge edge) throws UnrecognizedCCodeException;
+
+  /**
+   * Builds test for PCC that pF1 is covered by more abstract path formula pF2.
+   * Assumes that the SSA indices of pF1 are smaller or equal than those of pF2.
+   * Since pF1 may be merged with other path formulas resulting in pF2, needs to
+   * add assumptions about the connection between indexed variables as included by
+   * {@link PathFormulaManager#makeOr(PathFormula, PathFormula)}. Returns negation of
+   * implication to check if it is unsatisfiable (implication is valid).
+   *
+   * @param pF1 path formula which should be covered
+   * @param pF2 path formula which covers
+   * @return pF1.getFormula() and assumptions and not pF2.getFormula()
+   * @throws InterruptedException
+   */
+  public BooleanFormula buildImplicationTestAsUnsat(PathFormula pF1, PathFormula pF2) throws InterruptedException;
+
 }

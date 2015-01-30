@@ -29,11 +29,14 @@ import java.util.Map;
 
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.time.Timer;
+import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.core.counterexample.Model;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
+import org.sosy_lab.cpachecker.exceptions.UnrecognizedCCodeException;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.Formula;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.PathFormulaManager;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.pointeraliasing.PointerTargetSet;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.pointeraliasing.PointerTargetSetManager;
@@ -47,7 +50,7 @@ public class CachingPathFormulaManager implements PathFormulaManager {
   public final Timer pathFormulaComputationTimer = new Timer();
   public int pathFormulaCacheHits = 0;
 
-  private final PathFormulaManager delegate;
+  public final PathFormulaManager delegate;
 
   private final Map<Pair<CFAEdge, PathFormula>, Pair<PathFormula, ErrorConditions>> andFormulaWithConditionsCache
             = new HashMap<>();
@@ -177,12 +180,24 @@ public class CachingPathFormulaManager implements PathFormulaManager {
       PointerTargetSet pts) {
     return delegate.makeNewPathFormula(pOldFormula, pM, pts);
   }
-  
+
+  @Override
   public void clearCaches() {
     andFormulaWithConditionsCache.clear();
     andFormulaCache.clear();
     orFormulaCache.clear();
     emptyFormulaCache.clear();
     delegate.clearCaches();
+  }
+
+  @Override
+  public Formula expressionToFormula(PathFormula pFormula, CIdExpression expr,
+      CFAEdge edge) throws UnrecognizedCCodeException {
+    return delegate.expressionToFormula(pFormula, expr, edge);
+  }
+
+  @Override
+  public BooleanFormula buildImplicationTestAsUnsat(PathFormula pF1, PathFormula pF2) throws InterruptedException {
+    return delegate.buildImplicationTestAsUnsat(pF1, pF2);
   }
 }

@@ -24,11 +24,17 @@
 package org.sosy_lab.cpachecker.util.predicates.interfaces;
 
 import org.sosy_lab.common.Appender;
+import org.sosy_lab.cpachecker.util.predicates.Solver;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.NumeralFormula.IntegerFormula;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.NumeralFormula.RationalFormula;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.view.FormulaManagerView;
+import org.sosy_lab.cpachecker.util.predicates.matching.SmtAstMatcher;
 
 /**
- * Represents a Solver.
+ * Represents an SMT solver.
+ * Instances of this interface provide direct low-level access to an SMT solver.
+ * Most code should use this interface directly, but instead use the classes
+ * {@link Solver} and {@link FormulaManagerView} which provide additional features.
  */
 public interface FormulaManager {
 
@@ -54,9 +60,19 @@ public interface FormulaManager {
   BooleanFormulaManager getBooleanFormulaManager();
 
   /**
+   * Returns the Array-Theory.
+   */
+  ArrayFormulaManager getArrayFormulaManager();
+
+  /**
    * Returns the Bitvector-Theory.
    */
   BitvectorFormulaManager getBitvectorFormulaManager();
+
+  /**
+   * Returns the Floating-Point-Theory.
+   */
+  FloatingPointFormulaManager getFloatingPointFormulaManager();
 
   /**
    * Returns the Function-Theory.
@@ -67,6 +83,32 @@ public interface FormulaManager {
    * Returns some unsafe traverse methods.
    */
   UnsafeFormulaManager getUnsafeFormulaManager();
+
+  /**
+   * Returns the interface for handling quantifiers.
+   */
+  QuantifiedFormulaManager getQuantifiedFormulaManager();
+
+  /**
+   * Create a fresh new {@link ProverEnvironment} which encapsulates an assertion stack
+   * and can be used to check formulas for unsatisfiability.
+   * @param generateModels Whether the solver should generate models (i.e., satisfying assignments) for satisfiable formulas.
+   * @param generateUnsatCore Whether the solver should generate an unsat core for unsatisfiable formulas.
+   */
+  ProverEnvironment newProverEnvironment(boolean generateModels, boolean generateUnsatCore);
+
+  /**
+   * Create a fresh new {@link InterpolatingProverEnvironment} which encapsulates an assertion stack
+   * and allows to generate and retrieve interpolants for unsatisfiable formulas.
+   * @param shared Whether the solver should share as much as possible with other environments.
+   */
+  InterpolatingProverEnvironment<?> newProverEnvironmentWithInterpolation(boolean shared);
+
+  /**
+   * Create a fresh new {@link OptEnvironment} which encapsulates an assertion stack
+   * and allows to solve optimization queries.
+   */
+  OptEnvironment newOptEnvironment();
 
   /**
    * Returns the type of the given Formula.
@@ -83,10 +125,6 @@ public interface FormulaManager {
   // Instead implement the format in the View
   public BooleanFormula parse(String s) throws IllegalArgumentException;
 
-  /**
-   * Returns the Interface-Class of the given Formula. For example BitvectorFormula.class.
-   */
-  public <T extends Formula> Class<T> getInterface(T pInstance);
   /**
    * Create string representation of a formula in a format which may be dumped
    * to a file. To get a String, simply call {@link Object#toString()}
@@ -105,4 +143,9 @@ public interface FormulaManager {
    * Get some version information of the solver.
    */
   public String getVersion();
+
+  /**
+   * @return Returns an instance of SmtAstMatcher if implemented for the specific solver; otherwise 'null'.
+   */
+  public SmtAstMatcher getSmtAstMatcher();
 }

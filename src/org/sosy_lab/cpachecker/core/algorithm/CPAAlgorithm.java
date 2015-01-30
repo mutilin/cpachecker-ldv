@@ -32,7 +32,6 @@ import java.util.logging.Level;
 
 import org.sosy_lab.common.Classes;
 import org.sosy_lab.common.Pair;
-import org.sosy_lab.common.Triple;
 import org.sosy_lab.common.configuration.ClassOption;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
@@ -42,21 +41,24 @@ import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.ShutdownNotifier;
+import org.sosy_lab.cpachecker.core.algorithm.CPAAlgorithm.CPAAlgorithmFactory;
+import org.sosy_lab.cpachecker.core.algorithm.CPAAlgorithm.CPAStatistics;
 import org.sosy_lab.cpachecker.core.defaults.MergeSepOperator;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
+import org.sosy_lab.cpachecker.core.interfaces.AlgorithmIterationListener;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.ForcedCovering;
 import org.sosy_lab.cpachecker.core.interfaces.MergeOperator;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustment;
 import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustment.Action;
+import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustment.PrecisionAdjustmentResult;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
 import org.sosy_lab.cpachecker.core.interfaces.StopOperator;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGMergeJoinPredicatedAnalysis;
-import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.USReachedSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsState;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
@@ -95,6 +97,11 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
     public void printStatistics(PrintStream out, Result pResult,
         ReachedSet pReached) {
       out.println("Number of iterations:            " + countIterations);
+      if (countIterations == 0) {
+        // Statistics not relevant, prevent division by zero
+        return;
+      }
+
       out.println("Max size of waitlist:            " + maxWaitlistSize);
       out.println("Average size of waitlist:        " + countWaitlistSize
           / countIterations);
@@ -122,7 +129,7 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
   @Options(prefix="cpa")
   public static class CPAAlgorithmFactory {
 
-    @Option(description="Which strategy to use for forced coverings (empty for none)",
+    @Option(secure=true, description="Which strategy to use for forced coverings (empty for none)",
             name="forcedCovering")
     @ClassOption(packagePrefix="org.sosy_lab.cpachecker")
     private Class<? extends ForcedCovering> forcedCoveringClass = null;
@@ -131,13 +138,17 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
     private final ConfigurableProgramAnalysis cpa;
     private final LogManager logger;
     private final ShutdownNotifier shutdownNotifier;
+    private final AlgorithmIterationListener iterationListener;
 
     public CPAAlgorithmFactory(ConfigurableProgramAnalysis cpa, LogManager logger,
-        Configuration config, ShutdownNotifier pShutdownNotifier) throws InvalidConfigurationException {
+        Configuration config, ShutdownNotifier pShutdownNotifier,
+        @Nullable AlgorithmIterationListener pIterationListener) throws InvalidConfigurationException {
+
       config.inject(this);
       this.cpa = cpa;
       this.logger = logger;
       this.shutdownNotifier = pShutdownNotifier;
+      this.iterationListener = pIterationListener;
 
       if (forcedCoveringClass != null) {
         forcedCovering = Classes.createInstance(ForcedCovering.class, forcedCoveringClass,
@@ -150,14 +161,23 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
     }
 
     public CPAAlgorithm newInstance() {
-      return new CPAAlgorithm(cpa, logger, shutdownNotifier, forcedCovering);
+      return new CPAAlgorithm(cpa, logger, shutdownNotifier, forcedCovering, iterationListener);
     }
   }
 
   public static CPAAlgorithm create(ConfigurableProgramAnalysis cpa, LogManager logger,
-      Configuration config, ShutdownNotifier pShutdownNotifier) throws InvalidConfigurationException {
-    return new CPAAlgorithmFactory(cpa, logger, config, pShutdownNotifier).newInstance();
+      Configuration config, ShutdownNotifier pShutdownNotifier,
+      AlgorithmIterationListener pIterationListener) throws InvalidConfigurationException {
+
+    return new CPAAlgorithmFactory(cpa, logger, config, pShutdownNotifier, pIterationListener).newInstance();
   }
+
+  public static CPAAlgorithm create(ConfigurableProgramAnalysis cpa, LogManager logger,
+      Configuration config, ShutdownNotifier pShutdownNotifier) throws InvalidConfigurationException {
+
+    return new CPAAlgorithmFactory(cpa, logger, config, pShutdownNotifier, null).newInstance();
+  }
+
 
   private final ForcedCovering forcedCovering;
 
@@ -169,13 +189,18 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
 
   private final ShutdownNotifier                   shutdownNotifier;
 
+  private final AlgorithmIterationListener  iterationListener;
+
   public CPAAlgorithm(ConfigurableProgramAnalysis cpa, LogManager logger,
       ShutdownNotifier pShutdownNotifier,
-      ForcedCovering pForcedCovering) {
+      ForcedCovering pForcedCovering,
+      AlgorithmIterationListener pIterationListener) {
+
     this.cpa = cpa;
     this.logger = logger;
     this.shutdownNotifier = pShutdownNotifier;
     this.forcedCovering = pForcedCovering;
+    this.iterationListener = pIterationListener;
   }
 
   @Override
@@ -241,7 +266,7 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
       stats.transferTimer.start();
       Collection<? extends AbstractState> successors;
       try {
-        successors = transferRelation.getAbstractSuccessors(state, precision, null);
+        successors = transferRelation.getAbstractSuccessors(state, precision);
       } finally {
         stats.transferTimer.stop();
       }
@@ -259,16 +284,16 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
         logger.log(Level.ALL, "Successor of", state, "\nis", successor);
 
         stats.precisionTimer.start();
-        Triple<AbstractState, Precision, Action> precAdjustmentResult;
+        PrecisionAdjustmentResult precAdjustmentResult;
         try {
-          precAdjustmentResult = precisionAdjustment.prec(successor, precision, reachedSet);
+          precAdjustmentResult = precisionAdjustment.prec(successor, precision, reachedSet, successor);
         } finally {
           stats.precisionTimer.stop();
         }
 
-        successor = precAdjustmentResult.getFirst();
-        Precision successorPrecision = precAdjustmentResult.getSecond();
-        Action action = precAdjustmentResult.getThird();
+        successor = precAdjustmentResult.abstractState();
+        Precision successorPrecision = precAdjustmentResult.precision();
+        Action action = precAdjustmentResult.action();
 
         if (action == Action.BREAK) {
           stats.stopTimer.start();
@@ -337,7 +362,7 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
             reachedSet.removeAll(toRemove);
             reachedSet.addAll(toAdd);
 
-            if(mergeOperator instanceof ARGMergeJoinPredicatedAnalysis){
+            if (mergeOperator instanceof ARGMergeJoinPredicatedAnalysis) {
               ((ARGMergeJoinPredicatedAnalysis)mergeOperator).cleanUp(reachedSet);
             }
 
@@ -374,6 +399,10 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
           reachedSet.add(successor, successorPrecision);
           stats.addTimer.stop();
         }
+      }
+
+      if (iterationListener != null) {
+        iterationListener.afterAlgorithmIteration(this, reachedSet);
       }
     }
     return true;

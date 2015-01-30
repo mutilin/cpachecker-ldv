@@ -27,8 +27,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
-import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Semaphore;
@@ -41,23 +41,23 @@ import org.sosy_lab.common.Triple;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.log.LogManager;
-import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.ShutdownNotifier;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
+import org.sosy_lab.cpachecker.core.interfaces.pcc.PartitioningCheckingHelper;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
 import org.sosy_lab.cpachecker.cpa.PropertyChecker.PropertyCheckerCPA;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
-import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.pcc.strategy.AbstractStrategy;
 import org.sosy_lab.cpachecker.pcc.strategy.partialcertificate.PartialReachedSetDirectedGraph;
+import org.sosy_lab.cpachecker.pcc.strategy.partitioning.PartitionChecker;
 import org.sosy_lab.cpachecker.pcc.strategy.partitioning.PartitioningIOHelper;
-import org.sosy_lab.cpachecker.util.AbstractStates;
 
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Multimap;
+import com.google.common.collect.Sets;
 
 
 public class PartialReachedSetIOCheckingOnlyInterleavedStrategy extends AbstractStrategy {
@@ -73,6 +73,7 @@ public class PartialReachedSetIOCheckingOnlyInterleavedStrategy extends Abstract
     ioHelper = new PartitioningIOHelper(pConfig, pLogger, pShutdownNotifier, pCpa);
     cpa = pCpa;
     shutdownNotifier = pShutdownNotifier;
+    addPCCStatistic(ioHelper.getPartitioningStatistc());
   }
 
   @Override
@@ -84,12 +85,12 @@ public class PartialReachedSetIOCheckingOnlyInterleavedStrategy extends Abstract
 
   @Override
   public boolean checkCertificate(ReachedSet pReachedSet) throws CPAException, InterruptedException {
-    AtomicBoolean checkResult = new AtomicBoolean(true);
+    final AtomicBoolean checkResult = new AtomicBoolean(true);
     Semaphore partitionsAvailable = new Semaphore(0);
 
-    List<AbstractState> certificate = new ArrayList<>(ioHelper.getSavedReachedSetSize());
-    Multimap<CFANode, AbstractState> inPartition = HashMultimap.create();
-    Collection<AbstractState> inOtherPartition = new ArrayList<>();
+    Multimap<CFANode, AbstractState> partitionNodes = HashMultimap.create();
+    Collection<AbstractState> inOtherPartition = new HashSet<>();
+    Collection<AbstractState> certificate = Sets.newHashSetWithExpectedSize(ioHelper.getSavedReachedSetSize());
 
     AbstractState initialState = pReachedSet.popFromWaitlist();
     Precision initPrec = pReachedSet.getPrecision(initialState);
@@ -99,80 +100,47 @@ public class PartialReachedSetIOCheckingOnlyInterleavedStrategy extends Abstract
     try {
       readingThread.start();
 
-      int index;
-      AbstractState checkedState;
-      Collection<? extends AbstractState> successors;
+      PartitioningCheckingHelper checkInfo = new PartitioningCheckingHelper() {
+        @Override
+        public int getCurrentCertificateSize() {
+          return 0;
+        }
 
-      Multimap<CFANode, AbstractState> coveringInCurrentPartition = HashMultimap.create();
-Timer waiting = new Timer();
+        @Override
+        public void abortCheckingPreparation() {
+          checkResult.set(false);
+        }
+      };
+      PartitionChecker checker =
+          new PartitionChecker(initPrec, cpa.getStopOperator(), cpa.getTransferRelation(), ioHelper, checkInfo,
+              shutdownNotifier, logger);
+
       for (int i = 0; i < ioHelper.getNumPartitions() && checkResult.get(); i++) {
-        waiting.start();
         partitionsAvailable.acquire();
-        waiting.stop();
 
-        index = certificate.size();
-        coveringInCurrentPartition.clear();
-
-        // add nodes of partition
-        addToCurrentCoveringNodes(coveringInCurrentPartition, ioHelper.getPartition(i).getFirst());
-        inPartition.putAll(coveringInCurrentPartition);
-        for (AbstractState checkState : ioHelper.getPartition(i).getFirst()) {
-          certificate.add(checkState);
-        }
-System.out.println(ioHelper.getPartition(i).getFirst().length);
-        // add adjacent nodes of other partition
-        addToCurrentCoveringNodes(coveringInCurrentPartition, ioHelper.getPartition(i).getSecond());
-
-        while (index < certificate.size() && checkResult.get()) {
-          shutdownNotifier.shutdownIfNecessary();
-
-          checkedState = certificate.get(index++);
-
-          // compute successors
-          try {
-            successors = cpa.getTransferRelation().getAbstractSuccessors(checkedState, initPrec, null);
-
-
-            for (AbstractState successor : successors) {
-              // check if covered
-              if (!cpa.getStopOperator().stop(successor,
-                  coveringInCurrentPartition.get(AbstractStates.extractLocation(successor)), initPrec)) {
-                certificate.add(successor);
-                if (certificate.size() > ioHelper.getSavedReachedSetSize()) {
-                  logger.log(Level.SEVERE, "Checking failed, recomputed certificate bigger than original reached set.");
-                  return false;
-                }
-              }
-            }
-          } catch (CPATransferException | InterruptedException e) {
-            logger.log(Level.SEVERE, "Checking failed, successor computation failed");
-            return false;
-          } catch (CPAException e) {
-            logger.log(Level.SEVERE, "Checking failed, checking successor coverage failed");
-            return false;
-          }
-
+        if(!checkResult.get()){
+          return false;
         }
 
+        checker.checkPartition(i);
+        checker.addCertificatePartsToCertificate(certificate);
+        checker.clearPartitionElementsSavedForInspection();
       }
 
       if (!checkResult.get()) { return false; }
 
-      logger.log(Level.INFO, "Check if all are checked");
-      for (AbstractState outState : inOtherPartition) {
-        if (!cpa.getStopOperator().stop(outState, inPartition.get(AbstractStates.extractLocation(outState)), initPrec)) {
-          logger
-              .log(Level.SEVERE,
-                  "Not all outer partition nodes are in other partitions. Following state not contained: ",
-                  outState);
-          return false;
-        }
-      }
+      checker.addPartitionElements(partitionNodes);
+      checker.addElementsCheckedInOtherPartitions(inOtherPartition);
 
-      logger.log(Level.INFO, "Check if initial state is covered.");
-      if (!cpa.getStopOperator().stop(initialState, inPartition.get(AbstractStates.extractLocation(initialState)),
+      logger.log(Level.INFO, "Add initial state to elements for which it will be checked if they are covered by partition nodes of certificate.");
+      inOtherPartition.add(initialState);
+
+      logger.log(Level.INFO,
+              "Check if initial state and all nodes which should be contained in different partition are covered by certificate (partition node).");
+      if (!PartitionChecker.areElementsCoveredByPartitionElement(inOtherPartition, partitionNodes, cpa.getStopOperator(),
           initPrec)) {
-        logger.log(Level.SEVERE, "Initial state not covered.");
+        logger.log(Level.SEVERE,
+            "Initial state or a state which should be in other partition is not covered by certificate.");
         return false;
       }
 
@@ -186,24 +154,10 @@ System.out.println(ioHelper.getPartition(i).getFirst().length);
       } finally {
         stats.getPropertyCheckingTimer().stop();
       }
-/*System.out.println(waiting.getMaxTime());
-System.out.println(waiting.getAvgTime());
-System.out.println(waiting.getSumTime());
-System.out.println(waiting.getNumberOfIntervals());
-System.out.println(ioHelper.getNumPartitions()); TODO delete*/
       return true;
     } finally {
       checkResult.set(false);
       readingThread.interrupt();
-    }
-  }
-
-  private void addToCurrentCoveringNodes(Multimap<CFANode, AbstractState> coveringInCurrentPartition,
-      AbstractState[] nodes) {
-    CFANode node;
-    for (AbstractState internalNode : nodes) {
-      node = AbstractStates.extractLocation(internalNode);
-      coveringInCurrentPartition.put(node, internalNode);
     }
   }
 
@@ -239,30 +193,24 @@ System.out.println(ioHelper.getNumPartitions()); TODO delete*/
     public void run() {
       Triple<InputStream, ZipInputStream, ObjectInputStream> streams = null;
       try {
-        Timer read = new Timer();
         streams = openProofStream();
         ObjectInputStream o = streams.getThird();
         ioHelper.readMetadata(o, false);
 
         for (int i = 0; i < ioHelper.getNumPartitions() && checkResult.get(); i++) {
-          read.start();
-          ioHelper.readPartition(o);
-          read.stop();
-          //System.out.println(read.getLengthOfLastInterval()); TODO delete
+          ioHelper.readPartition(o, stats);
+
           if (shutdownNotifier.shouldShutdown()) {
             abortPreparation();
             break;
           }
           mainSemaphore.release();
-        }/*System.out.println(read.getAvgTime()); TODO delete
-        System.out.println(read.getMaxTime());
-        System.out.println(read.getSumTime());*/
+        }
       } catch (IOException | ClassNotFoundException e) {
-        logger.log(Level.SEVERE, "Partition reading failed. Stop checking");
+        logger.logUserException(Level.SEVERE, e, "Partition reading failed. Stop checking");
         abortPreparation();
       } catch (Exception e2) {
-        logger.log(Level.SEVERE, "Unexpected failure during proof reading");
-        e2.printStackTrace();
+        logger.logException(Level.SEVERE, e2, "Unexpected failure during proof reading");
         abortPreparation();
       } finally {
         if (streams != null) {

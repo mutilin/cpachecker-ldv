@@ -23,13 +23,18 @@
  */
 package org.sosy_lab.cpachecker.util.predicates.mathsat5;
 
+import java.io.ObjectStreamException;
+import java.io.Serializable;
+
+import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BitvectorFormula;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.FloatingPointFormula;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.Formula;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.NumeralFormula.IntegerFormula;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.NumeralFormula.RationalFormula;
 
-class Mathsat5Formula implements Formula {
+abstract class Mathsat5Formula implements Formula {
 
   private final long msatTerm;
 
@@ -64,6 +69,12 @@ class Mathsat5BitvectorFormula extends Mathsat5Formula implements BitvectorFormu
   }
 }
 
+class Mathsat5FloatingPointFormula extends Mathsat5Formula implements FloatingPointFormula {
+  public Mathsat5FloatingPointFormula(long pTerm) {
+    super(pTerm);
+  }
+}
+
 class Mathsat5IntegerFormula extends Mathsat5Formula implements IntegerFormula {
   public Mathsat5IntegerFormula(long pTerm) {
     super(pTerm);
@@ -76,8 +87,29 @@ class Mathsat5RationalFormula extends Mathsat5Formula implements RationalFormula
   }
 }
 
-class Mathsat5BooleanFormula extends Mathsat5Formula implements BooleanFormula {
+class Mathsat5BooleanFormula extends Mathsat5Formula implements BooleanFormula, Serializable {
+  private static final long serialVersionUID = -3587393134167404728L;
+
   public Mathsat5BooleanFormula(long pTerm) {
     super(pTerm);
+  }
+
+  private Object writeReplace() throws ObjectStreamException {
+    return new SerialProxyFormula(GlobalInfo.getInstance().getFormulaManager().dumpFormula(this).toString());
+  }
+
+  private static class SerialProxyFormula implements Serializable {
+
+    private static final long serialVersionUID = -1670677113148700321L;
+    private final String formula;
+
+    public SerialProxyFormula(final String pF) {
+      formula = pF;
+    }
+
+    private Object readResolve() throws ObjectStreamException {
+      return GlobalInfo.getInstance().getFormulaManager().parse(formula);
+    }
+
   }
 }

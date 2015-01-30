@@ -23,10 +23,14 @@
  */
 package org.sosy_lab.cpachecker.cpa.value.refiner.utils;
 
+import static com.google.common.collect.FluentIterable.from;
+
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.sosy_lab.common.Pair;
+import org.sosy_lab.cpachecker.cfa.ast.AVariableDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CArraySubscriptExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CAssignment;
 import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression;
@@ -57,16 +61,22 @@ import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionSummaryEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CReturnStatementEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
-import org.sosy_lab.cpachecker.cpa.value.ValueAnalysisTransferRelation;
+import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
+import org.sosy_lab.cpachecker.cpa.arg.ARGState;
+import org.sosy_lab.cpachecker.cpa.arg.MutableARGPath;
+import org.sosy_lab.cpachecker.cpa.value.ValueAnalysisState.MemoryLocation;
+
+import com.google.common.base.Optional;
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Multimap;
+
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 /**
  * Helper class that collects the set of variables on which all assume edges in the given path depend on (i.e. the transitive closure).
  */
  public class AssumptionUseDefinitionCollector {
-  /**
-   * the set of global variables declared in the given path
-   */
-  private final Set<String> globalVariables = new HashSet<>();
 
   /**
    * the set of variables in the transitive-closure of the assume edges
@@ -77,6 +87,14 @@ import org.sosy_lab.cpachecker.cpa.value.ValueAnalysisTransferRelation;
    * the set of variables for which to find the referencing ones
    */
   private final Set<String> dependingVariables = new HashSet<>();
+
+
+  private HashMultimap<ARGState, MemoryLocation> fakeInterpolants = HashMultimap.create();
+
+  /**
+   * after the assumption closure has been determined, this value states at which offset all dependencies are resolved
+   */
+  private int dependenciesResolvedOffset = 0;
 
   /**
    * the last traversed function return edge - needed as we go backwards through the edges to obtain the
@@ -100,11 +118,15 @@ import org.sosy_lab.cpachecker.cpa.value.ValueAnalysisTransferRelation;
     dependingVariables.clear();
     collectedVariables.clear();
 
-    determineGlobalVariables(path);
-
     for (int i = path.size() - 1; i >= 0; i--) {
       CFAEdge edge = path.get(i);
-      collectVariables(edge, collectedVariables);
+      collectVariables(null, edge, collectedVariables);
+
+      if(Iterables.getLast(path).getEdgeType() == CFAEdgeType.AssumeEdge
+          && dependingVariables.isEmpty()) {
+        dependenciesResolvedOffset = i;
+        return collectedVariables;
+      }
     }
 
     // for full paths, the set of depending variables always has be empty at this point,
@@ -120,41 +142,59 @@ import org.sosy_lab.cpachecker.cpa.value.ValueAnalysisTransferRelation;
   }
 
   /**
+   * This method collects the respective referenced variables in the given path.
+   *
+   * @param path the path to analyze
+   * @return the mapping of location to referenced variables in the given path
+   */
+  public Multimap<ARGState, MemoryLocation> obtainFakeInterpolants(ARGPath path) {
+
+    dependingVariables.clear();
+    collectedVariables.clear();
+
+    fakeInterpolants.clear();
+
+    List<CFAEdge> edgesList = path.asEdgesList();
+    List<ARGState> statesList = path.asStatesList();
+
+    int i = path.size() - 1;
+
+    for (; i >= 0; i--) {
+      collectVariables(statesList.get(i), edgesList.get(i), collectedVariables);
+
+      if(Iterables.getLast(edgesList).getEdgeType() == CFAEdgeType.AssumeEdge
+          && dependingVariables.isEmpty()) {
+        dependenciesResolvedOffset = i;
+        return fakeInterpolants;
+      }
+    }
+
+    return fakeInterpolants;
+  }
+
+  /**
+   * This method collects the respective referenced variables in the given ARG path.
+   *
+   * @param path the path to analyze
+   * @return the mapping of location to referenced variables in the given path
+   */
+  public Set<String> obtainUseDefInformation(MutableARGPath pFullArgPath) {
+    return obtainUseDefInformation(from(pFullArgPath).transform(Pair.<CFAEdge>getProjectionToSecond()).toList());
+  }
+
+  public int getDependenciesResolvedOffset() {
+    return dependenciesResolvedOffset;
+  }
+
+  /**
    * This method determines if the given path is only a suffix of a complete path.
    *
    * @param path the path to check
    * @return true, if the path is incomplete, else false
    */
+  @SuppressWarnings("unused")
   private boolean isIncompletePath(List<CFAEdge> path) {
     return path.get(0).getPredecessor().getNumEnteringEdges() > 0;
-  }
-
-  /**
-   * This method determines the set of global variables declared in the given path.
-   *
-   * @param path the path to analyze
-   */
-  private void determineGlobalVariables(List<CFAEdge> path) {
-    for (CFAEdge edge : path) {
-      if (edge.getEdgeType() == CFAEdgeType.DeclarationEdge) {
-        CDeclaration declaration = ((CDeclarationEdge)edge).getDeclaration();
-        if (isGlobalVariableDeclaration(declaration)) {
-          globalVariables.add(declaration.getName());
-        }
-      } else if (edge.getEdgeType() == CFAEdgeType.MultiEdge) {
-        determineGlobalVariables(((MultiEdge)edge).getEdges());
-      }
-    }
-  }
-
-  /**
-   * This method decides whether or not a declaration is a global (variable) declaration or not.
-   *
-   * @param declaration the declaration to analyze
-   * @return true if the declaration is a global (variable) declaration or not, else false
-   */
-  private boolean isGlobalVariableDeclaration(CDeclaration declaration) {
-    return declaration.isGlobal() && !(declaration instanceof CFunctionDeclaration);
   }
 
   /**
@@ -163,8 +203,7 @@ import org.sosy_lab.cpachecker.cpa.value.ValueAnalysisTransferRelation;
    * @param edge the edge to analyze
    * @param collectedVariables the mapping of collected variables
    */
-  private void collectVariables(CFAEdge edge, Set<String> collectedVariables) {
-    String currentFunction = edge.getPredecessor().getFunctionName();
+  private void collectVariables(ARGState state, CFAEdge edge, Set<String> collectedVariables) {
 
     switch (edge.getEdgeType()) {
     case BlankEdge:
@@ -174,26 +213,25 @@ import org.sosy_lab.cpachecker.cpa.value.ValueAnalysisTransferRelation;
 
     case FunctionReturnEdge:
       previousFunctionReturnEdge = (FunctionReturnEdge)edge;
+      fakeInterpolants.put(state, MemoryLocation.valueOf(edge.getPredecessor().getFunctionName() + "::__retval__"));
       break;
 
     case DeclarationEdge:
       CDeclaration declaration = ((CDeclarationEdge)edge).getDeclaration();
 
-      if (declaration.getName() != null) {
-        String variableName = declaration.getName();
+      if(declaration instanceof CVariableDeclaration) {
+        if (declaration.getName() != null) {
+          String variableName = declaration.getQualifiedName();
 
-        if(!declaration.isGlobal()) {
-          variableName = scoped(variableName, currentFunction);
-        }
+          if (dependingVariables.contains(variableName)) {
+            dependingVariables.remove(variableName);
+            collectedVariables.add(variableName);
 
-        if (dependingVariables.contains(variableName)) {
-          dependingVariables.remove(variableName);
-          collectedVariables.add(variableName);
-
-          if(((CVariableDeclaration)declaration).getInitializer() instanceof CInitializerExpression) {
-            CInitializerExpression initializer = ((CInitializerExpression)((CVariableDeclaration)declaration).getInitializer());
-            if(initializer != null) {
-              collectVariables(edge, initializer.getExpression());
+            if (((CVariableDeclaration)declaration).getInitializer() instanceof CInitializerExpression) {
+              CInitializerExpression initializer = ((CInitializerExpression)((CVariableDeclaration)declaration).getInitializer());
+              if (initializer != null) {
+                collectVariables(edge, initializer.getExpression());
+              }
             }
           }
         }
@@ -204,7 +242,7 @@ import org.sosy_lab.cpachecker.cpa.value.ValueAnalysisTransferRelation;
         CReturnStatementEdge returnStatementEdge = (CReturnStatementEdge)edge;
 
         // for cases where error path ends with a return statement
-        if(previousFunctionReturnEdge == null) {
+        if (previousFunctionReturnEdge == null) {
           break;
         }
 
@@ -214,15 +252,27 @@ import org.sosy_lab.cpachecker.cpa.value.ValueAnalysisTransferRelation;
 
         if (functionCall instanceof CFunctionCallAssignmentStatement) {
           CFunctionCallAssignmentStatement funcAssign = (CFunctionCallAssignmentStatement)functionCall;
-          String assignedVariable = scoped(funcAssign.getLeftHandSide().toASTString(), previousFunctionReturnEdge.getSuccessor().getFunctionName());
 
-          if (dependingVariables.contains(assignedVariable)) {
-            dependingVariables.remove(assignedVariable);
+          if(funcAssign.getLeftHandSide() instanceof CIdExpression) {
+            String assignedVariable = ((CIdExpression)(funcAssign.getLeftHandSide())).getDeclaration().getQualifiedName();
 
-            collectedVariables.add(assignedVariable);
-            // also add special FUNCTION_RETURN_VAR as relevant variable
-            collectedVariables.add(scoped(ValueAnalysisTransferRelation.FUNCTION_RETURN_VAR, returnStatementEdge.getPredecessor().getFunctionName()));
-            collectVariables(returnStatementEdge, returnStatementEdge.getExpression());
+            if (dependingVariables.contains(assignedVariable)) {
+              dependingVariables.remove(assignedVariable);
+
+              collectedVariables.add(assignedVariable);
+
+              // also add special function return variable as relevant variable
+              Optional<? extends AVariableDeclaration> returnVarName = returnStatementEdge.
+                  getSuccessor().getEntryNode().getReturnVariable();
+              if(returnVarName.isPresent()) {
+                collectedVariables.add(returnVarName.get().getQualifiedName());
+                fakeInterpolants.put(state, MemoryLocation.valueOf(returnVarName.get().getQualifiedName()));
+              }
+
+              if (returnStatementEdge.getExpression().isPresent()) {
+                collectVariables(returnStatementEdge, returnStatementEdge.getExpression().get());
+              }
+            }
           }
         }
 
@@ -248,20 +298,22 @@ import org.sosy_lab.cpachecker.cpa.value.ValueAnalysisTransferRelation;
       break;
 
     case AssumeEdge:
-      CAssumeEdge assumeEdge = (CAssumeEdge)edge;
-      collectVariables(assumeEdge, assumeEdge.getExpression());
+      handleAssumption(edge);
       break;
 
     case StatementEdge:
       CStatementEdge statementEdge = (CStatementEdge)edge;
       if (statementEdge.getStatement() instanceof CAssignment) {
         CAssignment assignment = (CAssignment)statementEdge.getStatement();
-        String assignedVariable = scoped(assignment.getLeftHandSide().toASTString(), currentFunction);
 
-        if (dependingVariables.contains(assignedVariable)) {
-          dependingVariables.remove(assignedVariable);
-          collectedVariables.add(assignedVariable);
-          collectVariables(statementEdge, assignment.getRightHandSide());
+        if(assignment.getLeftHandSide() instanceof CIdExpression) {
+          String assignedVariable = ((CIdExpression)(assignment.getLeftHandSide())).getDeclaration().getQualifiedName();
+
+          if (dependingVariables.contains(assignedVariable)) {
+            dependingVariables.remove(assignedVariable);
+            collectedVariables.add(assignedVariable);
+            collectVariables(statementEdge, assignment.getRightHandSide());
+          }
         }
       }
       break;
@@ -270,26 +322,25 @@ import org.sosy_lab.cpachecker.cpa.value.ValueAnalysisTransferRelation;
       List<CFAEdge> edges = ((MultiEdge)edge).getEdges();
 
       // process MultiEdges also in reverse order
-      for(int i = edges.size() - 1; i >= 0; i--) {
-        collectVariables(edges.get(i), collectedVariables);
+      for (int i = edges.size() - 1; i >= 0; i--) {
+        collectVariables(state, edges.get(i), collectedVariables);
       }
       break;
+    }
+
+    for(String var : dependingVariables) {
+      fakeInterpolants.put(state, MemoryLocation.valueOf(var));
     }
   }
 
   /**
-   * This method prefixes the name of a non-global variable with a given function name.
+   * This method collects variables from a given assume edge.
    *
-   * @param variableName the variable name
-   * @param functionName the function name
-   * @return the prefixed variable name
+   * @param edge the assume edge from which to collect variables
    */
-  private String scoped(String variableName, String functionName) {
-    if (globalVariables.contains(variableName)) {
-      return variableName;
-    } else {
-      return functionName + "::" + variableName;
-    }
+  protected void handleAssumption(CFAEdge edge) {
+    CAssumeEdge assumeEdge = (CAssumeEdge)edge;
+    collectVariables(assumeEdge, assumeEdge.getExpression());
   }
 
   /**
@@ -298,7 +349,7 @@ import org.sosy_lab.cpachecker.cpa.value.ValueAnalysisTransferRelation;
    * @param edge the edge to analyze
    * @param rightHandSide the right hand side of the assignment
    */
-  private void collectVariables(CFAEdge edge, CRightHandSide rightHandSide) {
+  protected void collectVariables(CFAEdge edge, CRightHandSide rightHandSide) {
     rightHandSide.accept(new CollectVariablesVisitor(edge));
   }
 
@@ -307,10 +358,6 @@ import org.sosy_lab.cpachecker.cpa.value.ValueAnalysisTransferRelation;
    */
   private class CollectVariablesVisitor extends DefaultCExpressionVisitor<Void, RuntimeException>
                                                implements CRightHandSideVisitor<Void, RuntimeException> {
-    /**
-     * the current assignment edge
-     */
-    private final CFAEdge currentEdge;
 
     /**
      * This method acts as the constructor of the class.
@@ -319,16 +366,16 @@ import org.sosy_lab.cpachecker.cpa.value.ValueAnalysisTransferRelation;
      * @param collectedVariables the mapping of locations to variable names up to the current edge
      */
     public CollectVariablesVisitor(CFAEdge currentEdge) {
-      this.currentEdge = currentEdge;
     }
 
     private void collectVariables(String variableName) {
-      dependingVariables.add(scoped(variableName, currentEdge.getPredecessor().getFunctionName()));
+      dependingVariables.add(variableName);
     }
 
     @Override
     public Void visit(CIdExpression pE) {
-      collectVariables(pE.getName());
+      collectVariables(pE.getDeclaration().getQualifiedName());
+
       return null;
     }
 
@@ -369,6 +416,7 @@ import org.sosy_lab.cpachecker.cpa.value.ValueAnalysisTransferRelation;
     }
 
     @Override
+    @SuppressFBWarnings(value = "SF_SWITCH_NO_DEFAULT", justification = "bug in FindBugs")
     public Void visit(CUnaryExpression pE) {
       UnaryOperator op = pE.getOperator();
 
@@ -378,6 +426,7 @@ import org.sosy_lab.cpachecker.cpa.value.ValueAnalysisTransferRelation;
         //$FALL-THROUGH$
       default:
         pE.getOperand().accept(this);
+        break;
       }
 
       return null;

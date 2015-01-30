@@ -36,6 +36,7 @@ import java.util.Stack;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 import org.eclipse.jdt.core.dom.ITypeBinding;
+import org.sosy_lab.cpachecker.cfa.ast.FileLocation;
 import org.sosy_lab.cpachecker.cfa.ast.java.JConstructorDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.java.JFieldDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.java.JMethodDeclaration;
@@ -43,15 +44,16 @@ import org.sosy_lab.cpachecker.cfa.ast.java.JParameterDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.java.JSimpleDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.java.JVariableDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.java.VisibilityModifier;
-import org.sosy_lab.cpachecker.cfa.parser.eclipse.java.util.NameConverter;
 import org.sosy_lab.cpachecker.cfa.types.java.JClassOrInterfaceType;
 import org.sosy_lab.cpachecker.cfa.types.java.JClassType;
 import org.sosy_lab.cpachecker.cfa.types.java.JConstructorType;
 import org.sosy_lab.cpachecker.cfa.types.java.JInterfaceType;
 import org.sosy_lab.cpachecker.cfa.types.java.JMethodType;
+import org.sosy_lab.cpachecker.cfa.types.java.JSimpleType;
 import org.sosy_lab.cpachecker.cfa.types.java.JType;
 
 import com.google.common.base.Joiner;
+import com.google.common.base.Optional;
 import com.google.common.collect.Lists;
 
 /**
@@ -60,6 +62,8 @@ import com.google.common.collect.Lists;
  * Additionally, it tracks classes that still need to be parsed.
  */
 class Scope {
+
+  private static final String RETURN_VAR_NAME = "__retval__";
 
   // Stores all found class and reference types
   private final TypeHierarchy typeHierachy;
@@ -76,6 +80,7 @@ class Scope {
 
   // Stores current class and method
   private String currentMethodName = null;
+  private Optional<JVariableDeclaration> returnVariable;
   private JClassOrInterfaceType currentClassType = null;
 
   // Stores enclosing classes
@@ -96,20 +101,18 @@ class Scope {
  * as creating symbolic tables to solve declarations.
  *
  * @param pFullyQualifiedMainClassName Name of the main Class of program. *
- * @param pRootPath Path to the root folder of current program.
- * @param pTypes Type Hierarchy of program created by {@link TypeHierachyCreator}
- * @param pFileOfTypes Maps types to the sourceFile they were extracted from
+ * @param pTypeHierarchy Type Hierarchy of program created by {@link TypeHierachyCreator}
  */
-  public Scope(String pFullyQualifiedMainClassName, TypeHierarchy pTypeHierachy) {
+  public Scope(String pFullyQualifiedMainClassName, TypeHierarchy pTypeHierarchy) {
 
     fullyQualifiedMainClassName = pFullyQualifiedMainClassName;
     enterProgramScope();
     registeredClasses.add(fullyQualifiedMainClassName); // Register Main Class
 
-    methods = pTypeHierachy.getMethodDeclarations();
-    fields = pTypeHierachy.getFieldDeclarations();
+    methods = pTypeHierarchy.getMethodDeclarations();
+    fields = pTypeHierarchy.getFieldDeclarations();
 
-    typeHierachy = pTypeHierachy;
+    typeHierachy = pTypeHierarchy;
   }
 
   private void enterProgramScope() {
@@ -145,7 +148,47 @@ class Scope {
    */
   public void enterMethod(JMethodDeclaration methodDef) {
     currentMethodName = methodDef.getOrigName();
+    returnVariable = Optional.fromNullable(createFunctionReturnVariable(methodDef));
+
     enterBlock();
+  }
+
+  private JVariableDeclaration createFunctionReturnVariable(JMethodDeclaration pMethod) {
+    FileLocation fileLocation = pMethod.getFileLocation();
+    JType returnType = (JType) pMethod.getType().getReturnType();
+    String qualifiedReturnVarName = createQualifiedName(RETURN_VAR_NAME);
+
+    if (JSimpleType.getVoid().equals(returnType)) {
+      return null;
+    }
+
+    return new JVariableDeclaration(fileLocation, returnType, RETURN_VAR_NAME,
+        RETURN_VAR_NAME, qualifiedReturnVarName, null, false);
+  }
+
+  public Optional<JVariableDeclaration> getReturnVariable() {
+    checkState(returnVariable != null);
+    return returnVariable;
+  }
+
+  /**
+   * Returns a fully qualified name for the given variable using the current scope information.
+   *
+   * @param pVariableName the simple name to create a fully qualified name of.
+   *
+   * @return the fully qualified name for the given variable name, based on the current scope
+   */
+  public String createQualifiedName(String pVariableName) {
+
+    /* Old way of creating qualified names - this includes the class name twice.
+     * But ValueAnalysisState.MemoryLocation uses names equal to the uncommented code below.
+     * As long as no need for the upper format exists, the lower one should be used to prevent
+     * the need of workarounds.
+     */
+    // return scope.getCurrentClassType().getName()
+    //    + "_" + scope.getCurrentMethodName()
+    //    + "::" + var;
+    return getCurrentMethodName() + "::" + pVariableName;
   }
 
   /**
@@ -171,8 +214,8 @@ class Scope {
   }
 
   /**
-   * Indicates that the Visitor using this scope
-   * leaves current Class while traversing the JDT AST.
+   * Indicates that the visitor using this scope
+   * leaves current class while traversing the JDT AST.
    */
   public void leaveClass() {
     depth--;
@@ -181,8 +224,10 @@ class Scope {
       currentClassType = null;
     } else {
 
-      if (classStack.size() == 0) { throw new CFAGenerationRuntimeException(
-          "Could not find enclosing Class of this nested Class"); }
+      if (classStack.isEmpty()) {
+        throw new CFAGenerationRuntimeException("Could not find enclosing class of nested class "
+          + currentClassType);
+      }
 
       currentClassType = classStack.pop();
     }

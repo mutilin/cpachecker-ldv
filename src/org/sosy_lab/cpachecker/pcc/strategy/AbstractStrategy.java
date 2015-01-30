@@ -31,6 +31,7 @@ import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 import java.io.PrintStream;
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.logging.Level;
 import java.util.zip.ZipEntry;
@@ -61,14 +62,15 @@ public abstract class AbstractStrategy implements PCCStrategy, StatisticsProvide
 
   protected LogManager logger;
   protected PCStrategyStatistics stats;
+  private Collection<Statistics> pccStats = new ArrayList<>();
 
-  @Option(
+  @Option(secure=true,
       name = "proofFile",
       description = "file in which proof representation needed for proof checking is stored")
   @FileOption(FileOption.Type.OUTPUT_FILE)
   protected Path file = Paths.get("arg.obj");
 
-  @Option(
+  @Option(secure=true,
       name = "useCores",
       description = "number of cpus/cores which should be used in parallel for proof checking")
   @IntegerOption(min=1)
@@ -80,6 +82,7 @@ public abstract class AbstractStrategy implements PCCStrategy, StatisticsProvide
     numThreads = Math.min(Runtime.getRuntime().availableProcessors(), numThreads);
     logger = pLogger;
     stats = new PCStrategyStatistics();
+    pccStats.add(stats);
   }
 
   @Override
@@ -111,7 +114,7 @@ public abstract class AbstractStrategy implements PCCStrategy, StatisticsProvide
         o.flush();
         zos.closeEntry();
         index++;
-      }while(continueWriting);
+      }while (continueWriting);
 
       ze = new ZipEntry("Helper");
       zos.putNextEntry(ze);
@@ -217,12 +220,16 @@ public abstract class AbstractStrategy implements PCCStrategy, StatisticsProvide
 
   protected abstract void readProofFromStream(ObjectInputStream in) throws ClassNotFoundException, InvalidConfigurationException, IOException;
 
-  @Override
-  public void collectStatistics(Collection<Statistics> statsCollection) {
-    statsCollection.add(stats);
+  protected void addPCCStatistic(final Statistics pPCCStatistic) {
+    pccStats.add(pPCCStatistic);
   }
 
-  protected static class PCStrategyStatistics implements Statistics {
+  @Override
+  public void collectStatistics(Collection<Statistics> statsCollection) {
+    statsCollection.addAll(pccStats);
+  }
+
+  public static class PCStrategyStatistics implements Statistics {
 
     protected Timer transferTimer = new Timer();
     protected Timer stopTimer = new Timer();
@@ -230,29 +237,30 @@ public abstract class AbstractStrategy implements PCCStrategy, StatisticsProvide
     protected Timer propertyCheckingTimer = new Timer();
 
     protected int countIterations = 0;
+    protected int proofSize = 0;
 
     @Override
     public String getName() {
       return "Proof Checking Strategy Statistics";
     }
 
-    public Timer getPreparationTimer(){
+    public Timer getPreparationTimer() {
       return preparationTimer;
     }
 
-    public Timer getStopTimer(){
+    public Timer getStopTimer() {
       return stopTimer;
     }
 
-    public Timer getTransferTimer(){
+    public Timer getTransferTimer() {
       return transferTimer;
     }
 
-    public Timer getPropertyCheckingTimer(){
+    public Timer getPropertyCheckingTimer() {
       return propertyCheckingTimer;
     }
 
-    public void increaseIteration(){
+    public void increaseIteration() {
       countIterations++;
     }
 
@@ -261,6 +269,8 @@ public abstract class AbstractStrategy implements PCCStrategy, StatisticsProvide
         ReachedSet pReached) {
       out.println("Number of iterations:                     " + countIterations);
       out.println();
+      out.println("Number of proof elements:                     " + proofSize);
+      out.println();
       out.println("  Time for preparing proof for checking:          " + preparationTimer);
       out.println("  Time for abstract successor checks:     " + transferTimer + " (Calls: "
           + transferTimer.getNumberOfIntervals() + ")");
@@ -268,6 +278,10 @@ public abstract class AbstractStrategy implements PCCStrategy, StatisticsProvide
           + stopTimer.getNumberOfIntervals()
           + ")");
       out.println(" Time for checking property:          "   + propertyCheckingTimer);
+    }
+
+    public void increaseProofSize(int pIncrement) {
+      proofSize+=pIncrement;
     }
 
   }

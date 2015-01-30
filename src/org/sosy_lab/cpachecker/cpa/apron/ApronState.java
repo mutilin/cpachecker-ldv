@@ -34,6 +34,7 @@ import java.util.logging.Level;
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
+import org.sosy_lab.cpachecker.cpa.value.ValueAnalysisState.MemoryLocation;
 
 import apron.Abstract0;
 import apron.Dimchange;
@@ -57,45 +58,15 @@ public class ApronState implements AbstractState {
     INT, FLOAT;
   }
 
-  public static class Block {
-    private static int numBlocks = 0;
-
-    private final int id;
-
-    Block() {
-      numBlocks++;
-      id = numBlocks;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-      if (obj == this) {
-        return true;
-      }
-      if (!(obj instanceof Block)) {
-        return false;
-      }
-      return id == ((Block)obj).id;
-    }
-
-    @Override
-    public int hashCode() {
-      final int prime = 31;
-      int result = 7;
-      result = prime * result + id;
-      return result;
-    }
-  }
-
   // the Apron state representation
   private Abstract0 apronState;
   private ApronManager apronManager;
 
   // mapping from variable name to its identifier
-  private List<String> integerToIndexMap;
-  private List<String> realToIndexMap;
-  private Map<String, Type> variableToTypeMap;
-  private final Block block;
+  private List<MemoryLocation> integerToIndexMap;
+  private List<MemoryLocation> realToIndexMap;
+  private Map<MemoryLocation, Type> variableToTypeMap;
+  private final boolean isLoopHead;
 
   private LogManager logger;
 
@@ -109,17 +80,25 @@ public class ApronState implements AbstractState {
     integerToIndexMap = new LinkedList<>();
     realToIndexMap = new LinkedList<>();
     variableToTypeMap = new HashMap<>();
-    block = new Block();
+    isLoopHead = false;
   }
 
-  public ApronState(Abstract0 apronNativeState, ApronManager manager, List<String> intMap, List<String> realMap, Map<String, Type> typeMap, Block block, LogManager log) {
+  public ApronState(Abstract0 apronNativeState, ApronManager manager, List<MemoryLocation> intMap, List<MemoryLocation> realMap, Map<MemoryLocation, Type> typeMap, boolean pIsLoopHead, LogManager log) {
     apronState = apronNativeState;
     apronManager = manager;
     integerToIndexMap = intMap;
     realToIndexMap = realMap;
     variableToTypeMap = typeMap;
-    this.block = block;
+    isLoopHead = pIsLoopHead;
     logger = log;
+  }
+
+  public boolean isLoopHead() {
+    return isLoopHead;
+  }
+
+  public ApronState asLoopHead() {
+    return new ApronState(apronState, apronManager, integerToIndexMap, realToIndexMap, variableToTypeMap, isLoopHead, logger);
   }
 
   @Override
@@ -128,11 +107,12 @@ public class ApronState implements AbstractState {
     if (!(pObj instanceof ApronState)) {
       return false;
     }
-    ApronState otherOct = (ApronState) pObj;
+    ApronState otherApron = (ApronState) pObj;
 logger.log(Level.FINEST, "apron state: isEqual");
-    return Objects.equals(integerToIndexMap, otherOct.integerToIndexMap)
-           && Objects.equals(realToIndexMap, otherOct.realToIndexMap)
-           && this.apronState.isEqual(apronManager.getManager(), otherOct.apronState);
+    return Objects.equals(integerToIndexMap, otherApron.integerToIndexMap)
+           && Objects.equals(realToIndexMap, otherApron.realToIndexMap)
+           && this.apronState.isEqual(apronManager.getManager(), otherApron.apronState)
+           && isLoopHead == otherApron.isLoopHead;
   }
 
   @Override
@@ -143,6 +123,7 @@ logger.log(Level.FINEST, "apron state: isEqual");
     result = prime * result + Objects.hashCode(integerToIndexMap);
     result = prime * result + Objects.hash(realToIndexMap);
     result = prime * result + Objects.hashCode(variableToTypeMap);
+    result = prime * result + Objects.hash(isLoopHead);
     return result;
   }
 
@@ -193,9 +174,9 @@ logger.log(Level.FINEST, "apron state: isEqual");
 
     ApronState newState1;
     if (variableToTypeMap.size() != maxEqualIntIndex  + maxEqualRealIndex) {
-      List<String> newIntMap1 = integerToIndexMap.subList(0, maxEqualIntIndex);
-      List<String> newRealMap1 = realToIndexMap.subList(0, maxEqualRealIndex);
-      Map<String, Type> newTypeMap1 = new HashMap<>(variableToTypeMap);
+      List<MemoryLocation> newIntMap1 = integerToIndexMap.subList(0, maxEqualIntIndex);
+      List<MemoryLocation> newRealMap1 = realToIndexMap.subList(0, maxEqualRealIndex);
+      Map<MemoryLocation, Type> newTypeMap1 = new HashMap<>(variableToTypeMap);
       int amountRemoved = variableToTypeMap.size()-(maxEqualIntIndex + maxEqualRealIndex);
       int[] placesRemoved = new int[amountRemoved];
       int amountInts = integerToIndexMap.size() - maxEqualIntIndex;
@@ -214,16 +195,16 @@ logger.log(Level.FINEST, "apron state: isEqual");
       logger.log(Level.FINEST, "apron state: removeDimensionCopy: " + new Dimchange(amountInts, amountReals, placesRemoved));
       Abstract0 newApronState1 = apronState.removeDimensionsCopy(apronManager.getManager(),
                                                                  new Dimchange(amountInts, amountReals, placesRemoved));
-      newState1 =  new ApronState(newApronState1, apronManager, newIntMap1, newRealMap1, newTypeMap1, block, logger);
+      newState1 =  new ApronState(newApronState1, apronManager, newIntMap1, newRealMap1, newTypeMap1, isLoopHead, logger);
     } else {
       newState1 = this;
     }
 
     ApronState newState2;
     if (oldState.variableToTypeMap.size() != maxEqualIntIndex + maxEqualRealIndex) {
-      List<String> newIntMap2 = integerToIndexMap.subList(0, maxEqualIntIndex);
-      List<String> newRealMap2 = realToIndexMap.subList(0, maxEqualRealIndex);
-      Map<String, Type> newTypeMap2 = new HashMap<>(variableToTypeMap);
+      List<MemoryLocation> newIntMap2 = integerToIndexMap.subList(0, maxEqualIntIndex);
+      List<MemoryLocation> newRealMap2 = realToIndexMap.subList(0, maxEqualRealIndex);
+      Map<MemoryLocation, Type> newTypeMap2 = new HashMap<>(variableToTypeMap);
       int amountRemoved = oldState.variableToTypeMap.size()-(maxEqualIntIndex + maxEqualRealIndex);
       int[] placesRemoved = new int[amountRemoved];
       int amountInts = oldState.integerToIndexMap.size() - maxEqualIntIndex;
@@ -242,20 +223,12 @@ logger.log(Level.FINEST, "apron state: isEqual");
       logger.log(Level.FINEST, "apron state: removeDimensionCopy: " + new Dimchange(amountInts, amountReals, placesRemoved));
       Abstract0 newApronState2 =  oldState.apronState.removeDimensionsCopy(oldState.apronManager.getManager(),
                                                                            new Dimchange(amountInts, amountReals, placesRemoved));
-      newState2 = new ApronState(newApronState2, oldState.apronManager, newIntMap2, newRealMap2, newTypeMap2, block, logger);
+      newState2 = new ApronState(newApronState2, oldState.apronManager, newIntMap2, newRealMap2, newTypeMap2, isLoopHead, logger);
     } else {
       newState2 = oldState;
     }
 
     return Pair.of(newState1, newState2);
-  }
-
-  public boolean areInSameBlock(ApronState other) {
-    return block.equals(other.block);
-  }
-
-  public Block getBlock() {
-    return block;
   }
 
   @Override
@@ -281,15 +254,15 @@ logger.log(Level.FINEST, "apron state: isEqual");
     return variableToTypeMap.size();
   }
 
-  public List<String> getIntegerVariableToIndexMap() {
+  public List<MemoryLocation> getIntegerVariableToIndexMap() {
     return integerToIndexMap;
   }
 
-  public List<String> getRealVariableToIndexMap() {
+  public List<MemoryLocation> getRealVariableToIndexMap() {
     return realToIndexMap;
   }
 
-  public Map<String, Type> getVariableToTypeMap() {
+  public Map<MemoryLocation, Type> getVariableToTypeMap() {
     return variableToTypeMap;
   }
 
@@ -301,7 +274,7 @@ logger.log(Level.FINEST, "apron state: isEqual");
   /**
    * This method sets the coefficients/ the value of a variable to undefined.
    */
-  public ApronState forget(String pVariableName) {
+  public ApronState forget(MemoryLocation pVariableName) {
     int varIdx = getVariableIndexFor(pVariableName);
 
     if (varIdx == -1) {
@@ -313,18 +286,18 @@ logger.log(Level.FINEST, "apron state: isEqual");
                           new LinkedList<>(integerToIndexMap),
                           new LinkedList<>(realToIndexMap),
                           new HashMap<>(variableToTypeMap),
-                          block,
+                          false,
                           logger);
   }
 
   /**
    * Returns the index of the variable, if the variable is not in the map -1 is returned.
    */
-  protected int getVariableIndexFor(String pVariableName) {
+  protected int getVariableIndexFor(MemoryLocation pVariableName) {
 
     if (integerToIndexMap.contains(pVariableName)) {
       int counter = 0;
-      for (String str : integerToIndexMap) {
+      for (MemoryLocation str : integerToIndexMap) {
         if (str.equals(pVariableName)) {
           return counter;
         }
@@ -334,7 +307,7 @@ logger.log(Level.FINEST, "apron state: isEqual");
 
     if (realToIndexMap.contains(pVariableName)) {
       int counter = 0;
-      for (String str : realToIndexMap) {
+      for (MemoryLocation str : realToIndexMap) {
         if (str.equals(pVariableName)) {
           return counter + integerToIndexMap.size();
         }
@@ -352,12 +325,12 @@ logger.log(Level.FINEST, "apron state: isEqual");
     return index < integerToIndexMap.size();
   }
 
-  protected boolean existsVariable(String variableName) {
+  protected boolean existsVariable(MemoryLocation variableName) {
     return integerToIndexMap.contains(variableName)
            || realToIndexMap.contains(variableName);
   }
 
-  public ApronState declareVariable(String varName, Type type){
+  public ApronState declareVariable(MemoryLocation varName, Type type) {
     assert !existsVariable(varName);
 
     Dimchange dimch;
@@ -376,7 +349,7 @@ logger.log(Level.FINEST, "apron state: isEqual");
                                      new LinkedList<>(integerToIndexMap),
                                      new LinkedList<>(realToIndexMap),
                                      new HashMap<>(variableToTypeMap),
-                                     block,
+                                     false,
                                      logger);
     if (type == Type.INT) {
       newState.integerToIndexMap.add(varName);
@@ -387,7 +360,7 @@ logger.log(Level.FINEST, "apron state: isEqual");
     return newState;
   }
 
-  public ApronState makeAssignment(String leftVarName, Linexpr0 assignment) {
+  public ApronState makeAssignment(MemoryLocation leftVarName, Linexpr0 assignment) {
     int varIndex = getVariableIndexFor(leftVarName);
     if (varIndex == -1) {
       return this;
@@ -399,18 +372,18 @@ logger.log(Level.FINEST, "apron state: isEqual");
                             integerToIndexMap,
                             realToIndexMap,
                             variableToTypeMap,
-                            block,
+                            false,
                             logger);
     } else {
       return forget(leftVarName);
     }
   }
 
-  public ApronState makeAssignment(String leftVarName, Texpr0Node assignment) {
+  public ApronState makeAssignment(MemoryLocation leftVarName, Texpr0Node assignment) {
     return makeAssignment(leftVarName, new Texpr0Intern(assignment));
   }
 
-  public ApronState makeAssignment(String leftVarName, Texpr0Intern assignment) {
+  public ApronState makeAssignment(MemoryLocation leftVarName, Texpr0Intern assignment) {
     int varIndex = getVariableIndexFor(leftVarName);
     if (varIndex == -1) {
       return this;
@@ -422,7 +395,7 @@ logger.log(Level.FINEST, "apron state: isEqual");
                             integerToIndexMap,
                             realToIndexMap,
                             variableToTypeMap,
-                            block,
+                            false,
                             logger);
     } else {
       return forget(leftVarName);
@@ -437,7 +410,7 @@ logger.log(Level.FINEST, "apron state: isEqual");
                           integerToIndexMap,
                           realToIndexMap,
                           variableToTypeMap,
-                          block,
+                          false,
                           logger);
   }
 
@@ -448,39 +421,39 @@ logger.log(Level.FINEST, "apron state: isEqual");
                           integerToIndexMap,
                           realToIndexMap,
                           variableToTypeMap,
-                          block,
+                          false,
                           logger);
   }
 
   public ApronState removeLocalVars(String functionName) {
-    return removeVars(functionName, "");
+    return removeVars(functionName + "::");
   }
 
-  public Map<String, Interval> getVariablesWithBounds() {
+  public Map<MemoryLocation, Interval> getVariablesWithBounds() {
     logger.log(Level.FINEST, "apron state: getBounds");
-    Map<String, Interval> vars = new HashMap<>();
-    for (String varName : integerToIndexMap) {
+    Map<MemoryLocation, Interval> vars = new HashMap<>();
+    for (MemoryLocation varName : integerToIndexMap) {
       vars.put(varName, apronState.getBound(apronManager.getManager(), getVariableIndexFor(varName)));
     }
-    for (String varName : realToIndexMap) {
+    for (MemoryLocation varName : realToIndexMap) {
       vars.put(varName, apronState.getBound(apronManager.getManager(), getVariableIndexFor(varName)));
     }
     return vars;
   }
 
-  private ApronState removeVars(String functionName, String varPrefix) {
-    List<String> keysToRemove = new ArrayList<>();
+  private ApronState removeVars(String varPrefix) {
+    List<MemoryLocation> keysToRemove = new ArrayList<>();
     int intsRemoved = 0;
-    for (String var : integerToIndexMap) {
-      if (var.startsWith(functionName+"::"+varPrefix)) {
+    for (MemoryLocation var : integerToIndexMap) {
+      if (var.getAsSimpleString().startsWith(varPrefix)) {
         keysToRemove.add(var);
         intsRemoved++;
       }
     }
 
     int realsRemoved = 0;
-    for (String var : realToIndexMap) {
-      if (var.startsWith(functionName+"::"+varPrefix)) {
+    for (MemoryLocation var : realToIndexMap) {
+      if (var.getAsSimpleString().startsWith(varPrefix)) {
         keysToRemove.add(var);
         realsRemoved++;
       }
@@ -500,7 +473,7 @@ logger.log(Level.FINEST, "apron state: isEqual");
                                          new LinkedList<>(integerToIndexMap),
                                          new LinkedList<>(realToIndexMap),
                                          new HashMap<>(variableToTypeMap),
-                                         block,
+                                         false,
                                          logger);
     newState.integerToIndexMap.removeAll(keysToRemove);
     newState.realToIndexMap.removeAll(keysToRemove);

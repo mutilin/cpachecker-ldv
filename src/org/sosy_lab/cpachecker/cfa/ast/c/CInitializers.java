@@ -37,11 +37,14 @@ import java.util.Set;
 import org.sosy_lab.cpachecker.cfa.ast.FileLocation;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.types.c.CArrayType;
+import org.sosy_lab.cpachecker.cfa.types.c.CBasicType;
 import org.sosy_lab.cpachecker.cfa.types.c.CComplexType.ComplexTypeKind;
 import org.sosy_lab.cpachecker.cfa.types.c.CCompositeType;
 import org.sosy_lab.cpachecker.cfa.types.c.CCompositeType.CCompositeTypeMemberDeclaration;
 import org.sosy_lab.cpachecker.cfa.types.c.CElaboratedType;
 import org.sosy_lab.cpachecker.cfa.types.c.CNumericTypes;
+import org.sosy_lab.cpachecker.cfa.types.c.CPointerType;
+import org.sosy_lab.cpachecker.cfa.types.c.CSimpleType;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCCodeException;
 
@@ -164,7 +167,7 @@ public final class CInitializers {
       } else if (currentType instanceof CElaboratedType) {
         throw new UnrecognizedCCodeException("Unexpected initializer for " + currentType + " that is not fully defined", edge, initializerList);
       } else {
-        throw new UnrecognizedCCodeException("Unexpected initializer list for type " + currentType, edge, initializerList);
+        throw new UnrecognizedCCodeException("Unexpected initializer list for " + currentObject + " with type " + currentType, edge, initializerList);
       }
 
       if (!successful) {
@@ -272,7 +275,7 @@ public final class CInitializers {
         String fieldName = ((CFieldDesignator)designator).getFieldName();
         if (!(currentType instanceof CCompositeType)
             || ((CCompositeType)currentType).getKind() == ComplexTypeKind.ENUM) {
-          throw new UnrecognizedCCodeException("Designated field initializer for non-struct type", edge, designator);
+          throw new UnrecognizedCCodeException("Designated field initializer for non-struct type " + currentType, edge, designator);
         }
 
         successful = handleInitializerForCompositeType(currentSubobject, Optional.of(fieldName),
@@ -281,7 +284,7 @@ public final class CInitializers {
 
       } else if (designator instanceof CArrayDesignator) {
         if (!(currentType instanceof CArrayType)) {
-          throw new UnrecognizedCCodeException("Designated array initializer for non-array type", edge, designator);
+          throw new UnrecognizedCCodeException("Designated array initializer for non-array type " + currentType, edge, designator);
         }
 
         CArrayType arrayType = (CArrayType)currentType;
@@ -301,7 +304,7 @@ public final class CInitializers {
 
       } else if (designator instanceof CArrayRangeDesignator) {
         if (!(currentType instanceof CArrayType)) {
-          throw new UnrecognizedCCodeException("Designated array initializer for non-array type", edge, designator);
+          throw new UnrecognizedCCodeException("Designated array initializer for non-array type " + currentType, edge, designator);
         }
 
         CArrayType arrayType = (CArrayType)currentType;
@@ -369,6 +372,17 @@ public final class CInitializers {
 
       if (targetType.equals(currentType)) {
         break;
+      }
+
+      // String literals may be used to initialize char arrays.
+      // They have a type of (const char)*.
+      if (targetType.equals(CPointerType.POINTER_TO_CONST_CHAR)
+          && currentType instanceof CArrayType) {
+        CType currentElementType = ((CArrayType)currentType).getType();
+        if (currentElementType instanceof CSimpleType
+            && ((CSimpleType) currentElementType).getType() == CBasicType.CHAR) {
+          break;
+        }
       }
       boolean successful;
 

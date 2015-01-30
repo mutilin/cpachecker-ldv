@@ -122,14 +122,13 @@ public class PredicateForcedCovering implements ForcedCovering, StatisticsProvid
       throw new InvalidConfigurationException(PredicateForcedCovering.class.getSimpleName() + " needs a PredicateCPA");
     }
 
-    imgr = new InterpolationManager(predicateCpa.getFormulaManager(),
+    imgr = new InterpolationManager(
                                                    predicateCpa.getPathFormulaManager(),
                                                    predicateCpa.getSolver(),
-                                                   predicateCpa.getFormulaManagerFactory(),
                                                    config,
                                                    predicateCpa.getShutdownNotifier(),
                                                    pLogger);
-    fmgr = predicateCpa.getFormulaManager();
+    fmgr = predicateCpa.getSolver().getFormulaManager();
     predAbsMgr = predicateCpa.getPredicateManager();
     impact = new ImpactUtility(config, fmgr, predAbsMgr);
   }
@@ -210,7 +209,7 @@ public class PredicateForcedCovering implements ForcedCovering, StatisticsProvid
         assert formulas.size() == path.size() + 2;
 
         // C) Compute interpolants
-        CounterexampleTraceInfo interpolantInfo = imgr.buildCounterexampleTrace(formulas, Collections.<ARGState>emptySet());
+        CounterexampleTraceInfo interpolantInfo = imgr.buildCounterexampleTrace(formulas);
 
         if (!interpolantInfo.isSpurious()) {
           logger.log(Level.FINER, "Forced covering unsuccessful.");
@@ -273,8 +272,7 @@ public class PredicateForcedCovering implements ForcedCovering, StatisticsProvid
   private ImmutableList<ARGState> getAbstractionPathTo(ARGState argState) {
     ARGPath pathFromRoot = ARGUtils.getOnePathTo(argState);
 
-    return from(pathFromRoot)
-        .transform(Pair.<ARGState>getProjectionToFirst())
+    return from(pathFromRoot.asStatesList())
         .filter(Predicates.compose(
                 PredicateAbstractState.FILTER_ABSTRACTION_STATES,
                 AbstractStates.toState(PredicateAbstractState.class)))

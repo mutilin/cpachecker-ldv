@@ -30,16 +30,26 @@ public class Z3NativeApiConstants {
 
   /** returns, if the function of the expression is the given operation. */
   public static boolean isOP(long z3context, long expr, int op) {
+    if (!is_app(z3context, expr)) {
+      return false;
+    }
+
     long decl = get_app_decl(z3context, expr);
     return get_decl_kind(z3context, decl) == op;
   }
 
   // CONSTANT VALUES, TODO should we make enums?
 
-  // Z3_l_bool
-  public static final int Z3_L_FALSE = -1;
-  public static final int Z3_L_UNDEF = 0;
-  public static final int Z3_L_TRUE = 1;
+  public static enum Z3_LBOOL {
+    Z3_L_FALSE(-1),
+    Z3_L_UNDEF(0),
+    Z3_L_TRUE(1);
+
+    final int status;
+    Z3_LBOOL(int status) {
+       this.status = status;
+    }
+  }
 
   // Z3_ast_kind
   public static final int Z3_NUMERAL_AST = 0;
@@ -228,4 +238,11 @@ public class Z3NativeApiConstants {
   public static final int Z3_OP_DT_RECOGNISER = 2049;
   public static final int Z3_OP_DT_ACCESSOR = 2050;
   public static final int Z3_OP_UNINTERPRETED = 2051;
+
+  // Z3_ast_print_mode
+  public static final int Z3_PRINT_SMTLIB_FULL = 0;
+  public static final int Z3_PRINT_LOW_LEVEL = 1;
+  public static final int Z3_PRINT_SMTLIB_COMPLIANT = 2;
+  public static final int Z3_PRINT_SMTLIB2_COMPLIANT = 3;
+
 }

@@ -69,7 +69,7 @@ public abstract class AbstractRelevantPredicatesComputer<T> implements RelevantP
 
     boolean result;
     if (fmgr.getBooleanFormulaManager().isFalse(pPredicate.getSymbolicAtom())
-        || fmgr.extractVariables(pPredicate.getSymbolicAtom()).isEmpty()) {
+        || fmgr.extractVariableNames(pPredicate.getSymbolicAtom()).isEmpty()) {
       result = true;
     } else {
       String predicateString = pPredicate.getSymbolicAtom().toString();

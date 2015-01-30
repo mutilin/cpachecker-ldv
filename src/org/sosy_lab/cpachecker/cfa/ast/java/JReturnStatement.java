@@ -23,8 +23,10 @@
  */
 package org.sosy_lab.cpachecker.cfa.ast.java;
 
-import org.sosy_lab.cpachecker.cfa.ast.AReturnStatement;
+import org.sosy_lab.cpachecker.cfa.ast.AbstractReturnStatement;
 import org.sosy_lab.cpachecker.cfa.ast.FileLocation;
+
+import com.google.common.base.Optional;
 
 /**
  *  This class represents the return statement AST node type.
@@ -33,16 +35,18 @@ import org.sosy_lab.cpachecker.cfa.ast.FileLocation;
  *   return [ Expression ] ;
  *
  */
-public class JReturnStatement extends AReturnStatement implements JAstNode {
+public class JReturnStatement extends AbstractReturnStatement implements JAstNode {
 
-  public JReturnStatement(FileLocation pFileLocation, JExpression pExpression) {
-    super(pFileLocation, pExpression);
+  public JReturnStatement(FileLocation pFileLocation, Optional<JExpression> pExpression) {
+    // TODO We absolutely need a correct assignment here that assigns pExpression to a special variable with the return type of the function.
+    super(pFileLocation, pExpression, Optional.<JAssignment>absent());
 
   }
 
+  @SuppressWarnings("unchecked") // safe because Optional is covariant
   @Override
-  public JExpression getReturnValue() {
-    return (JExpression) super.getReturnValue();
+  public Optional<JExpression> getReturnValue() {
+    return (Optional<JExpression>) super.getReturnValue();
   }
 
   @Override

@@ -23,8 +23,9 @@ CPAchecker web page:
 """
 
 # prepare for Python 3
-from __future__ import absolute_import, print_function, unicode_literals
+from __future__ import absolute_import, division, print_function, unicode_literals
 
+import errno
 import glob
 import logging
 import os
@@ -47,14 +48,17 @@ def forceLinuxPath(path):
         return path.replace('\\', '/')
     return path
 
-def killProcess(pid, sig=signal.SIGTERM):
+def killProcess(pid, sig=signal.SIGKILL):
     '''
     This function kills the process and the children in its process group.
     '''
     try:
-        os.killpg(pid, sig)
-    except OSError: # process itself returned and exited before killing
-        pass
+        os.kill(pid, sig)
+    except OSError as e:
+        if e.errno == errno.ESRCH: # process itself returned and exited before killing
+            logging.debug("Failure {0} while killing process {1} with signal {2}: {3}".format(e.errno, pid, sig, e.strerror))
+        else:
+            logging.warning("Failure {0} while killing process {1} with signal {2}: {3}".format(e.errno, pid, sig, e.strerror))
 
 def printOut(value, end='\n'):
     """
@@ -158,6 +162,25 @@ def formatNumber(number, numberOfDigits):
     return "%.{0}f".format(numberOfDigits) % number
 
 
+def parseIntList(s):
+    """
+    Parse a comma-separated list of strings.
+    The list may additionally contain ranges such as "1-5",
+    which will be expanded into "1,2,3,4,5".
+    """
+    result = []
+    for item in s.split(','):
+        item = item.strip().split('-')
+        if len(item) == 1:
+            result.append(int(item[0]))
+        elif len(item) == 2:
+            start, end = item
+            result.extend(range(int(start), int(end)+1))
+        else:
+            raise ValueError("invalid range: '{0}'".format(s))
+    return result
+
+
 def expandFileNamePattern(pattern, baseDir):
     """
     Expand a file name pattern containing wildcards, environment variables etc.
@@ -196,18 +219,6 @@ def getFiles(paths):
     return result if changed else paths
 
 
-def appendFileToFile(sourcename, targetname):
-    source = open(sourcename, 'r')
-    try:
-        target = open(targetname, 'a')
-        try:
-            target.writelines(source.readlines())
-        finally:
-            target.close()
-    finally:
-        source.close()
-
-
 def findExecutable(program, fallback=None, exitOnError=True):
     def isExecutable(programPath):
         return os.path.isfile(programPath) and os.access(programPath, os.X_OK)
@@ -232,6 +243,22 @@ def findExecutable(program, fallback=None, exitOnError=True):
 def commonBaseDir(l):
     # os.path.commonprefix returns the common prefix, not the common directory
     return os.path.dirname(os.path.commonprefix(l))
+
+
+def writeFile(content, *path):
+    """
+    Simply write some content to a file, overriding the file if necessary.
+    """
+    with open(os.path.join(*path), "w") as file:
+        return file.write(content)
+
+
+def readFile(*path):
+    """
+    Read the full content of a file.
+    """
+    with open(os.path.join(*path)) as f:
+        return f.read().strip()
 
 
 def addFilesToGitRepository(baseDir, files, description):
@@ -298,18 +325,23 @@ def getEnergy(oldEnergy=None):
     newEnergy = {}
 
     executable = findExecutable('read-energy.sh', exitOnError=False)
-    if executable is None: # not availableon current system
+    if executable is None: # not available on current system
+        logging.debug('Energy measurement not available because read-energy.sh could not be found.')
         return newEnergy
 
     for energyType in ENERGY_TYPES:
+        logging.debug('Reading {0} energy measurement for value.'.format(energyType))
         energysh = subprocess.Popen([executable, energyType], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         (stdout, stderr) = energysh.communicate()
-        if energysh.returncode:
-            logging.debug('error while reading energy: out={0}, err={1}, retval={2}'.format(stdout, stderr, energysh.returncode))
+        if energysh.returncode or stderr:
+            logging.debug('Error while reading {0} energy measurement: retval={3}, out={1}, err={2}'.format(energyType, stdout, stderr, energysh.returncode))
         try:
             newEnergy[energyType] = int(stdout)
         except ValueError:
+            logging.debug('Invalid value while reading {0} energy measurement: {1}'.format(energyType, stdout, stderr, energysh.returncode))
             pass # do nothing
+
+    logging.debug('Finished reading energy measurements.')
 
     if oldEnergy is None:
         return newEnergy

@@ -39,7 +39,7 @@ class Tool(benchmark.tools.template.BaseTool):
         return self.preprocessedFile
 
 
-    def getCmdline(self, executable, options, sourcefiles, propertyfile):
+    def getCmdline(self, executable, options, sourcefiles, propertyfile, rlimits):
         assert len(sourcefiles) == 1, "only one sourcefile supported"
         sourcefile = sourcefiles[0]
         sourcefile = self.preprocessSourcefile(sourcefile)
@@ -60,9 +60,9 @@ class Tool(benchmark.tools.template.BaseTool):
         verificationSuccessfulFound = False
         verificationFailedFound     = False
 
-        for line in output.splitlines():
+        for line in output:
             if 'A real bug found.' in line:
-                status = result.STR_FALSE_REACH
+                status = result.STATUS_FALSE_REACH
             elif 'VERIFICATION SUCCESSFUL' in line:
                 verificationSuccessfulFound = True
             elif 'VERIFICATION FAILED' in line:
@@ -72,13 +72,13 @@ class Tool(benchmark.tools.template.BaseTool):
             elif 'The program models are identical' in line:
                 status = self.previousStatus
             elif 'Assertion(s) hold trivially.' in line:
-                status = result.STR_TRUE
+                status = result.STATUS_TRUE_PROP
 
         if status is None:
             if verificationSuccessfulFound and not verificationFailedFound:
-                status = result.STR_TRUE
+                status = result.STATUS_TRUE_PROP
             else:
-                status = result.STR_UNKNOWN
+                status = result.STATUS_UNKNOWN
 
         self.previousStatus = status
 

@@ -25,14 +25,13 @@ package org.sosy_lab.cpachecker.core;
 
 import java.util.logging.Level;
 
-import javax.annotation.Nullable;
-
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
+import org.sosy_lab.cpachecker.core.CoreComponentsFactory.SpecAutomatonCompositionType;
 import org.sosy_lab.cpachecker.core.algorithm.Algorithm;
 import org.sosy_lab.cpachecker.core.algorithm.AlgorithmWithPropertyCheck;
 import org.sosy_lab.cpachecker.core.algorithm.AssumptionCollectorAlgorithm;
@@ -47,6 +46,7 @@ import org.sosy_lab.cpachecker.core.algorithm.RestartAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.RestartWithConditionsAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.ResultCheckAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.impact.ImpactAlgorithm;
+import org.sosy_lab.cpachecker.core.algorithm.precondition.PreconditionRefinerAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.testgen.TestGenAlgorithm;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
@@ -64,63 +64,69 @@ import org.sosy_lab.cpachecker.exceptions.CPAException;
 @Options(prefix="analysis")
 public class CoreComponentsFactory {
 
-  @Option(description="use assumption collecting algorithm")
+  public static enum SpecAutomatonCompositionType { NONE, TARGET_SPEC, BACKWARD_TO_ENTRY_SPEC }
+
+  @Option(secure=true, description="use assumption collecting algorithm")
   private boolean collectAssumptions = false;
 
-  @Option(name="algorithm.conditionAdjustment",
+  @Option(secure=true, name="algorithm.conditionAdjustment",
       description="use adjustable conditions algorithm")
   private boolean useAdjustableConditions = false;
 
-  @Option(name="algorithm.CEGAR",
+  @Option(secure=true, name="algorithm.CEGAR",
       description = "use CEGAR algorithm for lazy counter-example guided analysis"
         + "\nYou need to specify a refiner with the cegar.refiner option."
         + "\nCurrently all refiner require the use of the ARGCPA.")
   private boolean useCEGAR = false;
 
-  @Option(description="use a second model checking run (e.g., with CBMC or a different CPAchecker configuration) to double-check counter-examples")
+  @Option(secure=true, description="use a second model checking run (e.g., with CBMC or a different CPAchecker configuration) to double-check counter-examples")
   private boolean checkCounterexamples = false;
 
-  @Option(name="checkCounterexamplesWithBDDCPARestriction",
+  @Option(secure=true, name="checkCounterexamplesWithBDDCPARestriction",
       description="use counterexample check and the BDDCPA Restriction option")
   private boolean useBDDCPARestriction = false;
 
-  @Option(name="algorithm.BMC",
+  @Option(secure=true, name="algorithm.BMC",
       description="use a BMC like algorithm that checks for satisfiability "
         + "after the analysis has finished, works only with PredicateCPA")
   private boolean useBMC = false;
 
-  @Option(name="algorithm.impact",
+  @Option(secure=true, name="algorithm.impact",
       description="Use McMillan's Impact algorithm for lazy interpolation")
   private boolean useImpactAlgorithm = false;
 
   @Option(description="Save results of local analysis")
   private boolean saveLocalResults = false;
 
-  @Option(name="restartAfterUnknown",
+  @Option(secure=true, name="restartAfterUnknown",
       description="restart the analysis using a different configuration after unknown result")
   private boolean useRestartingAlgorithm = false;
 
-  @Option(name="algorithm.predicatedAnalysis",
+  @Option(secure=true, name="algorithm.predicatedAnalysis",
       description="use a predicated analysis which proves if the program satisfies a specified property"
           + " with the help of a PredicateCPA to separate differnt program paths")
   private boolean usePredicatedAnalysisAlgorithm = false;
 
-  @Option(name="algorithm.proofCheck",
+  @Option(secure=true, name="algorithm.proofCheck",
       description="use a proof check algorithm to validate a previously generated proof")
   private boolean useProofCheckAlgorithm = false;
 
-  @Option(name="algorithm.propertyCheck",
+  @Option(secure=true, name="algorithm.propertyCheck",
       description = "do analysis and then check "
       + "if reached set fulfills property specified by ConfigurableProgramAnalysisWithPropertyChecker")
   private boolean usePropertyCheckingAlgorithm = false;
 
-  @Option(name="algorithm.testGen",
+  @Option(secure=true, name="algorithm.testGen",
       description = "use the TestGen Algorithm")
   private boolean useTestGenAlgorithm = false;
 
-  @Option(name="checkProof",
+  @Option(secure=true, name="checkProof",
       description = "do analysis and then check analysis result")
   private boolean useResultCheckAlgorithm = false;
+
+  @Option(secure=true, name="refinePreconditions",
+      description = "Refine the preconditions until the set of unsafe and safe states are disjoint.")
+  private boolean usePreconditionRefinementAlgorithm = false;
 
   private final Configuration config;
   private final LogManager logger;
@@ -162,9 +168,9 @@ public class CoreComponentsFactory {
       algorithm = new ImpactAlgorithm(config, logger, shutdownNotifier, cpa, cfa);
 
     } else {
-      algorithm = CPAAlgorithm.create(cpa, logger, config, shutdownNotifier);
+      algorithm = CPAAlgorithm.create(cpa, logger, config, shutdownNotifier, stats);
 
-      if(usePredicatedAnalysisAlgorithm){
+      if (usePredicatedAnalysisAlgorithm) {
         algorithm = new PredicatedAnalysisAlgorithm(algorithm, cpa, cfa, logger, config, shutdownNotifier);
       }
 
@@ -208,12 +214,20 @@ public class CoreComponentsFactory {
       if (useResultCheckAlgorithm) {
         algorithm = new ResultCheckAlgorithm(algorithm, cpa, cfa, config, logger, shutdownNotifier);
       }
+
+      if (usePreconditionRefinementAlgorithm) {
+        algorithm = new PreconditionRefinerAlgorithm(algorithm, cpa, cfa, config, logger, shutdownNotifier);
+      }
     }
 
     if (stats != null && algorithm instanceof StatisticsProvider) {
       ((StatisticsProvider)algorithm).collectStatistics(stats.getSubStatistics());
     }
     return algorithm;
+  }
+
+  public ReachedSetFactory getReachedSetFactory() {
+    return reachedSetFactory;
   }
 
   public ReachedSet createReachedSet() {
@@ -229,7 +243,8 @@ public class CoreComponentsFactory {
   }
 
   public ConfigurableProgramAnalysis createCPA(final CFA cfa,
-      @Nullable final MainCPAStatistics stats) throws InvalidConfigurationException, CPAException {
+      @Nullable final MainCPAStatistics stats,
+      SpecAutomatonCompositionType composeWithSpecificationCPAs) throws InvalidConfigurationException, CPAException {
     logger.log(Level.FINE, "Creating CPAs");
     if (stats != null) {
       stats.cpaCreationTime.start();
@@ -238,10 +253,18 @@ public class CoreComponentsFactory {
 
       if (useRestartingAlgorithm) {
         // hard-coded dummy CPA
-        return LocationCPA.factory().set(cfa, CFA.class).createInstance();
+        return LocationCPA.factory().set(cfa, CFA.class).setConfiguration(config).createInstance();
       }
 
-      ConfigurableProgramAnalysis cpa = cpaFactory.buildCPAs(cfa);
+      final ConfigurableProgramAnalysis cpa;
+      switch (composeWithSpecificationCPAs) {
+      case TARGET_SPEC:
+        cpa = cpaFactory.buildCPAWithSpecAutomatas(cfa); break;
+      case BACKWARD_TO_ENTRY_SPEC:
+        cpa = cpaFactory.buildCPAWithBackwardSpecAutomatas(cfa); break;
+      default:
+        cpa = cpaFactory.buildCPAs(cfa, null);
+      }
 
       if (stats != null && cpa instanceof StatisticsProvider) {
         ((StatisticsProvider)cpa).collectStatistics(stats.getSubStatistics());

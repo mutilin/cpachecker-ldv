@@ -32,9 +32,9 @@ import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.ShutdownNotifier;
 import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
-import org.sosy_lab.cpachecker.core.defaults.MergeSepOperator;
 import org.sosy_lab.cpachecker.core.defaults.StaticPrecisionAdjustment;
 import org.sosy_lab.cpachecker.core.defaults.StopSepOperator;
+import org.sosy_lab.cpachecker.core.defaults.VariableTrackingPrecision;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractDomain;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.CPAFactory;
@@ -42,6 +42,7 @@ import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.MergeOperator;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustment;
+import org.sosy_lab.cpachecker.core.interfaces.StateSpacePartition;
 import org.sosy_lab.cpachecker.core.interfaces.StopOperator;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.exceptions.InvalidCFAException;
@@ -56,14 +57,14 @@ public final class OctagonCPA implements ConfigurableProgramAnalysis {
     return AutomaticCPAFactory.forType(OctagonCPA.class);
   }
 
-  @Option(name="merge", toUppercase=true, values={"SEP", "JOIN"},
-      description="which merge operator to use for OctagonCPA?")
-  private String mergeType = "SEP";
-
-  @Option(name="octagonLibrary", toUppercase=true, values={"INT", "FLOAT"},
+  @Option(secure=true, name="octagonLibrary", toUppercase=true, values={"INT", "FLOAT"},
       description="with this option the number representation in the"
           + " library will be changed between floats and ints.")
   private String octagonLibrary = "INT";
+
+  @Option(secure=true, name="initialPrecisionType", toUppercase=true, values={"STATIC_FULL", "REFINEABLE_EMPTY"},
+      description="this option determines which initial precision should be used")
+  private String precisionType = "STATIC_FULL";
 
   private final AbstractDomain abstractDomain;
   private final TransferRelation transferRelation;
@@ -82,7 +83,7 @@ public final class OctagonCPA implements ConfigurableProgramAnalysis {
                      throws InvalidConfigurationException, InvalidCFAException {
     config.inject(this);
     logger = log;
-    OctDomain octagonDomain = new OctDomain(logger);
+    OctagonDomain octagonDomain = new OctagonDomain(logger);
 
     if (octagonLibrary.equals("FLOAT")) {
       octagonManager = new OctagonFloatManager();
@@ -90,15 +91,9 @@ public final class OctagonCPA implements ConfigurableProgramAnalysis {
       octagonManager = new OctagonIntManager();
     }
 
-    this.transferRelation = new OctTransferRelation(logger, cfa);
+    this.transferRelation = new OctagonTransferRelation(logger, cfa);
 
-    MergeOperator octagonMergeOp = null;
-    if (mergeType.equals("JOIN")) {
-      octagonMergeOp = new OctMergeJoinOperator(octagonDomain, config);
-    } else {
-      // default is sep
-      octagonMergeOp = MergeSepOperator.getInstance();
-    }
+    MergeOperator octagonMergeOp = OctagonMergeOperator.getInstance(octagonDomain, config);
 
     StopOperator octagonStopOp = new StopSepOperator(octagonDomain);
 
@@ -109,7 +104,16 @@ public final class OctagonCPA implements ConfigurableProgramAnalysis {
     this.config = config;
     this.shutdownNotifier = shutdownNotifier;
     this.cfa = cfa;
-    precision = new OctPrecision(config);
+
+    if (precisionType.equals("REFINEABLE_EMPTY")) {
+      precision = VariableTrackingPrecision.createRefineablePrecision(config,
+          VariableTrackingPrecision.createStaticPrecision(config, cfa.getVarClassification(), getClass()));
+
+      // static full precision is default
+    } else {
+      precision = VariableTrackingPrecision.createStaticPrecision(config, cfa.getVarClassification(), getClass());
+    }
+
   }
 
   public OctagonManager getManager() {
@@ -142,12 +146,12 @@ public final class OctagonCPA implements ConfigurableProgramAnalysis {
   }
 
   @Override
-  public AbstractState getInitialState(CFANode node) {
-    return new OctState(logger, octagonManager);
+  public AbstractState getInitialState(CFANode pNode, StateSpacePartition pPartition) {
+    return new OctagonState(logger, octagonManager);
   }
 
   @Override
-  public Precision getInitialPrecision(CFANode pNode) {
+  public Precision getInitialPrecision(CFANode pNode, StateSpacePartition pPartition) {
     return precision;
   }
 

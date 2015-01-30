@@ -23,7 +23,7 @@
  */
 package org.sosy_lab.cpachecker.util.predicates.smtInterpol;
 
-import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.*;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -31,21 +31,18 @@ import java.io.PrintWriter;
 import java.io.StringReader;
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 import java.util.logging.Level;
 
-import org.sosy_lab.common.Triple;
+import javax.annotation.Nullable;
+
 import org.sosy_lab.common.configuration.Configuration;
-import org.sosy_lab.common.configuration.FileOption;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.io.Files;
 import org.sosy_lab.common.io.Path;
-import org.sosy_lab.common.io.Paths;
+import org.sosy_lab.common.io.PathCounterTemplate;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.core.ShutdownNotifier;
 
@@ -56,7 +53,9 @@ import de.uni_freiburg.informatik.ultimate.logic.Annotation;
 import de.uni_freiburg.informatik.ultimate.logic.FunctionSymbol;
 import de.uni_freiburg.informatik.ultimate.logic.LoggingScript;
 import de.uni_freiburg.informatik.ultimate.logic.Logics;
+import de.uni_freiburg.informatik.ultimate.logic.Model;
 import de.uni_freiburg.informatik.ultimate.logic.QuotedObject;
+import de.uni_freiburg.informatik.ultimate.logic.ReasonUnknown;
 import de.uni_freiburg.informatik.ultimate.logic.SMTLIBException;
 import de.uni_freiburg.informatik.ultimate.logic.Script;
 import de.uni_freiburg.informatik.ultimate.logic.Script.LBool;
@@ -64,6 +63,7 @@ import de.uni_freiburg.informatik.ultimate.logic.Sort;
 import de.uni_freiburg.informatik.ultimate.logic.Term;
 import de.uni_freiburg.informatik.ultimate.logic.TermVariable;
 import de.uni_freiburg.informatik.ultimate.logic.Theory;
+import de.uni_freiburg.informatik.ultimate.logic.simplification.SimplifyDDA;
 import de.uni_freiburg.informatik.ultimate.smtinterpol.smtlib2.ParseEnvironment;
 import de.uni_freiburg.informatik.ultimate.smtinterpol.smtlib2.SMTInterpol;
 import de.uni_freiburg.informatik.ultimate.smtinterpol.smtlib2.TerminationRequest;
@@ -73,50 +73,17 @@ import de.uni_freiburg.informatik.ultimate.smtinterpol.smtlib2.TerminationReques
  * so functions remain declared, if levels are popped.
  * This Wrapper allows to set a logfile for all Smt-Queries (default "smtinterpol.smt2").
  */
-@Options(prefix="cpa.predicate.smtinterpol")
+@Options(prefix="cpa.predicate.solver.smtinterpol")
 class SmtInterpolEnvironment {
 
-  /**
-   * Enum listing possible types for SmtInterpol.
-   */
-  static enum Type {
-    BOOL("Bool"),
-    INT("Int"),
-    REAL("Real");
-    // TODO more types?
-    // TODO merge enum with ModelTypes?
-
-    private final String name;
-
-    private Type(String s) {
-      name = s;
-    }
-
-    @Override
-    public String toString() {
-      return name;
-    }
-  }
-
-  @Option(description="Double check generated results like interpolants and models whether they are correct")
+  @Option(secure=true, description="Double check generated results like interpolants and models whether they are correct")
   private boolean checkResults = false;
 
-  @Option(description="Export solver queries in Smtlib format into a file.")
-  private boolean logAllQueries = false;
+  private final @Nullable PathCounterTemplate smtLogfile;
 
-  @Option(description="Export interpolation queries in Smtlib format into a file.")
-  private boolean logInterpolationQueries = false;
-
-  @Option(name="logfile", description="Export solver queries in Smtlib format into a file.")
-  @FileOption(FileOption.Type.OUTPUT_FILE)
-  private Path smtLogfile = Paths.get("smtinterpol.%03d.smt2");
-
-  @Option(description = "List of further options which will be set to true for SMTInterpol in addition to the default options. "
+  @Option(secure=true, description = "List of further options which will be set to true for SMTInterpol in addition to the default options. "
       + "Format is 'option1,option2,option3'")
   private List<String> furtherOptions = ImmutableList.of();
-
-  /** this is a counter to get distinct logfiles for distinct environments. */
-  private static int logfileCounter = 0;
 
   private final LogManager logger;
   private final ShutdownNotifier shutdownNotifier;
@@ -125,20 +92,18 @@ class SmtInterpolEnvironment {
   private final Script script;
   private final Theory theory;
 
-  /** The stack contains a List of Declarations for each levels on the assertion-stack.
-   * It is used to declare functions again, if stacklevels are popped. */
-  private final List<Collection<Triple<String, Sort[], Sort>>> stack = new ArrayList<>();
-
-  /** This Collection is the toplevel of the stack. */
-  private Collection<Triple<String, Sort[], Sort>> currentDeclarations;
+  /** The current depth of the stack in the solver. */
+  private int stackDepth = 0;
 
   /** The Constructor creates the wrapped Element, sets some options
    * and initializes the logger. */
   public SmtInterpolEnvironment(Configuration config,
-      final LogManager pLogger, final ShutdownNotifier pShutdownNotifier) throws InvalidConfigurationException {
+      final LogManager pLogger, final ShutdownNotifier pShutdownNotifier,
+      @Nullable PathCounterTemplate pSmtLogfile) throws InvalidConfigurationException {
     config.inject(this);
     logger = pLogger;
     shutdownNotifier = checkNotNull(pShutdownNotifier);
+    smtLogfile = pSmtLogfile;
 
     final SMTInterpol smtInterpol = new SMTInterpol(createLog4jLogger(logger),
         new TerminationRequest() {
@@ -148,7 +113,7 @@ class SmtInterpolEnvironment {
           }
         });
 
-    if (logAllQueries && smtLogfile != null) {
+    if (smtLogfile != null) {
       script = createLoggingWrapper(smtInterpol);
     } else {
       script = smtInterpol;
@@ -180,7 +145,7 @@ class SmtInterpolEnvironment {
   }
 
   private Script createLoggingWrapper(SMTInterpol smtInterpol) {
-    String filename = getFilename(smtLogfile);
+    String filename = smtLogfile.getFreshPath().toAbsolutePath().toString();
     try {
       // create a thin wrapper around Benchmark,
       // this allows to write most formulas of the solver to outputfile
@@ -244,19 +209,12 @@ class SmtInterpolEnvironment {
     return theory;
   }
 
-  /**  This function creates a filename with following scheme:
-       first filename is unchanged, then a number is appended */
-  private String getFilename(final Path oldFilename) {
-    String filename = oldFilename.toAbsolutePath().getPath();
-    return String.format(filename, logfileCounter++);
-  }
-
   SmtInterpolInterpolatingProver getInterpolator(SmtInterpolFormulaManager mgr) {
-    if (logInterpolationQueries && smtLogfile != null) {
-      String logfile = getFilename(smtLogfile);
+    if (smtLogfile != null) {
+      Path logfile = smtLogfile.getFreshPath();
 
       try {
-        PrintWriter out = new PrintWriter(Files.openOutputFile(Paths.get(logfile)));
+        PrintWriter out = new PrintWriter(Files.openOutputFile(logfile));
 
         out.println("(set-option :produce-interpolants true)");
         out.println("(set-option :produce-models true)");
@@ -278,6 +236,8 @@ class SmtInterpolEnvironment {
   }
 
   SmtInterpolTheoremProver createProver(SmtInterpolFormulaManager mgr) {
+    checkState(stackDepth == 0,
+        "Not allowed to create a new prover environment while solver stack is still non-empty, parallel stacks are not supported.");
     return new SmtInterpolTheoremProver(mgr, shutdownNotifier);
   }
 
@@ -317,77 +277,43 @@ class SmtInterpolEnvironment {
    * The params for the functionSymbol also have sorts.
    * If you want to declare a new variable, i.e. "X", paramSorts is an empty array. */
   public void declareFun(String fun, Sort[] paramSorts, Sort resultSort) {
-    declareFun(fun, paramSorts, resultSort, true);
-  }
+    FunctionSymbol fsym = theory.getFunction(fun, paramSorts);
 
-  /** This function declares a function.
-   * It is possible to check, if the function was declared before.
-   * If both ('check' and 'declared before') are true, nothing is done. */
-  private void declareFun(String fun, Sort[] paramSorts, Sort resultSort, boolean check) {
-    if (check) {
-      FunctionSymbol fsym = theory.getFunction(fun, paramSorts);
-
-      if (fsym == null) {
-        declareFun(fun, paramSorts, resultSort, false);
-      } else {
-        if (!fsym.getReturnSort().equals(resultSort)) {
-          throw new SMTLIBException("Function " + fun + " is already declared with different definition");
-        }
-      }
-
-    } else {
+    if (fsym == null) {
       script.declareFun(fun, paramSorts, resultSort);
-      if (currentDeclarations != null) {
-        currentDeclarations.add(Triple.of(fun, paramSorts, resultSort));
+    } else {
+      if (!fsym.getReturnSort().equals(resultSort)) {
+        throw new SMTLIBException("Function " + fun + " is already declared with different definition");
       }
     }
   }
 
   public void push(int levels) {
+    checkArgument(levels > 0);
     try {
       script.push(levels);
+      stackDepth += levels;
     } catch (SMTLIBException e) {
       throw new AssertionError(e);
-    }
-
-    for (int i = 0; i < levels; i++) {
-      currentDeclarations = new ArrayList<>();
-      stack.add(currentDeclarations);
     }
   }
 
   /** This function pops levels from the assertion-stack.
    * It also declares popped functions on the lower level. */
   public void pop(int levels) {
-    assert stack.size() >= levels : "not enough levels to remove";
+    checkArgument(levels >= 0);
+    checkState(stackDepth >= levels, "not enough levels to remove");
     try {
-     // for (int i=0;i<levels;i++) script.pop(1); // for old version of SmtInterpol
       script.pop(levels);
+      stackDepth -= levels;
     } catch (SMTLIBException e) {
       throw new AssertionError(e);
-    }
-
-    if (stack.size() - levels > 0) {
-      currentDeclarations = stack.get(stack.size() - levels - 1);
-    } else {
-      currentDeclarations = null;
-    }
-
-    for (int i = 0; i < levels; i++) {
-      final Collection<Triple<String, Sort[], Sort>> topDecl = stack.remove(stack.size() - 1);
-
-      for (Triple<String, Sort[], Sort> function : topDecl) {
-        final String fun = function.getFirst();
-        final Sort[] paramSorts = function.getSecond();
-        final Sort resultSort = function.getThird();
-        declareFun(fun, paramSorts, resultSort, false);
-      }
     }
   }
 
   /** This function adds the term on top of the stack. */
   public void assertTerm(Term term) {
-    assert stack.size() > 0 : "assertions should be on higher levels";
+    checkState(stackDepth > 0, "assertions should be on higher levels");
     try {
       script.assertTerm(term);
     } catch (SMTLIBException e) {
@@ -399,6 +325,7 @@ class SmtInterpolEnvironment {
    * if their conjunction is SAT or UNSAT.
    */
   public boolean checkSat() throws InterruptedException {
+    checkState(stackDepth > 0, "checkSat should be on higher levels");
     try {
       // We actually terminate SmtInterpol during the analysis
       // by using a shutdown listener. However, SmtInterpol resets the
@@ -412,8 +339,21 @@ class SmtInterpolEnvironment {
         return true;
       case UNSAT:
         return false;
-      default:
+      case UNKNOWN:
         shutdownNotifier.shutdownIfNecessary();
+        Object reason = script.getInfo(":reason-unknown");
+        if (!(reason instanceof ReasonUnknown)) {
+          throw new SMTLIBException("checkSat returned UNKNOWN with unknown reason " + reason);
+        }
+        switch ((ReasonUnknown)reason) {
+        case MEMOUT:
+          // SMTInterpol catches OOM, but we want to have it thrown.
+          throw new OutOfMemoryError("Out of memory during SMTInterpol operation");
+        default:
+          throw new SMTLIBException("checkSat returned UNKNOWN with unexpected reason " + reason);
+        }
+
+      default:
         throw new SMTLIBException("checkSat returned " + result);
       }
     } catch (SMTLIBException e) {
@@ -437,21 +377,24 @@ class SmtInterpolEnvironment {
 
   /** This function returns a map,
    * that contains assignments term->term for all terms in terms. */
-  public Map<Term, Term> getValue(Term[] terms) {
-    try {
-      return script.getValue(terms);
-    } catch (SMTLIBException e) {
-      throw new AssertionError(e);
-    }
+  public Model getModel() {
+    return script.getModel();
   }
 
   public Object getInfo(String info) {
     return script.getInfo(info);
   }
 
-  /** This function returns the Sort for a Type. */
-  public Sort sort(Type type) {
-    return sort(type.toString());
+  public Sort getBooleanSort() {
+    return theory.getBooleanSort();
+  }
+
+  public Sort getIntegerSort() {
+    return theory.getNumericSort();
+  }
+
+  public Sort getRealSort() {
+    return theory.getRealSort();
   }
 
   /** This function returns an n-ary sort with given parameters. */
@@ -466,6 +409,15 @@ class SmtInterpolEnvironment {
   public Term term(String funcname, Term... params) {
     try {
       return script.term(funcname, params);
+    } catch (SMTLIBException e) {
+      throw new AssertionError(e);
+    }
+  }
+
+  public Term term(String funcname, BigInteger[] indices,
+      Sort returnSort, Term... params) {
+    try {
+      return script.term(funcname, indices, returnSort, params);
     } catch (SMTLIBException e) {
       throw new AssertionError(e);
     }
@@ -559,7 +511,7 @@ class SmtInterpolEnvironment {
    * Each partition must be a named term or a conjunction of named terms.
    * There should be (n-1) interpolants for n partitions. */
   public Term[] getInterpolants(Term[] partition) {
-    assert stack.size() > 0 : "interpolants should be on higher levels";
+    checkState(stackDepth > 0, "interpolants should be on higher levels");
     try {
       return script.getInterpolants(partition);
     } catch (SMTLIBException e) {
@@ -568,9 +520,18 @@ class SmtInterpolEnvironment {
   }
 
   public Term[] getUnsatCore() {
-    assert stack.size() > 0 : "unsat core should be on higher levels";
+    checkState(stackDepth > 0, "unsat core should be on higher levels");
     try {
       return script.getUnsatCore();
+    } catch (SMTLIBException e) {
+      throw new AssertionError(e);
+    }
+  }
+
+  public Term simplify(Term input) {
+    try {
+      SimplifyDDA s = new SimplifyDDA(script, true);
+      return s.getSimplifiedTerm(input);
     } catch (SMTLIBException e) {
       throw new AssertionError(e);
     }

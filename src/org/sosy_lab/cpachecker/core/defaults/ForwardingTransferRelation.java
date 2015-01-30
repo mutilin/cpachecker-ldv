@@ -29,12 +29,11 @@ import java.util.List;
 
 import javax.annotation.Nullable;
 
-import com.google.common.base.Preconditions;
 import org.sosy_lab.cpachecker.cfa.ast.AFunctionCall;
 import org.sosy_lab.cpachecker.cfa.ast.AParameterDeclaration;
-import org.sosy_lab.cpachecker.cfa.ast.IADeclaration;
-import org.sosy_lab.cpachecker.cfa.ast.IAExpression;
-import org.sosy_lab.cpachecker.cfa.ast.IAStatement;
+import org.sosy_lab.cpachecker.cfa.ast.ADeclaration;
+import org.sosy_lab.cpachecker.cfa.ast.AExpression;
+import org.sosy_lab.cpachecker.cfa.ast.AStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCall;
@@ -44,8 +43,10 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CSimpleDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
 import org.sosy_lab.cpachecker.cfa.ast.java.JDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.java.JExpression;
+import org.sosy_lab.cpachecker.cfa.ast.java.JIdExpression;
 import org.sosy_lab.cpachecker.cfa.ast.java.JMethodOrConstructorInvocation;
 import org.sosy_lab.cpachecker.cfa.ast.java.JParameterDeclaration;
+import org.sosy_lab.cpachecker.cfa.ast.java.JSimpleDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.java.JStatement;
 import org.sosy_lab.cpachecker.cfa.model.ADeclarationEdge;
 import org.sosy_lab.cpachecker.cfa.model.AReturnStatementEdge;
@@ -74,9 +75,10 @@ import org.sosy_lab.cpachecker.cfa.model.java.JReturnStatementEdge;
 import org.sosy_lab.cpachecker.cfa.model.java.JStatementEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
-import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCFAEdgeException;
+
+import com.google.common.base.Preconditions;
 
 /** This Transfer-Relation forwards the method 'getAbstractSuccessors()'
  * to an edge-specific sub-methods ('AssumeEdge', 'DeclarationEdge', ...).
@@ -116,7 +118,7 @@ import org.sosy_lab.cpachecker.exceptions.UnrecognizedCFAEdgeException;
  *  - P type of Precision
  */
 public abstract class ForwardingTransferRelation<S, T extends AbstractState, P extends Precision>
-    implements TransferRelation {
+    extends SingleEdgeTransferRelation {
 
   private static final String NOT_IMPLEMENTED = "this method is not implemented";
 
@@ -150,7 +152,7 @@ public abstract class ForwardingTransferRelation<S, T extends AbstractState, P e
 
 
   @Override
-  public Collection<T> getAbstractSuccessors(
+  public Collection<T> getAbstractSuccessorsForEdge(
       final AbstractState abstractState, final Precision abstractPrecision, final CFAEdge cfaEdge)
       throws CPATransferException {
 
@@ -238,7 +240,7 @@ public abstract class ForwardingTransferRelation<S, T extends AbstractState, P e
       // last node of its CFA, where return edge is from that last node
       // to the return site of the caller function
       final AReturnStatementEdge returnEdge = (AReturnStatementEdge) cfaEdge;
-      return handleReturnStatementEdge(returnEdge, returnEdge.getExpression());
+      return handleReturnStatementEdge(returnEdge);
 
     case BlankEdge:
       return handleBlankEdge((BlankEdge) cfaEdge);
@@ -289,7 +291,7 @@ public abstract class ForwardingTransferRelation<S, T extends AbstractState, P e
 
   /** This function handles assumptions like "if(a==b)" and "if(a!=0)".
    * If the assumption is not fulfilled, NULL should be returned. */
-  protected S handleAssumption(AssumeEdge cfaEdge, IAExpression expression, boolean truthAssumption)
+  protected S handleAssumption(AssumeEdge cfaEdge, AExpression expression, boolean truthAssumption)
       throws CPATransferException {
     if (cfaEdge instanceof CAssumeEdge) {
       return handleAssumption((CAssumeEdge) cfaEdge, (CExpression) expression, truthAssumption);
@@ -316,7 +318,7 @@ public abstract class ForwardingTransferRelation<S, T extends AbstractState, P e
   /** This function handles functioncalls like "f(x)", that calls "f(int a)". */
   @SuppressWarnings("unchecked")
   protected S handleFunctionCallEdge(FunctionCallEdge cfaEdge,
-      List<? extends IAExpression> arguments, List<? extends AParameterDeclaration> parameters,
+      List<? extends AExpression> arguments, List<? extends AParameterDeclaration> parameters,
       String calledFunctionName) throws CPATransferException {
     if (cfaEdge instanceof CFunctionCallEdge) {
       return handleFunctionCallEdge((CFunctionCallEdge) cfaEdge,
@@ -377,7 +379,7 @@ public abstract class ForwardingTransferRelation<S, T extends AbstractState, P e
 
 
   /** This function handles declarations like "int a = 0;" and "int b = !a;". */
-  protected S handleDeclarationEdge(ADeclarationEdge cfaEdge, IADeclaration decl)
+  protected S handleDeclarationEdge(ADeclarationEdge cfaEdge, ADeclaration decl)
       throws CPATransferException {
     if (cfaEdge instanceof CDeclarationEdge) {
       return handleDeclarationEdge((CDeclarationEdge) cfaEdge, (CDeclaration) decl);
@@ -402,7 +404,7 @@ public abstract class ForwardingTransferRelation<S, T extends AbstractState, P e
 
   /** This function handles statements like "a = 0;" and "b = !a;"
    * and calls of external functions. */
-  protected S handleStatementEdge(AStatementEdge cfaEdge, IAStatement statement)
+  protected S handleStatementEdge(AStatementEdge cfaEdge, AStatement statement)
       throws CPATransferException {
     if (cfaEdge instanceof CStatementEdge) {
       return handleStatementEdge((CStatementEdge) cfaEdge, (CStatement) statement);
@@ -427,25 +429,25 @@ public abstract class ForwardingTransferRelation<S, T extends AbstractState, P e
 
 
   /** This function handles functionStatements like "return (x)". */
-  protected S handleReturnStatementEdge(AReturnStatementEdge cfaEdge, @Nullable IAExpression expression)
+  protected S handleReturnStatementEdge(AReturnStatementEdge cfaEdge)
       throws CPATransferException {
     if (cfaEdge instanceof CReturnStatementEdge) {
-      return handleReturnStatementEdge((CReturnStatementEdge) cfaEdge, (CExpression) expression);
+      return handleReturnStatementEdge((CReturnStatementEdge) cfaEdge);
 
     } else if (cfaEdge instanceof JReturnStatementEdge) {
-      return handleReturnStatementEdge((JReturnStatementEdge) cfaEdge, (JExpression) expression);
+      return handleReturnStatementEdge((JReturnStatementEdge) cfaEdge);
 
     } else {
       throw new AssertionError("unknown edge");
     }
   }
 
-  protected S handleReturnStatementEdge(CReturnStatementEdge cfaEdge, @Nullable CExpression expression)
+  protected S handleReturnStatementEdge(CReturnStatementEdge cfaEdge)
       throws CPATransferException {
     throw new AssertionError(NOT_IMPLEMENTED);
   }
 
-  protected S handleReturnStatementEdge(JReturnStatementEdge cfaEdge, @Nullable JExpression expression)
+  protected S handleReturnStatementEdge(JReturnStatementEdge cfaEdge)
       throws CPATransferException {
     throw new AssertionError(NOT_IMPLEMENTED);
   }
@@ -478,7 +480,7 @@ public abstract class ForwardingTransferRelation<S, T extends AbstractState, P e
     throw new AssertionError(NOT_IMPLEMENTED);
   }
 
-  public static boolean isGlobal(final IAExpression exp) {
+  public static boolean isGlobal(final AExpression exp) {
     if (exp instanceof CExpression) {
       return isGlobal((CExpression) exp);
     } else if (exp instanceof JExpression) {
@@ -497,7 +499,14 @@ public abstract class ForwardingTransferRelation<S, T extends AbstractState, P e
   }
 
   protected static boolean isGlobal(final JExpression exp) {
-    // TODO what is 'global' in Java?
+    if (exp instanceof JIdExpression) {
+      JSimpleDeclaration decl = ((JIdExpression) exp).getDeclaration();
+
+      if (decl instanceof ADeclaration) {
+        return ((ADeclaration) decl).isGlobal();
+      }
+    }
+
     return false;
   }
 

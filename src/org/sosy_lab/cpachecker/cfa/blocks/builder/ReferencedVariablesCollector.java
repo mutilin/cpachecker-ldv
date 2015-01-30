@@ -29,8 +29,6 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-import com.google.common.collect.HashMultimap;
-import com.google.common.collect.Multimap;
 import org.sosy_lab.cpachecker.cfa.ast.c.CArraySubscriptExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CAssignment;
 import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression;
@@ -55,11 +53,19 @@ import org.sosy_lab.cpachecker.cfa.ast.c.DefaultCExpressionVisitor;
 import org.sosy_lab.cpachecker.cfa.blocks.ReferencedVariable;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CReturnStatementEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
 import org.sosy_lab.cpachecker.util.CFAUtils;
+
+import com.google.common.base.Optional;
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.Multimap;
+
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 
 /**
@@ -119,6 +125,13 @@ public class ReferencedVariablesCollector {
   private void collectVars(final CFAEdge edge) {
 
     switch (edge.getEdgeType()) {
+
+      case MultiEdge: {
+        for (CFAEdge innerEdge : (MultiEdge)edge) {
+          collectVars(innerEdge);
+        }
+        break;
+      }
       case AssumeEdge: {
         CAssumeEdge assumeEdge = (CAssumeEdge) edge;
         Set<String> vars = collectVars(assumeEdge.getExpression());
@@ -162,10 +175,16 @@ public class ReferencedVariablesCollector {
         }
         break;
       }
+      case ReturnStatementEdge:
+        Optional<CExpression> returnExpr = ((CReturnStatementEdge) edge).getExpression();
+        if (returnExpr.isPresent()) {
+          Set<String> vars = collectVars(returnExpr.get());
+          allVars.addAll(vars);
+        }
+        break;
       case BlankEdge:
       case CallToReturnEdge:
       case FunctionReturnEdge:
-      case ReturnStatementEdge:
         //nothing to do
         break;
       default:
@@ -262,6 +281,7 @@ public class ReferencedVariablesCollector {
     }
 
     @Override
+    @SuppressFBWarnings(value = "SF_SWITCH_NO_DEFAULT", justification = "bug in FindBugs")
     public Void visit(CUnaryExpression pE) {
       UnaryOperator op = pE.getOperator();
 
@@ -271,6 +291,7 @@ public class ReferencedVariablesCollector {
         //$FALL-THROUGH$
       default:
         pE.getOperand().accept(this);
+        break;
       }
       return null;
     }

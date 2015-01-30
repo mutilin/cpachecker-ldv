@@ -103,7 +103,7 @@ public class ReachedSetStrategy extends SequentialReadStrategy {
 
       try {
         stats.transferTimer.start();
-        successors = cpa.getTransferRelation().getAbstractSuccessors(state, initialPrec, null);
+        successors = cpa.getTransferRelation().getAbstractSuccessors(state, initialPrec);
         stats.transferTimer.stop();
 
         for (AbstractState succ : successors) {
@@ -148,6 +148,7 @@ public class ReachedSetStrategy extends SequentialReadStrategy {
     if (!(pReadProof instanceof AbstractState[])) { throw new InvalidConfigurationException(
         "Proof Type requires reached set as set of abstract states."); }
     reachedSet = (AbstractState[])pReadProof;
+    stats.increaseProofSize(reachedSet.length);
     orderReachedSetByLocation(reachedSet);
     } finally {
       stats.preparationTimer.stop();

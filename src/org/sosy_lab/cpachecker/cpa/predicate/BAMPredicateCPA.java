@@ -36,7 +36,6 @@ import org.sosy_lab.cpachecker.core.ShutdownNotifier;
 import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
 import org.sosy_lab.cpachecker.core.interfaces.CPAFactory;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysisWithBAM;
-import org.sosy_lab.cpachecker.core.interfaces.Reducer;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSetFactory;
 import org.sosy_lab.cpachecker.cpa.predicate.relevantpredicates.AuxiliaryComputer;
@@ -45,6 +44,7 @@ import org.sosy_lab.cpachecker.cpa.predicate.relevantpredicates.RefineableOccurr
 import org.sosy_lab.cpachecker.cpa.predicate.relevantpredicates.RelevantPredicatesComputer;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.PathFormulaManager;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.view.FormulaManagerView;
 
 
 /**
@@ -62,7 +62,7 @@ public class BAMPredicateCPA extends PredicateCPA implements ConfigurableProgram
   private final BAMPredicateCPAStatistics stats;
   private final RelevantPredicatesComputer relevantPredicatesComputer;
 
-  @Option(description="whether to use auxiliary predidates for reduction")
+  @Option(secure=true, description="whether to use auxiliary predidates for reduction")
   private boolean auxiliaryPredicateComputer = true;
 
 
@@ -74,16 +74,17 @@ public class BAMPredicateCPA extends PredicateCPA implements ConfigurableProgram
 
     config.inject(this, BAMPredicateCPA.class);
 
+    FormulaManagerView fmgr = getSolver().getFormulaManager();
     RelevantPredicatesComputer relevantPredicatesComputer;
     if (auxiliaryPredicateComputer) {
-      relevantPredicatesComputer = new AuxiliaryComputer(getFormulaManager());
+      relevantPredicatesComputer = new AuxiliaryComputer(fmgr);
     } else {
-      relevantPredicatesComputer = new RefineableOccurrenceComputer(getFormulaManager());
+      relevantPredicatesComputer = new RefineableOccurrenceComputer(fmgr);
     }
     relevantPredicatesComputer = new CachingRelevantPredicatesComputer(relevantPredicatesComputer);
     this.relevantPredicatesComputer = relevantPredicatesComputer;
 
-    reducer = new BAMPredicateReducer(getFormulaManager().getBooleanFormulaManager(), this, relevantPredicatesComputer);
+    reducer = new BAMPredicateReducer(fmgr.getBooleanFormulaManager(), this, relevantPredicatesComputer);
     blk = pBlk;
     stats = new BAMPredicateCPAStatistics(reducer);
   }
@@ -97,14 +98,14 @@ public class BAMPredicateCPA extends PredicateCPA implements ConfigurableProgram
   }
 
   @Override
-  public Reducer getReducer() {
+  public BAMPredicateReducer getReducer() {
     return reducer;
   }
 
   public void setPartitioning(BlockPartitioning partitioning) {
     blk.setPartitioning(partitioning);
   }
-  
+
   public void clearAllCaches() {
     reducer.clearCaches();
     relevantPredicatesComputer.clear();

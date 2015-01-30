@@ -36,6 +36,7 @@ import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.CoreComponentsFactory;
 import org.sosy_lab.cpachecker.core.ShutdownNotifier;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
+import org.sosy_lab.cpachecker.core.interfaces.StateSpacePartition;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
@@ -108,12 +109,12 @@ public class ResultCheckAlgorithm implements Algorithm, StatisticsProvider {
         ProofCheckAlgorithm checker = new ProofCheckAlgorithm(cpa, config, logger, shutdownNotifier, pReachedSet);
         CoreComponentsFactory factory = new CoreComponentsFactory(config, logger, shutdownNotifier);
         ReachedSet reached = factory.createReachedSet();
-        reached.add(cpa.getInitialState(analyzedProgram.getMainFunction()),
-            cpa.getInitialPrecision(analyzedProgram.getMainFunction()));
+        reached.add(cpa.getInitialState(analyzedProgram.getMainFunction(), StateSpacePartition.getDefaultPartition()),
+            cpa.getInitialPrecision(analyzedProgram.getMainFunction(), StateSpacePartition.getDefaultPartition()));
         result = checker.run(reached);
       } catch (InvalidConfigurationException e) {
         result = false;
-      } catch (InterruptedException e1){
+      } catch (InterruptedException e1) {
         logger.log(Level.INFO, "Timed out. Checking incomplete.");
         return false;
       } finally {

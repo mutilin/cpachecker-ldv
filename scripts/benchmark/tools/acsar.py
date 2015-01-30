@@ -1,7 +1,6 @@
 import os
 import subprocess
 
-import benchmark.filewriter as filewriter
 import benchmark.util as Util
 import benchmark.tools.template
 import benchmark.result as result
@@ -16,7 +15,7 @@ class Tool(benchmark.tools.template.BaseTool):
         return 'Acsar'
 
 
-    def getCmdline(self, executable, options, sourcefiles, propertyfile):
+    def getCmdline(self, executable, options, sourcefiles, propertyfile, rlimits):
         assert len(sourcefiles) == 1, "only one sourcefile supported"
         sourcefile = sourcefiles[0]
 
@@ -33,11 +32,12 @@ class Tool(benchmark.tools.template.BaseTool):
             "ERROR:", "ERROR_LOCATION:").replace(
             "errorFn();", "goto ERROR_LOCATION; ERROR_LOCATION:;")
         newFilename = sourcefile + "_acsar.c"
-        filewriter.writeFile(newFilename, content)
+        Util.writeFile(newFilename, content)
         return newFilename
 
 
     def getStatus(self, returncode, returnsignal, output, isTimeout):
+        output = '\n'.join(output)
         if "syntax error" in output:
             status = "SYNTAX ERROR"
 
@@ -63,13 +63,13 @@ class Tool(benchmark.tools.template.BaseTool):
             status = "KILLED"
 
         elif "Error Location <<ERROR_LOCATION>> is not reachable" in output:
-            status = result.STR_TRUE
+            status = result.STATUS_TRUE_PROP
 
         elif "Error Location <<ERROR_LOCATION>> is reachable via the following path" in output:
-            status = result.STR_FALSE_REACH
+            status = result.STATUS_FALSE_REACH
 
         else:
-            status = result.STR_UNKNOWN
+            status = result.STATUS_UNKNOWN
 
         # delete tmp-files
         os.remove(self.prepSourcefile)

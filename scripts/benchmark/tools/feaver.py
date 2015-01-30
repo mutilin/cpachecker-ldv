@@ -1,6 +1,5 @@
 import os
 
-import benchmark.filewriter as filewriter
 import benchmark.util as Util
 import benchmark.tools.template
 import benchmark.result as result
@@ -15,7 +14,7 @@ class Tool(benchmark.tools.template.BaseTool):
         return 'Feaver'
 
 
-    def getCmdline(self, executable, options, sourcefiles, propertyfile):
+    def getCmdline(self, executable, options, sourcefiles, propertyfile, rlimits):
         assert len(sourcefiles) == 1, "only one sourcefile supported"
         sourcefile = sourcefiles[0]
         
@@ -29,11 +28,12 @@ class Tool(benchmark.tools.template.BaseTool):
         content = open(sourcefile, "r").read()
         content = content.replace("goto ERROR;", "assert(0);")
         newFilename = "tmp_benchmark_feaver.c"
-        filewriter.writeFile(newFilename, content)
+        Util.writeFile(newFilename, content)
         return newFilename
 
 
     def getStatus(self, returncode, returnsignal, output, isTimeout):
+        output = '\n'.join(output)
         if "collect2: ld returned 1 exit status" in output:
             status = "COMPILE ERROR"
 
@@ -50,13 +50,13 @@ class Tool(benchmark.tools.template.BaseTool):
             status = "ERROR"
 
         elif "Error Found:" in output:
-            status = result.STR_FALSE_REACH
+            status = result.STATUS_FALSE_REACH
 
         elif "No Errors Found" in output:
-            status = result.STR_TRUE
+            status = result.STATUS_TRUE_PROP
 
         else:
-            status = result.STR_UNKNOWN
+            status = result.STATUS_UNKNOWN
 
         # delete tmp-files
         for tmpfile in [self.prepSourcefile, self.prepSourcefile[0:-1] + "M",

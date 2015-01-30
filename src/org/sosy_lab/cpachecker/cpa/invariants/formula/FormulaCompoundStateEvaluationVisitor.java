@@ -108,6 +108,12 @@ public class FormulaCompoundStateEvaluationVisitor implements FormulaEvaluationV
           if (value.equals(pEqual.getOperand2())) {
             return CompoundInterval.logicalTrue();
           }
+          if (value instanceof Exclusion) {
+            Exclusion<CompoundInterval> exclusion = (Exclusion<CompoundInterval>) value;
+            if (exclusion.getExcluded().equals(pEqual.getOperand2())) {
+              return CompoundInterval.logicalFalse();
+            }
+          }
           if (value instanceof Variable) {
             var = (Variable<CompoundInterval>) value;
             value = pEnvironment.get(var.getName());
@@ -123,6 +129,12 @@ public class FormulaCompoundStateEvaluationVisitor implements FormulaEvaluationV
           if (value.equals(pEqual.getOperand1())) {
             return CompoundInterval.logicalTrue();
           }
+          if (value instanceof Exclusion) {
+            Exclusion<CompoundInterval> exclusion = (Exclusion<CompoundInterval>) value;
+            if (exclusion.getExcluded().equals(pEqual.getOperand1())) {
+              return CompoundInterval.logicalFalse();
+            }
+          }
           if (value instanceof Variable) {
             var = (Variable<CompoundInterval>) value;
             value = pEnvironment.get(var.getName());
@@ -133,6 +145,16 @@ public class FormulaCompoundStateEvaluationVisitor implements FormulaEvaluationV
       }
     }
     return result;
+  }
+
+  @Override
+  public CompoundInterval visit(Exclusion<CompoundInterval> pExclusion,
+      Map<? extends String, ? extends InvariantsFormula<CompoundInterval>> pEnvironment) {
+    CompoundInterval excluded = pExclusion.getExcluded().accept(this, pEnvironment);
+    if (excluded.isSingleton()) {
+      return excluded.invert();
+    }
+    return CompoundInterval.top();
   }
 
   @Override

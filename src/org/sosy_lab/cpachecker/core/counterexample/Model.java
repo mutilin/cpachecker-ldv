@@ -26,6 +26,7 @@ package org.sosy_lab.cpachecker.core.counterexample;
 import static com.google.common.base.Preconditions.checkState;
 
 import java.io.IOException;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
@@ -42,12 +43,14 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Joiner.MapJoiner;
 import com.google.common.collect.ForwardingMap;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
+import com.google.common.collect.Multimap;
 import com.google.common.collect.Ordering;
 
 /**
- * This class represents an assignment of values to program variables
+ * This class represents an assignment of concrete values to program variables
  * along a path. Each variable can have several assignments with different
  * SSA indices if it gets re-assigned along the path.
  *
@@ -61,17 +64,19 @@ public class Model extends ForwardingMap<AssignableTerm, Object> implements Appe
     Uninterpreted,
     Integer,
     Real,
+    FloatingPoint,
     Bitvector;
   }
 
   public static interface AssignableTerm {
-
     public TermType getType();
     public String getName();
-
   }
 
   public static class Constant implements AssignableTerm {
+
+    protected final String name;
+    protected final TermType type;
 
     public Constant(final String name, final TermType type) {
       this.name = name;
@@ -118,8 +123,6 @@ public class Model extends ForwardingMap<AssignableTerm, Object> implements Appe
           && type.equals(otherConstant.type);
     }
 
-    protected final String name;
-    protected final TermType type;
   }
 
   public static class Variable extends Constant implements AssignableTerm {
@@ -167,12 +170,15 @@ public class Model extends ForwardingMap<AssignableTerm, Object> implements Appe
     private final int ssaIndex;
   }
 
+  /**
+   * A function call can have a concrete return value.
+   * TODO: Describe why handling pointers/references is not needed in this case
+   */
   public static class Function implements AssignableTerm {
 
     private final String mName;
     private final TermType mReturnType;
     private final List<Object> mArguments;
-
     private int mHashCode;
 
     public Function(String pName, TermType pReturnType, Object[] pArguments) {
@@ -238,7 +244,9 @@ public class Model extends ForwardingMap<AssignableTerm, Object> implements Appe
   }
 
   private final Map<AssignableTerm, Object> mModel;
-  private final CFAPathWithAssignments assignments;
+
+  private final CFAPathWithAssumptions assignments;
+  private final Multimap<CFAEdge, AssignableTerm> assignableTermsPerCFAEdge;
 
   @Override
   protected Map<AssignableTerm, Object> delegate() {
@@ -251,17 +259,27 @@ public class Model extends ForwardingMap<AssignableTerm, Object> implements Appe
 
   private Model() {
     mModel = ImmutableMap.of();
-    assignments = new CFAPathWithAssignments();
+    assignments = new CFAPathWithAssumptions();
+    assignableTermsPerCFAEdge = ImmutableListMultimap.of();
   }
 
   public Model(Map<AssignableTerm, Object> content) {
     mModel = ImmutableMap.copyOf(content);
-    assignments = new CFAPathWithAssignments();
+    assignments = new CFAPathWithAssumptions();
+    assignableTermsPerCFAEdge = ImmutableListMultimap.of();
   }
 
-  public Model(Map<AssignableTerm, Object> content, CFAPathWithAssignments pAssignments) {
+  public Model(Map<AssignableTerm, Object> content, CFAPathWithAssumptions pAssignments) {
     mModel = ImmutableMap.copyOf(content);
     assignments = pAssignments;
+    assignableTermsPerCFAEdge = ImmutableListMultimap.of();
+  }
+
+  public Model(Map<AssignableTerm, Object> content, CFAPathWithAssumptions pAssignments,
+      Multimap<CFAEdge, AssignableTerm> pAssignableTermsPerCFAEdge) {
+    mModel = ImmutableMap.copyOf(content);
+    assignments = pAssignments;
+    assignableTermsPerCFAEdge = pAssignableTermsPerCFAEdge;
   }
 
   /**
@@ -269,23 +287,55 @@ public class Model extends ForwardingMap<AssignableTerm, Object> implements Appe
    * but additionally has information about when each variable was assigned.
    * @see Model#getAssignedTermsPerEdge()
    */
-  public Model withAssignmentInformation(CFAPathWithAssignments pAssignments) {
+  public Model withAssignmentInformation(CFAPathWithAssumptions pAssignments) {
     checkState(assignments.isEmpty());
     return new Model(mModel, pAssignments);
   }
 
   /**
-   * Return a path that indicates which terms where assigned at which edge.
+   * Return a new model that is equal to the current one,
+   * but additionally has information about when each variable was assigned,
+   * and which
+   * @see Model#getAssignedTermsPerEdge()
+   */
+  public Model withAssignmentInformation(CFAPathWithAssumptions pAssignments,
+      Multimap<CFAEdge, AssignableTerm> pAssignableTermsPerCFAEdge) {
+    checkState(assignments.isEmpty());
+    return new Model(mModel, pAssignments);
+  }
+
+  /**
+   * Return a path that indicates which variables where assigned which values at
+   * what edge. Note that not every value for every variable is available.
+   */
+  @Nullable
+  public CFAPathWithAssumptions getCFAPathWithAssignments() {
+    return assignments;
+  }
+
+  /**
+   * Return a path that indicates which terms were assigned at which edge.
    * Note that it is not guaranteed that this is information is present for
    * all terms, thus <code>this.getAssignedTermsPerEdge().getAllAssignedTerms()</code> may
    * be smaller than <code>this.keySet()</code> (but not larger).
    */
-  public CFAPathWithAssignments getAssignedTermsPerEdge() {
-    return assignments;
+  public Multimap<CFAEdge, AssignableTerm> getAssignedTermsPerEdge() {
+    return assignableTermsPerCFAEdge;
+  }
+
+  /**
+   * Returns a collection of {@link AssignableTerm}} terms that were assigned a the given
+   * {@link CFAEdge} edge.
+   *
+   * @param pEdge All terms that were assigned at this edge are returned-
+   * @return A collection of terms assigned at the given edge.
+   */
+  public Collection<AssignableTerm> getAllAssignedTerms(CFAEdge pEdge) {
+    return assignableTermsPerCFAEdge.get(pEdge);
   }
 
   @Nullable
-  public Map<ARGState, CFAEdgeWithAssignments> getExactVariableValues(ARGPath pPath) {
+  public Map<ARGState, CFAEdgeWithAssumptions> getExactVariableValues(ARGPath pPath) {
 
     if (assignments.isEmpty()) {
       return null;
@@ -295,7 +345,7 @@ public class Model extends ForwardingMap<AssignableTerm, Object> implements Appe
   }
 
   @Nullable
-  public CFAPathWithAssignments getExactVariableValuePath(List<CFAEdge> pPath) {
+  public CFAPathWithAssumptions getExactVariableValuePath(List<CFAEdge> pPath) {
 
     if (assignments.isEmpty()) {
       return null;

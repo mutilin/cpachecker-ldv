@@ -23,7 +23,7 @@
  */
 package org.sosy_lab.cpachecker.util.predicates.z3;
 
-import org.sosy_lab.cpachecker.util.NativeLibraries;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 /** This class contains the native calls for Z3.
  *
@@ -32,27 +32,193 @@ import org.sosy_lab.cpachecker.util.NativeLibraries;
  * should not be incremented. The object will be destroyed after next usage.
  * If the user wants to use the object several times, he has to increment
  * the reference (only once!), so that the object remains valid. */
+@SuppressWarnings("unused")
 public final class Z3NativeApi {
-
-  static {
-    NativeLibraries.loadLibrary("z3j");
-  }
 
   // Helper Classes,
   // they are used during the native operations
   // and can be accessed later to get the values.
   public static class PointerToInt {
-    public int value;
+    @SuppressFBWarnings(value = "UUF_UNUSED_FIELD",
+        justification = "Read by native code")
+    int value;
   }
 
   public static class PointerToLong {
-    public long value;
+    @SuppressFBWarnings(value = "UUF_UNUSED_FIELD",
+        justification = "Read by native code")
+    long value;
   }
 
   public static class PointerToString {
-    public String value;
+    @SuppressFBWarnings(value = "UUF_UNUSED_FIELD",
+        justification = "Read by native code")
+    String value;
   }
 
+  /** Start optimization - Nikolaj Bjorner branch. **/
+
+  /**
+   * Create a new optimize context.
+   *
+   * User must use {@link #optimize_inc_ref}
+   * and {@link #optimize_dec_ref} to manage optimize objects.
+   * Even if the context was created using
+   * {@link #mk_context} instead of {@link #mk_context_rc}.
+   *
+   * @param context Z3_context pointer
+   * @return Z3_optimize pointer.
+   */
+  public static native long mk_optimize(long context);
+
+  /**
+   * Increment the reference counter of the optimize context.
+   * @param context Z3_context pointer
+   * @param optimize Z3_optimize pointer
+   */
+  public static native void optimize_inc_ref(long context, long optimize);
+
+  /**
+   * Decrement the reference counter of the optimize context.
+   * @param context Z3_context pointer
+   * @param optimize Z3_optimize pointer
+   */
+  public static native void optimize_dec_ref(long context, long optimize);
+
+  /**
+   * Add a maximization constraint.
+   *
+   * @param context Z3_context pointer
+   * @param optimize Z3_optimize pointer
+   * @param ast Z3_ast arithmetical term to maximize.
+   * @return objective index
+   */
+  public static native int optimize_maximize(long context, long optimize, long ast);
+
+  /**
+   * Add a minimization constraint.
+   *
+   * @param context Z3_context pointer
+   * @param optimize Z3_optimize pointer
+   * @param ast Z3_ast arithmetical term to maximize.
+   * @return objective index
+   */
+  public static native int optimize_minimize(long context, long optimize, long ast);
+
+
+  /**
+   * Check consistency and produce optimal values.
+   *
+   * @param context Z3_context pointer
+   * @param optimize Z3_optimize pointer
+   * @return status as {@link Z3NativeApiConstants.Z3_LBOOL}:
+   *   false, undefined or true.
+   */
+  public static native int optimize_check(long context, long optimize);
+
+  /**
+   * \brief Retrieve the model for the last #Z3_optimize_check
+   * The error handler is invoked if a model is not available because
+   * the commands above were not invoked for the given optimization
+   * solver, or if the result was \c Z3_L_FALSE.
+   * @param context Z3_context pointer
+   * @param optimize Z3_optimize pointer
+   * @return Z3_model pointer
+   */
+  public static native long optimize_get_model(long context, long optimize);
+
+  /**
+   * Assert hard constraint to the optimization context.
+   *
+   * @param context Z3_context pointer
+   * @param optimize Z3_optimize pointer
+   * @param ast Z3_ast imposed constraints
+   */
+  public static native void optimize_assert(
+      long context, long optimize, long ast);
+
+  /**
+   * Create a backtracking point.
+   *
+   * The optimize solver contains a set of rules, added facts and assertions.
+   * The set of rules, facts and assertions are restored upon calling {#link #optimize_pop}
+   *
+   * @param c Z3_context
+   * @param d Z3_optimize
+   */
+  public static native void optimize_push(long c, long d);
+
+  /**
+   * Backtrack one level.
+   * The number of calls to pop cannot exceed calls to push.
+   *
+   * @param c Z3_context
+   * @param d Z3_optimize
+   */
+  public static native void optimize_pop(long c, long d);
+
+  /**
+   * Set parameters on optimization context.
+   *
+   * @param c Z3_context context
+   * @param o Z3_optimize optimization context
+   * @param p Z3_params parameters
+   */
+  public static native void optimize_set_params(long c, long o, long p);
+
+    /**
+     * Return the parameter description set for the given optimize object.
+     *
+     * @param c Z3_context context
+     * @param o Z3_optimize optimization context
+     * @return Z3_param_descrs
+     */
+    public static native long optimize_get_param_descrs(long c, long o);
+
+    /**
+     * Retrieve lower bound value or approximation for the i'th optimization objective.
+     *
+     * @param c Z3_context context
+     * @param o Z3_optimize optimization context
+     * @param idx index of optimization objective
+     *
+     * @return Z3_ast
+     */
+    public static native long optimize_get_lower(long c, long o, int idx);
+
+    /**
+     * Retrieve upper bound value or approximation for the i'th optimization objective.
+     *
+     * @param c Z3_context context
+     * @param o Z3_optimize optimization context
+     * @param idx index of optimization objective
+     *
+     * @return Z3_ast
+     */
+    public static native long optimize_get_upper(long c, long o, int idx);
+
+    /**
+     * @param c Z3_context context.
+     * @param o Z3_optimize optimization context.
+     * @return Current context as a string.
+     */
+    public static native String optimize_to_string(long c, long o);
+
+    /**
+     * @param c Z3_context
+     * @param t Z3_optimize
+     * @return Description of parameters accepted by optimize
+     */
+    public static native String optimize_get_help(long c, long t);
+
+    /**
+     * Retrieve statistics information from the last call to {@link #optimize_check}
+     *
+     * @return Z3_stats
+     */
+    public static native long optimize_get_statistics(long c, long d);
+
+  /** -- end optimization -- **/
 
   // CREATE CONFIGURATION
   public static native void global_param_set(String param_id, String param_value);
@@ -66,7 +232,7 @@ public final class Z3NativeApi {
 
   // CREATE CONTEXT
   public static native long mk_context(long config);
-  public static native long mk_context_rc(long context);
+  public static native long mk_context_rc(long config);
   public static native void del_context(long context);
   public static native void inc_ref(long context, long ast);
   public static native void dec_ref(long context, long ast);
@@ -143,13 +309,12 @@ public final class Z3NativeApi {
   public static native long mk_eq(long context, long a1, long a2);
   private static native long mk_distinct(long context, int len, long[] as);
   public static native long mk_not(long context, long a1);
-  public static native long mk_interp(long context, long a1);
   public static native long mk_ite(long context, long a1, long a2, long a3);
   public static native long mk_iff(long context, long a1, long a2);
   public static native long mk_implies(long context, long a1, long a2);
   public static native long mk_xor(long context, long a1, long a2);
-  private static native long mk_and(long context, int len, long[] as);
-  private static native long mk_or(long context, int len, long[] as);
+  public static native long mk_and(long context, int len, long[] as);
+  public static native long mk_or(long context, int len, long[] as);
 
   public static long mk_distinct(long context, long... as) {
     return mk_distinct(context, as.length, as);
@@ -164,7 +329,7 @@ public final class Z3NativeApi {
   }
 
   // ARITHMETIC: INTEGERS AND REALS
-  private static native long mk_add(long context, int len, long[] as);
+  public static native long mk_add(long context, int len, long[] as);
   private static native long mk_mul(long context, int len, long[] as);
   private static native long mk_sub(long context, int len, long[] as);
   public static native long mk_unary_minus(long context, long a1);
@@ -390,9 +555,44 @@ public final class Z3NativeApi {
 
   // MODIFIERS
   public static native long update_term(long context, long a1, int a2, long[] a3);
-  public static native long substitute(long context, long a1, int a2, long[] a3, long[] a4);
-  public static native long substitute_vars(long context, long a1, int a2, long[] a3);
-  public static native long translate(long context, long a1, long a2);
+
+  /**
+   * Substitute every occurrence of <code>from[i]</code> in <code>a</code>
+   * with <code>to[i]</code>, for <code>i</code> smaller than
+   * <code>num_exprs</code>.
+   * The result is the new AST. The arrays <code>from</code> and <code>to</code>
+   * must have size <code>num_exprs</code>.
+   * For every <code>i</code> smaller than <code>num_exprs</code>, we must have
+   * that sort of <code>from[i]</code> must be equal to sort of
+   * <code>to[i]</code>.
+   *
+   * @param context Z3_context
+   * @param a Z3_ast Input formula
+   * @param num_exprs Number of expressions to substitute
+   * @param from Change from
+   * @param to Change to
+   * @return Formula with substitutions applied.
+   */
+  public static native long substitute(long context, long a, int num_exprs,
+        long[] from, long[] to);
+
+  /**
+   * Substitute the free variables in <code>a</code> with the expressions in
+   * <code>to</code>.
+   * For every <code>i</code> smaller than <code>num_exprs</code>, the variable
+   * with de-Bruijn
+   * index <code>i</code> is replaced with term <code>to[i]</code>.
+   *
+   * @param context Z3_context
+   * @param a Z3_ast Input formula
+   * @param num_exprs Number of expressions to substitute
+   * @param to Change to
+   * @return Formula with substitutions applied.
+   */
+  public static native long substitute_vars(long context, long a, int num_exprs,
+      long[] to);
+  public static native long translate(long contextSource, long a,
+      long contextTarget);
 
 
   // MODELS
@@ -425,160 +625,170 @@ public final class Z3NativeApi {
   public static native long func_entry_get_arg(long context, long a1, int a2);
 
 
-  // INTERACTION LOGGING
-  public static native boolean open_log(String filename);
-  public static native void append_log(String s);
-  public static native void close_log();
-  public static native void toggle_warning_messages(boolean enabled);
+    // INTERACTION LOGGING
+    public static native boolean open_log(String filename);
+    public static native void append_log(String s);
+    public static native void close_log();
+    public static native void toggle_warning_messages(boolean enabled);
 
 
-  // STRING CONVERSION
-  public static native void set_ast_print_mode(long context, int mode);
-  public static native String ast_to_string(long context, long ast);
-  public static native String pattern_to_string(long context, long pattern);
-  public static native String sort_to_string(long context, long sort);
-  public static native String func_decl_to_string(long context, long func_decl);
-  public static native String model_to_string(long context, long model);
-  public static native String benchmark_to_smtlib_string(long context, String name, String logic, String status, String attributes, int len, long[] assumptions, long ast);
+    // STRING CONVERSION
+    public static native void set_ast_print_mode(long context, int mode);
+    public static native String ast_to_string(long context, long ast);
+    public static native String pattern_to_string(long context, long pattern);
+    public static native String sort_to_string(long context, long sort);
+    public static native String func_decl_to_string(long context, long func_decl);
+    public static native String model_to_string(long context, long model);
+    public static native String benchmark_to_smtlib_string(long context, String name, String logic, String status, String attributes, int len, long[] assumptions, long ast);
 
 
-  // PARSER INTERFACE
-  private static native long parse_smtlib2_string(long context, String str, int len1, long[] sort_symbols, long[] sorts, int len2, long[] decl_symbols, long[] decls);
-  private static native long parse_smtlib2_file(long context, String filename, int len1, long[] sort_symbols, long[] sorts, int len2, long[] decl_symbols, long[] decls);
-  private static native void parse_smtlib_string(long context, String str, int len1, long[] sort_symbols, long[] sorts, int len2, long[] decl_symbols, long[] decls);
-  private static native void parse_smtlib_file(long context, String filename, int len1, long[] sort_symbols, long[] sorts, int len2, long[] decl_symbols, long[] decls);
+    // PARSER INTERFACE
+    private static native long parse_smtlib2_string(long context, String str, int len1, long[] sort_symbols, long[] sorts, int len2, long[] decl_symbols, long[] decls);
+    private static native long parse_smtlib2_file(long context, String filename, int len1, long[] sort_symbols, long[] sorts, int len2, long[] decl_symbols, long[] decls);
+    private static native void parse_smtlib_string(long context, String str, int len1, long[] sort_symbols, long[] sorts, int len2, long[] decl_symbols, long[] decls);
+    private static native void parse_smtlib_file(long context, String filename, int len1, long[] sort_symbols, long[] sorts, int len2, long[] decl_symbols, long[] decls);
 
-  public static long parse_smtlib2_string(long context, String str, long[] sort_symbols, long[] sorts, long[] decl_symbols, long[] decls) {
-    return parse_smtlib2_string(context, str, sort_symbols.length, sort_symbols, sorts, decl_symbols.length, decl_symbols, decls);
-  }
+    public static long parse_smtlib2_string(long context, String str, long[] sort_symbols, long[] sorts, long[] decl_symbols, long[] decls) {
+      return parse_smtlib2_string(context, str, sort_symbols.length, sort_symbols, sorts, decl_symbols.length, decl_symbols, decls);
+    }
 
-  public static long parse_smtlib2_file(long context, String filename, long[] sort_symbols, long[] sorts, long[] decl_symbols, long[] decls) {
-    return parse_smtlib2_file(context, filename, sort_symbols.length, sort_symbols, sorts, decl_symbols.length, decl_symbols, decls);
-  }
+    public static long parse_smtlib2_file(long context, String filename, long[] sort_symbols, long[] sorts, long[] decl_symbols, long[] decls) {
+      return parse_smtlib2_file(context, filename, sort_symbols.length, sort_symbols, sorts, decl_symbols.length, decl_symbols, decls);
+    }
 
-  public static void parse_smtlib_string(long context, String str, long[] sort_symbols, long[] sorts, long[] decl_symbols, long[] decls) {
-    parse_smtlib_string(context, str, sort_symbols.length, sort_symbols, sorts, decl_symbols.length, decl_symbols, decls);
-  }
+    public static void parse_smtlib_string(long context, String str, long[] sort_symbols, long[] sorts, long[] decl_symbols, long[] decls) {
+      parse_smtlib_string(context, str, sort_symbols.length, sort_symbols, sorts, decl_symbols.length, decl_symbols, decls);
+    }
 
-  public static void parse_smtlib_file(long context, String filename, long[] sort_symbols, long[] sorts, long[] decl_symbols, long[] decls) {
-    parse_smtlib_string(context, filename, sort_symbols.length, sort_symbols, sorts, decl_symbols.length, decl_symbols, decls);
-  }
+    public static void parse_smtlib_file(long context, String filename, long[] sort_symbols, long[] sorts, long[] decl_symbols, long[] decls) {
+      parse_smtlib_string(context, filename, sort_symbols.length, sort_symbols, sorts, decl_symbols.length, decl_symbols, decls);
+    }
 
-  public static native int get_smtlib_num_formulas(long context);
-  public static native long get_smtlib_formula(long context, int i);
-  public static native int get_smtlib_num_assumptions(long context);
-  public static native long get_smtlib_assumption(long context, int i);
-  public static native int get_smtlib_num_decls(long context);
-  public static native long get_smtlib_decl(long context, int i);
-  public static native int get_smtlib_num_sorts(long context);
-  public static native long get_smtlib_sort(long context, int i);
+    public static native int get_smtlib_num_formulas(long context);
+    public static native long get_smtlib_formula(long context, int i);
+    public static native int get_smtlib_num_assumptions(long context);
+    public static native long get_smtlib_assumption(long context, int i);
+    public static native int get_smtlib_num_decls(long context);
+    public static native long get_smtlib_decl(long context, int i);
+    public static native int get_smtlib_num_sorts(long context);
+    public static native long get_smtlib_sort(long context, int i);
 
-  public static native String get_smtlib_error(long context);
+    public static native String get_smtlib_error(long context);
 
+    public static native void setInternalErrorHandler(long ctx);
 
-  // ERROR HANDLING
-  // TODO set_error_handler()
-  public static native int get_error_code(long context);
-  public static native void set_error(long context, int error_code);
-  public static native String get_error_msg(int error_code);
-  public static native String get_error_msg_ex(long context, int error_code);
-
-
-  // MISC
-  public static native void get_version(PointerToInt major, PointerToInt minor, PointerToInt build, PointerToInt revision);
-  public static native void enable_trace(String context);
-  public static native void disable_trace(String context);
-  public static native void reset_memory();
+    public static native int get_error_code(long context);
+    public static native void set_error(long context, int error_code);
+    public static native String get_error_msg(int error_code);
+    public static native String get_error_msg_ex(long context, int error_code);
 
 
-  // EXTERNAL
-  // TODO do we need external functions?
+    // MISC
+    public static native void get_version(PointerToInt major, PointerToInt minor, PointerToInt build, PointerToInt revision);
 
 
-  // FIXPOINT FACILITIES
-  // TODO callbacks missing, do we need them?
-  // TODO missing function: fp_init?
-  public static native long mk_fixedpoint(long context);
-  public static native void fixedpoint_inc_ref(long context, long a1);
-  public static native void fixedpoint_dec_ref(long context, long a1);
-  public static native void fixedpoint_add_rule(long context, long a1, long a2, long a3);
-  public static native void fixedpoint_add_fact(long context, long a1, long a2, int a3, int[] a4);
-  public static native void fixedpoint_assert(long context, long a1, long a2);
-  public static native int fixedpoint_query(long context, long a1, long a2);
-  public static native int fixedpoint_query_relations(long context, long a1, int a2, long[] a3);
-  public static native long fixedpoint_get_answer(long context, long a1);
-  public static native String fixedpoint_get_reason_unknown(long context, long a1);
-  public static native void fixedpoint_update_rule(long context, long a1, long a2, long a3);
-  public static native int fixedpoint_get_num_levels(long context, long a1, long a2);
-  public static native long fixedpoint_get_cover_delta(long context, long a1, int a2, long a3);
-  public static native void fixedpoint_add_cover(long context, long a1, int a2, long a3, long a4);
-  public static native long fixedpoint_get_statistics(long context, long a1);
-  public static native void fixedpoint_register_relation(long context, long a1, long a2);
-  public static native void fixedpoint_set_predicate_representation(long context, long a1, long a2, int a3, long[] a4);
-  public static native long fixedpoint_get_rules(long context, long a1);
-  public static native long fixedpoint_get_assertions(long context, long a1);
-  public static native void fixedpoint_set_params(long context, long a1, long a2);
-  public static native String fixedpoint_get_help(long context, long a1);
-  public static native long fixedpoint_get_param_descrs(long context, long a1);
-  public static native String fixedpoint_to_string(long context, long a1, int a2, long[] a3);
-  public static native long fixedpoint_from_string(long context, long a1, String a2);
-  public static native long fixedpoint_from_file(long context, long a1, String a2);
-  public static native void fixedpoint_push(long context, long a1);
-  public static native void fixedpoint_pop(long context, long a1);
+   /**
+    * Enable tracing messages tagged as {@code tag}.
+    *
+    * NOTE: Works only if Z3 is compiled in DEBUG mode. No-op otherwise.
+    */
+    public static native void enable_trace(String tag);
+
+   /**
+    * Disable tracing messages tagged as {@code tag}.
+    */
+    public static native void disable_trace(String tag);
+    public static native void reset_memory();
 
 
-  // AST VECTORS
-  public static native long mk_ast_vector(long context);
-  public static native void ast_vector_inc_ref(long context, long ast_vector);
-  public static native void ast_vector_dec_ref(long context, long ast_vector);
-  public static native int ast_vector_size(long context, long ast_vector);
-  public static native long ast_vector_get(long context, long ast_vector, int i);
-  public static native void ast_vector_set(long context, long ast_vector, int i, long ast);
-  public static native void ast_vector_resize(long context, long ast_vector, int num);
-  public static native void ast_vector_push(long context, long ast_vector, long ast);
-  public static native long ast_vector_translate(long context_source, long ast_vector, long context_target);
-  public static native String ast_vector_to_string(long context, long ast_vector);
+    // EXTERNAL
+    // TODO do we need external functions?
 
 
-  // AST MAPS
-  public static native long mk_ast_map(long context);
-  public static native void ast_map_inc_ref(long context, long ast_map);
-  public static native void ast_map_dec_ref(long context, long ast_map);
-  public static native boolean ast_map_contains(long context, long ast_map, long ast);
-  public static native long ast_map_find(long context, long ast_map, long ast);
-  public static native void ast_map_insert(long context, long ast_map, long ast_key, long ast_value);
-  public static native void ast_map_erase(long context, long ast_map, long ast_key);
-  public static native void ast_map_reset(long context, long ast_map);
-  public static native int ast_map_size(long context, long ast_map);
-  public static native long ast_map_keys(long context, long ast_map);
-  public static native String ast_map_to_string(long context, long ast_map);
+    // FIXPOINT FACILITIES
+    // TODO callbacks missing, do we need them?
+    // TODO missing function: fp_init?
+    public static native long mk_fixedpoint(long context);
+    public static native void fixedpoint_inc_ref(long context, long a1);
+    public static native void fixedpoint_dec_ref(long context, long a1);
+    public static native void fixedpoint_add_rule(long context, long a1, long a2, long a3);
+    public static native void fixedpoint_add_fact(long context, long a1, long a2, int a3, int[] a4);
+    public static native void fixedpoint_assert(long context, long a1, long a2);
+    public static native int fixedpoint_query(long context, long a1, long a2);
+    public static native int fixedpoint_query_relations(long context, long a1, int a2, long[] a3);
+    public static native long fixedpoint_get_answer(long context, long a1);
+    public static native String fixedpoint_get_reason_unknown(long context, long a1);
+    public static native void fixedpoint_update_rule(long context, long a1, long a2, long a3);
+    public static native int fixedpoint_get_num_levels(long context, long a1, long a2);
+    public static native long fixedpoint_get_cover_delta(long context, long a1, int a2, long a3);
+    public static native void fixedpoint_add_cover(long context, long a1, int a2, long a3, long a4);
+    public static native long fixedpoint_get_statistics(long context, long a1);
+    public static native void fixedpoint_register_relation(long context, long a1, long a2);
+    public static native void fixedpoint_set_predicate_representation(long context, long a1, long a2, int a3, long[] a4);
+    public static native long fixedpoint_get_rules(long context, long a1);
+    public static native long fixedpoint_get_assertions(long context, long a1);
+    public static native void fixedpoint_set_params(long context, long a1, long a2);
+    public static native String fixedpoint_get_help(long context, long a1);
+    public static native long fixedpoint_get_param_descrs(long context, long a1);
+    public static native String fixedpoint_to_string(long context, long a1, int a2, long[] a3);
+    public static native long fixedpoint_from_string(long context, long a1, String a2);
+    public static native long fixedpoint_from_file(long context, long a1, String a2);
+    public static native void fixedpoint_push(long context, long a1);
+    public static native void fixedpoint_pop(long context, long a1);
 
 
-  // GOALS
-  public static native long mk_goal(long context, boolean models, boolean unsat_cores, boolean proofs);
-  public static native void goal_inc_ref(long context, long goal);
-  public static native void goal_dec_ref(long context, long goal);
-  public static native int goal_precision(long context, long goal);
-  public static native void goal_assert(long context, long goal, long ast);
-  public static native boolean goal_inconsistent(long context, long goal);
-  public static native int goal_depth(long context, long goal);
-  public static native void goal_reset(long context, long goal);
-  public static native int goal_size(long context, long goal);
-  public static native long goal_formula(long context, long goal, int index);
-  public static native int goal_num_exprs(long context, long goal);
-  public static native boolean goal_is_decided_sat(long context, long goal);
-  public static native boolean goal_is_decided_unsat(long context, long goal);
-  public static native long goal_translate(long context_source, long goal, long context_target);
-  public static native String goal_to_string(long context, long goal);
+    // AST VECTORS
+    public static native long mk_ast_vector(long context);
+    public static native void ast_vector_inc_ref(long context, long ast_vector);
+    public static native void ast_vector_dec_ref(long context, long ast_vector);
+    public static native int ast_vector_size(long context, long ast_vector);
+    public static native long ast_vector_get(long context, long ast_vector, int i);
+    public static native void ast_vector_set(long context, long ast_vector, int i, long ast);
+    public static native void ast_vector_resize(long context, long ast_vector, int num);
+    public static native void ast_vector_push(long context, long ast_vector, long ast);
+    public static native long ast_vector_translate(long context_source, long ast_vector, long context_target);
+    public static native String ast_vector_to_string(long context, long ast_vector);
 
 
-  // TACTICS AND PROBES
-  public static native long mk_tactic(long context, String name);
-  public static native void tactic_inc_ref(long context, long tactic);
-  public static native void tactic_dec_ref(long context, long tactic);
+    // AST MAPS
+    public static native long mk_ast_map(long context);
+    public static native void ast_map_inc_ref(long context, long ast_map);
+    public static native void ast_map_dec_ref(long context, long ast_map);
+    public static native boolean ast_map_contains(long context, long ast_map, long ast);
+    public static native long ast_map_find(long context, long ast_map, long ast);
+    public static native void ast_map_insert(long context, long ast_map, long ast_key, long ast_value);
+    public static native void ast_map_erase(long context, long ast_map, long ast_key);
+    public static native void ast_map_reset(long context, long ast_map);
+    public static native int ast_map_size(long context, long ast_map);
+    public static native long ast_map_keys(long context, long ast_map);
+    public static native String ast_map_to_string(long context, long ast_map);
 
-  public static native long mk_probe(long context, String name);
-  public static native void probe_inc_ref(long context, long probe);
+
+    // GOALS
+    public static native long mk_goal(long context, boolean models, boolean unsat_cores, boolean proofs);
+    public static native void goal_inc_ref(long context, long goal);
+    public static native void goal_dec_ref(long context, long goal);
+    public static native int goal_precision(long context, long goal);
+    public static native void goal_assert(long context, long goal, long ast);
+    public static native boolean goal_inconsistent(long context, long goal);
+    public static native int goal_depth(long context, long goal);
+    public static native void goal_reset(long context, long goal);
+    public static native int goal_size(long context, long goal);
+    public static native long goal_formula(long context, long goal, int index);
+    public static native int goal_num_exprs(long context, long goal);
+    public static native boolean goal_is_decided_sat(long context, long goal);
+    public static native boolean goal_is_decided_unsat(long context, long goal);
+    public static native long goal_translate(long context_source, long goal, long context_target);
+    public static native String goal_to_string(long context, long goal);
+
+
+    // TACTICS AND PROBES
+    public static native long mk_tactic(long context, String name);
+    public static native void tactic_inc_ref(long context, long tactic);
+    public static native void tactic_dec_ref(long context, long tactic);
+
+    public static native long mk_probe(long context, String name);
+    public static native void probe_inc_ref(long context, long probe);
   public static native void probe_dec_ref(long context, long probe);
 
   public static native long tactic_and_then(long context, long tactic1, long tactic2);
@@ -645,6 +855,12 @@ public final class Z3NativeApi {
   public static native int solver_check_assumptions(long context, long solver, int len, long[] assumptions);
   public static native long solver_get_model(long context, long solver);
   public static native long solver_get_proof(long context, long solver);
+
+  /**
+   * Return the unsatisfiable core for the problem.
+   *
+   * @return Z3_ast_vector
+   */
   public static native long solver_get_unsat_core(long context, long solver);
   public static native String solver_get_reason_unknown(long context, long solver);
   public static native long solver_get_statistics(long context, long solver);
@@ -662,19 +878,134 @@ public final class Z3NativeApi {
   public static native int stats_get_uint_value(long context, long stats, int i);
   public static native double stats_get_double_value(long context, long stats, int i);
 
-  // INTERPOLATION
-  public static native long mk_interpolation_context(long config);
-  private static native int interpolate(long context, int num, long[] cnsts, int[] parents, long options, long[] interps, PointerToLong model, PointerToLong labels, int incremental, int num_theory, long[] theory);
-  private static native int interpolateSeq(long context, int num, long[] cnsts, long[] interps, PointerToLong model, PointerToLong labels, int incremental, int num_theory, long[] theory);
-
   public static native String interpolation_profile(long context);
 
-  public static int interpolate(long context, long[] cnsts, int[] parents, long options, long[] interps, PointerToLong model, PointerToLong labels, int incremental, long[] theory) {
-    return interpolate(context, cnsts.length, cnsts, parents, options, interps, model, labels, incremental, theory.length, theory);
-  }
+  /**
+   * Interpolation API
+   */
 
-  public static int interpolateSeq(long context, long[] cnsts, long[] interps, PointerToLong model, PointerToLong labels, int incremental, long[] theory) {
-    return interpolateSeq(context, cnsts.length, cnsts, interps, model, labels, incremental, theory.length, theory);
-  }
+  /**
+   * Create an AST node marking a formula position for interpolation.
+   * The node {@code a} must have Boolean sort.
+   * @param c Z3_context
+   * @param a Z3_ast
+   * @return Z3_ast
+   */
+  public static native long mk_interpolant(long c, long a);
 
+  /**
+   * This function generates a Z3 context suitable for generation of
+   * interpolants. Formulas can be generated as abstract syntax trees in
+   * this context using the Z3 C API.
+   *
+   * Interpolants are also generated as AST's in this context.
+   *
+   * If cfg is non-null, it will be used as the base configuration
+   * for the Z3 context. This makes it possible to set Z3 options
+   * to be used during interpolation. This feature should be used
+   * with some caution however, as it may be that certain Z3 options
+   * are incompatible with interpolation.
+   *
+   * @param cfg Z3_config
+   * @return Z3_context
+   */
+  public static native long mk_interpolation_context(long cfg);
+
+  /** Compute an interpolant from a refutation. This takes a proof of
+   * "false" from a set of formulas C, and an interpolation
+   * pattern. The pattern {@code pat} is a formula combining the formulas in C
+   * using logical conjunction and the "interp" operator (see
+   * {@link #mk_interpolant}. This interp operator is logically the identity
+   * operator. It marks the sub-formulas of the pattern for which interpolants should
+   * be computed. The interpolant is a map sigma from marked subformulas to
+   * formulas, such that, for each marked subformula phi of pat (where phi sigma
+   * is phi with sigma(psi) substituted for each subformula psi of phi such that
+   * psi in dom(sigma)):
+   *
+   * 1) phi sigma implies sigma(phi), and
+   *
+   * 2) sigma(phi) is in the common uninterpreted vocabulary between
+   * the formulas of C occurring in phi and those not occurring in
+   * phi
+   *
+   * and moreover pat sigma implies false. In the simplest case
+   * an interpolant for the pattern "(and (interp A) B)" maps A
+   * to an interpolant for A /\ B.
+   *
+   * The return value is a vector of formulas representing sigma. The
+   * vector contains sigma(phi) for each marked subformula of pat, in
+   * pre-order traversal. This means that subformulas of phi occur before phi
+   * in the vector. Also, subformulas that occur multiply in pat will
+   * occur multiply in the result vector.
+   *
+   * In particular, calling this function on a pattern of the
+   * form (interp ... (interp (and (interp A_1) A_2)) ... A_N) will
+   * result in a sequence interpolant for A_1, A_2,... A_N.
+   *
+   * Neglecting interp markers, the pattern must be a conjunction of
+   * formulas in C, the set of premises of the proof. Otherwise an
+   * error is flagged.
+   *
+   * Any premises of the proof not present in the pattern are
+   * treated as "background theory". Predicate and function symbols
+   * occurring in the background theory are treated as interpreted and
+   * thus always allowed in the interpolant.
+   *
+   * Interpolant may not necessarily be computable from all
+   * proofs. To be sure an interpolant can be computed, the proof
+   * must be generated by an SMT solver for which interpolation is
+   * supported, and the premises must be expressed using only
+   * theories and operators for which interpolation is supported.
+   *
+   * Currently, the only SMT solver that is supported is the legacy
+   * SMT solver. Such a solver is available as the default solver in
+   * #Z3_context objects produced by {@link #mk_interpolation_context}.
+   * Currently, the theories supported are equality with
+   * uninterpreted functions, linear integer arithmetic, and the
+   * theory of arrays (in SMT-LIB terms, this is AUFLIA).
+   * Quantifiers are allowed. Use of any other operators (including
+   * "labels") may result in failure to compute an interpolant from a
+   * proof.
+   *
+   * @param c Z3_context logical context.
+   * @param pf Z3_ast a refutation from premises (assertions) C
+   * @param pat Z3_ast an interpolation pattern over C
+   * @param p Z3_params parameters
+   * @return Z3_ast_vector
+   */
+
+  public static native long get_interpolant(long c, long pf, long pat, long p);
+
+  /** Compute an interpolant for an unsatisfiable conjunction of formulas.
+   *
+   * This takes as an argument an interpolation pattern as in
+   * {@link #get_interpolant}. This is a conjunction, some subformulas of
+   * which are marked with the "interp" operator (see {@link #mk_interpolant}).
+   *
+   * The conjunction is first checked for unsatisfiability. The result
+   * of this check is returned in the out parameter "status". If the result
+   * is unsat, an interpolant is computed from the refutation as in #Z3_get_interpolant
+   * and returned as a vector of formulas. Otherwise the return value is
+   * an empty formula.
+   *
+   * See {@link #get_interpolant} for a discussion of supported theories.
+   *
+   * The advantage of this function over {@link #get_interpolant} is that
+   * it is not necessary to create a suitable SMT solver and generate
+   * a proof. The disadvantage is that it is not possible to use the
+   * solver incrementally.
+   *
+   * @param c Z3_context logical context.
+   * @param pat Z3_ast an interpolation pattern
+   * @param p Z3_params parameters for solver creation
+   * @param model returns model if satisfiable
+   *
+   * @return status of SAT check
+   **/
+  public static native int compute_interpolant(
+      long c,
+      long pat,
+      long p,
+      PointerToLong interp,
+      PointerToLong model);
 }

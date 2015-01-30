@@ -23,17 +23,16 @@ CPAchecker web page:
 """
 
 # prepare for Python 3
-from __future__ import absolute_import, print_function, unicode_literals
+from __future__ import absolute_import, division, print_function, unicode_literals
 
 import logging
 import os
 import signal
 import threading
 
-from . import filewriter
 from . import util
 
-_BYTE_FACTOR = 1024 # byte in kilobyte
+_BYTE_FACTOR = 1000 # byte in kilobyte
 
 class KillProcessOnOomThread(threading.Thread):
     """
@@ -57,15 +56,15 @@ class KillProcessOnOomThread(threading.Thread):
 
     @param cgroup: The memory cgroup the process is in
     @param process: The process instance to kill
-    @param memlimit: The memory limit in MB
+    @param callbackFn: A one-argument function that is called in case of OOM with a string for the reason as argument
     """
-    def __init__(self, cgroup, process, memlimit):
+    def __init__(self, cgroup, process, callbackFn=lambda reason: None):
         super(KillProcessOnOomThread, self).__init__()
-        daemon = True
+        self.daemon = True
         self._finished = threading.Event()
         self._process = process
-        self._memlimit = memlimit
         self._cgroup = cgroup
+        self._callback = callbackFn
 
         ofd = os.open(os.path.join(cgroup, 'memory.oom_control'), os.O_WRONLY)
         try:
@@ -78,17 +77,17 @@ class KillProcessOnOomThread(threading.Thread):
             self._efd = libc.eventfd(0, EFD_CLOEXEC)
 
             try:
-                filewriter.writeFile('{} {}'.format(self._efd, ofd),
+                util.writeFile('{} {}'.format(self._efd, ofd),
                                      cgroup, 'cgroup.event_control')
 
                 # If everything worked, disable Kernel-side process killing.
                 # This is not allowed if memory.use_hierarchy is enabled,
                 # but we don't care.
                 try:
-                    os.write(ofd, '1')
-                except OSError:
-                    pass
-            except Error as e:
+                    os.write(ofd, '1'.encode('ascii'))
+                except OSError as e:
+                    logging.debug("Failed to disable kernel-side OOM killer: error {0} ({1})".format(e.errno, e.strerror))
+            except EnvironmentError as e:
                 os.close(self._efd)
                 raise e
         finally:
@@ -101,27 +100,31 @@ class KillProcessOnOomThread(threading.Thread):
             # If read returned, this means the kernel sent us an event.
             # It does so either on OOM or if the cgroup is removed.
             if not self._finished.is_set():
+                self._callback('memory')
                 logging.debug('Killing process {0} due to out-of-memory event from kernel.'.format(self._process.pid))
-                util.killProcess(self._process.pid, signal.SIGKILL)
+                util.killProcess(self._process.pid)
                 # Also kill all children of subprocesses directly.
                 with open(os.path.join(self._cgroup, 'tasks'), 'rt') as tasks:
                     for task in tasks:
-                        util.killProcess(int(task), signal.SIGKILL)
+                        util.killProcess(int(task))
 
                 # We now need to increase the memory limit of this cgroup
                 # to give the process a chance to terminate
-                # 10MB ought to be enough
-                limitFile = 'memory.memsw.limit_in_bytes'
-                if not os.path.exists(os.path.join(self._cgroup, limitFile)):
-                    limitFile = 'memory.limit_in_bytes'
-                try:
-                    filewriter.writeFile(str((self._memlimit + 10) * _BYTE_FACTOR * _BYTE_FACTOR),
-                                         self._cgroup, limitFile)
-                except IOError as e:
-                    logging.warning('Failed to increase memory limit after OOM: error {0} ({1})'.format(e.errno, e.strerror))
+                self._resetMemoryLimit('memory.memsw.limit_in_bytes')
+                self._resetMemoryLimit('memory.limit_in_bytes')
 
         finally:
             os.close(self._efd)
+
+    def _resetMemoryLimit(self, limitFile):
+        if os.path.exists(os.path.join(self._cgroup, limitFile)):
+            try:
+                # Write a high value (1 PB) as the limit
+                util.writeFile(str(1 * _BYTE_FACTOR * _BYTE_FACTOR * _BYTE_FACTOR * _BYTE_FACTOR * _BYTE_FACTOR),
+                                     self._cgroup, limitFile)
+            except IOError as e:
+                logging.warning('Failed to increase {0} after OOM: error {1} ({2})'.format(limitFile, e.errno, e.strerror))
+
 
     def cancel(self):
         self._finished.set()

@@ -30,6 +30,7 @@ import java.util.List;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.cfa.ast.c.CAstNode;
+import org.sosy_lab.cpachecker.cfa.parser.Scope;
 import org.sosy_lab.cpachecker.exceptions.CParserException;
 import org.sosy_lab.cpachecker.exceptions.ParserException;
 
@@ -82,7 +83,7 @@ class CParserWithPreprocessor implements CParser {
       if (programCode.isEmpty()) {
         throw new CParserException("Preprocessor returned empty program");
       }
-      programs.add(new FileContentToParse(p.getFileName(), programCode, p.getStaticVariablePrefix()));
+      programs.add(new FileContentToParse(p.getFileName(), programCode));
     }
     return realParser.parseString(programs, sourceOriginMapping);
   }
@@ -95,12 +96,12 @@ class CParserWithPreprocessor implements CParser {
   }
 
   @Override
-  public CAstNode parseSingleStatement(String pCode) throws CParserException, InvalidConfigurationException {
-    return realParser.parseSingleStatement(pCode);
+  public CAstNode parseSingleStatement(String pCode, Scope pScope) throws CParserException, InvalidConfigurationException {
+    return realParser.parseSingleStatement(pCode, pScope);
   }
 
   @Override
-  public List<CAstNode> parseStatements(String pCode) throws CParserException, InvalidConfigurationException {
-    return realParser.parseStatements(pCode);
+  public List<CAstNode> parseStatements(String pCode, Scope pScope) throws CParserException, InvalidConfigurationException {
+    return realParser.parseStatements(pCode, pScope);
   }
 }

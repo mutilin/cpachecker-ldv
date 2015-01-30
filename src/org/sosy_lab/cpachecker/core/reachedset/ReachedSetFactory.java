@@ -30,8 +30,10 @@ import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.core.waitlist.AutomatonFailedMatchesWaitlist;
 import org.sosy_lab.cpachecker.core.waitlist.AutomatonMatchesWaitlist;
+import org.sosy_lab.cpachecker.core.waitlist.CallstackPccSortedWaitlist;
 import org.sosy_lab.cpachecker.core.waitlist.CallstackSortedWaitlist;
 import org.sosy_lab.cpachecker.core.waitlist.ExplicitSortedWaitlist;
+import org.sosy_lab.cpachecker.core.waitlist.PostorderSortedWaitlist;
 import org.sosy_lab.cpachecker.core.waitlist.ReversePostorderSortedWaitlist;
 import org.sosy_lab.cpachecker.core.waitlist.Waitlist;
 import org.sosy_lab.cpachecker.core.waitlist.Waitlist.WaitlistFactory;
@@ -44,35 +46,41 @@ public class ReachedSetFactory {
     NORMAL, LOCATIONMAPPED, PARTITIONED, USAGESTATISTICS
   }
 
-  @Option(name="traversal.order",
+  @Option(secure=true, name="traversal.order",
       description="which strategy to adopt for visiting states?")
   Waitlist.TraversalMethod traversalMethod = Waitlist.TraversalMethod.DFS;
 
-  @Option(name = "traversal.useCallstack",
+  @Option(secure=true, name = "traversal.useCallstack",
       description = "handle states with a deeper callstack first?"
       + "\nThis needs the CallstackCPA to have any effect.")
   boolean useCallstack = false;
 
-  @Option(name = "traversal.useReversePostorder",
+  @Option(secure=true, name = "traversal.usePccCallstack",
+      description = "handle states with a deeper callstack first?"
+      + "\nThis needs the CallstackPccCPA to have any effect.")
+  boolean usePccCallstack = false;
+
+  @Option(secure=true, name = "traversal.useReversePostorder",
       description = "Use an implementation of reverse postorder strategy that allows to select "
       + "a secondary strategy that is used if there are two states with the same reverse postorder id. "
       + "The secondary strategy is selected with 'analysis.traversal.order'.")
   boolean useReversePostorder = false;
 
-  @Option(name = "traversal.useTopsort",
-      description="This option was renamed to analysis.traversal.useReversePostorder and will soon get removed.")
-  @Deprecated
-  boolean useTopsort = false;
+  @Option(secure=true, name = "traversal.usePostorder",
+      description = "Use an implementation of postorder strategy that allows to select "
+      + "a secondary strategy that is used if there are two states with the same postorder id. "
+      + "The secondary strategy is selected with 'analysis.traversal.order'.")
+  boolean usePostorder = false;
 
-  @Option(name = "traversal.useExplicitInformation",
+  @Option(secure=true, name = "traversal.useExplicitInformation",
       description = "handle more abstract states (with less information) first? (only for ExplicitCPA)")
   boolean useExplicitInformation = false;
 
-  @Option(name = "traversal.useAutomatonInformation",
+  @Option(secure=true, name = "traversal.useAutomatonInformation",
       description = "handle abstract states with more automaton matches first? (only if AutomatonCPA enabled)")
   boolean useAutomatonInformation = false;
 
-  @Option(name = "reachedSet",
+  @Option(secure=true, name = "reachedSet",
       description = "which reached set implementation to use?"
       + "\nNORMAL: just a simple set"
       + "\nLOCATIONMAPPED: a different set per location "
@@ -80,7 +88,6 @@ public class ReachedSetFactory {
       + "\nPARTITIONED: partitioning depending on CPAs (e.g Location, Callstack etc.)")
   ReachedSetType reachedSet = ReachedSetType.PARTITIONED;
 
-  @SuppressWarnings("deprecation")
   public ReachedSetFactory(Configuration config, LogManager logger) throws InvalidConfigurationException {
     config.inject(this);
   }
@@ -92,8 +99,14 @@ public class ReachedSetFactory {
       waitlistFactory = AutomatonMatchesWaitlist.factory(waitlistFactory);
       waitlistFactory = AutomatonFailedMatchesWaitlist.factory(waitlistFactory);
     }
-    if (useReversePostorder || useTopsort) {
+    if (useReversePostorder) {
       waitlistFactory = ReversePostorderSortedWaitlist.factory(waitlistFactory);
+    }
+    if (usePostorder) {
+      waitlistFactory = PostorderSortedWaitlist.factory(waitlistFactory);
+    }
+    if (usePccCallstack) {
+      waitlistFactory = CallstackPccSortedWaitlist.factory(waitlistFactory);
     }
     if (useCallstack) {
       waitlistFactory = CallstackSortedWaitlist.factory(waitlistFactory);

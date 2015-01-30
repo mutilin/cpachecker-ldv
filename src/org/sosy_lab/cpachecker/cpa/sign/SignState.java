@@ -26,110 +26,116 @@ package org.sosy_lab.cpachecker.cpa.sign;
 import java.io.IOException;
 import java.io.ObjectStreamException;
 import java.io.Serializable;
+import java.util.List;
 
-import org.sosy_lab.common.configuration.Configuration;
-import org.sosy_lab.common.configuration.InvalidConfigurationException;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractStateWithTargetVariable;
-import org.sosy_lab.cpachecker.core.interfaces.TargetableWithPredicatedAnalysis;
-import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
-import org.sosy_lab.cpachecker.util.predicates.interfaces.view.FormulaManagerView;
+import org.sosy_lab.common.collect.PathCopyingPersistentTreeMap;
+import org.sosy_lab.common.collect.PersistentMap;
+import org.sosy_lab.cpachecker.core.defaults.LatticeAbstractState;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractQueryableState;
+import org.sosy_lab.cpachecker.core.interfaces.Graphable;
+import org.sosy_lab.cpachecker.exceptions.InvalidQueryException;
+import org.sosy_lab.cpachecker.util.CheckTypesOfStringsUtil;
 
-import com.google.common.base.Optional;
+import com.google.common.base.Joiner;
+import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableMap.Builder;
-import com.google.common.collect.Sets;
 
 
-public class SignState implements AbstractStateWithTargetVariable, TargetableWithPredicatedAnalysis, Serializable {
+public class SignState implements Serializable, LatticeAbstractState<SignState>, AbstractQueryableState, Graphable {
 
   private static final long serialVersionUID = -2507059869178203119L;
 
   private static final boolean DEBUG = false;
 
-  private static SignTargetChecker targetChecker;
+  private static final Splitter propertySplitter = Splitter.on("<=").trimResults();
 
-  private final Optional<SignState> stateBeforeEnteredFunction;
-
-  static void init(Configuration config) throws InvalidConfigurationException {
-    targetChecker = new SignTargetChecker(config);
-  }
-
-  private SignMap signMap;
-
-  public SignMap getSignMap() {
-    return signMap;
-  }
+  private PersistentMap<String, SIGN> signMap;
 
   public final static SignState TOP = new SignState();
   private final static SerialProxySign proxy = new SerialProxySign();
 
-  private SignState(SignMap pSignMap, Optional<SignState> pStateBeforeEnteredFunction) {
+  private SignState(PersistentMap<String, SIGN> pSignMap) {
     signMap = pSignMap;
-    stateBeforeEnteredFunction = pStateBeforeEnteredFunction;
   }
 
   private SignState() {
-    signMap = new SignMap(ImmutableMap.<String, SIGN> of());
-    stateBeforeEnteredFunction = Optional.absent();
+    signMap = PathCopyingPersistentTreeMap.of();
   }
 
-  public SignState union(SignState pToJoin) {
+  @Override
+  public SignState join(SignState pToJoin) {
     if (pToJoin.equals(this)) { return pToJoin; }
     if (this.equals(TOP) || pToJoin.equals(TOP)) { return TOP; }
 
     // assure termination of loops do not merge if  pToJoin covers this but return pToJoin
-    if (isSubsetOf(pToJoin)) { return pToJoin; }
+    if (isLessOrEqual(pToJoin)) { return pToJoin; }
 
     SignState result = SignState.TOP;
-    for (String varIdent : Sets.union(signMap.keySet(), pToJoin.signMap.keySet())) {
-      result = result.assignSignToVariable(varIdent,
-          signMap.getSignForVariable(varIdent).combineWith(pToJoin.signMap.getSignForVariable(varIdent))); // TODO performance
+    PersistentMap<String, SIGN> newMap = PathCopyingPersistentTreeMap.of();
+    SIGN combined;
+    for (String varIdent : pToJoin.signMap.keySet()) {
+      // only add those variables that are contained in both states (otherwise one has value ALL (not saved))
+      if (signMap.containsKey(varIdent)) {
+        combined = getSignForVariable(varIdent).combineWith(pToJoin.getSignForVariable(varIdent));
+        if (!combined.isAll()) {
+          newMap = newMap.putAndCopy(varIdent, combined);
+        }
+      }
     }
-    return result;
+
+    return newMap.size() > 0 ? new SignState(newMap) : result;
   }
 
-  public boolean isSubsetOf(SignState pSuperset) {
+  @Override
+  public boolean isLessOrEqual(SignState pSuperset) {
     if (pSuperset.equals(this) || pSuperset.equals(TOP)) { return true; }
-    if (stateBeforeEnteredFunction.isPresent()) {
-      if (!pSuperset.stateBeforeEnteredFunction.isPresent()
-          || pSuperset.stateBeforeEnteredFunction.get() != stateBeforeEnteredFunction.get()) { return false; }
-    } else {
-      if (pSuperset.stateBeforeEnteredFunction.isPresent()) { return false; }
-    }
+    if (signMap.size() < pSuperset.signMap.size()) { return false; }
     // is subset if for every variable all sign assumptions are considered in pSuperset
-    for (String varIdent : Sets.union(signMap.keySet(), pSuperset.signMap.keySet())) {
-      if (!signMap.getSignForVariable(varIdent).isSubsetOf(pSuperset.signMap.getSignForVariable(varIdent))) { return false; }
+    // check that all variables in superset with SIGN != ALL have no bigger assumptions in subset
+    for (String varIdent : pSuperset.signMap.keySet()) {
+      if (!getSignForVariable(varIdent).isSubsetOf(pSuperset.getSignForVariable(varIdent))) { return false; }
     }
     return true;
   }
 
   public SignState enterFunction(ImmutableMap<String, SIGN> pArguments) {
-    SignMap resultSignMap = signMap.mergeWith(new SignMap(pArguments));
-    return new SignState(resultSignMap, Optional.of(this));
+    PersistentMap<String, SIGN> newMap = signMap;
+
+    for (String var : pArguments.keySet()) {
+      if (!pArguments.get(var).equals(SIGN.ALL)) {
+        newMap = newMap.putAndCopy(var, pArguments.get(var));
+      }
+    }
+
+    return signMap == newMap ? this : new SignState(newMap);
   }
 
-  public SignState leaveFunction() {
-      if(stateBeforeEnteredFunction.isPresent()) {
-          return stateBeforeEnteredFunction.get();
+  public SignState leaveFunction(String pFunctionName) {
+    PersistentMap<String, SIGN> newMap = signMap;
+
+    for (String var : signMap.keySet()) {
+      if (var.startsWith(pFunctionName + "::")) {
+        newMap = newMap.removeAndCopy(var);
       }
-      throw new IllegalStateException("No function has been entered before");
+    }
+
+    return newMap == signMap ? this : new SignState(newMap);
   }
 
   public SignState assignSignToVariable(String pVarIdent, SIGN sign) {
-    Builder<String, SIGN> mapBuilder = ImmutableMap.builder();
-    if (!sign.isAll()) {
-      mapBuilder.put(pVarIdent, sign);
+    if (sign.isAll()) {
+      return signMap.containsKey(pVarIdent) ? new SignState(signMap.removeAndCopy(pVarIdent)) : this;
     }
-    for (String varId : signMap.keySet()) {
-      if (!varId.equals(pVarIdent)) {
-        mapBuilder.put(varId, signMap.getSignForVariable(varId));
-      }
-    }
-    return new SignState(new SignMap(mapBuilder.build()), stateBeforeEnteredFunction);
+    return signMap.containsKey(pVarIdent) && getSignForVariable(pVarIdent).equals(sign) ? this
+        : new SignState(signMap.putAndCopy(pVarIdent, sign));
   }
 
   public SignState removeSignAssumptionOfVariable(String pVarIdent) {
     return assignSignToVariable(pVarIdent, SIGN.ALL);
+  }
+
+  public SIGN getSignForVariable(String pVarIdent) {
+    return signMap.containsKey(pVarIdent) ? signMap.get(pVarIdent) : SIGN.ALL;
   }
 
   @Override
@@ -143,7 +149,7 @@ public class SignState implements AbstractStateWithTargetVariable, TargetableWit
         continue;
       }
       builder.append(loopDelim);
-      builder.append(key + "->" + signMap.getSignForVariable(key));
+      builder.append(key + "->" + getSignForVariable(key));
       loopDelim = delim;
     }
     builder.append("]");
@@ -153,34 +159,12 @@ public class SignState implements AbstractStateWithTargetVariable, TargetableWit
   @Override
   public boolean equals(Object pObj) {
     if (!(pObj instanceof SignState)) { return false; }
-    return ((SignState) pObj).getSignMap().equals(this.getSignMap());
+    return ((SignState) pObj).signMap.equals(this.signMap);
   }
 
   @Override
   public int hashCode() {
     return signMap.hashCode();
-  }
-
-  @Override
-  public boolean isTarget() {
-    return targetChecker == null ? false : targetChecker.isTarget(this);
-  }
-
-  @Override
-  public ViolatedProperty getViolatedProperty() throws IllegalStateException {
-    if (isTarget()) { return ViolatedProperty.OTHER; }
-    return null;
-  }
-
-  @Override
-  public BooleanFormula getErrorCondition(FormulaManagerView pFmgr) {
-    return targetChecker == null ? pFmgr.getBooleanFormulaManager().makeBoolean(false) : targetChecker
-        .getErrorCondition(this, pFmgr);
-  }
-
-  @Override
-  public String getTargetVariableName() {
-    return targetChecker == null ? "" : targetChecker.getErrorVariableName();
   }
 
   private Object writeReplace() throws ObjectStreamException {
@@ -208,6 +192,69 @@ public class SignState implements AbstractStateWithTargetVariable, TargetableWit
     private Object readResolve() throws ObjectStreamException {
       return TOP;
     }
+  }
+
+  @Override
+  public String getCPAName() {
+    return "SignAnalysis";
+  }
+
+  @Override
+  public Object evaluateProperty(String pProperty) throws InvalidQueryException {
+    return Boolean.valueOf(checkProperty(pProperty));
+  }
+
+  @Override
+  public boolean checkProperty(String pProperty) throws InvalidQueryException {
+    // TODO Auto-generated method stub
+    List<String> parts = propertySplitter.splitToList(pProperty);
+
+    if (parts.size() == 2) {
+
+      // pProperty = value <= varName
+      if (CheckTypesOfStringsUtil.isSIGN(parts.get(0))) {
+        SIGN value = SIGN.valueOf(parts.get(0));
+        SIGN varName = getSignForVariable(parts.get(1));
+        return (varName.covers(value));
+      }
+
+      // pProperty = varName <= value
+      else if (CheckTypesOfStringsUtil.isSIGN(parts.get(1))){
+        SIGN varName = getSignForVariable(parts.get(0));
+        SIGN value = SIGN.valueOf(parts.get(1));
+        return (value.covers(varName));
+      }
+
+      // pProperty = varName1 <= varName2
+      else {
+        SIGN varName1 = getSignForVariable(parts.get(0));
+        SIGN varName2 = getSignForVariable(parts.get(1));
+        return (varName2.covers(varName1));
+      }
+    }
+
+    return false;
+  }
+
+  @Override
+  public void modifyProperty(String pModification) throws InvalidQueryException {
+    throw new InvalidQueryException("The modifying query " + pModification + " is an unsupported operation in " + getCPAName() + "!");
+  }
+
+  @Override
+  public String toDOTLabel() {
+    StringBuilder sb = new StringBuilder();
+
+    sb.append("{");
+    Joiner.on(", ").withKeyValueSeparator("=").appendTo(sb, signMap);
+    sb.append("}");
+
+    return sb.toString();
+  }
+
+  @Override
+  public boolean shouldBeHighlighted() {
+    return false;
   }
 
 }
