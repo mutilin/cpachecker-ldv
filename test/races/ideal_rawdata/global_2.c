@@ -1,10 +1,3 @@
-1
-0
-0
-0
-0
-0
-1
 0
 0
 0
@@ -12,6 +5,3 @@
 0
 0
 0
-2
-intLock[1]
-kernDispatchDisable[1]

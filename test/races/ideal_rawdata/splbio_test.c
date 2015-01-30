@@ -1,19 +1,10 @@
 1
-1
-0
-0
-0
-0
-2
-1
 0
 0
 0
 0
 0
 1
-1
-pthread_mutex_lock(&ipl_mutex)[1]
 #
 0
 int gvar

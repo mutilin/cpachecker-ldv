@@ -1,10 +1,3 @@
-2
-0
-0
-0
-0
-0
-2
 1
 0
 0
@@ -12,8 +5,6 @@
 0
 0
 1
-1
-kernDispatchDisable[1]
 #
 0
 int threadDispatchLevel

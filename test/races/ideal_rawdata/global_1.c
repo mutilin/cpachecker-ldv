@@ -5,15 +5,6 @@
 0
 0
 1
-1
-0
-0
-0
-0
-0
-1
-1
-kernDispatchDisable[1]
 #
 0
 int gvar

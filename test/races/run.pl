@@ -72,4 +72,4 @@ if ($tool_failures > 0) {
 print "You may look the difference, like\n";
 print "meld output/unsafe_rawdata_NAME_OF_TEST.new ideal_verdict/NAME_OF_TEST.c\n";
 print "The log of every test launch is located in output/log_NAME_OF_TEST\n";
-print "Thank you for usage the service of our test system, houp to meet you again. Good luck!\n";
+print "Thank you for usage the service of our test system, hope to meet you again. Good luck!\n";

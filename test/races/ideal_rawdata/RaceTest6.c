@@ -5,15 +5,6 @@
 0
 0
 1
-1
-0
-0
-0
-0
-0
-1
-1
-example_lock[1]
 #
 0
 int global
