@@ -158,6 +158,7 @@ public class UsageContainer {
   }
   
   public Collection<UnrefinedUsagePointSet> getUnrefinedUnsafes() {
+    getUnsafesIfNecessary();
     return unrefinedStat.values();
   }
   

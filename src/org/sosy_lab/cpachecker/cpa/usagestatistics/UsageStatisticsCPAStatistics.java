@@ -314,9 +314,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     try {
       final Writer writer = Files.openOutputFile(outputStatFileName);
       logger.log(Level.FINE, "Print statistics about unsafe cases");
-      printCountStatistics(writer, container.getGeneralIterator());
       printCountStatistics(writer, container.getUnsafeIterator());
-      //printLockStatistics(writer);
       logger.log(Level.FINEST, "Processing unsafe identifiers");
       Iterator<SingleIdentifier> unsafeIterator = container.getUnsafeIterator();
       while (unsafeIterator.hasNext()) {

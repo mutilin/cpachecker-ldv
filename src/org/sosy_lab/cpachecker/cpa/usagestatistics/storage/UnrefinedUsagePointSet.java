@@ -132,6 +132,20 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
       return false;
     }
     
+    boolean result = checkRefinedUsages();
+    if (result) {
+      if (refinedInformation.size() > 1 || topUsages.size() == 1) {
+        return true;
+      } else {
+        //Try to refine the second usage, if it is possible
+        return false;
+      }
+    } else {
+      return false;
+    }
+  }
+  
+  private boolean checkRefinedUsages() {
     Iterator<UsagePoint> iterator = topUsages.iterator();
     Set<UsagePoint> refinedPoints = new TreeSet<>();
     UsagePoint tmpPoint = iterator.next();
@@ -147,7 +161,8 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
   }
   
   public boolean isTrueUnsafe() {
-    return false;
+    //Is called at the end, so return true even if we have only one refined usage
+    return checkRefinedUsages();
   }
 
   public int size() {
