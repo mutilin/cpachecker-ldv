@@ -87,11 +87,13 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
   final Stats pStat = new Stats();
   private final UsageStatisticsCPA cpa;
   private final LogManager logger;
+  private final int NUMBER_FOR_RESET_PRECISION;
   private InterpolantCache iCache = new InterpolantCache();
 
   public UsageStatisticsRefiner(ConfigurableProgramAnalysis pCpa) throws CPAException, InvalidConfigurationException {
     super(pCpa);
     cpa = CPAs.retrieveCPA(pCpa, UsageStatisticsCPA.class);
+    NUMBER_FOR_RESET_PRECISION = cpa.getThePrecisionCleaningLimit();
     logger = cpa.getLogger();
   }
 
@@ -102,7 +104,6 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
   int i = 0;
   int lastFalseUnsafeSize = -1;
   int lastTrueUnsafes = -1;
-  private static final int HARDCODED_NUMBER_FOR_START_CLEANING_PRECISION = 10;
   @Override
   public boolean performRefinement(ReachedSet pReached) throws CPAException, InterruptedException {
     final UsageContainer container =
@@ -164,7 +165,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       lastTrueUnsafes = newTrueUnsafeSize;
     }
     counter += (newTrueUnsafeSize -lastTrueUnsafes);
-    if (counter >= HARDCODED_NUMBER_FOR_START_CLEANING_PRECISION) {
+    if (counter >= NUMBER_FOR_RESET_PRECISION) {
       Precision p = pReached.getPrecision(pReached.getFirstState());
       PredicatePrecision predicates = Precisions.extractPrecisionByType(p, PredicatePrecision.class);
       System.out.println("Clean: " + predicates.getLocalPredicates().size());

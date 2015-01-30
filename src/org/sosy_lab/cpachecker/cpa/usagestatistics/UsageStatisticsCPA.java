@@ -84,6 +84,9 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
   @Option(name="stop", toUppercase=true, values={"SEP", "JOIN", "NEVER"},
       description="which stop operator to use for LockStatisticsCPA")
   private String stopType = "SEP";
+  
+  @Option(name="precisionReset", description="The value of marked unsafes, after which the precision should be cleaned")
+  private int precisionReset = Integer.MAX_VALUE;
 
   private String outputFileName = "output/localsave";
 
@@ -201,5 +204,9 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
 
   public LogManager getLogger() {
     return logger;
+  }
+
+  public int getThePrecisionCleaningLimit() {
+    return precisionReset;
   }
 }
