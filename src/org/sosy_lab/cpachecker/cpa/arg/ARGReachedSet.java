@@ -219,7 +219,7 @@ public class ARGReachedSet {
   }
 
   public void updateFirstStatePrecision(Precision pNewPrecision,
-      Class<? extends Precision> pPrecisionType) {
+      Predicate<? super Precision> pPrecisionType) {
 
     ARGState s = (ARGState) mReached.getFirstState();
     Precision oldPrecision = mReached.getPrecision(s);

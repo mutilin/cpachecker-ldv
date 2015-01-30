@@ -22,6 +22,10 @@
  *    http://cpachecker.sosy-lab.org
  */
 package org.sosy_lab.cpachecker.core;
+import static com.google.common.base.Preconditions.*;
+import static com.google.common.base.Predicates.notNull;
+import static com.google.common.collect.FluentIterable.from;
+import static org.sosy_lab.cpachecker.util.AbstractStates.*;
 
 import java.io.IOException;
 import java.io.PrintStream;

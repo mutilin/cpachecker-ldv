@@ -23,16 +23,13 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
-import org.sosy_lab.common.Triple;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustment;
 import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
 import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSetView;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
-import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
-import org.sosy_lab.cpachecker.util.AbstractStates;
 
 import com.google.common.base.Functions;
 import com.google.common.base.Preconditions;
@@ -46,8 +43,8 @@ class UsageStatisticsPrecisionAdjustment implements PrecisionAdjustment {
   }
 
   @Override
-  public Triple<AbstractState, Precision, Action> prec(AbstractState pElement,
-      Precision oldPrecision, UnmodifiableReachedSet pElements) throws CPAException, InterruptedException {
+  public PrecisionAdjustmentResult prec(AbstractState pElement,
+      Precision oldPrecision, UnmodifiableReachedSet pElements, AbstractState fullState) throws CPAException, InterruptedException {
 
     Preconditions.checkArgument(pElement instanceof UsageStatisticsState);
     UsageStatisticsState element = (UsageStatisticsState)pElement;
@@ -59,18 +56,18 @@ class UsageStatisticsPrecisionAdjustment implements PrecisionAdjustment {
 
     Precision oldWrappedPrecision = ((UsageStatisticsPrecision)oldPrecision).getWrappedPrecision();
 
-    Triple<AbstractState, Precision, Action> unwrappedResult = wrappedPrecAdjustment.prec(oldElement, oldWrappedPrecision, elements);
+    PrecisionAdjustmentResult unwrappedResult = wrappedPrecAdjustment.prec(oldElement, oldWrappedPrecision, elements, fullState);
 
-    AbstractState newElement = unwrappedResult.getFirst();
-    Precision newWrappedPrecision = unwrappedResult.getSecond();
-    Action action = unwrappedResult.getThird();
+    AbstractState newElement = unwrappedResult.abstractState();
+    Precision newWrappedPrecision = unwrappedResult.precision();
+    Action action = unwrappedResult.action();
 
     if ((oldElement == newElement) && (oldWrappedPrecision == newWrappedPrecision)) {
       // nothing has changed
-      return Triple.of(pElement, oldPrecision, action);
+      return PrecisionAdjustmentResult.create(pElement, oldPrecision, action);
     }
     AbstractState resultElement = element.clone(newElement);
     UsageStatisticsPrecision newPrecision = ((UsageStatisticsPrecision)oldPrecision).clone(newWrappedPrecision);
-    return Triple.of(resultElement, (Precision)newPrecision, action);
+    return PrecisionAdjustmentResult.create(resultElement, newPrecision, action);
   }
 }

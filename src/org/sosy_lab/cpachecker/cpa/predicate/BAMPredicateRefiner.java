@@ -22,6 +22,10 @@
  *    http://cpachecker.sosy-lab.org
  */
 package org.sosy_lab.cpachecker.cpa.predicate;
+import static com.google.common.collect.FluentIterable.from;
+import static com.google.common.collect.Iterables.getOnlyElement;
+import static org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState.getPredicateState;
+import static org.sosy_lab.cpachecker.util.AbstractStates.*;
 
 import java.io.PrintStream;
 import java.util.ArrayDeque;
@@ -32,9 +36,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
-import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.log.LogManager;
@@ -58,7 +60,6 @@ import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
 import org.sosy_lab.cpachecker.cpa.arg.ARGReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.bam.AbstractBAMBasedRefiner;
-import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateRefiner.BAMPredicateAbstractionRefinementStrategy;
 import org.sosy_lab.cpachecker.cpa.predicate.relevantpredicates.RefineableRelevantPredicatesComputer;
 import org.sosy_lab.cpachecker.cpa.predicate.relevantpredicates.RelevantPredicatesComputer;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
@@ -71,7 +72,6 @@ import org.sosy_lab.cpachecker.util.predicates.Solver;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.PathFormulaManager;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.Region;
-import org.sosy_lab.cpachecker.util.predicates.interfaces.view.FormulaManagerView;
 import org.sosy_lab.cpachecker.util.predicates.interpolation.InterpolationManager;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormula;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.SSAMap;
@@ -443,7 +443,7 @@ public class BAMPredicateRefiner extends AbstractBAMBasedRefiner implements Stat
       // Not implemented for BAM (different sets of reached states have to be handled)
     }
 
-    Map<CFANode, Set<AbstractionPredicate>> cache2 = new HashMap<>();
+    /*Map<CFANode, Set<AbstractionPredicate>> cache2 = new HashMap<>();
     public void checkRelevantFormulas(List<Pair<BooleanFormula, ARGState>> pList, PredicatePrecision precision) {
 
       BlockPartitioning partitioning = predicateCpa.getPartitioning();
@@ -491,7 +491,7 @@ public class BAMPredicateRefiner extends AbstractBAMBasedRefiner implements Stat
           cache2.put(currentNode, allPredicates);
         }
       }
-    }
+    }*/
   }
 
   @Override

@@ -22,6 +22,7 @@
  *    http://cpachecker.sosy-lab.org
  */
 package org.sosy_lab.cpachecker.core;
+import static com.google.common.base.Preconditions.*;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -63,7 +64,7 @@ public class CounterexampleInfo {
 
   public static CounterexampleInfo spurious(Object data) {
   	CounterexampleInfo result = new CounterexampleInfo(true, null, null);
-  	result.furtherInfo.add(Pair.of(data, (Path)null));
+  	result.furtherInfo.add(Pair.of(data, (PathTemplate)null));
   	return result;
   }
 

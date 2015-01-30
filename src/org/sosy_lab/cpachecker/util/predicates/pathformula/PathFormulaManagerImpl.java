@@ -23,7 +23,9 @@
  */
 package org.sosy_lab.cpachecker.util.predicates.pathformula;
 
+import static com.google.common.base.Objects.firstNonNull;
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.collect.FluentIterable.from;
 
 import java.util.Collections;
 import java.util.List;
@@ -31,6 +33,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.regex.Pattern;
+
+import javax.annotation.Nullable;
 
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.Triple;
@@ -64,7 +68,6 @@ import org.sosy_lab.cpachecker.util.predicates.interfaces.PathFormulaManager;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.view.BooleanFormulaManagerView;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.view.FormulaManagerView;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.view.FunctionFormulaManagerView;
-import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormulaManagerImpl.MergeResult;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.SSAMap.SSAMapBuilder;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.arrays.CToFormulaConverterWithArrays;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.arrays.CtoFormulaTypeHandlerWithArrays;
@@ -376,7 +379,7 @@ public class PathFormulaManagerImpl implements PathFormulaManager {
       return finalConjunct;
     }
 
-    T getResult() {
+    public T getResult() {
       return result;
     }
   }
@@ -684,6 +687,7 @@ public class PathFormulaManagerImpl implements PathFormulaManager {
     return preds;
   }
 
+  @Override
   public PointerTargetSetManager getPtsManager() {
     return ptsManager;
   }
@@ -697,6 +701,7 @@ public class PathFormulaManagerImpl implements PathFormulaManager {
         oldFormula.getLength());
   }
 
+  @Override
   public void clearCaches() {
     typeHandler.clear();
   }

@@ -23,6 +23,8 @@
  */
 package org.sosy_lab.cpachecker.cpa.callstack;
 
+import static org.sosy_lab.cpachecker.util.CFAUtils.leavingEdges;
+
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -241,6 +243,7 @@ public class CallstackTransferRelation extends SingleEdgeTransferRelation {
     } else if (!skipRecursion) {
       return true;
     }
+    return hasRecursion(element, pCallEdge.getSuccessor().getFunctionName());
   }
 
   protected boolean hasFunctionPointerRecursion(final CallstackState element,

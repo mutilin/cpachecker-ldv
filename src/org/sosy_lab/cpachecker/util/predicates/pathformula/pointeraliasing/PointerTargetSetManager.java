@@ -193,34 +193,34 @@ public class PointerTargetSetManager {
 
     return new MergeResult<>(resultPTS, mergeFormula1, mergeFormula2, basesMergeFormula);
   }
-  
+
   public PointerTargetSet expand(PointerTargetSet rootPts, PointerTargetSet reducedPts, String functionPrefix, SSAMap ssa) {
     if (rootPts.isEmpty() && reducedPts.isEmpty()) {
       return PointerTargetSet.emptyPointerTargetSet();
     }
-    
+
     if (rootPts.equals(reducedPts)) {
       return rootPts;
     }
-    
+
     PersistentSortedMap<String, CType> bases = rootPts.bases;
-    
+
     for (String name : reducedPts.bases.keySet()) {
       if (name.contains(functionPrefix)) {
         bases = bases.putAndCopy(name, reducedPts.bases.get(name));
       }
     }
-    
+
     PointerTargetSet fakePts =
         new PointerTargetSet(bases,
                              rootPts.lastBase,
                              PathCopyingPersistentTreeMap.<CompositeField, Boolean>of(),
                              PathCopyingPersistentTreeMap.<String, DeferredAllocationPool>of(),
                              PathCopyingPersistentTreeMap.<String, PersistentList<PointerTarget>>of());
-    
+
     PointerTargetSet resultPTS;
     try {
-      resultPTS = mergePointerTargetSets(rootPts, fakePts, ssa).getSecond();
+      resultPTS = mergePointerTargetSets(rootPts, fakePts, ssa).getResult();
     } catch (InterruptedException e) {
       // TODO Auto-generated catch block
       e.printStackTrace();

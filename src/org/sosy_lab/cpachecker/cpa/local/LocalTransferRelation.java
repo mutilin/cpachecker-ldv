@@ -34,14 +34,12 @@ import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
-import org.sosy_lab.cpachecker.cfa.ast.IAExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CAssignment;
 import org.sosy_lab.cpachecker.cfa.ast.c.CDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCall;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallAssignmentStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CInitializer;
 import org.sosy_lab.cpachecker.cfa.ast.c.CInitializerExpression;
@@ -49,7 +47,6 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CParameterDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CVariableDeclaration;
-import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
@@ -78,6 +75,8 @@ import org.sosy_lab.cpachecker.util.identifiers.LocalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.ReturnIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
+import com.google.common.base.Optional;
+
 @Options(prefix="cpa.local")
 public class LocalTransferRelation implements TransferRelation {
 
@@ -94,7 +93,7 @@ public class LocalTransferRelation implements TransferRelation {
     idCreator = new IdentifierCreator();
   }
   @Override
-  public Collection<? extends AbstractState> getAbstractSuccessors(AbstractState pState, Precision pPrecision,
+  public Collection<? extends AbstractState> getAbstractSuccessorsForEdge(AbstractState pState, Precision pPrecision,
       CFAEdge pCfaEdge) throws CPATransferException, InterruptedException {
 
     LocalState LocalElement = (LocalState) pState;
@@ -179,11 +178,11 @@ public class LocalTransferRelation implements TransferRelation {
   }
 
   private void handleReturnStatementEdge(LocalState pSuccessor, CReturnStatementEdge pCfaEdge) throws HandleCodeException {
-    CExpression returnExpression = pCfaEdge.getExpression();
-    if (returnExpression != null) {
-      int dereference = findDereference(returnExpression.getExpressionType());
+    Optional<CExpression> returnExpression = pCfaEdge.getExpression();
+    if (returnExpression.isPresent()) {
+      int dereference = findDereference(returnExpression.get().getExpressionType());
       if (dereference > 0) {
-        AbstractIdentifier returnId = createId(returnExpression, dereference);
+        AbstractIdentifier returnId = createId(returnExpression.get(), dereference);
         DataType type = pSuccessor.getType(returnId);
         pSuccessor.set(ReturnIdentifier.getInstance(), type);
       }
@@ -366,6 +365,15 @@ public class LocalTransferRelation implements TransferRelation {
   public Collection<? extends AbstractState> strengthen(AbstractState pState, List<AbstractState> pOtherStates,
       CFAEdge pCfaEdge, Precision pPrecision) throws CPATransferException, InterruptedException {
     return null;
+  }
+  @Override
+  public Collection<? extends AbstractState> getAbstractSuccessors(AbstractState pState, Precision pPrecision)
+      throws CPATransferException, InterruptedException {
+    throw new UnsupportedOperationException(
+        "The " + this.getClass().getSimpleName()
+        + " expects to be called with a CFA edge supplied"
+        + " and does not support configuration where it needs to"
+        + " return abstract states for any CFA edge.");
   }
 
 }

@@ -23,6 +23,8 @@
  */
 package org.sosy_lab.cpachecker.cpa.bam;
 
+import static org.sosy_lab.cpachecker.cpa.bam.AbstractBAMBasedRefiner.DUMMY_STATE_FOR_MISSING_BLOCK;
+import static org.sosy_lab.cpachecker.util.AbstractStates.extractLocation;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -36,14 +38,12 @@ import java.util.logging.Level;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.blocks.BlockPartitioning;
-import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
-import org.sosy_lab.cpachecker.cpa.bam.BAMCEXSubgraphComputer.BackwardARGState;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
 import org.sosy_lab.cpachecker.util.AbstractStates;
@@ -254,8 +254,7 @@ public class BAMCEXSubgraphComputer {
         pPathElementToReachedState.put(newParent, parent);
         //and remember to explore the parent later
         openElements.push(parent);
-        CFAEdge edge = BAMARGUtils.getEdgeToChild(parent, currentElement);
-        if (edge == null) {
+        if (expandedToReducedCache.containsKey(currentElement)) {
           //this is a summarized call and thus an direct edge could not be found
           //we have the transfer function to handle this case, as our reachSet is wrong
           //(we have to use the cached ones)

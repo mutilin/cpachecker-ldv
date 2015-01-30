@@ -97,4 +97,10 @@ public class UsageStatisticsReducer implements Reducer {
     return getVariableExpandedState(pRootState, pReducedContext, pReducedState);
   }
 
+  @Override
+  public AbstractState rebuildStateAfterFunctionCall(AbstractState pRootState, AbstractState pEntryState,
+      AbstractState pExpandedState, CFANode pExitLocation) {
+    return pExpandedState;
+  }
+
 }

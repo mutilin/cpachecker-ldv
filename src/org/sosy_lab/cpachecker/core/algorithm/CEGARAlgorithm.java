@@ -22,6 +22,9 @@
  *    http://cpachecker.sosy-lab.org
  */
 package org.sosy_lab.cpachecker.core.algorithm;
+import static com.google.common.collect.FluentIterable.from;
+import static org.sosy_lab.cpachecker.util.AbstractStates.*;
+import static org.sosy_lab.cpachecker.util.statistics.StatisticsUtils.div;
 
 import java.io.PrintStream;
 import java.lang.reflect.InvocationTargetException;
@@ -46,6 +49,7 @@ import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Refiner;
+import org.sosy_lab.cpachecker.core.interfaces.StateSpacePartition;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
@@ -59,6 +63,8 @@ import org.sosy_lab.cpachecker.util.AbstractStates;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
+
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 @Options(prefix="cegar")
 public class CEGARAlgorithm implements Algorithm, StatisticsProvider {
@@ -254,7 +260,7 @@ public class CEGARAlgorithm implements Algorithm, StatisticsProvider {
             CFANode firstNode = AbstractStates.extractLocation(firstState);
             Precision precision = reached.getPrecision(firstState);
             reached.clear();
-            reached.add((((CPAAlgorithm)algorithm).cpa).getInitialState(firstNode), precision);
+            reached.add((((CPAAlgorithm)algorithm).cpa).getInitialState(firstNode, StateSpacePartition.getDefaultPartition()), precision);
             assert !from(reached).anyMatch(IS_TARGET_STATE);
           }
         //}

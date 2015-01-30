@@ -47,7 +47,7 @@ public class FunctionPointerReducer implements Reducer {
     FunctionPointerState state = (FunctionPointerState) pRootState;
     FunctionPointerState.Builder builder = state.createBuilder();
     builder.addGlobalVariables((FunctionPointerState)pReducedState);
-    builder.clearVariablesWithPrefix(pReducedContext.getCallNode().getFunctionName());
+    builder.clearVariablesForFunction(pReducedContext.getCallNode().getFunctionName());
     return builder.build();
   }
 
@@ -82,6 +82,12 @@ public class FunctionPointerReducer implements Reducer {
   public AbstractState getVariableExpandedStateForProofChecking(AbstractState pRootState, Block pReducedContext,
       AbstractState pReducedState) {
     return pRootState;
+  }
+
+  @Override
+  public AbstractState rebuildStateAfterFunctionCall(AbstractState pRootState, AbstractState pEntryState,
+      AbstractState pExpandedState, CFANode pExitLocation) {
+    return pExpandedState;
   }
 
 }

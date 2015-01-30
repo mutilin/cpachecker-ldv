@@ -22,6 +22,9 @@
  *    http://cpachecker.sosy-lab.org
  */
 package org.sosy_lab.cpachecker.cpa.predicate;
+import static com.google.common.collect.FluentIterable.from;
+import static org.sosy_lab.cpachecker.util.AbstractStates.toState;
+import static org.sosy_lab.cpachecker.util.statistics.StatisticsWriter.writingStatisticsTo;
 
 import java.io.PrintStream;
 import java.util.Collection;
@@ -155,7 +158,7 @@ public class PredicateCPARefiner extends AbstractARGBasedRefiner implements Stat
   private final LogManager logger;
 
   protected final PathFormulaManager pfmgr;
-  private final FormulaManagerView fmgr;
+  protected final FormulaManagerView fmgr;
   private final InterpolationManager formulaManager;
   private final PathChecker pathChecker;
   private final RefinementStrategy strategy;

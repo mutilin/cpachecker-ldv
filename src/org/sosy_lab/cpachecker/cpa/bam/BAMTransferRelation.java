@@ -22,6 +22,7 @@
  *    http://cpachecker.sosy-lab.org
  */
 package org.sosy_lab.cpachecker.cpa.bam;
+import static org.sosy_lab.cpachecker.util.AbstractStates.*;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -34,6 +35,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.Stack;
 import java.util.logging.Level;
+
+import javax.annotation.Nonnull;
 
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.Triple;
@@ -63,7 +66,6 @@ import org.sosy_lab.cpachecker.core.reachedset.ReachedSetFactory;
 import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
 import org.sosy_lab.cpachecker.cpa.arg.ARGReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
-import org.sosy_lab.cpachecker.cpa.bam.BAMTransferRelation.PCCInformation;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackCPA;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackReducer;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;

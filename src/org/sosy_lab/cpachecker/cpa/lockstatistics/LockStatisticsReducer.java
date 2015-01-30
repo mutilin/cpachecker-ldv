@@ -99,4 +99,10 @@ public class LockStatisticsReducer implements Reducer {
   public void setCallstackReducer(CallstackReducer r) {
     cReducer = r;
   }
+
+  @Override
+  public AbstractState rebuildStateAfterFunctionCall(AbstractState pRootState, AbstractState pEntryState,
+      AbstractState pExpandedState, CFANode pExitLocation) {
+    return pExpandedState;
+  }
 }

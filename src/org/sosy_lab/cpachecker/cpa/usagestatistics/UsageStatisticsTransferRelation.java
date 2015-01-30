@@ -27,6 +27,7 @@ import static org.sosy_lab.cpachecker.util.AbstractStates.extractLocation;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -66,9 +67,7 @@ import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackTransferRelation;
-import org.sosy_lab.cpachecker.cpa.composite.CompositeTransferRelation;
 import org.sosy_lab.cpachecker.cpa.local.LocalState.DataType;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsPrecision;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsTransferRelation;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.BinderFunctionInfo.LinkerInfo;
@@ -133,41 +132,34 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
   @Override
   public Collection<? extends AbstractState> getAbstractSuccessors(
-      AbstractState pElement, Precision pPrecision, CFAEdge pCfaEdge)
+      AbstractState pElement, Precision pPrecision)
       throws InterruptedException, CPATransferException {
 
-    Collection<UsageStatisticsState> results;
-    statistics.transferRelationTimer.start();
+    Collection<AbstractState> results;
     assert (pPrecision instanceof UsageStatisticsPrecision);
 
-    if (pCfaEdge == null) {
-      CFANode node = extractLocation(pElement);
-      results = new ArrayList<>(node.getNumLeavingEdges());
+    CFANode node = extractLocation(pElement);
+    results = new ArrayList<>(node.getNumLeavingEdges());
 
-      for (int edgeIdx = 0; edgeIdx < node.getNumLeavingEdges(); edgeIdx++) {
-        CFAEdge edge = node.getLeavingEdge(edgeIdx);
-          getAbstractSuccessorForEdge((UsageStatisticsState)pElement, (UsageStatisticsPrecision)pPrecision, edge, results);
-      }
-
-    } else {
-      results = new ArrayList<>(1);
-      getAbstractSuccessorForEdge((UsageStatisticsState)pElement, (UsageStatisticsPrecision)pPrecision, pCfaEdge, results);
-
+    for (int edgeIdx = 0; edgeIdx < node.getNumLeavingEdges(); edgeIdx++) {
+      CFAEdge edge = node.getLeavingEdge(edgeIdx);
+      results.addAll(getAbstractSuccessorsForEdge(pElement, pPrecision, edge));
     }
-    statistics.transferRelationTimer.stop();
     return results;
   }
 
-  private void getAbstractSuccessorForEdge(UsageStatisticsState oldState,
-      UsageStatisticsPrecision pPrecision, CFAEdge pCfaEdge, Collection<UsageStatisticsState> results)
-      throws InterruptedException, CPATransferException {
+  @Override
+  public Collection<? extends AbstractState> getAbstractSuccessorsForEdge(AbstractState pState, Precision pPrecision,
+      CFAEdge pCfaEdge) throws CPATransferException, InterruptedException {
 
+    statistics.transferRelationTimer.start();
+    Collection<AbstractState> result = new ArrayList<>();
     CFAEdge currentEdge = pCfaEdge;
-
+    UsageStatisticsState oldState = (UsageStatisticsState) pState;
     CFANode node = AbstractStates.extractLocation(oldState);
     if (node instanceof CFunctionEntryNode && abortfunctions != null && abortfunctions.contains(node.getFunctionName())) {
       logger.log(Level.FINEST, currentEdge + " is abort edge, analysis was stopped");
-      return;
+      return Collections.emptySet();
     }
 
     if (checkFunciton(pCfaEdge, skippedfunctions)) {
@@ -186,14 +178,17 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
     AbstractState oldWrappedState = oldState.getWrappedState();
     UsageStatisticsState newState = oldState.clone();
-    newState = handleEdge(pPrecision, newState, pCfaEdge);
-    Collection<? extends AbstractState> newWrappedStates = wrappedTransfer.getAbstractSuccessors(oldWrappedState, pPrecision.getWrappedPrecision(), currentEdge);
+    newState = handleEdge((UsageStatisticsPrecision)pPrecision, newState, pCfaEdge);
+    Collection<? extends AbstractState> newWrappedStates = wrappedTransfer.getAbstractSuccessorsForEdge(oldWrappedState,
+        ((UsageStatisticsPrecision)pPrecision).getWrappedPrecision(), currentEdge);
     for (AbstractState newWrappedState : newWrappedStates) {
       UsageStatisticsState resultState = newState.clone(newWrappedState);
       if (resultState != null) {
-        results.add(resultState);
+        result.add(resultState);
       }
     }
+    statistics.transferRelationTimer.stop();
+    return result;
   }
 
   private boolean checkFunciton(CFAEdge pCfaEdge, Set<String> functionSet) {
@@ -208,7 +203,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
   private UsageStatisticsState handleEdge(UsageStatisticsPrecision precision, UsageStatisticsState newState
       , CFAEdge pCfaEdge) throws CPATransferException {
-    
+
     switch(pCfaEdge.getEdgeType()) {
 
       case DeclarationEdge: {
@@ -503,7 +498,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     LineInfo lineInfo = new LineInfo(line, node);
     EdgeInfo info = new EdgeInfo(eType);
     UsageInfo usage = new UsageInfo(access, lineInfo, info, lockState, fullCallstack);
-    
+
     state.addUsage(singleId, usage);
   }
 

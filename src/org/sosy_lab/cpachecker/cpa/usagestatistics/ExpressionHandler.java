@@ -41,7 +41,6 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CIntegerLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CPointerExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStringLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CTypeIdExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CTypeIdInitializerExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
@@ -135,11 +134,6 @@ public class ExpressionHandler implements CExpressionVisitor<Void, HandleCodeExc
     //In all other unary operation we only read the operand
     accessMode = Access.READ;
     expression.getOperand().accept(this);
-    return null;
-  }
-
-  @Override
-  public Void visit(CTypeIdInitializerExpression pCTypeIdInitializerExpression) throws HandleCodeException {
     return null;
   }
 

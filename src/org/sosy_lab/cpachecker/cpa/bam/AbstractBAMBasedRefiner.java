@@ -22,7 +22,6 @@
  *    http://cpachecker.sosy-lab.org
  */
 package org.sosy_lab.cpachecker.cpa.bam;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -30,11 +29,6 @@ import java.util.Map;
 
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.time.Timer;
-<<<<<<< HEAD
-import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
-import org.sosy_lab.cpachecker.cfa.model.CFANode;
-=======
->>>>>>> master
 import org.sosy_lab.cpachecker.core.CounterexampleInfo;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
@@ -129,28 +123,6 @@ public abstract class AbstractBAMBasedRefiner extends AbstractARGBasedRefiner {
     } finally {
       computePathTimer.stop();
     }
-  }
-
-
-  protected ARGPath computeCounterexample(ARGState root) {
-    ARGPath path = new ARGPath();
-    ARGState currentElement = root;
-    while (currentElement.getChildren().size() > 0) {
-      ARGState child = currentElement.getChildren().iterator().next();
-
-      CFAEdge edge = currentElement.getEdgeToChild(child);
-      path.add(Pair.of(currentElement, edge));
-
-      currentElement = child;
-    }
-    CFANode node = extractLocation(currentElement);
-    if (node.getNumLeavingEdges() > 0) {
-    	//It may be the last node, which has no leaving edges
-      path.add(Pair.of(currentElement, node.getLeavingEdge(0)));
-    } else {
-      path.add(Pair.of(currentElement, node.getEnteringEdge(0)));
-    }
-    return path;
   }
 
   public static class BAMReachedSet extends ARGReachedSet.ForwardingARGReachedSet {

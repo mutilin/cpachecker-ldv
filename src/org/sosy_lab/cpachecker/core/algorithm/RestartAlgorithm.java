@@ -22,6 +22,10 @@
  *    http://cpachecker.sosy-lab.org
  */
 package org.sosy_lab.cpachecker.core.algorithm;
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Strings.isNullOrEmpty;
+import static com.google.common.collect.FluentIterable.from;
+import static org.sosy_lab.cpachecker.util.AbstractStates.IS_TARGET_STATE;
 
 import java.io.IOException;
 import java.io.PrintStream;
@@ -29,6 +33,8 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.logging.Level;
+
+import javax.annotation.Nullable;
 
 import org.sosy_lab.common.Triple;
 import org.sosy_lab.common.configuration.Configuration;
@@ -381,7 +387,6 @@ public class RestartAlgorithm implements Algorithm, StatisticsProvider {
     Configuration singleConfig = singleConfigBuilder.build();
     LogManager singleLogger = logger.withComponentName("Analysis" + (stats.noOfAlgorithmsUsed+1));
 
-    RestartAlgorithmOptions singleOptions = new RestartAlgorithmOptions();
     singleConfig.inject(singleOptions);
 
     ResourceLimitChecker singleLimits = ResourceLimitChecker.fromConfiguration(singleConfig, singleLogger, singleShutdownNotifier);

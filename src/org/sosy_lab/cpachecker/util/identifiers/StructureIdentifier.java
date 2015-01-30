@@ -38,6 +38,7 @@ import org.sosy_lab.cpachecker.cfa.types.c.CSimpleType;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
 import org.sosy_lab.cpachecker.cfa.types.c.CTypeVisitor;
 import org.sosy_lab.cpachecker.cfa.types.c.CTypedefType;
+import org.sosy_lab.cpachecker.cfa.types.c.CVoidType;
 import org.sosy_lab.cpachecker.cpa.local.LocalState.DataType;
 import org.sosy_lab.cpachecker.cpa.local.LocalTransferRelation;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
@@ -92,6 +93,11 @@ public class StructureIdentifier extends SingleIdentifier{
     public CType visit(CTypedefType pTypedefType) throws HandleCodeException {
       //This is strange, but some typedefs are typedefs itself
       return pTypedefType.getRealType().accept(this);
+    }
+
+    @Override
+    public CType visit(CVoidType pVoidType) throws HandleCodeException {
+      return pVoidType;
     }
 
   }

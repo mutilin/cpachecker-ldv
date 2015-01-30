@@ -119,11 +119,6 @@ import org.sosy_lab.cpachecker.util.predicates.pathformula.pointeraliasing.Point
 
 import com.google.common.base.CharMatcher;
 import com.google.common.base.Optional;
-<<<<<<< HEAD
-import com.google.common.collect.ImmutableList;
-=======
-import com.google.common.collect.ImmutableMap;
->>>>>>> master
 import com.google.common.collect.ImmutableSet;
 
 /**

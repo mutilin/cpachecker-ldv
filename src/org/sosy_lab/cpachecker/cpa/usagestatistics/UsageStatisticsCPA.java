@@ -48,6 +48,7 @@ import org.sosy_lab.cpachecker.core.interfaces.MergeOperator;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustment;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
+import org.sosy_lab.cpachecker.core.interfaces.StateSpacePartition;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.interfaces.StopOperator;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
@@ -84,7 +85,7 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
   @Option(name="stop", toUppercase=true, values={"SEP", "JOIN", "NEVER"},
       description="which stop operator to use for LockStatisticsCPA")
   private String stopType = "SEP";
-  
+
   @Option(name="precisionReset", description="The value of marked unsafes, after which the precision should be cleaned")
   private int precisionReset = Integer.MAX_VALUE;
 
@@ -175,13 +176,8 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
   }
 
   @Override
-  public AbstractState getInitialState(CFANode pNode) {
-    return new UsageStatisticsState(getWrappedCpa().getInitialState(pNode), container);
-  }
-
-  @Override
-  public Precision getInitialPrecision(CFANode pNode) {
-    precision = new UsageStatisticsPrecision(this.getWrappedCpa().getInitialPrecision(pNode));
+  public Precision getInitialPrecision(CFANode pNode, StateSpacePartition p) {
+    precision = new UsageStatisticsPrecision(this.getWrappedCpa().getInitialPrecision(pNode, p));
     PresisionParser parser = new PresisionParser(outputFileName, cfa);
     parser.parse(precision);
     return precision;
@@ -208,5 +204,10 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
 
   public int getThePrecisionCleaningLimit() {
     return precisionReset;
+  }
+
+  @Override
+  public AbstractState getInitialState(CFANode pNode, StateSpacePartition pPartition) {
+    return new UsageStatisticsState(getWrappedCpa().getInitialState(pNode, pPartition), container);
   }
 }

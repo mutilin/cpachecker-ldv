@@ -22,6 +22,9 @@
  *    http://cpachecker.sosy-lab.org
  */
 package org.sosy_lab.cpachecker.util.predicates.interpolation;
+import static com.google.common.base.Preconditions.*;
+import static com.google.common.collect.FluentIterable.from;
+import static org.sosy_lab.cpachecker.util.statistics.StatisticsUtils.div;
 
 import java.io.PrintStream;
 import java.util.ArrayDeque;
@@ -87,8 +90,6 @@ import com.google.common.collect.ImmutableMultiset;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-
-import de.uni_freiburg.informatik.ultimate.smtinterpol.interpolate.Interpolator;
 
 
 @Options(prefix="cpa.predicate.refinement")

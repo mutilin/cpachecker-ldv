@@ -23,6 +23,7 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -31,6 +32,8 @@ import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.WrapperPrecision;
 import org.sosy_lab.cpachecker.cpa.local.LocalState.DataType;
 import org.sosy_lab.cpachecker.util.identifiers.GeneralIdentifier;
+
+import com.google.common.base.Predicate;
 
 
 public class UsageStatisticsPrecision implements WrapperPrecision {
@@ -138,21 +141,25 @@ public class UsageStatisticsPrecision implements WrapperPrecision {
   }
 
   @Override
-  public Precision replaceWrappedPrecision(Precision newPrecision, Class<? extends Precision> replaceType) {
-
-    if (replaceType.equals(UsageStatisticsPrecision.class)) {
-      return newPrecision;
-    } else if (replaceType.equals(wrappedPrecision.getClass())) {
-      UsageStatisticsPrecision result = new UsageStatisticsPrecision(newPrecision);
+  public Precision replaceWrappedPrecision(Precision pNewPrecision, Predicate<? super Precision> pReplaceType) {
+    if (pReplaceType.apply(this)) {
+      return pNewPrecision;
+    } else if (pReplaceType.apply(wrappedPrecision)) {
+      UsageStatisticsPrecision result = new UsageStatisticsPrecision(pNewPrecision);
       result.localStatistics = this.localStatistics;
       return result;
     } else if (wrappedPrecision instanceof WrapperPrecision) {
-      UsageStatisticsPrecision result = new UsageStatisticsPrecision(((WrapperPrecision) wrappedPrecision).replaceWrappedPrecision(newPrecision, replaceType));
+      UsageStatisticsPrecision result = new UsageStatisticsPrecision(((WrapperPrecision) wrappedPrecision).replaceWrappedPrecision(pNewPrecision, pReplaceType));
       result.localStatistics = this.localStatistics;
       return result;
 
     } else {
       return null;
     }
+  }
+
+  @Override
+  public Iterable<Precision> getWrappedPrecisions() {
+    return Collections.singleton(wrappedPrecision);
   }
 }

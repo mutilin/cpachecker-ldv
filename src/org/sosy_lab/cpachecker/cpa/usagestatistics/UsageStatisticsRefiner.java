@@ -25,7 +25,6 @@ package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
 import java.io.PrintStream;
 import java.util.Collection;
-import java.util.Iterator;
 import java.util.List;
 import java.util.logging.Level;
 
@@ -34,7 +33,6 @@ import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.CounterexampleInfo;
-import org.sosy_lab.cpachecker.core.MainCPAStatistics;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Refiner;
@@ -44,20 +42,21 @@ import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
 import org.sosy_lab.cpachecker.cpa.arg.ARGReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
+import org.sosy_lab.cpachecker.cpa.arg.ARGUtils;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateCPA;
 import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateRefiner;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicatePrecision;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.caches.InterpolantCache;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.AbstractUsagePointSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsageContainer;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.CPAs;
 import org.sosy_lab.cpachecker.util.Precisions;
-import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
+
+import com.google.common.base.Predicates;
 
 
 public class UsageStatisticsRefiner extends BAMPredicateRefiner implements StatisticsProvider {
@@ -170,7 +169,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       PredicatePrecision predicates = Precisions.extractPrecisionByType(p, PredicatePrecision.class);
       System.out.println("Clean: " + predicates.getLocalPredicates().size());
       pReached.updatePrecision(pReached.getFirstState(),
-          Precisions.replaceByType(p, PredicatePrecision.empty(), PredicatePrecision.class));
+          Precisions.replaceByType(p, PredicatePrecision.empty(), Predicates.instanceOf(PredicatePrecision.class)));
       iCache.reset();
       BAMPredicateCPA bamcpa = CPAs.retrieveCPA(cpa, BAMPredicateCPA.class);
       if (bamcpa != null) {
@@ -178,7 +177,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       }
       lastFalseUnsafeSize = originUnsafeSize;
       lastTrueUnsafes = newTrueUnsafeSize;
-    } 
+    }
     iCache.removeUnusedCacheEntries();
     pStat.UnsafeCheck.stopIfRunning();
     return refinementFinish;
@@ -189,7 +188,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       //we delete this state from other unsafe
     ARGState subgraph = transfer.findPath(pLastElement, pathStateToReachedState, stack);
     assert (subgraph != null);
-    return computeCounterexample(subgraph);
+    return ARGUtils.getRandomPath(subgraph);
   }
 
   @Override

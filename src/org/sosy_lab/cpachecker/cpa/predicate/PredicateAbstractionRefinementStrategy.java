@@ -22,6 +22,10 @@
  *    http://cpachecker.sosy-lab.org
  */
 package org.sosy_lab.cpachecker.cpa.predicate;
+import static com.google.common.base.Preconditions.*;
+import static org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState.getPredicateState;
+import static org.sosy_lab.cpachecker.cpa.predicate.PredicatePrecision.*;
+import static org.sosy_lab.cpachecker.util.AbstractStates.extractLocation;
 
 import java.io.IOException;
 import java.io.PrintStream;

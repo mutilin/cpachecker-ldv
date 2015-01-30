@@ -58,6 +58,7 @@ import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.LineInfo;
+import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCCodeException;
 
 import com.google.common.collect.ImmutableMap;
@@ -74,7 +75,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
 
   private final Set<LockInfo> locks;
   private LogManager logger;
-  
+
   private CallstackState fullCallstack = null;
 
   int i = 0;
@@ -89,7 +90,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
   }
 
   @Override
-  public Collection<LockStatisticsState> getAbstractSuccessors(AbstractState element, Precision pPrecision
+  public Collection<LockStatisticsState> getAbstractSuccessorsForEdge(AbstractState element, Precision pPrecision
       , CFAEdge cfaEdge) {
 
     return Collections.singleton(((LockStatisticsState)element).clone());
@@ -270,7 +271,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
 
   private LockStatisticsState handleStatement(LockStatisticsState element,
       CStatement statement, LineInfo line, String currentFunction) {
-    
+
     LockStatisticsState newElement = element.clone();
 
     if (statement instanceof CAssignment) {
@@ -429,12 +430,22 @@ public class LockStatisticsTransferRelation implements TransferRelation
     logger.log(Level.FINER, "Set a lock level " + level + " at line " + line + ", Callstack: " + fullCallstack);
     newElement.set(lock.lockName, level, line, fullCallstack, "");
   }
-  
+
   public void setCallstackState(CallstackState state) {
     fullCallstack = state;
   }
 
   public CallstackState getFullCallstack() {
     return fullCallstack;
+  }
+
+  @Override
+  public Collection<? extends AbstractState> getAbstractSuccessors(AbstractState pState, Precision pPrecision)
+      throws CPATransferException, InterruptedException {
+    throw new UnsupportedOperationException(
+        "The " + this.getClass().getSimpleName()
+        + " expects to be called with a CFA edge supplied"
+        + " and does not support configuration where it needs to"
+        + " return abstract states for any CFA edge.");
   }
 }
