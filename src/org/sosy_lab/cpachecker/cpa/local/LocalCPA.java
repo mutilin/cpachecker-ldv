@@ -34,6 +34,7 @@ import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.log.LogManager;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
 import org.sosy_lab.cpachecker.core.defaults.MergeJoinOperator;
@@ -56,10 +57,13 @@ import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
 import org.sosy_lab.cpachecker.core.interfaces.StopOperator;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
+import org.sosy_lab.cpachecker.core.interfaces.pcc.ProofChecker;
+import org.sosy_lab.cpachecker.exceptions.CPAException;
+import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 
 
 @Options(prefix="cpa.local")
-public class LocalCPA implements ConfigurableProgramAnalysisWithBAM, StatisticsProvider {
+public class LocalCPA implements ConfigurableProgramAnalysisWithBAM, StatisticsProvider, ProofChecker {
     private LocalDomain abstractDomain;
     private MergeOperator mergeOperator;
     private StopOperator stopOperator;
@@ -168,5 +172,20 @@ public class LocalCPA implements ConfigurableProgramAnalysisWithBAM, StatisticsP
     @Override
     public void collectStatistics(Collection<Statistics> pStatsCollection) {
       pStatsCollection.add(statistics);
+    }
+
+    @Override
+    public boolean areAbstractSuccessors(AbstractState pState, CFAEdge pCfaEdge,
+        Collection<? extends AbstractState> pSuccessors) throws CPATransferException, InterruptedException {
+      Collection<? extends AbstractState> result = transferRelation.getAbstractSuccessorsForEdge(pState, SingletonPrecision.getInstance(), pCfaEdge);
+      return result.equals(pSuccessors);
+    }
+
+    @Override
+    public boolean isCoveredBy(AbstractState pState, AbstractState pOtherState) throws CPAException,
+        InterruptedException {
+      LocalState firstState = (LocalState) pState;
+      LocalState secondState = (LocalState) pOtherState;
+      return firstState.isLessOrEqual(secondState);
     }
 }

@@ -39,6 +39,7 @@ import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
 import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSetWrapper;
+import org.sosy_lab.cpachecker.cpa.predicate.PredicatePrecision;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.util.Precisions;
 
@@ -238,12 +239,12 @@ public class ARGReachedSet {
    */
   private Precision adaptPrecision(Precision pOldPrecision, Precision pNewPrecision,
     Predicate<? super Precision> pPrecisionType) {
-    /*PredicatePrecision old = Precisions.extractPrecisionByType(pOldPrecision, PredicatePrecision.class);
+    PredicatePrecision old = Precisions.extractPrecisionByType(pOldPrecision, PredicatePrecision.class);
     if (old != null) {
       PredicatePrecision newP = Precisions.extractPrecisionByType(pNewPrecision, PredicatePrecision.class);
       PredicatePrecision merged = newP.mergeWith(old);
-      pNewPrecision = Precisions.replaceByType(pNewPrecision, merged, PredicatePrecision.class);
-    }*/
+      pNewPrecision = Precisions.replaceByType(pNewPrecision, merged, pPrecisionType);
+    }
     return Precisions.replaceByType(pOldPrecision, pNewPrecision, pPrecisionType);
   }
 

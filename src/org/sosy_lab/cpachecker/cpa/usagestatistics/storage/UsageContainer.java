@@ -46,7 +46,7 @@ public class UsageContainer {
   private final Map<SingleIdentifier, RefinedUsagePointSet> refinedStat;
 
   private final Set<SingleIdentifier> falseUnsafes;
-  
+
   private final LogManager logger;
 
   public Timer resetTimer = new Timer();
@@ -108,7 +108,7 @@ public class UsageContainer {
     result.addAll(refinedStat.keySet());
     return result.iterator();
   }
-  
+
   public Iterator<SingleIdentifier> getUnrefinedUnsafeIterator() {
     getUnsafesIfNecessary();
     Set<SingleIdentifier> result = new TreeSet<>(unrefinedStat.keySet());
@@ -123,11 +123,11 @@ public class UsageContainer {
     getUnsafesIfNecessary();
     return unrefinedStat.size() + refinedStat.size();
   }
-  
+
   public int getTrueUnsafeSize() {
     return refinedStat.size();
   }
-  
+
   public int getFalseUnsafeSize() {
     return falseUnsafes.size();
   }
@@ -156,12 +156,12 @@ public class UsageContainer {
       return refinedStat.get(id);
     }
   }
-  
+
   public Collection<UnrefinedUsagePointSet> getUnrefinedUnsafes() {
     getUnsafesIfNecessary();
     return unrefinedStat.values();
   }
-  
+
   public void setAsRefined(UnrefinedUsagePointSet set) {
     for (SingleIdentifier id : unrefinedStat.keySet()) {
       UnrefinedUsagePointSet stored = unrefinedStat.get(id);
@@ -193,6 +193,6 @@ public class UsageContainer {
     }
     out.println("Total amount of refined variables:                " + generalRefinedSize);
     out.println("Total amount of refined usages:                   " + allUsages + "(avg. " +
-        (generalUnrefinedSize == 0 ? "0" : (allUsages/generalRefinedSize)) + ")");
+        (generalRefinedSize == 0 ? "0" : (allUsages/generalRefinedSize)) + ")");
   }
 }

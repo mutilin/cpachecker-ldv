@@ -132,7 +132,7 @@ public class CallstackTransferRelation extends SingleEdgeTransferRelation {
         final String calledFunction = succ.getFunctionName();
         final CFANode callerNode = pred;
 
-        if (hasRecursion(e, calledFunction)) {
+        if (!shouldGoByFunctionCall(e, (FunctionCallEdge)pEdge)) {
           if (skipRecursiveFunctionCall(e, (FunctionCallEdge)pEdge)) {
             // skip recursion, don't enter function
             logger.logOnce(Level.WARNING, "Skipping recursive function call from",
@@ -238,12 +238,11 @@ public class CallstackTransferRelation extends SingleEdgeTransferRelation {
   //call edge
   private boolean shouldGoByFunctionCall(CallstackState element, FunctionCallEdge pCallEdge) {
     if (goByStatementNow) {
-      goByStatementNow = false;
       return false;
     } else if (!skipRecursion) {
       return true;
     }
-    return hasRecursion(element, pCallEdge.getSuccessor().getFunctionName());
+    return !hasRecursion(element, pCallEdge.getSuccessor().getFunctionName());
   }
 
   protected boolean hasFunctionPointerRecursion(final CallstackState element,
@@ -299,7 +298,6 @@ public class CallstackTransferRelation extends SingleEdgeTransferRelation {
 
   protected boolean shouldGoByFunctionSummaryStatement(CallstackState element, CFunctionSummaryStatementEdge sumEdge) {
     if (goByStatementNow) {
-      goByStatementNow = false;
       return true;
     }
     String functionName = sumEdge.getFunctionName();
@@ -319,5 +317,9 @@ public class CallstackTransferRelation extends SingleEdgeTransferRelation {
 
   public void setFlag() {
     goByStatementNow = true;
+  }
+
+  public void resetFlag() {
+    goByStatementNow = false;
   }
 }

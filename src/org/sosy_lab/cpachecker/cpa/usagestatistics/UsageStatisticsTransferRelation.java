@@ -159,11 +159,14 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     CFANode node = AbstractStates.extractLocation(oldState);
     if (node instanceof CFunctionEntryNode && abortfunctions != null && abortfunctions.contains(node.getFunctionName())) {
       logger.log(Level.FINEST, currentEdge + " is abort edge, analysis was stopped");
+      statistics.transferRelationTimer.stop();
       return Collections.emptySet();
     }
 
+    boolean needToReset = false;
     if (checkFunciton(pCfaEdge, skippedfunctions)) {
       callstackTransfer.setFlag();
+      needToReset = true;
       //Find right summary edge
       //CFANode node = AbstractStates.extractLocation(oldState);
       for (int k = 0; k < node.getNumLeavingEdges(); k++) {
@@ -186,6 +189,9 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       if (resultState != null) {
         result.add(resultState);
       }
+    }
+    if (needToReset) {
+      callstackTransfer.resetFlag();
     }
     statistics.transferRelationTimer.stop();
     return result;

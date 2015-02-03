@@ -29,7 +29,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -52,7 +51,6 @@ import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
-import org.sosy_lab.cpachecker.cfa.model.c.CFunctionSummaryStatementEdge;
 import org.sosy_lab.cpachecker.core.ShutdownNotifier;
 import org.sosy_lab.cpachecker.core.algorithm.CPAAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.CPAAlgorithm.CPAAlgorithmFactory;
@@ -77,6 +75,7 @@ import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
+import org.sosy_lab.cpachecker.util.CFAUtils;
 import org.sosy_lab.cpachecker.util.CPAs;
 
 import com.google.common.base.Predicate;
@@ -120,7 +119,6 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
   final Map<AbstractState, Block> expandedToBlockCache = new HashMap<>();
 
   private Block currentBlock;
-  private LinkedList<Block> BlockStack = new LinkedList<>();
 
   private BlockPartitioning partitioning;
   private int depth = 0;
@@ -250,10 +248,24 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
       logger.log(Level.FINEST, "Finished recursive analysis of depth", depth--);
       return resultStates;
     }
+    boolean foundRecursion = false;
+    if (!partitioning.isCallNode(node)) {
+      // the easy case: we are in the middle of a block, so just forward to wrapped CPAs
+      for (CFAEdge e : CFAUtils.leavingEdges(node)) {
+        if (isRecursionEdge(e)) {
+          callstackTransfer.setFlag();
+          foundRecursion = true;
+        }
+      }
+    }
 
     // the easy case: we are in the middle of a block, so just forward to wrapped CPAs.
     // if there are several leaving edges, the wrapped CPA should handle all of them.
-    return wrappedTransfer.getAbstractSuccessors(pState, pPrecision);
+    Collection<? extends AbstractState> result = wrappedTransfer.getAbstractSuccessors(pState, pPrecision);
+    if (foundRecursion) {
+      callstackTransfer.resetFlag();
+    }
+    return result;
   }
 
   private Collection<? extends AbstractState> doFixpointIterationForRecursion(
@@ -261,23 +273,7 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
           throws CPAException, InterruptedException {
 
 
-   /* if (!partitioning.isCallNode(node)) {
-      // the easy case: we are in the middle of a block, so just forward to wrapped CPAs
-      List<AbstractState> result = new ArrayList<>();
-      for (CFAEdge e : CFAUtils.leavingEdges(node)) {
 
-        if (isRecursionEdge(e)) {
-          callstackTransfer.setFlag();
-          result.addAll(getAbstractSuccessors0(pState, pPrecision, getSummaryEdge(node)));
-          break;
-        }
-
-        Collection<? extends AbstractState> tmpResult = getAbstractSuccessors0(pState, pPrecision, e);
-        result.addAll(tmpResult);
-        if (e instanceof CFunctionReturnEdge && tmpResult.size() > 0) {
-          setLockStatisticsPrecision(AbstractStates.extractStateByType(tmpResult.iterator().next(), CallstackState.class));
-        }
-*/
     assert isHeadOfMainFunction(pHeadOfMainFunction) && stack.isEmpty();
 
     Collection<? extends AbstractState> resultStates;
@@ -323,26 +319,6 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
       // continue;
     }
 
-/*
-    if (partitioning.getBlockForCallNode(node).equals(currentBlock)) {
-      // we are already in same context
-      // thus we already did the recursive call or we have a recursion in the cachedSubtrees
-      // the latter is not supported yet, but in the the former case we can classically do the post operation
-      if (BlockStack.size() == 0) {
-        BlockStack.add(currentBlock);
-        setLockStatisticsPrecision(AbstractStates.extractStateByType(pState, CallstackState.class));
-      }
-      return wrappedTransfer.getAbstractSuccessors(pState, pPrecision, null); // edge is null
-    }
-    Block nextBlock;
-    nextBlock = partitioning.getBlockForCallNode(node);
-    if (BlockStack.contains(nextBlock)) {
-      logger.log(Level.INFO, "BlockStack contains nextBlock");
-      //go by summaryEdge
-      callstackTransfer.setFlag();
-      return attachAdditionalInfoToCallNodes(wrappedTransfer.getAbstractSuccessors(pState, pPrecision, getSummaryEdge(node)));
-    }
-*/
     return resultStates;
   }
 
@@ -440,7 +416,6 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
     final Block outerSubtree = currentBlock;
     currentBlock = partitioning.getBlockForCallNode(node);
 
-    BlockStack.add(currentBlock);
     logger.log(Level.ALL, "Reducing state", initialState);
     final AbstractState reducedInitialState = wrappedReducer.getVariableReducedState(initialState, currentBlock, node);
     final Precision reducedInitialPrecision = wrappedReducer.getVariableReducedPrecision(pPrecision, currentBlock);
@@ -616,7 +591,6 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
 
       forwardPrecisionToExpandedPrecision.put(expandedState, expandedPrecision);
     }
-    BlockStack.removeLast();
     setLockStatisticsPrecision(AbstractStates.extractStateByType(state, CallstackState.class).getPreviousState());
 
     logger.log(Level.ALL, "Expanded results:", expandedResult);
@@ -625,37 +599,31 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
   }
 
   private void setLockStatisticsPrecision(final CallstackState state) {
-      try {
-        LockStatisticsCPA lockCPA = CPAs.retrieveCPA(bamCPA, LockStatisticsCPA.class);
-        if (lockCPA != null) {
-          CallstackState fullState = restoreCallstack(state);
-          ((LockStatisticsTransferRelation)lockCPA.getTransferRelation()).setCallstackState(fullState);
-        }
-      } catch (HandleCodeException e) {
-        logger.log(Level.WARNING, "Can't restore callstack");
+    if (state == null) {
+      //The last state
+      return;
+    }
+    try {
+      LockStatisticsCPA lockCPA = CPAs.retrieveCPA(bamCPA, LockStatisticsCPA.class);
+      if (lockCPA != null) {
+        CallstackState fullState = restoreCallstack(state);
+        ((LockStatisticsTransferRelation)lockCPA.getTransferRelation()).setCallstackState(fullState);
       }
+    } catch (HandleCodeException e) {
+      logger.log(Level.WARNING, "Can't restore callstack");
+    }
   }
 
   private boolean isRecursionEdge(CFAEdge e) {
     if (e instanceof CFunctionCallEdge) {
-      for (Block block : BlockStack) {
+      for (Triple<AbstractState, Precision, Block> triple : stack) {
+        Block block = triple.getThird();
         if (block.getCallNode().equals(e.getSuccessor())) {
           return true;
         }
       }
     }
     return false;
-  }
-
-  private CFunctionSummaryStatementEdge getSummaryEdge(CFANode node) {
-    CFAEdge e;
-    for (int i = 0; i < node.getNumLeavingEdges(); i++) {
-      e = node.getLeavingEdge(i);
-      if (e instanceof CFunctionSummaryStatementEdge) {
-        return (CFunctionSummaryStatementEdge)e;
-      }
-    }
-    return null;
   }
 
   /** Analyse the block starting at node with initialState.
@@ -1078,8 +1046,8 @@ throws InterruptedException, RecursiveAnalysisFailedException {
     CFANode currentNode, previousNode, predecessor;
 
     previousNode = null;
-    for (int i = 0; i < BlockStack.size(); i++) {
-      currentNode = BlockStack.get(i).getCallNode();
+    for (int i = 0; i < stack.size(); i++) {
+      currentNode = stack.get(i).getThird().getCallNode();
       predecessor = currentNode;
       for (int j = 0; j < currentNode.getNumEnteringEdges(); j++) {
         predecessor = currentNode.getEnteringEdge(j).getPredecessor();
@@ -1091,41 +1059,27 @@ throws InterruptedException, RecursiveAnalysisFailedException {
       }
       fullState = new CallstackState(fullState, currentNode.getFunctionName(), predecessor);
       previousNode = currentNode;
+      if (fullState.getCurrentFunction().equals(state.getCurrentFunction())) {
+        return fullState;
+      }
     }
     tmpState = state;
-    if (fullState != null) {
-      if (tmpState.getCurrentFunction().equals(fullState.getCurrentFunction())) {
-        return fullState;
-      } else if (!tmpState.getCurrentFunction().equals(fullState.getCurrentFunction()) && tmpState.getPreviousState() != null) {
-        Stack<CallstackState> callstack = new Stack<>();
-        while (!tmpState.getCurrentFunction().equals(fullState.getCurrentFunction())) {
-          callstack.push(tmpState);
-          tmpState = tmpState.getPreviousState();
-          if (tmpState == null) {
-            throw new HandleCodeException("Can't restore callstack");
-          }
+    if (!tmpState.getCurrentFunction().equals(fullState.getCurrentFunction()) && tmpState.getPreviousState() != null) {
+      Stack<CallstackState> callstack = new Stack<>();
+      while (!tmpState.getCurrentFunction().equals(fullState.getCurrentFunction())) {
+        callstack.push(tmpState);
+        tmpState = tmpState.getPreviousState();
+        if (tmpState == null) {
+          throw new HandleCodeException("Can't restore callstack");
         }
-        tmpState = fullState;
-        CallstackState savedState;
-        while (!callstack.empty()) {
-          savedState = callstack.pop();
-          tmpState = new CallstackState(tmpState, savedState.getCurrentFunction(), savedState.getCallNode());
-        }
-        return tmpState;
-      } else/* if (!tmpState.getCurrentFunction().equals(fullState.getCurrentFunction()) && tmpState.getPreviousState() == null) */{
-        currentNode = currentBlock.getCallNode();
-        for (int i = 0; i < currentNode.getNumEnteringEdges(); i++) {
-          previousNode = currentNode.getEnteringEdge(i).getPredecessor();
-          if (previousNode.getFunctionName().equals(fullState.getCurrentFunction())) {
-            tmpState = new CallstackState(fullState, tmpState.getCurrentFunction(), previousNode);
-            return tmpState;
-          }
-        }
-        throw new HandleCodeException("Can't find called function");
       }
-    } else {
-      return tmpState;
+      while (!callstack.empty()) {
+        tmpState = callstack.pop();
+        fullState = new CallstackState(fullState, tmpState.getCurrentFunction(), tmpState.getCallNode());
+      }
+      return fullState;
     }
+    throw new HandleCodeException("Can't find called function");
   }
 
   private Pair<Boolean, Collection<ARGState>> checkARGBlock(ARGState rootNode,
