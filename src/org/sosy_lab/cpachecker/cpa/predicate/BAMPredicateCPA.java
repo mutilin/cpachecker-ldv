@@ -111,7 +111,6 @@ public class BAMPredicateCPA extends PredicateCPA implements ConfigurableProgram
     relevantPredicatesComputer.clear();
     PathFormulaManager pamgr = getPathFormulaManager();
     pamgr.clearCaches();
-
   }
 
   @Override
