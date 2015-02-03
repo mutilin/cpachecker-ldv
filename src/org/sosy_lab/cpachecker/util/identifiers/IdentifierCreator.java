@@ -23,6 +23,7 @@
  */
 package org.sosy_lab.cpachecker.util.identifiers;
 
+import org.sosy_lab.cpachecker.cfa.ast.c.CAddressOfLabelExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CArraySubscriptExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CCastExpression;
@@ -225,5 +226,10 @@ public class IdentifierCreator implements CExpressionVisitor<AbstractIdentifier,
   @Override
   public AbstractIdentifier visit(CImaginaryLiteralExpression PIastLiteralExpression) throws HandleCodeException {
     return new ConstantIdentifier(PIastLiteralExpression.toASTString(), dereference);
+  }
+
+  @Override
+  public AbstractIdentifier visit(CAddressOfLabelExpression pAddressOfLabelExpression) throws HandleCodeException {
+    throw new HandleCodeException("Can't create an identifier for " + pAddressOfLabelExpression);
   }
 }

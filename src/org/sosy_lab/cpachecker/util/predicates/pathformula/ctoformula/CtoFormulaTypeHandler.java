@@ -106,7 +106,4 @@ public class CtoFormulaTypeHandler {
   public FormulaType<?> getPointerType() {
     return pointerType;
   }
-  public void clear() {
-    typeCache.clear();
-  }
 }

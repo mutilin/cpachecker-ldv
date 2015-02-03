@@ -703,7 +703,6 @@ public class PathFormulaManagerImpl implements PathFormulaManager {
 
   @Override
   public void clearCaches() {
-    typeHandler.clear();
   }
 
   @Override

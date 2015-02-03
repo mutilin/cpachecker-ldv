@@ -27,6 +27,7 @@ import java.util.LinkedList;
 import java.util.List;
 
 import org.sosy_lab.common.Pair;
+import org.sosy_lab.cpachecker.cfa.ast.c.CAddressOfLabelExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CArraySubscriptExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CCastExpression;
@@ -156,6 +157,9 @@ public class ExpressionHandler implements CExpressionVisitor<Void, HandleCodeExc
 
   @Override
   public Void visit(CImaginaryLiteralExpression PIastLiteralExpression) throws HandleCodeException { return null; }
+
+  @Override
+  public Void visit(CAddressOfLabelExpression pAddressOfLabelExpression) throws HandleCodeException { return null; }
 
 }
 
