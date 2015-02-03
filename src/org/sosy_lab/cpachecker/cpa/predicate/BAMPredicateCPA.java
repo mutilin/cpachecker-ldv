@@ -43,6 +43,7 @@ import org.sosy_lab.cpachecker.cpa.predicate.relevantpredicates.CachingRelevantP
 import org.sosy_lab.cpachecker.cpa.predicate.relevantpredicates.RefineableOccurrenceComputer;
 import org.sosy_lab.cpachecker.cpa.predicate.relevantpredicates.RelevantPredicatesComputer;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.PathFormulaManager;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.view.FormulaManagerView;
 
 
@@ -108,6 +109,9 @@ public class BAMPredicateCPA extends PredicateCPA implements ConfigurableProgram
   public void clearAllCaches() {
     reducer.clearCaches();
     relevantPredicatesComputer.clear();
+    PathFormulaManager pamgr = getPathFormulaManager();
+    pamgr.clearCaches();
+
   }
 
   @Override
