@@ -78,8 +78,9 @@ public class PathToCTranslator {
   private final List<FunctionBody> mFunctionBodies = new ArrayList<>();
 
   private PathToCTranslator() {
-    // add declaration of assert function to C code
-    mGlobalDefinitionsList.add("extern void assert(int);");
+    // add declaration of used functions to C code
+    mGlobalDefinitionsList.add("extern void __VERIFIER_assume(int);");
+    mGlobalDefinitionsList.add("extern void __VERIFIER_error();");
   }
 
   /**
@@ -343,8 +344,7 @@ public class PathToCTranslator {
     FunctionBody currentFunction = functionStack.peek();
 
     if (childElement.isTarget()) {
-      // label ERROR is required by CBMCChecker
-      currentFunction.write("ERROR: assert(0); // target state ");
+      currentFunction.write("__VERIFIER_error(); // target state ");
     }
 
     // handle the edge
@@ -378,8 +378,7 @@ public class PathToCTranslator {
 
     case AssumeEdge: {
       CAssumeEdge lAssumeEdge = (CAssumeEdge)pCFAEdge;
-      return ("__CPROVER_assume(" + lAssumeEdge.getCode() + ");");
-//    return ("if(! (" + lAssumptionString + ")) { return (0); }");
+      return ("__VERIFIER_assume(" + lAssumeEdge.getCode() + ");");
     }
 
     case DeclarationEdge: {
