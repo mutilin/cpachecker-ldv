@@ -921,6 +921,11 @@ throws InterruptedException, RecursiveAnalysisFailedException {
     argCache.clear();
     abstractStateToReachedSet.clear();
     expandedToReducedCache.clear();
+    expandedToBlockCache.clear();
+    forwardPrecisionToExpandedPrecision.clear();
+    if (correctARGsForBlocks != null) {
+      correctARGsForBlocks.clear();
+    }
   }
 
   Pair<Block, ReachedSet> getCachedReachedSet(ARGState root, Precision rootPrecision) {
