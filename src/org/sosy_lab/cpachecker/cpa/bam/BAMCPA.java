@@ -41,7 +41,6 @@ import org.sosy_lab.common.io.Paths;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.blocks.BlockPartitioning;
-import org.sosy_lab.cpachecker.cfa.blocks.BlockToDotWriter;
 import org.sosy_lab.cpachecker.cfa.blocks.builder.FunctionPartitioning;
 import org.sosy_lab.cpachecker.cfa.blocks.builder.PartitioningHeuristic;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
@@ -134,10 +133,10 @@ public class BAMCPA extends AbstractSingleWrapperCPA implements StatisticsProvid
     if (blockPartitioning == null) {
       blockPartitioning = heuristic.buildPartitioning(pNode);
 
-      if (exportBlocksPath != null) {
+      /*if (exportBlocksPath != null) {
         BlockToDotWriter writer = new BlockToDotWriter(blockPartitioning);
         writer.dump(exportBlocksPath, logger);
-      }
+      }*/
 
       transfer.setBlockPartitioning(blockPartitioning);
 
