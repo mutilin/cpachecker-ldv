@@ -30,6 +30,8 @@ import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.blocks.BlockPartitioning;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 
+import com.google.common.collect.ImmutableSet;
+
 
 
 public class UnrecursiveBlockPartitioningBuilder extends BlockPartitioningBuilder {
@@ -43,7 +45,8 @@ public class UnrecursiveBlockPartitioningBuilder extends BlockPartitioningBuilde
     //now we can create the Blocks   for the BlockPartitioning
     Collection<Block> blocks = new ArrayList<>(returnNodesMap.keySet().size());
     for (CFANode key : returnNodesMap.keySet()) {
-      blocks.add(new Block(referencedVariablesMap.get(key), callNodesMap.get(key), returnNodesMap.get(key), blockNodesMap.get(key)));
+      blocks.add(new Block(ImmutableSet.copyOf(referencedVariablesMap.get(key)), callNodesMap.get(key),
+          returnNodesMap.get(key), ImmutableSet.copyOf(blockNodesMap.get(key))));
     }
     return new BlockPartitioning(blocks, mainFunction);
   }

@@ -40,8 +40,8 @@ import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
-import org.sosy_lab.cpachecker.util.CFATraversal;
 
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 
 
@@ -49,10 +49,6 @@ import com.google.common.collect.Sets;
  * Helper class can build a <code>BlockPartitioning</code> from a partition of a program's CFA into blocks.
  */
 public class BlockPartitioningBuilder {
-
-  private static final CFATraversal TRAVERSE_CFA_INSIDE_FUNCTION = CFATraversal.dfs().ignoreFunctionCalls();
-
-  //private final ReferencedVariablesCollector referenceCollector;
 
   protected final Map<CFANode, Set<ReferencedVariable>> referencedVariablesMap = new HashMap<>();
   protected final Map<CFANode, Set<CFANode>> callNodesMap = new HashMap<>();
@@ -150,6 +146,9 @@ public class BlockPartitioningBuilder {
 
     } while (!workCopyOfCFANodes.isEmpty()) ;
 
+    //Try to optimize the memory
+    Map<CFANode, ImmutableSet<ReferencedVariable>> immutableVariablesMap = new HashMap<>();
+    Map<CFANode, ImmutableSet<CFANode>> immutableNodesMap = new HashMap<>();
     //Resolve loop mapping
     for (CFANode node : loopMapping.keySet()) {
       CFANode mappedNode = loopMapping.get(node);
@@ -159,14 +158,34 @@ public class BlockPartitioningBuilder {
       /* We put the same object, because new Block() makes copy of these maps,
        * so we do not care about this equality
        */
-      referencedVariablesMap.put(node, referencedVariablesMap.get(mappedNode));
-      blockNodesMap.put(node, blockNodesMap.get(mappedNode));
+      ImmutableSet<ReferencedVariable> resultVars;
+      ImmutableSet<CFANode> resultNodes;
+      if (!immutableVariablesMap.containsKey(mappedNode)) {
+        resultVars = ImmutableSet.copyOf(referencedVariablesMap.get(mappedNode));
+        immutableVariablesMap.put(mappedNode, resultVars);
+      } else {
+        resultVars = immutableVariablesMap.get(mappedNode);
+      }
+      immutableVariablesMap.put(node, resultVars);
+      if (!immutableNodesMap.containsKey(mappedNode)) {
+        resultNodes = ImmutableSet.copyOf(blockNodesMap.get(mappedNode));
+        immutableNodesMap.put(mappedNode, resultNodes);
+      } else {
+        resultNodes = immutableNodesMap.get(mappedNode);
+      }
+      immutableNodesMap.put(node, resultNodes);
     }
 
     //now we can create the Blocks for the BlockPartitioning
     Collection<Block> blocks = new ArrayList<>(returnNodesMap.keySet().size());
     for (CFANode key : returnNodesMap.keySet()) {
-      blocks.add(new Block(referencedVariablesMap.get(key), callNodesMap.get(key), returnNodesMap.get(key), blockNodesMap.get(key)));
+      if (immutableVariablesMap.containsKey(key)) {
+        assert immutableNodesMap.containsKey(key);
+        blocks.add(new Block(immutableVariablesMap.get(key), callNodesMap.get(key), returnNodesMap.get(key), immutableNodesMap.get(key)));
+      } else {
+        blocks.add(new Block(ImmutableSet.copyOf(referencedVariablesMap.get(key)), callNodesMap.get(key),
+            returnNodesMap.get(key), ImmutableSet.copyOf(blockNodesMap.get(key))));
+      }
     }
     return new BlockPartitioning(blocks, mainFunction);
   }
