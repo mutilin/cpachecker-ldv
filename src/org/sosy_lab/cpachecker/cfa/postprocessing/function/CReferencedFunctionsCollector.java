@@ -24,7 +24,10 @@ package org.sosy_lab.cpachecker.cfa.postprocessing.function;
  *    http://cpachecker.sosy-lab.org
  */
 
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.sosy_lab.cpachecker.cfa.ast.c.CArraySubscriptExpression;
@@ -45,6 +48,7 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CInitializer;
 import org.sosy_lab.cpachecker.cfa.ast.c.CInitializerExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CInitializerList;
 import org.sosy_lab.cpachecker.cfa.ast.c.CInitializerVisitor;
+import org.sosy_lab.cpachecker.cfa.ast.c.CLeftHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.c.CPointerExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSideVisitor;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatementVisitor;
@@ -56,7 +60,20 @@ import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CReturnStatementEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
+import org.sosy_lab.cpachecker.cfa.types.c.CArrayType;
+import org.sosy_lab.cpachecker.cfa.types.c.CCompositeType;
+import org.sosy_lab.cpachecker.cfa.types.c.CCompositeType.CCompositeTypeMemberDeclaration;
+import org.sosy_lab.cpachecker.cfa.types.c.CElaboratedType;
 import org.sosy_lab.cpachecker.cfa.types.c.CFunctionType;
+import org.sosy_lab.cpachecker.cfa.types.c.CPointerType;
+import org.sosy_lab.cpachecker.cfa.types.c.CType;
+import org.sosy_lab.cpachecker.cfa.types.c.CTypedefType;
+import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
+import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
+import org.sosy_lab.cpachecker.util.identifiers.ConstantIdentifier;
+import org.sosy_lab.cpachecker.util.identifiers.IdentifierCreator;
+import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
+import org.sosy_lab.cpachecker.util.identifiers.StructureIdentifier;
 
 
 /**
@@ -71,6 +88,10 @@ class CReferencedFunctionsCollector {
 
   public Set<String> getCollectedFunctions() {
     return collectedFunctions;
+  }
+
+  public Map<String, Set<String>> getFieldAssignement() {
+    return collector.funcToField;
   }
 
   public void visitEdge(CFAEdge edge) {
@@ -91,8 +112,13 @@ class CReferencedFunctionsCollector {
       if (declaration instanceof CVariableDeclaration) {
         CInitializer init = ((CVariableDeclaration)declaration).getInitializer();
         if (init != null) {
+          int num = collectedFunctions.size();
           init.accept(collector);
+          if (num < collectedFunctions.size()) {
+            saveDeclaration(declaration.getType(), init);
+          }
         }
+
       }
       break;
     case ReturnStatementEdge:
@@ -117,7 +143,70 @@ class CReferencedFunctionsCollector {
 
   public void visitDeclaration(CVariableDeclaration decl) {
     if (decl.getInitializer() != null) {
+      int num = collectedFunctions.size();
       decl.getInitializer().accept(collector);
+      if (num < collectedFunctions.size()) {
+        saveDeclaration(decl.getType(), decl.getInitializer());
+      }
+    }
+  }
+
+  private void saveDeclaration(CType type, CInitializer init) {
+    if (init instanceof CInitializerList) {
+      //Only structures
+      if (type instanceof CArrayType) {
+        List<CInitializer> initList = ((CInitializerList)init).getInitializers();
+        for (CInitializer cInit : initList) {
+          saveDeclaration(((CArrayType)type).getType(), cInit);
+        }
+      } else if (type instanceof CElaboratedType) {
+        saveDeclaration(type.getCanonicalType(), init);
+      } else if (type instanceof CCompositeType) {
+        List<CCompositeTypeMemberDeclaration> list = ((CCompositeType) type).getMembers();
+        List<CInitializer> initList = ((CInitializerList)init).getInitializers();
+        for (int i = 0; i < list.size(); i++) {
+          CCompositeTypeMemberDeclaration decl = list.get(i);
+          CInitializer cInit = initList.get(i);
+          if (!(cInit instanceof CInitializerExpression)) {
+            continue;
+          }
+          saveInitializerExpression((CInitializerExpression)cInit, decl.getName());
+        }
+      } else if (type instanceof CTypedefType) {
+        saveDeclaration(((CTypedefType) type).getRealType(), init);
+      } else {
+        System.out.println("Strange");
+      }
+    }
+  }
+
+  private void saveInitializerExpression(CInitializerExpression init, String fieldName) {
+    IdentifierCreator creator = new IdentifierCreator();
+    try {
+      AbstractIdentifier id = init.getExpression().accept(creator);
+      CType type = init.getExpression().getExpressionType().getCanonicalType();
+      if (type instanceof CPointerType) {
+        type = ((CPointerType) type).getType();
+        if (type instanceof CFunctionType) {
+          if (id instanceof SingleIdentifier) {
+            String lastFunction = ((SingleIdentifier) id).getName();
+            Set<String> result;
+            if (collector.funcToField.containsKey(lastFunction)) {
+              result = collector.funcToField.get(lastFunction);
+            } else {
+              result = new HashSet<>();
+              collector.funcToField.put(lastFunction, result);
+            }
+            result.add(fieldName);
+          } else if (id instanceof ConstantIdentifier) {
+            //Zeroes
+          } else {
+            System.out.println("Strange id " + id);
+          }
+        }
+      }
+    } catch (HandleCodeException e) {
+      e.printStackTrace();
     }
   }
 
@@ -127,6 +216,10 @@ class CReferencedFunctionsCollector {
                                                           CInitializerVisitor<Void, RuntimeException> {
 
     private final Set<String> collectedFunctions;
+    public final Map<String, Set<String>> funcToField = new HashMap<>();
+    private String lastFunction;
+
+    private IdentifierCreator idCreator = new IdentifierCreator();
 
     public CollectFunctionsVisitor(Set<String> pCollectedVars) {
       collectedFunctions = pCollectedVars;
@@ -136,6 +229,7 @@ class CReferencedFunctionsCollector {
     public Void visit(CIdExpression pE) {
       if (pE.getExpressionType() instanceof CFunctionType) {
         collectedFunctions.add(pE.getName());
+        lastFunction = pE.getName();
       }
       return null;
     }
@@ -231,8 +325,12 @@ class CReferencedFunctionsCollector {
 
     @Override
     public Void visit(CExpressionAssignmentStatement pIastExpressionAssignmentStatement) {
+      int num = collectedFunctions.size();
       pIastExpressionAssignmentStatement.getLeftHandSide().accept(this);
       pIastExpressionAssignmentStatement.getRightHandSide().accept(this);
+      if (num < collectedFunctions.size()) {
+        saveAssignement(pIastExpressionAssignmentStatement.getLeftHandSide());
+      }
       return null;
     }
 
@@ -247,6 +345,24 @@ class CReferencedFunctionsCollector {
     public Void visit(CFunctionCallStatement pIastFunctionCallStatement) {
       pIastFunctionCallStatement.getFunctionCallExpression().accept(this);
       return null;
+    }
+
+    private void saveAssignement(CLeftHandSide left) {
+      try {
+        AbstractIdentifier id = left.accept(idCreator);
+        if (id instanceof StructureIdentifier) {
+          Set<String> result;
+          if (funcToField.containsKey(lastFunction)) {
+            result = funcToField.get(lastFunction);
+          } else {
+            result = new HashSet<>();
+            funcToField.put(lastFunction, result);
+          }
+          result.add(((StructureIdentifier) id).getName());
+        }
+      } catch (HandleCodeException e) {
+        e.printStackTrace();
+      }
     }
   }
 }

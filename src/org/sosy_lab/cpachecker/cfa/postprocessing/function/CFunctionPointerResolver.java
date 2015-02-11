@@ -30,8 +30,11 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
+
+import javax.annotation.Nullable;
 
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.Configuration;
@@ -41,9 +44,9 @@ import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFACreationUtils;
 import org.sosy_lab.cpachecker.cfa.MutableCFA;
-import org.sosy_lab.cpachecker.cfa.ast.FileLocation;
 import org.sosy_lab.cpachecker.cfa.ast.ADeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.AStatement;
+import org.sosy_lab.cpachecker.cfa.ast.FileLocation;
 import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression.BinaryOperator;
 import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpressionBuilder;
@@ -70,8 +73,14 @@ import org.sosy_lab.cpachecker.cfa.types.c.CFunctionType;
 import org.sosy_lab.cpachecker.cfa.types.c.CPointerType;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
 import org.sosy_lab.cpachecker.cfa.types.c.CVoidType;
+import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.util.CFATraversal;
 import org.sosy_lab.cpachecker.util.CFAUtils;
+import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
+import org.sosy_lab.cpachecker.util.identifiers.GlobalVariableIdentifier;
+import org.sosy_lab.cpachecker.util.identifiers.IdentifierCreator;
+import org.sosy_lab.cpachecker.util.identifiers.LocalVariableIdentifier;
+import org.sosy_lab.cpachecker.util.identifiers.StructureIdentifier;
 
 import com.google.common.base.Function;
 import com.google.common.base.Functions;
@@ -118,6 +127,7 @@ public class CFunctionPointerResolver {
   private Set<FunctionSet> functionSets = ImmutableSet.of(FunctionSet.USED_IN_CODE, FunctionSet.EQ_PARAM_SIZES, FunctionSet.RETURN_VALUE);
 
   private final Collection<FunctionEntryNode> candidateFunctions;
+  private final Map<String, Set<String>> fieldsMatching;
 
   private final Predicate<Pair<CFunctionCall, CFunctionType>> matchingFunctionCall;
 
@@ -147,6 +157,7 @@ public class CFunctionPointerResolver {
         }
       }
       Set<String> addressedFunctions = varCollector.getCollectedFunctions();
+      fieldsMatching = varCollector.getFieldAssignement();
       candidateFunctions =
           from(Sets.intersection(addressedFunctions, cfa.getAllFunctionNames()))
               .transform(Functions.forMap(cfa.getAllFunctions()))
@@ -158,6 +169,7 @@ public class CFunctionPointerResolver {
       }
     } else {
       candidateFunctions = cfa.getAllFunctionHeads();
+      fieldsMatching = null;
     }
 
   }
@@ -239,9 +251,18 @@ public class CFunctionPointerResolver {
 
     // 2.Step: replace functionCalls with functioncall- and return-edges
     // This loop replaces function pointer calls inside the given function with regular function calls.
+    System.out.println("Founded function pointers: " + candidateFunctions.size());
+    System.out.println("Founded function pointer calls: " + visitor.functionPointerCalls.size());
+    System.out.println("Size of fileds mapping: " + fieldsMatching.size());
     for (final CStatementEdge edge : visitor.functionPointerCalls) {
       replaceFunctionPointerCall((CFunctionCall)edge.getStatement(), edge);
     }
+    System.out.println("Empty function calls: " + empty);
+    System.out.println("Reducing function calls: " + reduce);
+    System.out.println("Total potential function calls: " + total);
+    System.out.println("Structure: " + structure + ", local: " + local + ", global " + global);
+    System.out.println("Empty structure: " + emptyStructure + ", local: " + emptyLocal + ", global " + emptyGlobal);
+    System.out.println("Totally removed " + totallyRemove);
   }
 
   /** This Visitor collects all functioncalls for functionPointers.
@@ -286,22 +307,79 @@ public class CFunctionPointerResolver {
   /**
    * This method replaces a single function pointer call with a function call series.
    */
+  int empty = 0;
+  int reduce = 0;
+  int total = 0;
+  int structure = 0;
+  int local = 0;
+  int global = 0;
+  int totallyRemove = 0;
+  int emptyStructure = 0;
+  int emptyLocal = 0;
+  int emptyGlobal = 0;
   private void replaceFunctionPointerCall(CFunctionCall functionCall, CStatementEdge statement) {
     CFunctionCallExpression fExp = functionCall.getFunctionCallExpression();
     logger.log(Level.FINEST, "Function pointer call", fExp);
 
     CExpression nameExp = fExp.getFunctionNameExpression();
+    if (nameExp.toASTString().equals("*func_xxx")) {
+      System.out.println("*f");
+    }
     Collection<CFunctionEntryNode> funcs = getFunctionSet(functionCall);
 
+    IdentifierCreator creator = new IdentifierCreator();
     if (funcs.isEmpty()) {
       // no possible targets, we leave the CFA unchanged and print a warning
       logger.logf(Level.WARNING, "%s: Function pointer %s with type %s is called,"
           + " but no possible target functions were found.",
           statement.getFileLocation(), nameExp.toASTString(), nameExp.getExpressionType().toASTString("*"));
+      empty++;
+      try {
+        final AbstractIdentifier id = nameExp.accept(creator);
+        if (id instanceof StructureIdentifier) {
+          emptyStructure++;
+        } else if (id instanceof LocalVariableIdentifier) {
+          emptyLocal++;
+        } else if (id instanceof GlobalVariableIdentifier) {
+          emptyGlobal++;
+        }
+      } catch (HandleCodeException e) {
+        e.printStackTrace();
+      }
       return;
     }
 
-    logger.log(Level.FINEST, "Inserting edges for the function pointer",
+    try {
+      final AbstractIdentifier id = nameExp.accept(creator);
+      if (id instanceof StructureIdentifier) {
+        structure++;
+        int funcSize = funcs.size();
+        funcs = from(funcs).filter( new Predicate<CFunctionEntryNode>() {
+          @Override
+          public boolean apply(@Nullable CFunctionEntryNode pInput) {
+            Set<String> fields = fieldsMatching.get(pInput.getFunctionName());
+            if (fields == null) {
+              return false;
+            } else {
+              return fields.contains(((StructureIdentifier) id).getName());
+            }
+          }
+        }).toList();
+        reduce += (funcSize - funcs.size());
+        total += funcs.size();
+        if (funcs.size() == 0) {
+          totallyRemove++;
+        }
+      } else if (id instanceof LocalVariableIdentifier) {
+        local++;
+      } else if (id instanceof GlobalVariableIdentifier) {
+        global++;
+      }
+    } catch (HandleCodeException e) {
+      e.printStackTrace();
+    }
+
+    logger.log(Level.INFO, "Inserting edges for the function pointer",
         nameExp.toASTString(), "with type", nameExp.getExpressionType().toASTString("*"),
         "to the functions", from(funcs).transform(new Function<CFANode, String>() {
             @Override
