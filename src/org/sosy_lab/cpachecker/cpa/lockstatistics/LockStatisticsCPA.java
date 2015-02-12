@@ -47,7 +47,7 @@ public class LockStatisticsCPA extends AbstractCPA implements ConfigurableProgra
   private final LockStatisticsReducer reducer;
 
   private LockStatisticsCPA (Configuration config, LogManager logger) throws InvalidConfigurationException {
-    super("sep", "sep", new LockStatisticsTransferRelation(config, logger));
+    super("sep", "sep", new LockStatisticsDomain(), new LockStatisticsTransferRelation(config, logger));
     reducer             = new LockStatisticsReducer();
   }
 
