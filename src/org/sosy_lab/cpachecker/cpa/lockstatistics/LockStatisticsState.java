@@ -53,11 +53,11 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
       mutableToRestore = state.toRestore;
     }
 
-    boolean add(LockStatisticsLock l) {
+    private boolean add(LockStatisticsLock l) {
       return mutableLocks.add(l);
     }
 
-    boolean remove(LockStatisticsLock l) {
+    private boolean remove(LockStatisticsLock l) {
       return mutableLocks.remove(l);
     }
 
@@ -67,7 +67,7 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
 
     public void add(String lockName, LineInfo line, CallstackState state, String variable, LogManager logger) {
       LockStatisticsLock newLock;
-      LockStatisticsLock oldLock = findLock(lockName, variable);
+      LockStatisticsLock oldLock = findLock(lockName, variable, mutableLocks);
       if(oldLock != null) {
         newLock = oldLock.addAccessPointer(new AccessPoint(line, state));
         remove(oldLock);
@@ -77,16 +77,27 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
       add(newLock);
     }
 
-
-    private void free(LockStatisticsLock oldLock, LogManager logger) {
-      if (oldLock == null) {
-        return;
+    public void free(String lockName, String variable, LogManager logger) {
+      LockStatisticsLock oldLock = findLock(lockName, variable, mutableLocks);
+      if (oldLock != null) {
+        String locksBefore = locks.toString();
+        remove(oldLock);
+        LockStatisticsLock newLock = oldLock.removeLastAccessPointer();
+        if (newLock != null) {
+          add(newLock);
+          if (logger != null) {
+            logger.log(Level.FINEST, "Locks before: " + locksBefore);
+            logger.log(Level.FINEST, "Locks after: " + locks);
+          }
+        }
       }
+    }
+
+    public void reset(String lockName, String var, LogManager logger) {
       String locksBefore = locks.toString();
-      remove(oldLock);
-      LockStatisticsLock newLock = oldLock.removeLastAccessPointer();
-      if (newLock != null) {
-        add(newLock);
+      LockStatisticsLock lock = findLock(lockName, var, mutableLocks);
+      if (lock != null) {
+        remove(lock);
         if (logger != null) {
           logger.log(Level.FINEST, "Locks before: " + locksBefore);
           logger.log(Level.FINEST, "Locks after: " + locks);
@@ -94,30 +105,9 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
       }
     }
 
-    public void free(String lockName, String variable, LogManager logger) {
-      LockStatisticsLock oldLock = findLock(lockName, variable);
-      if (oldLock != null) {
-        free(oldLock, logger);
-      }
-    }
-
-    public void reset(String lockName, String var, LogManager logger) {
-      LockStatisticsLock lock = findLock(lockName, var);
-      if (lock != null) {
-        remove(lock);
-      }
-    }
-
-    public void reset(Map<String, String> pResetLocks, LogManager pLogger) {
-      for (String lockName : pResetLocks.keySet()) {
-        LockStatisticsLock lock = findLock(lockName, pResetLocks.get(lockName));
-        remove(lock);
-      }
-    }
-
     public void set(String lockName, int num, LineInfo line, CallstackState state, String variable) {
       //num can be equal 0, this means, that in origin file it is 0 and we should delete locks
-      LockStatisticsLock oldLock = findLock(lockName, variable);
+      LockStatisticsLock oldLock = findLock(lockName, variable, mutableLocks);
       LockStatisticsLock newLock;
 
       if (oldLock != null) {
@@ -155,7 +145,7 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
 
       } else {
         for (String lockName : lockNames.keySet()) {
-          LockStatisticsLock oldLock = findLock(lockName, lockNames.get(lockName));
+          LockStatisticsLock oldLock = findLock(lockName, lockNames.get(lockName), mutableLocks);
           LockStatisticsLock newLock = mutableToRestore.findLock(lockName, lockNames.get(lockName));
           if (oldLock != null) {
             remove(oldLock);
@@ -167,6 +157,7 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
           }
         }
       }
+      mutableToRestore = mutableToRestore.toRestore;
     }
 
     LockStatisticsState build() {
@@ -231,9 +222,12 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
     return sb.toString();
   }
 
-
   public LockStatisticsLock findLock(String lockName, String variable) {
-    for (LockStatisticsLock lock : locks) {
+    return findLock(lockName, variable, locks);
+  }
+
+  private LockStatisticsLock findLock(String lockName, String variable, Set<LockStatisticsLock> lockSet) {
+    for (LockStatisticsLock lock : lockSet) {
       if (lock.hasEqualNameAndVariable(lockName, variable)) {
         return lock;
       }
@@ -242,8 +236,12 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
   }
 
   private LockStatisticsLock findLock(LockStatisticsLock target) {
+    return findLock(target, locks);
+  }
+
+  private LockStatisticsLock findLock(LockStatisticsLock target, Set<LockStatisticsLock> lockSet) {
     //this search checks faster (without cleaning variable)
-    for (LockStatisticsLock lock : locks) {
+    for (LockStatisticsLock lock : lockSet) {
       if (lock.hasEqualNameAndVariable(target)) {
         return lock;
       }

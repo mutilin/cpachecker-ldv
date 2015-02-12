@@ -97,13 +97,11 @@ public class LockStatisticsTransferRelation implements TransferRelation
     return Collections.singleton(((LockStatisticsState)element).clone());
   }
 
-  public Collection<LockStatisticsState> getAbstractSuccessors0(AbstractState element, CFAEdge cfaEdge) throws UnrecognizedCCodeException
-     {
+  public Collection<LockStatisticsState> getAbstractSuccessors0(AbstractState element, CFAEdge cfaEdge) throws UnrecognizedCCodeException {
 
     LockStatisticsState lockStatisticsElement     = (LockStatisticsState)element;
     LockStatisticsState successor;
     LockStatisticsStateBuilder builder = lockStatisticsElement.builder();
-
     switch (cfaEdge.getEdgeType()) {
 
       case FunctionCallEdge:
@@ -241,7 +239,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
             + ", \n\t line = " + cfaEdge.getLineNumber());
         builder.restore(locks, logger);
         for (String name : locks.keySet()) {
-          processLock(oldState, builder, new LineInfo(cfaEdge), findLockByName(name), locks.get(name));
+          processLock(builder.build(), builder, new LineInfo(cfaEdge), findLockByName(name), locks.get(name));
         }
       }
     }
