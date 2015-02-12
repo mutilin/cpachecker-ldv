@@ -24,8 +24,23 @@
 package org.sosy_lab.cpachecker.cpa.lockstatistics;
 
 import org.sosy_lab.cpachecker.core.interfaces.AbstractDomain;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
+import org.sosy_lab.cpachecker.exceptions.CPAException;
 
 
 public class LockStatisticsDomain implements AbstractDomain {
+
+  @Override
+  public AbstractState join(AbstractState pState1, AbstractState pState2) throws CPAException, InterruptedException {
+    throw new UnsupportedOperationException("Operation join isn't supported for LockStatisticsCPA");
+  }
+
+  @Override
+  public boolean isLessOrEqual(AbstractState pState1, AbstractState pState2) throws CPAException, InterruptedException {
+    LockStatisticsState state1 = (LockStatisticsState) pState1;
+    LockStatisticsState state2 = (LockStatisticsState) pState2;
+
+    return state1.isLessOrEqual(state2);
+  }
 
 }

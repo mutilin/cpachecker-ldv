@@ -333,15 +333,14 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
    * @param other the other element
    * @return true, if this element is less or equal than the other element, based on the order imposed by the lattice
    */
-  public boolean isCoveredBy(LockStatisticsState other) {
-    //This method is useful for refinement optimization
-
-    if (locks.size() == 0 && other.locks.size() > 0) {
+  public boolean isLessOrEqual(LockStatisticsState other) {
+    //State is less, if it has the same locks as the other and may be some more
+    /*if (locks.size() == 0 && other.locks.size() > 0) {
       return false;
-    }
+    }*/
 
-    for (LockStatisticsLock Lock : locks) {
-      if (other.findLock(Lock) == null) {
+    for (LockStatisticsLock Lock : other.locks) {
+      if (this.findLock(Lock) == null) {
         return false;
       }
     }
