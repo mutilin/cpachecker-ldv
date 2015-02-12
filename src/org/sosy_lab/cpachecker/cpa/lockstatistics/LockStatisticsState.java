@@ -24,14 +24,12 @@
 package org.sosy_lab.cpachecker.cpa.lockstatistics;
 
 import java.io.Serializable;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.logging.Level;
 
-import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
@@ -41,19 +39,158 @@ import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier.LockType;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.LineInfo;
 
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Sets;
+
 public class LockStatisticsState implements Comparable<LockStatisticsState>, AbstractState, Serializable {
+
+  public class LockStatisticsStateBuilder {
+    private Set<LockStatisticsLock> mutableLocks;
+    private LockStatisticsState mutableToRestore;
+
+    public LockStatisticsStateBuilder(LockStatisticsState state) {
+      mutableLocks = Sets.newTreeSet(state.locks);
+      mutableToRestore = state.toRestore;
+    }
+
+    boolean add(LockStatisticsLock l) {
+      return mutableLocks.add(l);
+    }
+
+    boolean remove(LockStatisticsLock l) {
+      return mutableLocks.remove(l);
+    }
+
+    void setRestoreState(LockStatisticsState s) {
+      mutableToRestore = s;
+    }
+
+    public void add(String lockName, LineInfo line, CallstackState state, String variable, LogManager logger) {
+      LockStatisticsLock newLock;
+      LockStatisticsLock oldLock = findLock(lockName, variable);
+      if(oldLock != null) {
+        newLock = oldLock.addAccessPointer(new AccessPoint(line, state));
+        remove(oldLock);
+      } else {
+        newLock = new LockStatisticsLock(lockName, line, LockType.GLOBAL_LOCK, state, variable);
+      }
+      add(newLock);
+    }
+
+
+    private void free(LockStatisticsLock oldLock, LogManager logger) {
+      if (oldLock == null) {
+        return;
+      }
+      String locksBefore = locks.toString();
+      remove(oldLock);
+      LockStatisticsLock newLock = oldLock.removeLastAccessPointer();
+      if (newLock != null) {
+        add(newLock);
+        if (logger != null) {
+          logger.log(Level.FINEST, "Locks before: " + locksBefore);
+          logger.log(Level.FINEST, "Locks after: " + locks);
+        }
+      }
+    }
+
+    public void free(String lockName, String variable, LogManager logger) {
+      LockStatisticsLock oldLock = findLock(lockName, variable);
+      if (oldLock != null) {
+        free(oldLock, logger);
+      }
+    }
+
+    public void reset(String lockName, String var, LogManager logger) {
+      LockStatisticsLock lock = findLock(lockName, var);
+      if (lock != null) {
+        remove(lock);
+      }
+    }
+
+    public void reset(Map<String, String> pResetLocks, LogManager pLogger) {
+      for (String lockName : pResetLocks.keySet()) {
+        LockStatisticsLock lock = findLock(lockName, pResetLocks.get(lockName));
+        remove(lock);
+      }
+    }
+
+    public void set(String lockName, int num, LineInfo line, CallstackState state, String variable) {
+      //num can be equal 0, this means, that in origin file it is 0 and we should delete locks
+      LockStatisticsLock oldLock = findLock(lockName, variable);
+      LockStatisticsLock newLock;
+
+      if (oldLock != null) {
+        newLock = oldLock;
+        if (num > oldLock.getAccessCounter()) {
+          newLock = oldLock.addRecursiveAccessPointer(num - oldLock.getAccessCounter(),
+              new AccessPoint(line, state));
+        } else if (num < oldLock.getAccessCounter()) {
+          for (int i = 0; i < oldLock.getAccessCounter() - num; i++) {
+            newLock = newLock.removeLastAccessPointer();
+          }
+        }
+        remove(oldLock);
+        if (newLock != null) {
+          add(newLock);
+        }
+      } else if (num > 0) {
+        newLock = new LockStatisticsLock(lockName, line, LockType.GLOBAL_LOCK, state, variable);
+        newLock = newLock.addRecursiveAccessPointer(num - 1, new AccessPoint(line, state));
+        // num - 1, because one of them is line above (new lock)
+        if (newLock != null) {
+          add(newLock);
+        }
+      }
+    }
+
+    public void restore(Map<String, String> lockNames, LogManager logger) {
+      if (mutableToRestore == null) {
+        return;
+      }
+      if (lockNames.size() == 0) {
+        //we didn't specify, which locks we would like to restore, so, restore all;
+        mutableLocks = mutableToRestore.locks;
+      } else if (locks.equals(mutableToRestore.locks)) {
+
+      } else {
+        for (String lockName : lockNames.keySet()) {
+          LockStatisticsLock oldLock = findLock(lockName, lockNames.get(lockName));
+          LockStatisticsLock newLock = mutableToRestore.findLock(lockName, lockNames.get(lockName));
+          if (oldLock != null) {
+            remove(oldLock);
+            if (newLock != null) {
+              add(newLock);
+            }
+          } else if (newLock != null){
+            add(newLock);
+          }
+        }
+      }
+    }
+
+    LockStatisticsState build() {
+      return new LockStatisticsState(mutableLocks, mutableToRestore);
+    }
+
+    public void resetAll() {
+      mutableLocks.clear();
+    }
+  }
+
   private static final long serialVersionUID = -3152134511524554357L;
 
-  private final Set<LockStatisticsLock> locks;
-  private LockStatisticsState toRestore;
+  private final ImmutableSet<LockStatisticsLock> locks;
+  private final LockStatisticsState toRestore;
   //if we need restore state, we save it here
   //Used for function annotations like annotate.function_name.restore
   public LockStatisticsState() {
-    this(new TreeSet<LockStatisticsLock>(), null);
+    locks = ImmutableSet.of();
+    toRestore = null;
   }
 
   private LockStatisticsState(Set<LockStatisticsLock> gLocks, LockStatisticsState state) {
-    this.locks  = gLocks;
+    this.locks  = ImmutableSet.copyOf(gLocks);
     toRestore = state;
   }
 
@@ -65,10 +202,10 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
     //Special hash for BAM, in other cases use iterator
     return locks;
   }
-  
+
   public Set<LockIdentifier> getLockIdentifiers() {
     Set<LockIdentifier> result = new TreeSet<>();
-    
+
     for (LockStatisticsLock lock : locks) {
       result.add(lock.getLockIdentifier());
     }
@@ -77,14 +214,6 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
 
   public Iterator<LockStatisticsLock> getLockIterator() {
     return locks.iterator();
-  }
-
-  public void setRestoreState(LockStatisticsState state) {
-    toRestore = state;
-  }
-
-  private void copyRestoreState(LockStatisticsState pRootState) {
-    setRestoreState(pRootState.toRestore);
   }
 
   @Override
@@ -102,26 +231,6 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
     return sb.toString();
   }
 
-  public void add(String lockName, LineInfo line, CallstackState state, String variable, LogManager logger) {
-    boolean b;
-    String locksBefore = locks.toString();
-
-    LockStatisticsLock oldLock = findLock(lockName, variable);
-    if(oldLock != null) {
-      LockStatisticsLock newLock = oldLock.addAccessPointer(new AccessPoint(line, state));
-      b = locks.remove(oldLock);
-      assert b;
-      b = locks.add(newLock);
-      assert b;
-    } else {
-      LockStatisticsLock tmpLock = new LockStatisticsLock(lockName, line, LockType.GLOBAL_LOCK, state, variable);
-      b = locks.add(tmpLock);
-    }
-    if(b && logger != null) {
-      logger.log(Level.FINEST, "Locks before: " + locksBefore);
-      logger.log(Level.FINEST, "Locks after: " + locks);
-    }
-  }
 
   public LockStatisticsLock findLock(String lockName, String variable) {
     for (LockStatisticsLock lock : locks) {
@@ -132,7 +241,7 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
     return null;
   }
 
-  public LockStatisticsLock findLock(LockStatisticsLock target) {
+  private LockStatisticsLock findLock(LockStatisticsLock target) {
     //this search checks faster (without cleaning variable)
     for (LockStatisticsLock lock : locks) {
       if (lock.hasEqualNameAndVariable(target)) {
@@ -142,169 +251,29 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
     return null;
   }
 
-  public void add(LockStatisticsLock l, LogManager logger) {
-	  String locksBefore = locks.toString();
-	  boolean b = locks.add(l);
-	  if(b && logger != null) {
-		  logger.log(Level.FINEST, "Locks before: " + locksBefore);
-		  logger.log(Level.FINEST, "Locks after: " + locks);
-	  }
-  }
-
-  private void free(LockStatisticsLock oldLock, LogManager logger) {
-    if (oldLock == null) {
-      return;
-    }
-    String locksBefore = locks.toString();
-    boolean b = locks.remove(oldLock);
-    assert b;
-    LockStatisticsLock newLock = oldLock.removeLastAccessPointer();
-    if (newLock != null) {
-      locks.add(newLock);
-      if (logger != null) {
-        logger.log(Level.FINEST, "Locks before: " + locksBefore);
-        logger.log(Level.FINEST, "Locks after: " + locks);
-      }
-    }
-  }
-
-  public void free(String lockName, String variable, LogManager logger) {
-	  LockStatisticsLock oldLock = findLock(lockName, variable);
-	  if (oldLock == null) {
-	    /*if (logger != null) {
-	      logger.log(Level.WARNING, "Free nonexisting lock: " + lockName);
-	    }*/
-	    return;
-    }
-    free(oldLock, logger);
-  }
-
-  public void reset(String lockName, String var, LogManager logger) {
-    LockStatisticsLock lock = findLock(lockName, var);
-    if (lock != null) {
-      reset(lock, logger);
-    }
-  }
-
-  private void reset(LockStatisticsLock lock, LogManager logger) {
-    String locksBefore = locks.toString();
-    boolean b = locks.remove(lock);
-    if (b && logger != null) {
-      logger.log(Level.FINEST, "Locks before: " + locksBefore);
-      logger.log(Level.FINEST, "Locks after: " + locks);
-    }
-  }
-
-  public LockStatisticsState reset(Map<String, String> pResetLocks, LogManager pLogger) {
-    LockStatisticsState newState = this.clone();
-    for (String lockName : pResetLocks.keySet()) {
-      newState.reset(lockName, pResetLocks.get(lockName), pLogger);
-    }
-    return newState;
-  }
-
-  public void set(String lockName, int num, LineInfo line, CallstackState state, String variable) {
-    //num can be equal 0, this means, that in origin file it is 0 and we should delete locks
-    LockStatisticsLock oldLock = findLock(lockName, variable);
-    LockStatisticsLock newLock;
-
-    if (oldLock != null) {
-      newLock = oldLock;
-      if (num > oldLock.getAccessCounter()) {
-        newLock = oldLock.addRecursiveAccessPointer(num - oldLock.getAccessCounter(),
-            new AccessPoint(line, state));
-      } else if (num < oldLock.getAccessCounter()) {
-        for (int i = 0; i < oldLock.getAccessCounter() - num; i++) {
-          newLock = newLock.removeLastAccessPointer();
-        }
-      }
-      locks.remove(oldLock);
-      if (newLock != null) {
-        locks.add(newLock);
-      }
-    } else if (num > 0) {
-      newLock = new LockStatisticsLock(lockName, line, LockType.GLOBAL_LOCK, state, variable);
-      newLock = newLock.addRecursiveAccessPointer(num - 1, new AccessPoint(line, state));
-      // num - 1, because one of them is line above (new lock)
-      if (newLock != null) {
-        locks.add(newLock);
-      }
-    }
-  }
-
-  public LockStatisticsState restore(Map<String, String> lockNames, LogManager logger) {
-    LockStatisticsState restoredState = this.toRestore;
-    if (restoredState == null) {
-      return this.clone();
-    }
-    LockStatisticsState newState;
-    if (lockNames.size() == 0) {
-      //we didn't specify, which locks we would like to restore, so, restore all;
-      newState = restoredState.clone();
-    } else if (this.locks.equals(restoredState.locks)) {
-      //only for optimization. We don't compare restoreState, because in this it can be only more complex.
-      newState = this.clone();
-    } else {
-
-      newState = this.clone();
-      for (String lockName : lockNames.keySet()) {
-        LockStatisticsLock oldLock = this.findLock(lockName, lockNames.get(lockName));
-        LockStatisticsLock newLock = restoredState.findLock(lockName, lockNames.get(lockName));
-        if (oldLock != null) {
-          newState.reset(oldLock, logger);
-          if (newLock != null) {
-            newState.add(newLock, logger);
-          }
-        } else if (newLock != null){
-          newState.add(newLock, logger);
-        }
-      }
-    }
-    newState.copyRestoreState(restoredState);
-    return newState;
-  }
 
   public int getCounter(String lockName, String varName) {
     LockStatisticsLock lock = findLock(lockName, varName);
     return (lock == null ? 0 : lock.getAccessCounter());
   }
 
-  //this function is used only in debugging. Do not delete!
-  /*public String getAllLines(String lockName) {
-    StringBuilder sb = new StringBuilder();
-    for (LockStatisticsLock lock : locks) {
-      if (lock.hasEqualNameAndVariable(lockName, null)) {
-        for (AccessPoint point : lock.getAccessPoints()) {
-          sb.append(point.getLineInfo().getLine() + ", ");
-        }
-      }
-    }
-
-    if (sb.length() > 2) {
-      sb.delete(sb.length() - 2, sb.length());
-    }
-
-    return sb.toString();
-  }*/
-
   @Override
   public LockStatisticsState clone() {
     return new LockStatisticsState(new TreeSet<>(this.locks), this.toRestore);
   }
 
-  public void markOldLocks() {
+  public LockStatisticsState reduce() {
     LockStatisticsLock tmpLock;
-    Set<Pair<LockStatisticsLock, LockStatisticsLock>> toChange = new HashSet<>();
+    LockStatisticsStateBuilder builder = builder();
     for (LockStatisticsLock lock : locks) {
       tmpLock = lock.markOldPoints();
       if (lock != tmpLock) {
-        toChange.add(Pair.of(lock, tmpLock));
+        builder.remove(lock);
+        builder.add(tmpLock);
       }
     }
-    for (Pair<LockStatisticsLock, LockStatisticsLock> pair : toChange) {
-      locks.remove(pair.getFirst());
-      locks.add(pair.getSecond());
-    }
+    builder.setRestoreState(null);
+    return builder.build();
   }
 
   @Override
@@ -344,22 +313,20 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
     return true;
   }
 
-  public void expandCallstack(LockStatisticsState rootState, BAMRestoreStack restorator, CallstackReducer pReducer, CFANode pNode) {
-    Set<Pair<LockStatisticsLock, LockStatisticsLock>> toChange = new HashSet<>();
+  public LockStatisticsState expandCallstack(LockStatisticsState rootState, BAMRestoreStack restorator, CallstackReducer pReducer, CFANode pNode) {
+    LockStatisticsStateBuilder builder = builder();
     LockStatisticsLock tmpLock;
     for (LockStatisticsLock lock : this.locks) {
       tmpLock = rootState.findLock(lock);
       //null is also correct (it shows, that we've found new lock)
       tmpLock = lock.expandCallstack(tmpLock, restorator, pReducer, pNode);
       if (lock != tmpLock) {
-        toChange.add(Pair.of(lock, tmpLock));
+        builder.remove(lock);
+        builder.add(tmpLock);
       }
     }
-    for (Pair<LockStatisticsLock, LockStatisticsLock> pair : toChange) {
-      locks.remove(pair.getFirst());
-      locks.add(pair.getSecond());
-    }
-    copyRestoreState(rootState);
+    builder.setRestoreState(rootState.toRestore);
+    return builder.build();
   }
 
   /**
@@ -389,6 +356,7 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
    * @param other The other LockStatisticsState
    * @return Difference between two states
    */
+  @Override
   public int compareTo(LockStatisticsState other) {
     int result = 0;
 
@@ -424,4 +392,7 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
     return false;
   }
 
+  LockStatisticsStateBuilder builder() {
+    return new LockStatisticsStateBuilder(this);
+  }
 }

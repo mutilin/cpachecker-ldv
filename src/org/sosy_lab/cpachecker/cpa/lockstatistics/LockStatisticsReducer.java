@@ -40,10 +40,7 @@ public class LockStatisticsReducer implements Reducer {
   @Override
   public AbstractState getVariableReducedState(AbstractState pExpandedElement, Block pContext, CFANode pCallNode) {
     LockStatisticsState lockState = (LockStatisticsState) pExpandedElement;
-    LockStatisticsState reducedState = lockState.clone();
-    reducedState.markOldLocks();
-    reducedState.setRestoreState(null);
-    return reducedState;
+    return lockState.reduce();
   }
 
   @Override
@@ -53,8 +50,7 @@ public class LockStatisticsReducer implements Reducer {
     LockStatisticsState reducedState = (LockStatisticsState)pReducedElement;
     LockStatisticsState expandedState = reducedState.clone();
     LockStatisticsState rootState = (LockStatisticsState) pRootElement;
-    expandedState.expandCallstack(rootState, restorator, cReducer, pReducedContext.getCallNode());
-    return expandedState;
+    return expandedState.expandCallstack(rootState, restorator, cReducer, pReducedContext.getCallNode());
   }
 
   @Override
