@@ -66,7 +66,11 @@ public class LockIdentifier implements Comparable<LockIdentifier> {
   }
 
   public boolean hasEqualNameAndVariable(String lockName, String variableName) {
-    return (this.name.equals(lockName) && variable.equals(variableName));
+    return (name.equals(lockName) && variable.equals(variableName));
+  }
+
+  public String getName() {
+    return name;
   }
 
   @Override

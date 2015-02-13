@@ -24,6 +24,7 @@
 package org.sosy_lab.cpachecker.cpa.lockstatistics;
 
 import java.io.Serializable;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
@@ -59,10 +60,6 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
 
     private boolean remove(LockStatisticsLock l) {
       return mutableLocks.remove(l);
-    }
-
-    void setRestoreState(LockStatisticsState s) {
-      mutableToRestore = s;
     }
 
     public void add(String lockName, LineInfo line, CallstackState state, String variable, LogManager logger) {
@@ -167,6 +164,79 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
     public void resetAll() {
       mutableLocks.clear();
     }
+
+    public void reduce() {
+      LockStatisticsLock tmpLock;
+      Set<LockStatisticsLock> iterativeLocks = Sets.newHashSet(mutableLocks);
+      for (LockStatisticsLock lock : iterativeLocks) {
+        tmpLock = lock.markOldPoints();
+        if (lock != tmpLock) {
+          remove(lock);
+          add(tmpLock);
+        }
+      }
+      mutableToRestore = null;
+    }
+
+    public void reduceLocks(Set<String> exceptLocks) {
+      Set<LockStatisticsLock> newLocks = new HashSet<>();
+      boolean changed = false;
+
+      for (LockStatisticsLock lock : mutableLocks) {
+        LockStatisticsLock reducedLock;
+        if (!exceptLocks.contains(lock.getLockIdentifier().getName())) {
+          reducedLock = lock.reduce();
+        } else {
+          reducedLock = lock;
+        }
+        newLocks.add(reducedLock);
+        if (lock != reducedLock) {
+          changed = true;
+        }
+      }
+      if (changed) {
+        mutableLocks = newLocks;
+      }
+    }
+
+    public void expand(LockStatisticsState rootState, BAMRestoreStack restorator, CallstackReducer pReducer, CFANode pNode) {
+      LockStatisticsLock tmpLock;
+      Set<LockStatisticsLock> iterativeLocks = Sets.newHashSet(mutableLocks);
+      for (LockStatisticsLock lock : iterativeLocks) {
+        tmpLock = rootState.findLock(lock);
+        //null is also correct (it shows, that we've found new lock)
+        tmpLock = lock.expandCallstack(tmpLock, restorator, pReducer, pNode);
+        if (lock != tmpLock) {
+          remove(lock);
+          add(tmpLock);
+        }
+      }
+      mutableToRestore = rootState.toRestore;
+    }
+
+    public void expandLocks(LockStatisticsState pRootState, Set<String> pRestrictedLocks) {
+      LockStatisticsLock tmpLock;
+      for (LockStatisticsLock lock : pRootState.locks) {
+        if (!pRestrictedLocks.contains(lock.getLockIdentifier().getName())) {
+          tmpLock = findLock(lock, mutableLocks);
+          //null is also correct (it shows, that we've found new lock)
+          if (tmpLock == null) {
+            tmpLock = lock.removeLastAccessPointer();
+            if (tmpLock != null) {
+              add(tmpLock);
+            }
+          } else {
+            remove(tmpLock);
+            tmpLock = tmpLock.expand(lock);
+            add(tmpLock);
+          }
+        }
+      }
+    }
+
+    public void setRestoreState(LockStatisticsState pOldState) {
+      mutableToRestore = pOldState;
+    }
   }
 
   private static final long serialVersionUID = -3152134511524554357L;
@@ -260,20 +330,6 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
     return new LockStatisticsState(new TreeSet<>(this.locks), this.toRestore);
   }
 
-  public LockStatisticsState reduce() {
-    LockStatisticsLock tmpLock;
-    LockStatisticsStateBuilder builder = builder();
-    for (LockStatisticsLock lock : locks) {
-      tmpLock = lock.markOldPoints();
-      if (lock != tmpLock) {
-        builder.remove(lock);
-        builder.add(tmpLock);
-      }
-    }
-    builder.setRestoreState(null);
-    return builder.build();
-  }
-
   @Override
   public int hashCode() {
     final int prime = 31;
@@ -309,22 +365,6 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
       return false;
     }
     return true;
-  }
-
-  public LockStatisticsState expandCallstack(LockStatisticsState rootState, BAMRestoreStack restorator, CallstackReducer pReducer, CFANode pNode) {
-    LockStatisticsStateBuilder builder = builder();
-    LockStatisticsLock tmpLock;
-    for (LockStatisticsLock lock : this.locks) {
-      tmpLock = rootState.findLock(lock);
-      //null is also correct (it shows, that we've found new lock)
-      tmpLock = lock.expandCallstack(tmpLock, restorator, pReducer, pNode);
-      if (lock != tmpLock) {
-        builder.remove(lock);
-        builder.add(tmpLock);
-      }
-    }
-    builder.setRestoreState(rootState.toRestore);
-    return builder.build();
   }
 
   /**

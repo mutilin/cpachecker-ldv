@@ -61,7 +61,7 @@ public class LockStatisticsLock implements Comparable<LockStatisticsLock> {
   public int getAccessCounter() {
     return accessPoints.size();
   }
-  
+
   public LockIdentifier getLockIdentifier() {
     return lockId;
   }
@@ -247,5 +247,23 @@ public class LockStatisticsLock implements Comparable<LockStatisticsLock> {
       return result;
     }
     return this.accessPoints.size() - pO.accessPoints.size();
+  }
+
+  public LockStatisticsLock reduce() {
+    assert (!accessPoints.isEmpty());
+    if (accessPoints.size() == 1) {
+      return this;
+    } else {
+      LinkedList<AccessPoint> reducedList = new LinkedList<>();
+      reducedList.add(accessPoints.get(0));
+      return clone(reducedList);
+    }
+  }
+
+  public LockStatisticsLock expand(LockStatisticsLock pLock) {
+    LinkedList<AccessPoint> expandedList = new LinkedList<>(this.accessPoints);
+    expandedList.removeFirst();
+    expandedList.addAll(0, pLock.accessPoints);
+    return clone(expandedList);
   }
 }

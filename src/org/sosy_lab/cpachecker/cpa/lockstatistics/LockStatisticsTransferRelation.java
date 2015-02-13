@@ -72,9 +72,9 @@ public class LockStatisticsTransferRelation implements TransferRelation
       description="function to reset state")
   private String lockreset;
 
-  private final Map<String, AnnotationInfo> annotatedfunctions;
+  final Map<String, AnnotationInfo> annotatedfunctions;
 
-  private final Set<LockInfo> locks;
+  final Set<LockInfo> locks;
   private LogManager logger;
 
   private CallstackState fullCallstack = null;
