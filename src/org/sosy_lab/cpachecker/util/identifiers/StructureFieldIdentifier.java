@@ -33,9 +33,9 @@ import org.sosy_lab.cpachecker.cpa.local.LocalState.DataType;
 public class StructureFieldIdentifier extends SingleIdentifier {
   protected String fieldType;
 
-  public StructureFieldIdentifier(String pNm, String pTp, CType fTp, int dereference) {
-    super(pNm, fTp, dereference);
-    fieldType = pTp;
+  public StructureFieldIdentifier(String pNm, String fTp, CType pTp, int dereference) {
+    super(pNm, pTp, dereference);
+    fieldType = fTp;
   }
 
   @Override
