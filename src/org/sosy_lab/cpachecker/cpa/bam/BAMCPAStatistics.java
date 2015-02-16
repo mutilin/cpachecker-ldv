@@ -154,6 +154,7 @@ class BAMCPAStatistics implements Statistics {
       out.println("  Constructing flat ARG:                                        " + refiner.computeSubtreeTimer);
       out.println("  Searching path to error location:                             " + refiner.computeCounterexampleTimer);
     }
+    out.println("Size of block partitioning:                                     " + cpa.blockPartitioning.getBlocks().size());
 
     //Add to reached set all states from BAM cache
     Collection<ReachedSet> cachedStates = cache.getAllCachedReachedStates();
