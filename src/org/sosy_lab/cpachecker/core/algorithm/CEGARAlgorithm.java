@@ -44,22 +44,16 @@ import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
-import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
-import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Refiner;
-import org.sosy_lab.cpachecker.core.interfaces.StateSpacePartition;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
-import org.sosy_lab.cpachecker.cpa.arg.ARGState;
-import org.sosy_lab.cpachecker.cpa.bam.BAMTransferRelation;
 import org.sosy_lab.cpachecker.cpa.value.refiner.UnsoundRefiner;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.InvalidComponentException;
 import org.sosy_lab.cpachecker.exceptions.RefinementFailedException;
-import org.sosy_lab.cpachecker.util.AbstractStates;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
@@ -255,13 +249,6 @@ public class CEGARAlgorithm implements Algorithm, StatisticsProvider {
           // assert that reached set is free of target states,
           // if refinement was successful and initial reached set was empty (i.e. stopAfterError=true)
           if (refinementSuccessful && initialReachedSetSize == 1) {
-            ((BAMTransferRelation)(((CPAAlgorithm)algorithm).cpa).getTransferRelation()).clearCaches();
-            ARGState firstState = (ARGState) reached.getFirstState();
-            CFANode firstNode = AbstractStates.extractLocation(firstState);
-            ARGState.clearIdGenerator();
-            Precision precision = reached.getPrecision(firstState);
-            reached.clear();
-            reached.add((((CPAAlgorithm)algorithm).cpa).getInitialState(firstNode, StateSpacePartition.getDefaultPartition()), precision);
             assert !from(reached).anyMatch(IS_TARGET_STATE);
           }
         //}

@@ -13,7 +13,7 @@ import com.google.common.collect.ImmutableSet;
 
 public class UnrefinedUsageInfoSet implements AbstractUsageInfoSet {
   private final Set<UsageInfo> unrefinedUsages;
-  
+
   public UnrefinedUsageInfoSet() {
     unrefinedUsages = new TreeSet<>();
   }
@@ -22,10 +22,12 @@ public class UnrefinedUsageInfoSet implements AbstractUsageInfoSet {
     unrefinedUsages.add(newInfo);
   }
 
+  @Override
   public int size() {
     return unrefinedUsages.size();
   }
 
+  @Override
   public void remove(UsageStatisticsState pUstate) {
     Iterator<UsageInfo> iterator = unrefinedUsages.iterator();
     while (iterator.hasNext()) {
@@ -37,11 +39,13 @@ public class UnrefinedUsageInfoSet implements AbstractUsageInfoSet {
       }
     }
   }
-  
+
+  @Override
   public UsageInfo getOneExample() {
     return unrefinedUsages.iterator().next();
   }
-  
+
+  @Override
   public ImmutableSet<UsageInfo> getUsages() {
     return ImmutableSet.copyOf(unrefinedUsages);
   }

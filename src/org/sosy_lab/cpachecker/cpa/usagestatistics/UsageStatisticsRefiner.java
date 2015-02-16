@@ -32,12 +32,14 @@ import java.util.logging.Level;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.CounterexampleInfo;
 import org.sosy_lab.cpachecker.core.MainCPAStatistics;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Refiner;
+import org.sosy_lab.cpachecker.core.interfaces.StateSpacePartition;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
@@ -87,16 +89,17 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
   }
 
   final Stats pStat = new Stats();
-  private final UsageStatisticsCPA cpa;
+  private final ConfigurableProgramAnalysis cpa;
   private final LogManager logger;
   private final int NUMBER_FOR_RESET_PRECISION;
   private InterpolantCache iCache = new InterpolantCache();
 
   public UsageStatisticsRefiner(ConfigurableProgramAnalysis pCpa) throws CPAException, InvalidConfigurationException {
     super(pCpa);
-    cpa = CPAs.retrieveCPA(pCpa, UsageStatisticsCPA.class);
-    NUMBER_FOR_RESET_PRECISION = cpa.getThePrecisionCleaningLimit();
-    logger = cpa.getLogger();
+    cpa = pCpa;
+    UsageStatisticsCPA UScpa = CPAs.retrieveCPA(pCpa, UsageStatisticsCPA.class);
+    NUMBER_FOR_RESET_PRECISION = UScpa.getThePrecisionCleaningLimit();
+    logger = UScpa.getLogger();
   }
 
   public static Refiner create(ConfigurableProgramAnalysis pCpa) throws CPAException, InvalidConfigurationException {
@@ -193,6 +196,14 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       lastTrueUnsafes = newTrueUnsafeSize;
     }
     iCache.removeUnusedCacheEntries();
+    transfer.clearCaches();
+    ARGState firstState = (ARGState) pReached.getFirstState();
+    CFANode firstNode = AbstractStates.extractLocation(firstState);
+    ARGState.clearIdGenerator();
+    Precision precision = pReached.getPrecision(firstState);
+    pReached.clear();
+    pReached.add(cpa.getInitialState(firstNode, StateSpacePartition.getDefaultPartition()), precision);
+
     pStat.UnsafeCheck.stopIfRunning();
     return refinementFinish;
   }

@@ -1,34 +1,29 @@
 package org.sosy_lab.cpachecker.cpa.usagestatistics.storage;
 
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.Set;
-
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsState;
 
 public class RefinedUsagePointSet implements AbstractUsagePointSet {
 
-  public class DoubleRefinedUsagePointSet extends RefinedUsagePointSet {
+  public static class DoubleRefinedUsagePointSet extends RefinedUsagePointSet {
     protected final RefinedUsageInfoSet target2;
-    
+
     private DoubleRefinedUsagePointSet(RefinedUsageInfoSet newSet, RefinedUsageInfoSet newSet2) {
       super(newSet);
       target2 = newSet2;
     }
-    
+
     @Override
     public int size() {
       return 2;
     }
-    
+
     @Override
     public Pair<UsageInfo, UsageInfo> getUnsafePair() {
       return Pair.of(target.getOneExample(), target2.getOneExample());
     }
-    
+
     @Override
     public AbstractUsageInfoSet getUsageInfo(UsagePoint point) {
       AbstractUsageInfoSet result = super.getUsageInfo(point);
@@ -42,21 +37,21 @@ public class RefinedUsagePointSet implements AbstractUsagePointSet {
       return null;
     }
   }
-  
+
   protected final RefinedUsageInfoSet target;
-  
+
   private RefinedUsagePointSet(RefinedUsageInfoSet newSet) {
     target = newSet;
   }
-  
+
   public static RefinedUsagePointSet create(RefinedUsageInfoSet newSet) {
     return new RefinedUsagePointSet(newSet);
   }
-  
+
   public static RefinedUsagePointSet create(RefinedUsageInfoSet newSet, RefinedUsageInfoSet newSet2) {
-    return new RefinedUsagePointSet(newSet).new DoubleRefinedUsagePointSet(newSet, newSet2);
+    return new DoubleRefinedUsagePointSet(newSet, newSet2);
   }
-  
+
   @Override
   public boolean isUnsafe() {
     return true;
