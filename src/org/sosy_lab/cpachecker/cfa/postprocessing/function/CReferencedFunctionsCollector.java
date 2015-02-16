@@ -71,6 +71,7 @@ import org.sosy_lab.cpachecker.cfa.types.c.CTypedefType;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.ConstantIdentifier;
+import org.sosy_lab.cpachecker.util.identifiers.GlobalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.IdentifierCreator;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.StructureIdentifier;
@@ -94,6 +95,10 @@ class CReferencedFunctionsCollector {
     return collector.funcToField;
   }
 
+  public Map<String, Set<String>> getGlobalAssignement() {
+    return collector.funcToGlobal;
+  }
+
   public void visitEdge(CFAEdge edge) {
     switch (edge.getEdgeType()) {
     case AssumeEdge:
@@ -112,9 +117,9 @@ class CReferencedFunctionsCollector {
       if (declaration instanceof CVariableDeclaration) {
         CInitializer init = ((CVariableDeclaration)declaration).getInitializer();
         if (init != null) {
-          int num = collectedFunctions.size();
+          int num = collector.tmpFunctions.size();
           init.accept(collector);
-          if (num < collectedFunctions.size()) {
+          if (num < collector.tmpFunctions.size()) {
             saveDeclaration(declaration.getType(), init);
           }
         }
@@ -139,16 +144,41 @@ class CReferencedFunctionsCollector {
       assert false;
       break;
     }
+    collectedFunctions.addAll(collector.tmpFunctions);
+    collector.tmpFunctions.clear();
   }
 
   public void visitDeclaration(CVariableDeclaration decl) {
     if (decl.getInitializer() != null) {
-      int num = collectedFunctions.size();
+      int num = collector.tmpFunctions.size();
       decl.getInitializer().accept(collector);
-      if (num < collectedFunctions.size()) {
-        saveDeclaration(decl.getType(), decl.getInitializer());
+      if (num < collector.tmpFunctions.size()) {
+        AbstractIdentifier id;
+        try {
+          id = IdentifierCreator.createIdentifier(decl, "", 0);
+          CInitializer init = decl.getInitializer();
+          if (id instanceof GlobalVariableIdentifier && init instanceof CInitializerExpression) {
+            Set<String> result;
+            AbstractIdentifier initId = ((CInitializerExpression)init).getExpression().accept(collector.idCreator);
+            if (initId instanceof SingleIdentifier) {
+              if (collector.funcToGlobal.containsKey(((SingleIdentifier) initId).getName())) {
+                result = collector.funcToGlobal.get(((SingleIdentifier) initId).getName());
+              } else {
+                result = new HashSet<>();
+                collector.funcToGlobal.put(((SingleIdentifier) initId).getName(), result);
+              }
+              result.add(((GlobalVariableIdentifier)id).getName());
+            }
+          } else {
+            saveDeclaration(decl.getType(), decl.getInitializer());
+          }
+        } catch (HandleCodeException e) {
+          e.printStackTrace();
+        }
       }
     }
+    collectedFunctions.addAll(collector.tmpFunctions);
+    collector.tmpFunctions.clear();
   }
 
   private void saveDeclaration(CType type, CInitializer init) {
@@ -216,7 +246,9 @@ class CReferencedFunctionsCollector {
                                                           CInitializerVisitor<Void, RuntimeException> {
 
     private final Set<String> collectedFunctions;
+    private final Set<String> tmpFunctions = new HashSet<>();
     public final Map<String, Set<String>> funcToField = new HashMap<>();
+    public final Map<String, Set<String>> funcToGlobal = new HashMap<>();
     private String lastFunction;
 
     private IdentifierCreator idCreator = new IdentifierCreator();
@@ -228,7 +260,7 @@ class CReferencedFunctionsCollector {
     @Override
     public Void visit(CIdExpression pE) {
       if (pE.getExpressionType() instanceof CFunctionType) {
-        collectedFunctions.add(pE.getName());
+        tmpFunctions.add(pE.getName());
         lastFunction = pE.getName();
       }
       return null;
@@ -325,10 +357,10 @@ class CReferencedFunctionsCollector {
 
     @Override
     public Void visit(CExpressionAssignmentStatement pIastExpressionAssignmentStatement) {
-      int num = collectedFunctions.size();
+      int num = tmpFunctions.size();
       pIastExpressionAssignmentStatement.getLeftHandSide().accept(this);
       pIastExpressionAssignmentStatement.getRightHandSide().accept(this);
-      if (num < collectedFunctions.size()) {
+      if (num < tmpFunctions.size()) {
         saveAssignement(pIastExpressionAssignmentStatement.getLeftHandSide());
       }
       return null;
@@ -359,6 +391,15 @@ class CReferencedFunctionsCollector {
             funcToField.put(lastFunction, result);
           }
           result.add(((StructureIdentifier) id).getName());
+        } else if (id instanceof GlobalVariableIdentifier) {
+          Set<String> result;
+          if (funcToGlobal.containsKey(lastFunction)) {
+            result = funcToGlobal.get(lastFunction);
+          } else {
+            result = new HashSet<>();
+            funcToGlobal.put(lastFunction, result);
+          }
+          result.add(((GlobalVariableIdentifier) id).getName());
         }
       } catch (HandleCodeException e) {
         e.printStackTrace();
