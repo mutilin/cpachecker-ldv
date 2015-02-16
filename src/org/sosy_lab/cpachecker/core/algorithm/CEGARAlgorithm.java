@@ -258,6 +258,7 @@ public class CEGARAlgorithm implements Algorithm, StatisticsProvider {
             ((BAMTransferRelation)(((CPAAlgorithm)algorithm).cpa).getTransferRelation()).clearCaches();
             ARGState firstState = (ARGState) reached.getFirstState();
             CFANode firstNode = AbstractStates.extractLocation(firstState);
+            ARGState.clearIdGenerator();
             Precision precision = reached.getPrecision(firstState);
             reached.clear();
             reached.add((((CPAAlgorithm)algorithm).cpa).getInitialState(firstNode, StateSpacePartition.getDefaultPartition()), precision);
