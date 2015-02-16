@@ -25,6 +25,7 @@ package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
 import java.io.PrintStream;
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
 import java.util.logging.Level;
 
@@ -33,6 +34,7 @@ import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.CounterexampleInfo;
+import org.sosy_lab.cpachecker.core.MainCPAStatistics;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Refiner;
@@ -54,6 +56,7 @@ import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.CPAs;
 import org.sosy_lab.cpachecker.util.Precisions;
+import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 
 import com.google.common.base.Predicates;
@@ -113,6 +116,17 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
 
     logger.log(Level.INFO, ("Perform US refinement: " + i++));
     int originUnsafeSize = container.getUnsafeSize();
+    System.out.println("Time: " + MainCPAStatistics.programTime);
+    System.out.println("Unsafes: " + originUnsafeSize);
+    Iterator<SingleIdentifier> iterator = container.getUnsafeIterator();
+    int trueU = 0;
+    while (iterator.hasNext()) {
+      SingleIdentifier id = iterator.next();
+      if (container.getUsages(id).isTrueUnsafe()) {
+        trueU++;
+      }
+    }
+    System.out.println("True unsafes: " + trueU);
     if (lastFalseUnsafeSize == -1) {
       lastFalseUnsafeSize = originUnsafeSize;
     }
