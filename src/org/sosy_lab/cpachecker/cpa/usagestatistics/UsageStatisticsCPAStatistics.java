@@ -27,12 +27,8 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.Writer;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedList;
-import java.util.List;
-import java.util.Set;
-import java.util.TreeSet;
 import java.util.logging.Level;
 
 import org.sosy_lab.common.Pair;
@@ -51,16 +47,14 @@ import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.AccessPoint;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsLock;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.AbstractUsageInfoSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.AbstractUsagePointSet;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.RefinedUsageInfoSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.RefinedUsagePointSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UnrefinedUsagePointSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsageContainer;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsagePoint;
-import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.identifiers.GlobalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.LocalVariableIdentifier;
@@ -84,7 +78,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   private int totalNumberOfUsagePoints = 0;
   private int maxNumberOfUsagePoints = 0;
   private int maxNumberOfUsages = 0;
-  
+
   private int totalFailureUsages = 0;
   private int totalFailureUnsafes = 0;
   private int totalUnsafesWithFailureUsages = 0;
@@ -115,12 +109,12 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
     CallTreeNode.clearTrunkState();
     LockStatisticsState Locks = usage.getLockState();
-    
+
     assert Locks != null;
-	  final Iterator<LockStatisticsLock> lockIterator = Locks.getLockIterator();
+	  final Iterator<LockIdentifier> lockIterator = Locks.getLockIterator();
 	  while(lockIterator.hasNext()) {
-	    LockStatisticsLock lock = lockIterator.next();
-	    UnmodifiableIterator<AccessPoint> accessPointIterator = lock.getAccessPointIterator();
+	    LockIdentifier lock = lockIterator.next();
+	    UnmodifiableIterator<AccessPoint> accessPointIterator = Locks.getAccessPointIterator(lock);
 	    while (accessPointIterator.hasNext()) {
 	      AccessPoint accessPoint = accessPointIterator.next();
 	      currentCallstackNode = createTree(accessPoint.getCallstack());
@@ -192,7 +186,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
     return tmpList;
   }
-  
+
   private void countUsageStatistics(UnrefinedUsagePointSet l) {
     Iterator<UsagePoint> pointIterator = l.getPointIterator();
     while (pointIterator.hasNext()) {
@@ -217,7 +211,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       }
     }
   }
-  
+
   private void countUsageStatistics(RefinedUsagePointSet l) {
     Pair<UsageInfo, UsageInfo> unsafe = l.getUnsafePair();
     UsageInfo first = unsafe.getFirst();
@@ -232,17 +226,17 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     trueUsagesInAllUnsafes += l.size();
     trueUsagesInTrueUnsafe += l.size();
   }
-  
+
   private void countStatistics(AbstractUsagePointSet l) {
     int startFailureNum = totalFailureUsages;
     int startTrueNum = trueUsagesInTrueUnsafe;
-    
+
     if (l instanceof UnrefinedUsagePointSet) {
       countUsageStatistics((UnrefinedUsagePointSet)l);
     } else if (l instanceof RefinedUsagePointSet) {
       countUsageStatistics((RefinedUsagePointSet)l);
     }
-    
+
     int d = trueUsagesInTrueUnsafe - startTrueNum;
     if (d > maxTrueUsages) {
       maxTrueUsages = d;

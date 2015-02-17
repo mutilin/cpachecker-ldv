@@ -398,7 +398,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
       builder.add(lock.lockName, line, fullCallstack, variable, logger);
     } else {
       UnmodifiableIterator<AccessPoint> accessPointIterator =
-          oldElement.findLock(lock.lockName, variable).getAccessPointIterator();
+          oldElement.getAccessPointIterator(lock.lockName, variable);
       StringBuilder message = new StringBuilder();
       message.append("Try to lock " + lock.lockName + " more, than " + lock.maxLock + " in " + line + " line. Previous were in ");
       while (accessPointIterator.hasNext()) {
