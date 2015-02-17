@@ -26,7 +26,7 @@ Line 36:     N0 -{splbio()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
 Line 21:     N0 -{spl()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 14:     N0 -{pthread_mutex_lock(&ipl_mutex)[1]}-> N0
+Line 14:     N0 -{pthread_mutex_lock(&ipl_mutex)}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 39:     N0 -{gvar = ...;}-> N0

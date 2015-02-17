@@ -37,7 +37,7 @@ Line 0:     N0 -{ldv_main()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
 Line 34:     N0 -{f()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 17:     N0 -{intLock[1]}-> N0
+Line 17:     N0 -{intLock}-> N0
 Line 18:     N0 -{*c = ...;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
@@ -47,7 +47,7 @@ Line 0:     N0 -{ldv_main()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
 Line 34:     N0 -{f()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 19:     N0 -{kernDispatchDisable[1]}-> N0
+Line 19:     N0 -{kernDispatchDisable}-> N0
 Line 22:     N0 -{*c = ...;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0

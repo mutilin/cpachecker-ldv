@@ -67,7 +67,7 @@ Line 65:     N0 -{get()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
 Line 30:     N0 -{init()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 54:     N0 -{kernDispatchDisable[1]}-> N0
+Line 54:     N0 -{kernDispatchDisable}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 71:     N0 -{true_unsafe = ...;}-> N0

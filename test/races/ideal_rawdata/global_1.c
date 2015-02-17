@@ -27,7 +27,7 @@ Line 0:     N0 -{ldv_main()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
 Line 22:     N0 -{g()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 15:     N0 -{kernDispatchDisable[1]}-> N0
+Line 15:     N0 -{kernDispatchDisable}-> N0
 Line 16:     N0 -{... = gvar;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0

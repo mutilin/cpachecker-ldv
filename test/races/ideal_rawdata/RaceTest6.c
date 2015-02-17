@@ -18,7 +18,7 @@ Line 0:     N0 -{ldv_main()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
 Line 25:     N0 -{increase()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 13:     N0 -{example_lock[1]}-> N0
+Line 13:     N0 -{example_lock}-> N0
 Line 14:     N0 -{global = ...;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
