@@ -119,6 +119,8 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
       }
       if (!accessList.isEmpty()) {
         mutableLocks.put(lockId, ImmutableList.copyOf(accessList));
+      } else {
+        mutableLocks.remove(lockId);
       }
     }
 
@@ -364,9 +366,6 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
    */
   public boolean isLessOrEqual(LockStatisticsState other) {
     //State is less, if it has the same locks as the other and may be some more
-    /*if (locks.size() == 0 && other.locks.size() > 0) {
-      return false;
-    }*/
 
     for (LockIdentifier lock : other.locks.keySet()) {
       if (!(this.locks.containsKey(lock))) {
@@ -411,17 +410,11 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
   }
 
   public boolean intersects(LockStatisticsState pLocks) {
-    /*if (pLocks.locks.size() == 0 && this.locks.size() == 0) {
-      return true;    //this is our assumption. This isn't unsafe.
-    }*/
-    for (LockIdentifier lock : pLocks.locks.keySet()) {
-      for (LockIdentifier myLock : this.locks.keySet()) {
-        if (lock == myLock) {
-          return true;
-        }
-      }
+    if (Sets.intersection(locks.keySet(), pLocks.locks.keySet()).isEmpty()) {
+      return false;
+    } else {
+      return true;
     }
-    return false;
   }
 
   LockStatisticsStateBuilder builder() {

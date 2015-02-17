@@ -312,7 +312,6 @@ public class LockStatisticsTransferRelation implements TransferRelation
 
   private void handleFunctionCall(LockStatisticsState oldState, LockStatisticsStateBuilder builder, CFunctionCallEdge callEdge) {
     Set<CFunctionCall> expressions = callEdge.getRawAST().asSet();
-
     if (expressions.size() > 0) {
       for (CStatement statement : expressions) {
         handleStatement(oldState, builder, statement, new LineInfo(callEdge), callEdge.getPredecessor().getFunctionName());
