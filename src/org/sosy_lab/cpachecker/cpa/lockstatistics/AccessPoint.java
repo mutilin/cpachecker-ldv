@@ -37,24 +37,32 @@ public class AccessPoint {
    * callstack is responsible for information in report.
    * So, in every moment in time this field should be correct to state of analysis
    */
-  private CallstackState callstack;
+  private final CallstackState callstack;
   /**
    * This field shows, if this access point is new or not
    */
-  private boolean isNewPoint;
+  private final boolean isNewPoint;
 
   AccessPoint(LineInfo l, CallstackState stack) {
+    this(l, stack, true);
+  }
+
+  private AccessPoint(LineInfo l, CallstackState stack, boolean isNew) {
     line = l;
     callstack = stack;
-    isNewPoint = true;
+    isNewPoint = isNew;
   }
 
   public CallstackState getCallstack() {
     return callstack;
   }
 
-  public void markAsOld() {
-    isNewPoint = false;
+  public AccessPoint markAsOld() {
+    if (isNew()) {
+      return new AccessPoint(line, callstack, false);
+    } else {
+      return this;
+    }
   }
 
   public boolean isNew() {
@@ -105,19 +113,16 @@ public class AccessPoint {
 
   @Override
   public AccessPoint clone() {
-    AccessPoint result =  new AccessPoint(line, callstack);
-    result.isNewPoint = this.isNewPoint;
-    return result;
+    return new AccessPoint(line, callstack, isNewPoint);
   }
 
   public AccessPoint expandCallstack(BAMRestoreStack pRestorator, CallstackReducer pReducer, CFANode pNode) {
-    AccessPoint result = this.clone();
     CallstackState reducedCallstack = (CallstackState)pReducer.getVariableReducedState(callstack, null, pNode);
     try {
-      result.callstack = pRestorator.restoreCallstack(reducedCallstack);
+      AccessPoint result = new AccessPoint(line, pRestorator.restoreCallstack(reducedCallstack), isNewPoint);
+      return result;
     } catch (HandleCodeException e) {
-      System.err.println(e.getMessage());
+      return null;
     }
-    return result;
   }
 }

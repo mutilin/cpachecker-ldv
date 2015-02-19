@@ -29,7 +29,7 @@ Line 35:     N0 -{g()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
 Line 28:     N0 -{ldbBreakpoint()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 17:     N0 -{intLock[1]}-> N0
+Line 17:     N0 -{intLock}-> N0
 Line 18:     N0 -{f()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
 Line 11:     N0 -{gvar = ...;}-> N0

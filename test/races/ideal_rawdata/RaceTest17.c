@@ -27,7 +27,7 @@ Line 0:     N0 -{ldv_main()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
 Line 31:     N0 -{f()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 12:     N0 -{kernDispatchDisable[1]}-> N0
+Line 12:     N0 -{kernDispatchDisable}-> N0
 Line 14:     N0 -{threadDispatchLevel = ...;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0

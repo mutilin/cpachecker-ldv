@@ -18,7 +18,7 @@ Line 0:     N0 -{ldv_main()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
 Line 23:     N0 -{f()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 8:     N0 -{intLock[1]}-> N0
+Line 8:     N0 -{intLock}-> N0
 Line 10:     N0 -{unsafe2 = ...;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0

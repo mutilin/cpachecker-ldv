@@ -23,6 +23,17 @@
  */
 package org.sosy_lab.cpachecker.cpa.lockstatistics;
 
+import static com.google.common.collect.FluentIterable.from;
+
+import java.util.Map;
+import java.util.Set;
+
+import javax.annotation.Nullable;
+
+import org.sosy_lab.common.configuration.Configuration;
+import org.sosy_lab.common.configuration.InvalidConfigurationException;
+import org.sosy_lab.common.configuration.Option;
+import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
@@ -30,17 +41,49 @@ import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
 import org.sosy_lab.cpachecker.cpa.bam.BAMRestoreStack;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackReducer;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState.LockStatisticsStateBuilder;
 
+import com.google.common.base.Function;
+import com.google.common.base.Predicate;
 
+@Options(prefix="cpa.lockstatistics")
 public class LockStatisticsReducer implements Reducer {
   //this field should be initialized by ABM
   private BAMRestoreStack restorator;
   private CallstackReducer cReducer;
+  private final Set<String> restrictedFunctions;
+  private final Set<String> restrictedLocks;
+
+  @Option(description="reduce recursive locks to a single access")
+  private boolean aggressiveReduction = false;
+
+  public LockStatisticsReducer(Configuration config, Map<String, AnnotationInfo> annotations, Set<LockInfo> locks) throws InvalidConfigurationException {
+    config.inject(this);
+    restrictedFunctions = annotations.keySet();
+    //Make a set of locks with nonempty reset functions
+    restrictedLocks = from(locks).filter(new Predicate<LockInfo>() {
+        @Override
+        public boolean apply(@Nullable LockInfo pInput) {
+          return !(pInput.ResetFunctions.isEmpty() && pInput.Variables.isEmpty());
+        }
+      }).transform(new Function<LockInfo, String>() {
+        @Override
+        @Nullable
+        public String apply(@Nullable LockInfo pInput) {
+            return pInput.lockName;
+        }
+      }).toSet();
+  }
 
   @Override
   public AbstractState getVariableReducedState(AbstractState pExpandedElement, Block pContext, CFANode pCallNode) {
     LockStatisticsState lockState = (LockStatisticsState) pExpandedElement;
-    return lockState.reduce();
+    LockStatisticsStateBuilder builder = lockState.builder();
+    builder.reduce();
+    if (aggressiveReduction && !restrictedFunctions.contains(pCallNode.getFunctionName())) {
+      builder.reduceLocks(restrictedLocks);
+    }
+    return builder.build();
   }
 
   @Override
@@ -48,9 +91,13 @@ public class LockStatisticsReducer implements Reducer {
       AbstractState pReducedElement) {
 
     LockStatisticsState reducedState = (LockStatisticsState)pReducedElement;
-    LockStatisticsState expandedState = reducedState.clone();
     LockStatisticsState rootState = (LockStatisticsState) pRootElement;
-    return expandedState.expandCallstack(rootState, restorator, cReducer, pReducedContext.getCallNode());
+    LockStatisticsStateBuilder builder = reducedState.builder();
+    builder.expand(rootState, restorator, cReducer, pReducedContext.getCallNode());
+    if (aggressiveReduction && !restrictedFunctions.contains(pReducedContext.getCallNode().getFunctionName())) {
+      builder.expandLocks(rootState, restrictedLocks);
+    }
+    return builder.build();
   }
 
   @Override

@@ -82,7 +82,7 @@ Line 46:     N0 -{main()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
 Line 41:     N0 -{f()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 14:     N0 -{intLock[1]}-> N0
+Line 14:     N0 -{intLock}-> N0
 Line 15:     N0 -{true_unsafe = ...;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
@@ -114,7 +114,7 @@ Line 46:     N0 -{main()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
 Line 41:     N0 -{f()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 14:     N0 -{intLock[1]}-> N0
+Line 14:     N0 -{intLock}-> N0
 Line 16:     N0 -{true_unsafe2 = ...;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
@@ -146,7 +146,7 @@ Line 46:     N0 -{main()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
 Line 41:     N0 -{f()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 23:     N0 -{intLock[1]}-> N0
+Line 23:     N0 -{intLock}-> N0
 Line 24:     N0 -{true_unsafe3 = ...;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
@@ -175,7 +175,7 @@ Line 46:     N0 -{main()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
 Line 41:     N0 -{f()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 31:     N0 -{intLock[1]}-> N0
+Line 31:     N0 -{intLock}-> N0
 Line 32:     N0 -{true_unsafe4 = ...;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0

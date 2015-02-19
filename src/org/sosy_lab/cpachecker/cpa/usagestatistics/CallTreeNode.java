@@ -29,7 +29,7 @@ import java.util.TreeSet;
 
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.AccessPoint;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsLock;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 public class CallTreeNode implements Comparable<CallTreeNode> {
@@ -38,7 +38,7 @@ public class CallTreeNode implements Comparable<CallTreeNode> {
   protected final Set<CallTreeNode> children;
 
   private static CallTreeNode trunk;
-  
+
   protected CallTreeNode(String c, int l) {
     code = c;
     line = l;
@@ -78,7 +78,7 @@ public class CallTreeNode implements Comparable<CallTreeNode> {
     }
     return true;
   }
-  
+
   private CallTreeNode add(CallTreeNode returnLeaf) {
   	if (this instanceof FunctionLeaf) {
 	  	for (CallTreeNode leaf : this.children) {
@@ -95,15 +95,15 @@ public class CallTreeNode implements Comparable<CallTreeNode> {
     return add(new FunctionLeaf(callstack.getCurrentFunction(),
         callstack.getCallNode().getLeavingEdge(0).getLineNumber()));
   }
-  
+
   public void add(UsageInfo usage, SingleIdentifier id) {
     add(new UsageLeaf(usage.createUsageView(id), usage.getLine().getLine()));
   }
-  
-  public void add(LockStatisticsLock lock, AccessPoint accessPoint) {
+
+  public void add(LockIdentifier lock, AccessPoint accessPoint) {
     add(new LockLeaf(lock.toString(), accessPoint.getLineInfo().getLine()));
   }
-  
+
   public Iterator<CallTreeNode> getChildrenIterator() {
     return children.iterator();
   }
@@ -121,7 +121,7 @@ public class CallTreeNode implements Comparable<CallTreeNode> {
   	}
     return getTrunkState();
   }
-  
+
   private class FunctionLeaf extends CallTreeNode {
   	protected FunctionLeaf(String code, int line) {
   		super(code, line);
@@ -134,18 +134,18 @@ public class CallTreeNode implements Comparable<CallTreeNode> {
     	}
       return this.line - arg0.line;
     }
-    
+
   	@Override
     public String toString() {
       return "Line " + line + ":     N0 -{" + code + "()" + "}-> N0\n";
     }
   }
-  
+
   private class UsageLeaf extends CallTreeNode {
   	protected UsageLeaf(String code, int line) {
   		super(code, line);
   	}
-  	
+
   	@Override
     public int compareTo(CallTreeNode arg0) {
     	if (arg0 instanceof LockLeaf) {
@@ -153,13 +153,13 @@ public class CallTreeNode implements Comparable<CallTreeNode> {
     	}
       return this.line - arg0.line;
     }
-  	
+
   	@Override
     public String toString() {
       return "Line " + line + ":     N0 -{" + code + "}-> N0\n";
     }
   }
-  
+
   private class LockLeaf extends CallTreeNode {
   	protected LockLeaf(String code, int line) {
   		super(code, line);

@@ -27,8 +27,8 @@ Line 0:     N0 -{ldv_main()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
 Line 22:     N0 -{f()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 10:     N0 -{kernDispatchDisable[1]}-> N0
-Line 12:     N0 -{intLock[1]}-> N0
+Line 10:     N0 -{kernDispatchDisable}-> N0
+Line 12:     N0 -{intLock}-> N0
 Line 13:     N0 -{g()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
 Line 17:     N0 -{global = ...;}-> N0

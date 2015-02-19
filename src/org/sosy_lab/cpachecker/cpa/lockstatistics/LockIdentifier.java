@@ -55,18 +55,34 @@ public class LockIdentifier implements Comparable<LockIdentifier> {
     if (createdIds == null) {
       createdIds = new HashSet<>();
     }
+    String varName = getCleanName(var);
     for (LockIdentifier id : createdIds) {
-      if ( id.name.equals(name) && id.type == type && id.variable.equals(var)) {
+      if ( id.name.equals(name) && id.type == type && id.variable.equals(varName)) {
         return id;
       }
     }
-    LockIdentifier newId = new LockIdentifier(name, var, type);
+    LockIdentifier newId = new LockIdentifier(name, varName, type);
     createdIds.add(newId);
     return newId;
   }
 
   public boolean hasEqualNameAndVariable(String lockName, String variableName) {
-    return (this.name.equals(lockName) && variable.equals(variableName));
+    return (name.equals(lockName) && variable.equals(variableName));
+  }
+
+  public String getName() {
+    return name;
+  }
+
+  private static String getCleanName(String originName) {
+    if (originName != null) {
+      String newName = originName.replaceAll("\\(", "");
+      newName = newName.replaceAll("\\)", "");
+      newName = newName.replaceAll("___\\d*", "");
+      return newName;
+    } else {
+      return null;
+    }
   }
 
   @Override

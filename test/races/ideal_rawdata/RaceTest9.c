@@ -28,7 +28,7 @@ Line 28:     N0 -{h()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
 Line 22:     N0 -{f()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 7:     N0 -{intLock[1]}-> N0
+Line 7:     N0 -{intLock}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 29:     N0 -{global = ...;}-> N0

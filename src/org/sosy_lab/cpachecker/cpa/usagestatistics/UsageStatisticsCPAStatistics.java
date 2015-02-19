@@ -47,7 +47,7 @@ import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.AccessPoint;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsLock;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.AbstractUsageInfoSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.AbstractUsagePointSet;
@@ -111,10 +111,8 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     LockStatisticsState Locks = usage.getLockState();
 
     assert Locks != null;
-	  final Iterator<LockStatisticsLock> lockIterator = Locks.getLockIterator();
-	  while(lockIterator.hasNext()) {
-	    LockStatisticsLock lock = lockIterator.next();
-	    UnmodifiableIterator<AccessPoint> accessPointIterator = lock.getAccessPointIterator();
+	  for (LockIdentifier lock : Locks.getLockIdentifiers()) {
+	    UnmodifiableIterator<AccessPoint> accessPointIterator = Locks.getAccessPointIterator(lock);
 	    while (accessPointIterator.hasNext()) {
 	      AccessPoint accessPoint = accessPointIterator.next();
 	      currentCallstackNode = createTree(accessPoint.getCallstack());

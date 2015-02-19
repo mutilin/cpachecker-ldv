@@ -29,7 +29,7 @@ Line 27:     N0 -{h()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
 Line 15:     N0 -{g()}-> N0
 Line 0:     N0 -{Function start dummy edge}-> N0
-Line 19:     N0 -{kernDispatchDisable[1]}-> N0
+Line 19:     N0 -{kernDispatchDisable}-> N0
 Line 21:     N0 -{gvar = ...;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0

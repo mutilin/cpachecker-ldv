@@ -72,9 +72,9 @@ public class LockStatisticsTransferRelation implements TransferRelation
       description="function to reset state")
   private String lockreset;
 
-  private final Map<String, AnnotationInfo> annotatedfunctions;
+  final Map<String, AnnotationInfo> annotatedfunctions;
 
-  private final Set<LockInfo> locks;
+  final Set<LockInfo> locks;
   private LogManager logger;
 
   private CallstackState fullCallstack = null;
@@ -312,7 +312,6 @@ public class LockStatisticsTransferRelation implements TransferRelation
 
   private void handleFunctionCall(LockStatisticsState oldState, LockStatisticsStateBuilder builder, CFunctionCallEdge callEdge) {
     Set<CFunctionCall> expressions = callEdge.getRawAST().asSet();
-
     if (expressions.size() > 0) {
       for (CStatement statement : expressions) {
         handleStatement(oldState, builder, statement, new LineInfo(callEdge), callEdge.getPredecessor().getFunctionName());
@@ -398,7 +397,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
       builder.add(lock.lockName, line, fullCallstack, variable, logger);
     } else {
       UnmodifiableIterator<AccessPoint> accessPointIterator =
-          oldElement.findLock(lock.lockName, variable).getAccessPointIterator();
+          oldElement.getAccessPointIterator(lock.lockName, variable);
       StringBuilder message = new StringBuilder();
       message.append("Try to lock " + lock.lockName + " more, than " + lock.maxLock + " in " + line + " line. Previous were in ");
       while (accessPointIterator.hasNext()) {
