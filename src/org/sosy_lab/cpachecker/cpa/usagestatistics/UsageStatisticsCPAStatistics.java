@@ -111,9 +111,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     LockStatisticsState Locks = usage.getLockState();
 
     assert Locks != null;
-	  final Iterator<LockIdentifier> lockIterator = Locks.getLockIterator();
-	  while(lockIterator.hasNext()) {
-	    LockIdentifier lock = lockIterator.next();
+	  for (LockIdentifier lock : Locks.getLockIdentifiers()) {
 	    UnmodifiableIterator<AccessPoint> accessPointIterator = Locks.getAccessPointIterator(lock);
 	    while (accessPointIterator.hasNext()) {
 	      AccessPoint accessPoint = accessPointIterator.next();
