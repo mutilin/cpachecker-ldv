@@ -30,6 +30,10 @@ import java.util.Set;
 
 import javax.annotation.Nullable;
 
+import org.sosy_lab.common.configuration.Configuration;
+import org.sosy_lab.common.configuration.InvalidConfigurationException;
+import org.sosy_lab.common.configuration.Option;
+import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
@@ -42,6 +46,7 @@ import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState.LockStatis
 import com.google.common.base.Function;
 import com.google.common.base.Predicate;
 
+@Options(prefix="cpa.lockstatistics")
 public class LockStatisticsReducer implements Reducer {
   //this field should be initialized by ABM
   private BAMRestoreStack restorator;
@@ -49,7 +54,11 @@ public class LockStatisticsReducer implements Reducer {
   private final Set<String> restrictedFunctions;
   private final Set<String> restrictedLocks;
 
-  public LockStatisticsReducer(Map<String, AnnotationInfo> annotations, Set<LockInfo> locks) {
+  @Option(description="reduce recursive locks to a single access")
+  private boolean aggressiveReduction = false;
+
+  public LockStatisticsReducer(Configuration config, Map<String, AnnotationInfo> annotations, Set<LockInfo> locks) throws InvalidConfigurationException {
+    config.inject(this);
     restrictedFunctions = annotations.keySet();
     //Make a set of locks with nonempty reset functions
     restrictedLocks = from(locks).filter(new Predicate<LockInfo>() {
@@ -71,7 +80,7 @@ public class LockStatisticsReducer implements Reducer {
     LockStatisticsState lockState = (LockStatisticsState) pExpandedElement;
     LockStatisticsStateBuilder builder = lockState.builder();
     builder.reduce();
-    if (!restrictedFunctions.contains(pCallNode.getFunctionName())) {
+    if (aggressiveReduction && !restrictedFunctions.contains(pCallNode.getFunctionName())) {
       builder.reduceLocks(restrictedLocks);
     }
     return builder.build();
@@ -85,7 +94,7 @@ public class LockStatisticsReducer implements Reducer {
     LockStatisticsState rootState = (LockStatisticsState) pRootElement;
     LockStatisticsStateBuilder builder = reducedState.builder();
     builder.expand(rootState, restorator, cReducer, pReducedContext.getCallNode());
-    if (!restrictedFunctions.contains(pReducedContext.getCallNode().getFunctionName())) {
+    if (aggressiveReduction && !restrictedFunctions.contains(pReducedContext.getCallNode().getFunctionName())) {
       builder.expandLocks(rootState, restrictedLocks);
     }
     return builder.build();
