@@ -29,6 +29,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -115,6 +116,7 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
   private final BAMCache argCache;
 
   final Map<AbstractState, ReachedSet> abstractStateToReachedSet = new HashMap<>();
+  final Map<AbstractState, AbstractState> reducedToExpand = new IdentityHashMap<>();
   final Map<AbstractState, AbstractState> expandedToReducedCache = new HashMap<>();
   final Map<AbstractState, Block> expandedToBlockCache = new HashMap<>();
 
@@ -899,21 +901,41 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
   }
 
   public ARGState findPath(ARGState target,
-      Map<ARGState, ARGState> pPathElementToReachedState, final CallstackState stack) throws InterruptedException, RecursiveAnalysisFailedException {
+      Map<ARGState, ARGState> pPathElementToReachedState) throws InterruptedException, RecursiveAnalysisFailedException {
+
+    if (reducedToExpand.isEmpty()) {
+      for (AbstractState expandedState : abstractStateToReachedSet.keySet()) {
+        ARGState firstState = (ARGState) abstractStateToReachedSet.get(expandedState).getFirstState();
+        if (firstState.getStateId() == ((ARGState)expandedState).getStateId() + 1) {
+          //first time
+          reducedToExpand.put(firstState, expandedState);
+        }
+      }
+    }
 
     final BAMCEXSubgraphComputer cexSubgraphComputer = new BAMCEXSubgraphComputer(
         partitioning, wrappedReducer, argCache, pPathElementToReachedState,
-        abstractStateToReachedSet, expandedToReducedCache, logger);
+        abstractStateToReachedSet, expandedToReducedCache, reducedToExpand, logger);
 
-        return cexSubgraphComputer.findPath(target, pPathElementToReachedState, stack);
+        return cexSubgraphComputer.findPath(target, pPathElementToReachedState);
   }
 
      ARGState computeCounterexampleSubgraph(ARGState target, ARGReachedSet reachedSet,
         Map<ARGState, ARGState> pPathElementToReachedState)
 throws InterruptedException, RecursiveAnalysisFailedException {
+   if (reducedToExpand.isEmpty()) {
+     for (AbstractState expandedState : abstractStateToReachedSet.keySet()) {
+       ARGState firstState = (ARGState) abstractStateToReachedSet.get(expandedState).getFirstState();
+       if (firstState.getStateId() == ((ARGState)expandedState).getStateId() + 1) {
+         //first time
+         reducedToExpand.put(firstState, expandedState);
+       }
+     }
+   }
+
     final BAMCEXSubgraphComputer cexSubgraphComputer = new BAMCEXSubgraphComputer(
             partitioning, wrappedReducer, argCache, pPathElementToReachedState,
-            abstractStateToReachedSet, expandedToReducedCache, logger);
+            abstractStateToReachedSet, expandedToReducedCache, reducedToExpand, logger);
     return cexSubgraphComputer.computeCounterexampleSubgraph(target, reachedSet, new BAMCEXSubgraphComputer.BackwardARGState(target));
   }
 
@@ -923,6 +945,7 @@ throws InterruptedException, RecursiveAnalysisFailedException {
     expandedToReducedCache.clear();
     expandedToBlockCache.clear();
     forwardPrecisionToExpandedPrecision.clear();
+    reducedToExpand.clear();
     if (correctARGsForBlocks != null) {
       correctARGsForBlocks.clear();
     }

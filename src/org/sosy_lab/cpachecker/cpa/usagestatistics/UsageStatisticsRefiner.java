@@ -47,7 +47,6 @@ import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
 import org.sosy_lab.cpachecker.cpa.arg.ARGReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.arg.ARGUtils;
-import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateCPA;
 import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateRefiner;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicatePrecision;
@@ -141,7 +140,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       pStat.UnsafeCheck.stopIfRunning();
       pathStateToReachedState.clear();
       pStat.ComputePath.start();
-      ARGPath pPath = computePath((ARGState)target.getKeyState(), target.getCallStack());
+      ARGPath pPath = computePath((ARGState)target.getKeyState());
       pStat.ComputePath.stopIfRunning();
       assert (pPath != null);
       try {
@@ -209,10 +208,10 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     return refinementFinish;
   }
 
-  protected ARGPath computePath(ARGState pLastElement, CallstackState stack) throws InterruptedException, CPATransferException {
+  protected ARGPath computePath(ARGState pLastElement) throws InterruptedException, CPATransferException {
     assert (pLastElement != null && !pLastElement.isDestroyed());
       //we delete this state from other unsafe
-    ARGState subgraph = transfer.findPath(pLastElement, pathStateToReachedState, stack);
+    ARGState subgraph = transfer.findPath(pLastElement, pathStateToReachedState);
     assert (subgraph != null);
     return ARGUtils.getRandomPath(subgraph);
   }

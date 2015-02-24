@@ -27,11 +27,8 @@ import static org.sosy_lab.cpachecker.cpa.bam.AbstractBAMBasedRefiner.DUMMY_STAT
 import static org.sosy_lab.cpachecker.util.AbstractStates.extractLocation;
 
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.NavigableSet;
-import java.util.Set;
 import java.util.Stack;
 import java.util.TreeSet;
 import java.util.logging.Level;
@@ -45,7 +42,6 @@ import org.sosy_lab.cpachecker.core.interfaces.Reducer;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
-import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 
@@ -64,7 +60,7 @@ public class BAMCEXSubgraphComputer {
   BAMCEXSubgraphComputer(BlockPartitioning partitioning, Reducer reducer, BAMCache bamCache,
                          Map<ARGState, ARGState> pathStateToReachedState,
                          Map<AbstractState, ReachedSet> abstractStateToReachedSet,
-                         Map<AbstractState, AbstractState> expandedToReducedCache,
+                         Map<AbstractState, AbstractState> expandedToReducedCache, Map<AbstractState, AbstractState> reduced,
                          LogManager logger) {
     this.partitioning = partitioning;
     this.reducer = reducer;
@@ -73,14 +69,7 @@ public class BAMCEXSubgraphComputer {
     this.abstractStateToReachedSet = abstractStateToReachedSet;
     this.expandedToReducedCache = expandedToReducedCache;
     this.logger = logger;
-    this.reducedToExpanded = new IdentityHashMap<>();
-    for (AbstractState expandedState : abstractStateToReachedSet.keySet()) {
-      ARGState firstState = (ARGState) abstractStateToReachedSet.get(expandedState).getFirstState();
-      if (firstState.getStateId() == ((ARGState)expandedState).getStateId() + 1) {
-        //first time
-        reducedToExpanded.put(firstState, expandedState);
-      }
-    }
+    this.reducedToExpanded = reduced;
   }
 
   /** returns the root of a subtree, leading from the root element of the given reachedSet to the target state.
@@ -235,10 +224,9 @@ public class BAMCEXSubgraphComputer {
     }
     return result;
   }
-  //public static int totalCalls = 0;
-  //public static int extraCalls = 0;
+
   public ARGState findPath(ARGState target,
-      Map<ARGState, ARGState> pPathElementToReachedState, final CallstackState stack) throws InterruptedException, RecursiveAnalysisFailedException {
+      Map<ARGState, ARGState> pPathElementToReachedState) throws InterruptedException, RecursiveAnalysisFailedException {
 
     Map<ARGState, BackwardARGState> elementsMap = new HashMap<>();
     Stack<ARGState> openElements = new Stack<>();
@@ -254,8 +242,6 @@ public class BAMCEXSubgraphComputer {
     assert (pState.isAbstractionState());
 
     openElements.push(target);
-    //int i = 0;
-    //int key = (int)(Math.random() * 100);
     while (!openElements.empty()) {
       ARGState currentElement = openElements.pop();
       BackwardARGState newCurrentElement = elementsMap.get(currentElement);
@@ -289,75 +275,30 @@ public class BAMCEXSubgraphComputer {
         }
       }
       if (currentElement.getParents().isEmpty()) {
-        if (stack.getPreviousState() == null) {
-          root = elementsMap.get(currentElement);
+        //Find correct expanded state
+        ARGState expandedState = (ARGState) reducedToExpanded.get(currentElement);
+        if (expandedState == null) {
+          //The first state
+          root = newCurrentElement;
           break;
         }
-        ARGState expandedState = null;
-        BackwardARGState lastNewExpandedState = null;
-        Set<ARGState> removedStates = new HashSet<>();
-        //Find correct expanded state
-        AbstractState tmpExpanded = reducedToExpanded.get(currentElement);
-        if (tmpExpanded == null) {
-          System.out.println("Obtain tmpExpanded = null");
-          return null;
-        }
-        expandedState = (ARGState) tmpExpanded;
         //Try to find path.
-        //It may be null, if somewhere callstack becomes different (now we don't understand this)
-        //i++;
-        //System.out.println(key + ": " + expandedState);
-        ARGState tmpRoot = findPath(expandedState, pPathElementToReachedState, stack.getPreviousState());
-        if (tmpRoot != null) {
-          BackwardARGState newExpandedState = null;
-          for (ARGState tmp : pPathElementToReachedState.keySet()) {
-            if (tmp.isDestroyed()) {
-              continue;
-            }
-            if (pPathElementToReachedState.get(tmp).equals(expandedState) && tmp.getChildren().size() == 0) {
-              newExpandedState = (BackwardARGState) tmp;
-              break;
-            }
-          }
-          root = tmpRoot;
-          lastNewExpandedState = newExpandedState;
-        }
-        if (lastNewExpandedState == null || root == null) {
-          /*System.out.println("Obtain " + i + " recursive calls");
-          if (i > 1) {
-            extraCalls += (i - 1);
-          }
-          totalCalls += i;*/
-          return null;
-        }
-        elementsMap.put(expandedState, lastNewExpandedState);
-        pPathElementToReachedState.put(lastNewExpandedState, expandedState);
+        BackwardARGState newExpandedState = new BackwardARGState(expandedState);
+        pPathElementToReachedState.put(newExpandedState, expandedState);
+        elementsMap.put(expandedState, newExpandedState);
         for (ARGState child : newCurrentElement.getChildren()) {
-          child.addParent(lastNewExpandedState);
+          child.addParent(newExpandedState);
         }
-        removedStates.add(newCurrentElement);
-        for (ARGState toRemove : removedStates) {
-          toRemove.removeFromARG();
-        }
+        newCurrentElement.removeFromARG();
+        openElements.push(expandedState);
       }
       if (currentElement.isDestroyed()) {
-        //It means, that we delete some part of path
-        /*System.out.println("Obtain " + i + " recursive calls");
-        if (i > 1) {
-          extraCalls += (i - 1);
-        }
-        totalCalls += i;*/
         return null;
       }
     }
-    /*System.out.println("Obtain " + i + " recursive calls");
-    if (i > 1) {
-      extraCalls += (i - 1);
-    }
-    totalCalls += i;*/
+    assert root != null;
     return root;
   }
-
 
   /**
    * This is a ARGState, that counts backwards, used to build the Pseudo-ARG for CEX-retrieval.
