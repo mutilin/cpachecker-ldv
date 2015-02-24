@@ -195,15 +195,16 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       lastFalseUnsafeSize = originUnsafeSize;
       lastTrueUnsafes = newTrueUnsafeSize;
     }
-    iCache.removeUnusedCacheEntries();
-    transfer.clearCaches();
-    ARGState firstState = (ARGState) pReached.getFirstState();
-    CFANode firstNode = AbstractStates.extractLocation(firstState);
-    ARGState.clearIdGenerator();
-    Precision precision = pReached.getPrecision(firstState);
-    pReached.clear();
-    pReached.add(cpa.getInitialState(firstNode, StateSpacePartition.getDefaultPartition()), precision);
-
+    if (refinementFinish) {
+      iCache.removeUnusedCacheEntries();
+      transfer.clearCaches();
+      ARGState firstState = (ARGState) pReached.getFirstState();
+      CFANode firstNode = AbstractStates.extractLocation(firstState);
+      ARGState.clearIdGenerator();
+      Precision precision = pReached.getPrecision(firstState);
+      pReached.clear();
+      pReached.add(cpa.getInitialState(firstNode, StateSpacePartition.getDefaultPartition()), precision);
+    }
     pStat.UnsafeCheck.stopIfRunning();
     return refinementFinish;
   }
