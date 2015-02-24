@@ -28,6 +28,7 @@ import static org.sosy_lab.cpachecker.util.AbstractStates.extractLocation;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.NavigableSet;
 import java.util.Set;
@@ -56,6 +57,7 @@ public class BAMCEXSubgraphComputer {
   private final BAMCache bamCache;
   private final Map<ARGState, ARGState> pathStateToReachedState;
   private final Map<AbstractState, ReachedSet> abstractStateToReachedSet;
+  private final Map<AbstractState, AbstractState> reducedToExpanded;
   private final Map<AbstractState, AbstractState> expandedToReducedCache;
   private final LogManager logger;
 
@@ -71,6 +73,14 @@ public class BAMCEXSubgraphComputer {
     this.abstractStateToReachedSet = abstractStateToReachedSet;
     this.expandedToReducedCache = expandedToReducedCache;
     this.logger = logger;
+    this.reducedToExpanded = new IdentityHashMap<>();
+    for (AbstractState expandedState : abstractStateToReachedSet.keySet()) {
+      ARGState firstState = (ARGState) abstractStateToReachedSet.get(expandedState).getFirstState();
+      if (firstState.getStateId() == ((ARGState)expandedState).getStateId() + 1) {
+        //first time
+        reducedToExpanded.put(firstState, expandedState);
+      }
+    }
   }
 
   /** returns the root of a subtree, leading from the root element of the given reachedSet to the target state.
@@ -225,7 +235,8 @@ public class BAMCEXSubgraphComputer {
     }
     return result;
   }
-
+  //public static int totalCalls = 0;
+  //public static int extraCalls = 0;
   public ARGState findPath(ARGState target,
       Map<ARGState, ARGState> pPathElementToReachedState, final CallstackState stack) throws InterruptedException, RecursiveAnalysisFailedException {
 
@@ -243,6 +254,8 @@ public class BAMCEXSubgraphComputer {
     assert (pState.isAbstractionState());
 
     openElements.push(target);
+    //int i = 0;
+    //int key = (int)(Math.random() * 100);
     while (!openElements.empty()) {
       ARGState currentElement = openElements.pop();
       BackwardARGState newCurrentElement = elementsMap.get(currentElement);
@@ -282,46 +295,39 @@ public class BAMCEXSubgraphComputer {
         }
         ARGState expandedState = null;
         BackwardARGState lastNewExpandedState = null;
-        ARGState lastExpandedState = null;
-        ReachedSet tmpReachedSet;
         Set<ARGState> removedStates = new HashSet<>();
         //Find correct expanded state
-        for (AbstractState tmpExpanded : abstractStateToReachedSet.keySet()) {
-          tmpReachedSet = abstractStateToReachedSet.get(tmpExpanded);
-          if (tmpReachedSet.getFirstState().equals(currentElement)) {
-            CallstackState expandedCallstack = AbstractStates.extractStateByType(tmpExpanded, CallstackState.class);
-            if (!(expandedCallstack.getPreviousState().getCurrentFunction()
-                .equals(stack.getPreviousState().getCurrentFunction()))) {
+        AbstractState tmpExpanded = reducedToExpanded.get(currentElement);
+        if (tmpExpanded == null) {
+          System.out.println("Obtain tmpExpanded = null");
+          return null;
+        }
+        expandedState = (ARGState) tmpExpanded;
+        //Try to find path.
+        //It may be null, if somewhere callstack becomes different (now we don't understand this)
+        //i++;
+        //System.out.println(key + ": " + expandedState);
+        ARGState tmpRoot = findPath(expandedState, pPathElementToReachedState, stack.getPreviousState());
+        if (tmpRoot != null) {
+          BackwardARGState newExpandedState = null;
+          for (ARGState tmp : pPathElementToReachedState.keySet()) {
+            if (tmp.isDestroyed()) {
               continue;
             }
-            expandedState = (ARGState) tmpExpanded;
-            if (lastExpandedState != null && expandedState.isOlderThan(lastExpandedState)) {
-              continue;
-            }
-            //Try to find path.
-            //It may be null, if somewhere callstack becomes different (now we don't understand this)
-            ARGState tmpRoot = findPath(expandedState, pPathElementToReachedState, stack.getPreviousState());
-            if (tmpRoot != null) {
-              BackwardARGState newExpandedState = null;
-              for (ARGState tmp : pPathElementToReachedState.keySet()) {
-                if (tmp.isDestroyed()) {
-                  continue;
-                }
-                if (pPathElementToReachedState.get(tmp).equals(expandedState) && tmp.getChildren().size() == 0) {
-                  newExpandedState = (BackwardARGState) tmp;
-                  break;
-                }
-              }
-              root = tmpRoot;
-              if (lastNewExpandedState != null) {
-                removedStates.add(lastNewExpandedState);
-              }
-              lastNewExpandedState = newExpandedState;
-              lastExpandedState = expandedState;
+            if (pPathElementToReachedState.get(tmp).equals(expandedState) && tmp.getChildren().size() == 0) {
+              newExpandedState = (BackwardARGState) tmp;
+              break;
             }
           }
+          root = tmpRoot;
+          lastNewExpandedState = newExpandedState;
         }
         if (lastNewExpandedState == null || root == null) {
+          /*System.out.println("Obtain " + i + " recursive calls");
+          if (i > 1) {
+            extraCalls += (i - 1);
+          }
+          totalCalls += i;*/
           return null;
         }
         elementsMap.put(expandedState, lastNewExpandedState);
@@ -336,9 +342,19 @@ public class BAMCEXSubgraphComputer {
       }
       if (currentElement.isDestroyed()) {
         //It means, that we delete some part of path
+        /*System.out.println("Obtain " + i + " recursive calls");
+        if (i > 1) {
+          extraCalls += (i - 1);
+        }
+        totalCalls += i;*/
         return null;
       }
     }
+    /*System.out.println("Obtain " + i + " recursive calls");
+    if (i > 1) {
+      extraCalls += (i - 1);
+    }
+    totalCalls += i;*/
     return root;
   }
 
