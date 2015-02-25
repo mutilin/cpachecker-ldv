@@ -23,17 +23,11 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
-import static com.google.common.collect.FluentIterable.from;
-
 import java.io.PrintStream;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Set;
 import java.util.logging.Level;
-
-import javax.annotation.Nullable;
 
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
@@ -41,10 +35,8 @@ import org.sosy_lab.common.io.PathTemplate;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
-import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.CounterexampleInfo;
-import org.sosy_lab.cpachecker.core.MainCPAStatistics;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Refiner;
@@ -66,14 +58,9 @@ import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.CPAs;
 import org.sosy_lab.cpachecker.util.Precisions;
-import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
-import org.sosy_lab.cpachecker.util.predicates.interfaces.view.FormulaManagerView;
 
-import com.google.common.base.Function;
-import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
-import com.google.common.collect.Sets;
 
 
 public class UsageStatisticsRefiner extends BAMPredicateRefiner implements StatisticsProvider {
@@ -84,7 +71,6 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     public final Timer Refinement = new Timer();
     public final Timer UnsafeCheck = new Timer();
     public final Timer CacheTime = new Timer();
-    public final Timer CacheInterpolantsTime = new Timer();
 
     @Override
     public void printStatistics(PrintStream pOut, Result pResult, ReachedSet pReached) {
@@ -92,7 +78,6 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       pOut.println("Time for computing path             " + ComputePath);
       pOut.println("Time for refinement                 " + Refinement);
       pOut.println("Time for formula cache              " + CacheTime);
-      pOut.println("Time for interpolants cache         " + CacheInterpolantsTime);
     }
 
     @Override
@@ -132,22 +117,9 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     final RefineableUsageComputer computer = new RefineableUsageComputer(container, logger);
     BAMPredicateCPA bamcpa = CPAs.retrieveCPA(cpa, BAMPredicateCPA.class);
     assert bamcpa != null;
-    FormulaManagerView fmgr = bamcpa.getSolver().getFormulaManager();
-    Set<String> refinedFunctions = new HashSet<>();
 
     logger.log(Level.INFO, ("Perform US refinement: " + i++));
     int originUnsafeSize = container.getUnsafeSize();
-    System.out.println("Time: " + MainCPAStatistics.programTime);
-    System.out.println("Unsafes: " + originUnsafeSize);
-    Iterator<SingleIdentifier> iterator = container.getUnsafeIterator();
-    int trueU = 0;
-    while (iterator.hasNext()) {
-      SingleIdentifier id = iterator.next();
-      if (container.getUsages(id).isTrueUnsafe()) {
-        trueU++;
-      }
-    }
-    System.out.println("True unsafes: " + trueU);
     if (lastFalseUnsafeSize == -1) {
       lastFalseUnsafeSize = originUnsafeSize;
     }
@@ -163,70 +135,34 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       pStat.ComputePath.stopIfRunning();
       assert (pPath != null);
 
-      pStat.CacheInterpolantsTime.start();
-      Set<String> calledFunctions = from(pPath.asEdgesList()).filter(CFunctionCallEdge.class).
-          transform(new Function<CFunctionCallEdge, String>() {
-            @Override
-            @Nullable
-            public String apply(@Nullable CFunctionCallEdge pInput) {
-              return pInput.getSuccessor().getFunctionName();
-            }
-          }).toSet();
-
-      if (Sets.intersection(calledFunctions, refinedFunctions).isEmpty()) {
-        pStat.CacheInterpolantsTime.stop();
-        try {
-          pStat.Refinement.start();
-          CounterexampleInfo counterexample = super.performRefinement0(
-              new BAMReachedSet(transfer, new ARGReachedSet(pReached), pPath, pathStateToReachedState), pPath);
-          refinementFinish |= counterexample.isSpurious();
-          if (counterexample.isSpurious()) {
-            Iterator<Pair<Object, PathTemplate>> pairIterator = counterexample.getAllFurtherInformation().iterator();
-            List<BooleanFormula> formulas = (List<BooleanFormula>) pairIterator.next().getFirst();
-            List<BooleanFormula> interpolants = (List<BooleanFormula>) pairIterator.next().getFirst();
-            pStat.CacheInterpolantsTime.start();
-            for (BooleanFormula interpolant : interpolants) {
-              Set<String> vars = fmgr.extractVariableNames(interpolant);
-              Set<String> funcNames = from(vars).filter(new Predicate<String>() {
-                @Override
-                public boolean apply(@Nullable String pInput) {
-                  return pInput.contains("::");
-                }
-              }).transform(new Function<String, String>() {
-                @Override
-                @Nullable
-                public String apply(@Nullable String pInput) {
-                  return pInput.substring(0, pInput.indexOf("::"));
-                }
-              }).toSet();
-              refinedFunctions.addAll(funcNames);
-            }
-            pStat.CacheInterpolantsTime.stop();
-            pStat.CacheTime.start();
-            if (iCache.contains(target, formulas)) {
-            	computer.setResultOfRefinement(target, true);
-              target.failureFlag = true;
-            } else {
-              iCache.add(target, formulas);
-            	computer.setResultOfRefinement(target, false);
-            }
-            pStat.CacheTime.stop();
+      try {
+        pStat.Refinement.start();
+        CounterexampleInfo counterexample = super.performRefinement0(
+            new BAMReachedSet(transfer, new ARGReachedSet(pReached), pPath, pathStateToReachedState), pPath);
+        refinementFinish |= counterexample.isSpurious();
+        if (counterexample.isSpurious()) {
+          Iterator<Pair<Object, PathTemplate>> pairIterator = counterexample.getAllFurtherInformation().iterator();
+          List<BooleanFormula> formulas = (List<BooleanFormula>) pairIterator.next().getFirst();
+          pStat.CacheTime.start();
+          if (iCache.contains(target, formulas)) {
+          	computer.setResultOfRefinement(target, true);
+            target.failureFlag = true;
           } else {
-            computer.setResultOfRefinement(target, !counterexample.isSpurious());
+            iCache.add(target, formulas);
+          	computer.setResultOfRefinement(target, false);
           }
-        } catch (IllegalStateException e) {
-          //msat_solver return -1 <=> unknown
-          //consider its as true;
-          logger.log(Level.WARNING, "Solver exception, consider " + target + " as true");
-          computer.setResultOfRefinement(target, true);
-          target.failureFlag = true;
-        } finally {
-          pStat.Refinement.stopIfRunning();
+          pStat.CacheTime.stop();
+        } else {
+          computer.setResultOfRefinement(target, !counterexample.isSpurious());
         }
-      } else {
-        //Consider them as false refined
-        pStat.CacheInterpolantsTime.stop();
-        computer.setResultOfRefinement(target, false);
+      } catch (IllegalStateException e) {
+        //msat_solver return -1 <=> unknown
+        //consider its as true;
+        logger.log(Level.WARNING, "Solver exception, consider " + target + " as true");
+        computer.setResultOfRefinement(target, true);
+        target.failureFlag = true;
+      } finally {
+        pStat.Refinement.stopIfRunning();
       }
       pStat.UnsafeCheck.start();
     }
