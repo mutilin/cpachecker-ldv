@@ -95,7 +95,7 @@ public class CounterexampleInfo {
    * @param dumpFile The file where "info.toString()" should be dumped (may be null).
    */
   public void addFurtherInformation(Object info, PathTemplate dumpFile) {
-    checkState(!spurious);
+    //checkState(!spurious);
 
     furtherInfo.add(Pair.of(checkNotNull(info), dumpFile));
   }

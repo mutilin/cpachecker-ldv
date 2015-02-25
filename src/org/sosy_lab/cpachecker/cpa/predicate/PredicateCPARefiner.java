@@ -252,15 +252,17 @@ public class PredicateCPARefiner extends AbstractARGBasedRefiner implements Stat
       }*/
       System.out.println("Total number of predicates: " + p.getLocalPredicates().size());
       totalRefinement.stop();
-      return CounterexampleInfo.spurious(formulas);
+      CounterexampleInfo info = CounterexampleInfo.spurious(formulas);
+      info.addFurtherInformation(counterexample.getInterpolants(), null);
+      return info;
 
     } else {
       // we have a real error
       logger.log(Level.FINEST, "Error trace is not spurious");
-      final ARGPath targetPath;
+      /*final ARGPath targetPath;
       final CounterexampleTraceInfo preciseCounterexample;
 
-      /*preciseCouterexampleTime.start();
+      preciseCouterexampleTime.start();
       if (branchingOccurred) {
         Pair<ARGPath, CounterexampleTraceInfo> preciseInfo = findPreciseErrorPath(allStatesTrace, counterexample);
 
