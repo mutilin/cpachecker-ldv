@@ -23,7 +23,6 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.logging.Level;
 
@@ -48,11 +47,11 @@ public class RefineableUsageComputer {
   private final LogManager logger;
   //Self-checking
   private boolean waitRefinementResult;
-  
+
   RefineableUsageComputer(UsageContainer c, LogManager l) {
     container = c;
     cache = new UsageCallstackCache();
-    unrefinedUsagePointSetIterator = new HashSet<>(container.getUnrefinedUnsafes()).iterator();
+    unrefinedUsagePointSetIterator = container.getUnrefinedUnsafes().iterator();
     logger = l;
     waitRefinementResult = false;
   }
@@ -63,7 +62,7 @@ public class RefineableUsageComputer {
 
     if (!result) {
       logger.log(Level.INFO, "Usage " + uinfo + " is not reachable, remove it from container");
-      cache.add(uinfo); 
+      cache.add(uinfo);
       if (!usageIterator.hasNext()) {
         //There are no usages in the point
         currentRefineableUsageList.remove(currentUsagePoint);
@@ -76,7 +75,7 @@ public class RefineableUsageComputer {
       }
     } else {
       logger.log(Level.INFO, "Usage " + uinfo + " is reachable, mark it as true");
-      currentRefineableUsageList.markAsTrue(uinfo); 
+      currentRefineableUsageList.markAsTrue(uinfo);
       if (currentRefineableUsageList.checkTrueUnsafe()) {
         container.setAsRefined(currentRefineableUsageList);
         usagePointIterator = null;
