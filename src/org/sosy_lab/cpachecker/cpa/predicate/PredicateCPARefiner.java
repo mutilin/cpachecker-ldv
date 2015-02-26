@@ -29,6 +29,7 @@ import static org.sosy_lab.cpachecker.util.statistics.StatisticsWriter.writingSt
 import java.io.PrintStream;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -69,6 +70,7 @@ import org.sosy_lab.cpachecker.util.predicates.BlockOperator;
 import org.sosy_lab.cpachecker.util.predicates.PathChecker;
 import org.sosy_lab.cpachecker.util.predicates.Solver;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
+import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormulaManager;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.PathFormulaManager;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.view.BooleanFormulaManagerView;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.view.FormulaManagerView;
@@ -251,9 +253,18 @@ public class PredicateCPARefiner extends AbstractARGBasedRefiner implements Stat
             );
       }*/
       System.out.println("Total number of predicates: " + p.getLocalPredicates().size());
+      BooleanFormulaManager bfmgr = fmgr.getBooleanFormulaManager();
+      LinkedList<ARGState> relatedStates = new LinkedList<>();
+      for (Pair<BooleanFormula, ARGState> interpolationPoint : Pair.zipList(counterexample.getInterpolants(), abstractionStatesTrace.subList(0, abstractionStatesTrace.size()-1))) {
+        BooleanFormula itp = interpolationPoint.getFirst();
+        if (bfmgr.isTrue(itp) || bfmgr.isFalse(itp)) {
+          continue;
+        }
+        relatedStates.add(interpolationPoint.getSecond());
+      }
       totalRefinement.stop();
       CounterexampleInfo info = CounterexampleInfo.spurious(formulas);
-      info.addFurtherInformation(counterexample.getInterpolants(), null);
+      info.addFurtherInformation(relatedStates, null);
       return info;
 
     } else {
