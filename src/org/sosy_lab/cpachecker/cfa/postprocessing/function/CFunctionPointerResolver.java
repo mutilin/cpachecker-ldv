@@ -79,7 +79,6 @@ import org.sosy_lab.cpachecker.util.CFAUtils;
 import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.GlobalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.IdentifierCreator;
-import org.sosy_lab.cpachecker.util.identifiers.LocalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.StructureIdentifier;
 
 import com.google.common.base.Function;
@@ -255,20 +254,8 @@ public class CFunctionPointerResolver {
     // 2.Step: replace functionCalls with functioncall- and return-edges
     // This loop replaces function pointer calls inside the given function with regular function calls.
     for (final CStatementEdge edge : visitor.functionPointerCalls) {
-      if (totalInserted < 1000) {
-        replaceFunctionPointerCall((CFunctionCall)edge.getStatement(), edge);
-      }
+      replaceFunctionPointerCall((CFunctionCall)edge.getStatement(), edge);
     }
-    System.out.println("Founded function pointers: " + candidateFunctions.size());
-    System.out.println("Founded function pointer calls: " + visitor.functionPointerCalls.size());
-    System.out.println("Size of fileds mapping: " + fieldsMatching.size());
-    System.out.println("Size of global mapping: " + globalsMatching.size());
-    System.out.println("Empty function calls: " + empty + "   (" + emptyStructure + " + " + emptyLocal + " + " + emptyGlobal +")");
-    System.out.println("Total inserted:       " + totalInserted + "   (" + structure + " + " + local + " + " + global +")");
-    System.out.println("Total function calls: " + total + "   (" + structureCalls + " + " + localCalls + " + " + globalCalls +")");
-    System.out.println("Max function calls:              " + structureMax + " + " + localMax + " + " + globalMax);
-    System.out.println("Totally removed: " + totallyRemove);
-    System.out.println("Reducing function calls: " + reduce);
   }
 
   /** This Visitor collects all functioncalls for functionPointers.
@@ -313,25 +300,6 @@ public class CFunctionPointerResolver {
   /**
    * This method replaces a single function pointer call with a function call series.
    */
-  int empty = 0;
-  int reduce = 0;
-  int total = 0;
-  int structure = 0;
-  int local = 0;
-  int global = 0;
-  int totallyRemove = 0;
-  int totalInserted = 0;
-  int emptyStructure = 0;
-  int emptyLocal = 0;
-  int emptyGlobal = 0;
-  int limit = 0;
-  int localCalls = 0;
-  int globalCalls = 0;
-  int structureCalls = 0;
-  int localMax = 0;
-  int globalMax = 0;
-  int structureMax = 0;
-
   private void replaceFunctionPointerCall(CFunctionCall functionCall, CStatementEdge statement) {
     CFunctionCallExpression fExp = functionCall.getFunctionCallExpression();
     logger.log(Level.FINEST, "Function pointer call", fExp);
@@ -345,27 +313,12 @@ public class CFunctionPointerResolver {
       logger.logf(Level.WARNING, "%s: Function pointer %s with type %s is called,"
           + " but no possible target functions were found.",
           statement.getFileLocation(), nameExp.toASTString(), nameExp.getExpressionType().toASTString("*"));
-      empty++;
-      try {
-        final AbstractIdentifier id = nameExp.accept(creator);
-        if (id instanceof StructureIdentifier) {
-          emptyStructure++;
-        } else if (id instanceof LocalVariableIdentifier) {
-          emptyLocal++;
-        } else if (id instanceof GlobalVariableIdentifier) {
-          emptyGlobal++;
-        }
-      } catch (HandleCodeException e) {
-        e.printStackTrace();
-      }
       return;
     }
 
     try {
       final AbstractIdentifier id = nameExp.accept(creator);
       if (id instanceof StructureIdentifier) {
-        structure++;
-        int funcSize = funcs.size();
         funcs = from(funcs).filter( new Predicate<CFunctionEntryNode>() {
           @Override
           public boolean apply(@Nullable CFunctionEntryNode pInput) {
@@ -377,20 +330,7 @@ public class CFunctionPointerResolver {
             }
           }
         }).toList();
-        reduce += (funcSize - funcs.size());
-        structureCalls += funcs.size();
-        if (funcs.size() > structureMax) {
-          structureMax = funcs.size();
-        }
-      } else if (id instanceof LocalVariableIdentifier) {
-        local++;
-        localCalls += funcs.size();
-        if (funcs.size() > localMax) {
-          localMax = funcs.size();
-        }
-        totalInserted++;
       } else if (id instanceof GlobalVariableIdentifier) {
-        global++;
         funcs = from(funcs).filter( new Predicate<CFunctionEntryNode>() {
           @Override
           public boolean apply(@Nullable CFunctionEntryNode pInput) {
@@ -402,21 +342,13 @@ public class CFunctionPointerResolver {
             }
           }
         }).toList();
-        globalCalls += funcs.size();
-        if (funcs.size() > globalMax) {
-          globalMax = funcs.size();
-        }
       }
     } catch (HandleCodeException e) {
       e.printStackTrace();
     }
     if (funcs.size() == 0) {
-      totallyRemove++;
       return;
     }
-    totalInserted++;
-    total += funcs.size();
-
     logger.log(Level.INFO, "Inserting edges for the function pointer",
         nameExp.toASTString(), "with type", nameExp.getExpressionType().toASTString("*"),
         "to the functions", from(funcs).transform(new Function<CFANode, String>() {

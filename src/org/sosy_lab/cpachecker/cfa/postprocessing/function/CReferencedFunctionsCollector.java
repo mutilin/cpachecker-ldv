@@ -70,7 +70,6 @@ import org.sosy_lab.cpachecker.cfa.types.c.CType;
 import org.sosy_lab.cpachecker.cfa.types.c.CTypedefType;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
-import org.sosy_lab.cpachecker.util.identifiers.ConstantIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.GlobalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.IdentifierCreator;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
@@ -85,7 +84,7 @@ import org.sosy_lab.cpachecker.util.identifiers.StructureIdentifier;
 class CReferencedFunctionsCollector {
 
   private final Set<String> collectedFunctions = new HashSet<>();
-  private final CollectFunctionsVisitor collector = new CollectFunctionsVisitor(collectedFunctions);
+  private final CollectFunctionsVisitor collector = new CollectFunctionsVisitor();
 
   public Set<String> getCollectedFunctions() {
     return collectedFunctions;
@@ -117,9 +116,9 @@ class CReferencedFunctionsCollector {
       if (declaration instanceof CVariableDeclaration) {
         CInitializer init = ((CVariableDeclaration)declaration).getInitializer();
         if (init != null) {
-          int num = collector.tmpFunctions.size();
+          int num = collector.collectedFunctions.size();
           init.accept(collector);
-          if (num < collector.tmpFunctions.size()) {
+          if (num < collector.collectedFunctions.size()) {
             saveDeclaration(declaration.getType(), init);
           }
         }
@@ -144,30 +143,23 @@ class CReferencedFunctionsCollector {
       assert false;
       break;
     }
-    collectedFunctions.addAll(collector.tmpFunctions);
-    collector.tmpFunctions.clear();
+    collectedFunctions.addAll(collector.collectedFunctions);
+    collector.collectedFunctions.clear();
   }
 
   public void visitDeclaration(CVariableDeclaration decl) {
     if (decl.getInitializer() != null) {
-      int num = collector.tmpFunctions.size();
+      int num = collector.collectedFunctions.size();
       decl.getInitializer().accept(collector);
-      if (num < collector.tmpFunctions.size()) {
+      if (num < collector.collectedFunctions.size()) {
         AbstractIdentifier id;
         try {
           id = IdentifierCreator.createIdentifier(decl, "", 0);
           CInitializer init = decl.getInitializer();
           if (id instanceof GlobalVariableIdentifier && init instanceof CInitializerExpression) {
-            Set<String> result;
             AbstractIdentifier initId = ((CInitializerExpression)init).getExpression().accept(collector.idCreator);
             if (initId instanceof SingleIdentifier) {
-              if (collector.funcToGlobal.containsKey(((SingleIdentifier) initId).getName())) {
-                result = collector.funcToGlobal.get(((SingleIdentifier) initId).getName());
-              } else {
-                result = new HashSet<>();
-                collector.funcToGlobal.put(((SingleIdentifier) initId).getName(), result);
-              }
-              result.add(((GlobalVariableIdentifier)id).getName());
+              saveInfoIntoMap(collector.funcToGlobal, ((SingleIdentifier) initId).getName(), ((GlobalVariableIdentifier)id).getName());
             }
           } else {
             saveDeclaration(decl.getType(), decl.getInitializer());
@@ -177,8 +169,8 @@ class CReferencedFunctionsCollector {
         }
       }
     }
-    collectedFunctions.addAll(collector.tmpFunctions);
-    collector.tmpFunctions.clear();
+    collectedFunctions.addAll(collector.collectedFunctions);
+    collector.collectedFunctions.clear();
   }
 
   private void saveDeclaration(CType type, CInitializer init) {
@@ -204,8 +196,6 @@ class CReferencedFunctionsCollector {
         }
       } else if (type instanceof CTypedefType) {
         saveDeclaration(((CTypedefType) type).getRealType(), init);
-      } else {
-        System.out.println("Strange");
       }
     }
   }
@@ -220,18 +210,7 @@ class CReferencedFunctionsCollector {
         if (type instanceof CFunctionType) {
           if (id instanceof SingleIdentifier) {
             String lastFunction = ((SingleIdentifier) id).getName();
-            Set<String> result;
-            if (collector.funcToField.containsKey(lastFunction)) {
-              result = collector.funcToField.get(lastFunction);
-            } else {
-              result = new HashSet<>();
-              collector.funcToField.put(lastFunction, result);
-            }
-            result.add(fieldName);
-          } else if (id instanceof ConstantIdentifier) {
-            //Zeroes
-          } else {
-            System.out.println("Strange id " + id);
+            saveInfoIntoMap(collector.funcToField, lastFunction, fieldName);
           }
         }
       }
@@ -240,27 +219,36 @@ class CReferencedFunctionsCollector {
     }
   }
 
+  private static void saveInfoIntoMap(Map<String, Set<String>> map, String funcName, String info) {
+    Set<String> result;
+    if (map.containsKey(funcName)) {
+      result = map.get(funcName);
+    } else {
+      result = new HashSet<>();
+      map.put(funcName, result);
+    }
+    result.add(info);
+  }
+
   private static class CollectFunctionsVisitor extends DefaultCExpressionVisitor<Void, RuntimeException>
                                                implements CRightHandSideVisitor<Void, RuntimeException>,
                                                           CStatementVisitor<Void, RuntimeException>,
                                                           CInitializerVisitor<Void, RuntimeException> {
 
-    private final Set<String> collectedFunctions;
-    private final Set<String> tmpFunctions = new HashSet<>();
+    private final Set<String> collectedFunctions = new HashSet<>();
     public final Map<String, Set<String>> funcToField = new HashMap<>();
     public final Map<String, Set<String>> funcToGlobal = new HashMap<>();
     private String lastFunction;
 
     private IdentifierCreator idCreator = new IdentifierCreator();
 
-    public CollectFunctionsVisitor(Set<String> pCollectedVars) {
-      collectedFunctions = pCollectedVars;
+    public CollectFunctionsVisitor() {
     }
 
     @Override
     public Void visit(CIdExpression pE) {
       if (pE.getExpressionType() instanceof CFunctionType) {
-        tmpFunctions.add(pE.getName());
+        collectedFunctions.add(pE.getName());
         lastFunction = pE.getName();
       }
       return null;
@@ -357,10 +345,10 @@ class CReferencedFunctionsCollector {
 
     @Override
     public Void visit(CExpressionAssignmentStatement pIastExpressionAssignmentStatement) {
-      int num = tmpFunctions.size();
+      int num = collectedFunctions.size();
       pIastExpressionAssignmentStatement.getLeftHandSide().accept(this);
       pIastExpressionAssignmentStatement.getRightHandSide().accept(this);
-      if (num < tmpFunctions.size()) {
+      if (num < collectedFunctions.size()) {
         saveAssignement(pIastExpressionAssignmentStatement.getLeftHandSide());
       }
       return null;
@@ -382,25 +370,16 @@ class CReferencedFunctionsCollector {
     private void saveAssignement(CLeftHandSide left) {
       try {
         AbstractIdentifier id = left.accept(idCreator);
+        Map<String, Set<String>> targetMap;
         if (id instanceof StructureIdentifier) {
-          Set<String> result;
-          if (funcToField.containsKey(lastFunction)) {
-            result = funcToField.get(lastFunction);
-          } else {
-            result = new HashSet<>();
-            funcToField.put(lastFunction, result);
-          }
-          result.add(((StructureIdentifier) id).getName());
+          targetMap = funcToField;
         } else if (id instanceof GlobalVariableIdentifier) {
-          Set<String> result;
-          if (funcToGlobal.containsKey(lastFunction)) {
-            result = funcToGlobal.get(lastFunction);
-          } else {
-            result = new HashSet<>();
-            funcToGlobal.put(lastFunction, result);
-          }
-          result.add(((GlobalVariableIdentifier) id).getName());
+          targetMap = funcToGlobal;
+        } else {
+          return;
         }
+
+        saveInfoIntoMap(targetMap, lastFunction, ((StructureIdentifier) id).getName());
       } catch (HandleCodeException e) {
         e.printStackTrace();
       }

@@ -246,12 +246,7 @@ public class PredicateCPARefiner extends AbstractARGBasedRefiner implements Stat
 
       PredicatePrecision p = Precisions.extractPrecisionByType(pReached.asReachedSet().getPrecision(pReached.asReachedSet().getFirstState()),
           PredicatePrecision.class);
-      /*if (strategy instanceof BAMPredicateAbstractionRefinementStrategy) {
-        ((BAMPredicateAbstractionRefinementStrategy)strategy).checkRelevantFormulas(
-            Pair.zipList(formulas, abstractionStatesTrace),
-            p
-            );
-      }*/
+
       System.out.println("Total number of predicates: " + p.getLocalPredicates().size());
       BooleanFormulaManager bfmgr = fmgr.getBooleanFormulaManager();
       LinkedList<ARGState> relatedStates = new LinkedList<>();

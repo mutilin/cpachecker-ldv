@@ -23,17 +23,11 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
-import static com.google.common.collect.FluentIterable.from;
-
 import java.io.PrintStream;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Set;
 import java.util.logging.Level;
-
-import javax.annotation.Nullable;
 
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
@@ -43,7 +37,6 @@ import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.CounterexampleInfo;
-import org.sosy_lab.cpachecker.core.MainCPAStatistics;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Refiner;
@@ -65,7 +58,6 @@ import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.CPAs;
 import org.sosy_lab.cpachecker.util.Precisions;
-import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 
 import com.google.common.base.Function;
@@ -80,7 +72,6 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     public final Timer Refinement = new Timer();
     public final Timer UnsafeCheck = new Timer();
     public final Timer CacheTime = new Timer();
-    public final Timer CacheInterpolantsTime = new Timer();
 
     @Override
     public void printStatistics(PrintStream pOut, Result pResult, ReachedSet pReached) {
@@ -88,7 +79,6 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       pOut.println("Time for computing path             " + ComputePath);
       pOut.println("Time for refinement                 " + Refinement);
       pOut.println("Time for formula cache              " + CacheTime);
-      pOut.println("Time for interpolants cache         " + CacheInterpolantsTime);
     }
 
     @Override
@@ -132,17 +122,6 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
 
     logger.log(Level.INFO, ("Perform US refinement: " + i++));
     int originUnsafeSize = container.getUnsafeSize();
-    System.out.println("Time: " + MainCPAStatistics.programTime);
-    System.out.println("Unsafes: " + originUnsafeSize);
-    Iterator<SingleIdentifier> iterator = container.getUnsafeIterator();
-    int trueU = 0;
-    while (iterator.hasNext()) {
-      SingleIdentifier id = iterator.next();
-      if (container.getUsages(id).isTrueUnsafe()) {
-        trueU++;
-      }
-    }
-    System.out.println("True unsafes: " + trueU);
     if (lastFalseUnsafeSize == -1) {
       lastFalseUnsafeSize = originUnsafeSize;
     }
