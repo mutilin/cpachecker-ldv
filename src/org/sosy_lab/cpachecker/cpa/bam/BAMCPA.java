@@ -64,8 +64,10 @@ import org.sosy_lab.cpachecker.core.interfaces.WrapperCPA;
 import org.sosy_lab.cpachecker.core.interfaces.pcc.ProofChecker;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSetFactory;
 import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateCPA;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsCPA;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
+import org.sosy_lab.cpachecker.util.CPAs;
 
 import com.google.common.base.Preconditions;
 
@@ -120,6 +122,10 @@ public class BAMCPA extends AbstractSingleWrapperCPA implements StatisticsProvid
     reducer = new TimedReducer(wrappedReducer);
     final BAMCache cache = new BAMCache(config, reducer);
     transfer = new BAMTransferRelation(config, logger, this, wrappedProofChecker, cache, pReachedSetFactory, pShutdownNotifier);
+    UsageStatisticsCPA usageCPA = CPAs.retrieveCPA(pCpa, UsageStatisticsCPA.class);
+    if (usageCPA != null) {
+      usageCPA.getStats().setBAMTransfer(transfer);
+    }
     prec = new BAMPrecisionAdjustment(pCpa.getPrecisionAdjustment(), transfer, logger);
     merge = new BAMMergeOperator(pCpa.getMergeOperator(), transfer);
     stop = new BAMStopOperator(pCpa.getStopOperator(), transfer);

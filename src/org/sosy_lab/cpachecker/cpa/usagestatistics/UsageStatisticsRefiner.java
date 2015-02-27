@@ -244,7 +244,7 @@ top:while ((target = computer.getNextRefineableUsage()) != null) {
     return refinementFinish;
   }
 
-  protected ARGPath computePath(ARGState pLastElement) throws InterruptedException, CPATransferException {
+  ARGPath computePath(ARGState pLastElement) throws InterruptedException, CPATransferException {
     assert (pLastElement != null && !pLastElement.isDestroyed());
       //we delete this state from other unsafe
     ARGState subgraph = transfer.findPath(pLastElement, pathStateToReachedState);

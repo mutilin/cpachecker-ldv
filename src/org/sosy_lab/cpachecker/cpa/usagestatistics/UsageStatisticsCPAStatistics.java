@@ -23,13 +23,19 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
+import static com.google.common.collect.FluentIterable.from;
+
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.Writer;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.logging.Level;
+
+import javax.annotation.Nullable;
 
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.Configuration;
@@ -42,9 +48,18 @@ import org.sosy_lab.common.io.Path;
 import org.sosy_lab.common.io.Paths;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
+import org.sosy_lab.cpachecker.cfa.model.BlankEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionReturnEdge;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
+import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
+import org.sosy_lab.cpachecker.cpa.arg.ARGState;
+import org.sosy_lab.cpachecker.cpa.arg.ARGUtils;
+import org.sosy_lab.cpachecker.cpa.bam.BAMTransferRelation;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.AccessPoint;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier;
@@ -55,12 +70,14 @@ import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.RefinedUsagePointSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UnrefinedUsagePointSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsageContainer;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsagePoint;
+import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.identifiers.GlobalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.LocalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.StructureFieldIdentifier;
 
+import com.google.common.base.Predicate;
 import com.google.common.collect.UnmodifiableIterator;
 
 @Options(prefix="cpa.usagestatistics")
@@ -89,6 +106,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   private int maxTrueUsages = 0;
 
   private UsageContainer container;
+  private BAMTransferRelation transfer;
 
   public final Timer transferRelationTimer = new Timer();
   public final Timer printStatisticsTimer = new Timer();
@@ -102,7 +120,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
    * looks through all unsafe cases of current identifier and find the example of two lines with different locks,
    * one of them must be 'write'
    */
-  private void createVisualization(final SingleIdentifier id, final UsageInfo usage, final Writer writer) throws IOException {
+  private void createVisualization(final SingleIdentifier id, final UsageInfo usage, final Writer writer) throws IOException, CPATransferException, InterruptedException {
     final LinkedList<Iterator<CallTreeNode>> nodeStack = new LinkedList<>();
     CallTreeNode currentCallstackNode;
     Iterator<CallTreeNode> currentIterator;
@@ -138,7 +156,48 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     if (usage.failureFlag) {
       writer.append("Line 0:     N0 -{/*Failure in refinement*/}-> N0\n");
     }
-    while (currentCallstackNode != null) {
+    ARGState root = transfer.findPath((ARGState)usage.getKeyState(), new HashMap<ARGState, ARGState>());
+    ARGPath path = ARGUtils.getRandomPath(root);
+    List<CFAEdge> edges = path.getInnerEdges();
+    edges = from(edges).filter(new Predicate<CFAEdge>() {
+      @Override
+      public boolean apply(@Nullable CFAEdge pInput) {
+        if (pInput instanceof CDeclarationEdge && ((CDeclarationEdge)pInput).getDeclaration().isGlobal()) {
+          return false;
+        } /*else if (pInput.getPredecessor().getFunctionName().equals("ldv_main")) {
+          //Remove infinite switch, it's too long
+          return false;
+        } */else {
+          return true;
+        }
+      }
+    }).toList();
+    /*Iterator<CFAEdge> edgeIterator = edges.iterator();
+    while (edgeIterator.hasNext()) {
+      CFAEdge edge = edgeIterator.next();
+      if (edge instanceof CDeclarationEdge && ((CDeclarationEdge)edge).getDeclaration().isGlobal()) {
+        edgeIterator.remove();
+      }
+    }*/
+    int callstackDepth = 1;
+    for (CFAEdge edge : edges) {
+      if (edge instanceof CFunctionCallEdge && edges.get(edges.size() - 1) != edge) {
+        callstackDepth++;
+      } else if (edge instanceof CFunctionReturnEdge) {
+        assert callstackDepth > 0;
+        callstackDepth--;
+      } else if (edge instanceof BlankEdge && edge.getDescription().equals("default return") && edges.get(edges.size() - 1) == edge) {
+        assert callstackDepth > 0;
+        callstackDepth--;
+      }
+      writer.write(edge.toString() + "\n");
+    }
+    //writer.write(edges.toString());
+    for (int i = 0; i < callstackDepth; i++) {
+      writer.append("Line 0:     N0 -{return;}-> N0\n");
+    }
+    writer.write("\n");
+    /*while (currentCallstackNode != null) {
       writer.append(currentCallstackNode.toString());
       currentIterator = currentCallstackNode.getChildrenIterator();
       if (currentIterator.hasNext()) {
@@ -148,7 +207,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       } else {
         currentCallstackNode = findFork(writer, nodeStack);
       }
-    }
+    }*/
   }
 
   private CallTreeNode findFork(final Writer writer, final LinkedList<Iterator<CallTreeNode>> callTreeStack) throws IOException {
@@ -250,7 +309,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
   }
 
-  private void createVisualization(final SingleIdentifier id, final Writer writer) throws IOException {
+  private void createVisualization(final SingleIdentifier id, final Writer writer) throws IOException, CPATransferException, InterruptedException {
     final AbstractUsagePointSet uinfo = container.getUsages(id);
     if (uinfo == null || uinfo.size() == 0) {
       return;
@@ -322,6 +381,14 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     } catch (IOException e) {
       logger.log(Level.SEVERE, e.getMessage());
       return;
+    } catch (CPATransferException e) {
+      logger.log(Level.SEVERE, "Exception during visualization");
+      e.printStackTrace();
+      return;
+    } catch (InterruptedException e) {
+      logger.log(Level.SEVERE, "Printing statistics was interrupted");
+      e.printStackTrace();
+      return;
     }
     out.println("Amount of unsafes:                                         " + unsafeSize);
     out.println("Amount of unsafe usages:                                   " + totalUsages + "(avg. " +
@@ -388,5 +455,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   @Override
   public String getName() {
     return "UsageStatisticsCPA";
+  }
+
+  public void setBAMTransfer(BAMTransferRelation t) {
+    transfer = t;
   }
 }
