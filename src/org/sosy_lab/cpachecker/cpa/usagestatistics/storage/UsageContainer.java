@@ -97,13 +97,20 @@ public class UsageContainer {
         }
       }
       for (SingleIdentifier id : toDelete) {
-        unrefinedStat.remove(id);
+        removeIdFromCaches(id);
       }
       for (SingleIdentifier id : refinedStat.keySet()) {
         RefinedUsagePointSet tmpList = refinedStat.get(id);
         unsafeUsages += tmpList.size();
       }
     }
+  }
+
+  private void removeIdFromCaches(SingleIdentifier id) {
+    //It is important to remove it from both of the caches
+    UnrefinedUsagePointSet uset = unrefinedStat.get(id);
+    unrefinedStat.remove(id);
+    toId.remove(uset);
   }
 
   public Iterator<SingleIdentifier> getUnsafeIterator() {
@@ -175,7 +182,7 @@ public class UsageContainer {
     assert toId.containsKey(set);
     SingleIdentifier id = toId.get(set);
     refinedStat.put(id, set.asTrueUnsafe());
-    unrefinedStat.remove(id);
+    removeIdFromCaches(id);
     toId.remove(set);
   }
 
