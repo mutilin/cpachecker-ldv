@@ -31,7 +31,6 @@ import java.io.PrintStream;
 import java.io.Writer;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.logging.Level;
 
@@ -50,6 +49,7 @@ import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.cfa.model.BlankEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionReturnEdge;
@@ -60,9 +60,6 @@ import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.arg.ARGUtils;
 import org.sosy_lab.cpachecker.cpa.bam.BAMTransferRelation;
-import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.AccessPoint;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.AbstractUsageInfoSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.AbstractUsagePointSet;
@@ -78,7 +75,6 @@ import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.StructureFieldIdentifier;
 
 import com.google.common.base.Predicate;
-import com.google.common.collect.UnmodifiableIterator;
 
 @Options(prefix="cpa.usagestatistics")
 public class UsageStatisticsCPAStatistics implements Statistics {
@@ -121,36 +117,8 @@ public class UsageStatisticsCPAStatistics implements Statistics {
    * one of them must be 'write'
    */
   private void createVisualization(final SingleIdentifier id, final UsageInfo usage, final Writer writer) throws IOException, CPATransferException, InterruptedException {
-    final LinkedList<Iterator<CallTreeNode>> nodeStack = new LinkedList<>();
-    CallTreeNode currentCallstackNode;
-    Iterator<CallTreeNode> currentIterator;
-
-    CallTreeNode.clearTrunkState();
     LockStatisticsState Locks = usage.getLockState();
 
-    assert Locks != null;
-	  for (LockIdentifier lock : Locks.getLockIdentifiers()) {
-	    UnmodifiableIterator<AccessPoint> accessPointIterator = Locks.getAccessPointIterator(lock);
-	    while (accessPointIterator.hasNext()) {
-	      AccessPoint accessPoint = accessPointIterator.next();
-	      currentCallstackNode = createTree(accessPoint.getCallstack());
-	      currentCallstackNode.add(lock, accessPoint);
-	    }
-	  }
-
-    currentCallstackNode = createTree(usage.getCallStack());
-    currentCallstackNode.add(usage, id);
-
-    //print this tree with aide of dfs
-    currentCallstackNode = CallTreeNode.getTrunkState();
-    currentIterator = currentCallstackNode.getChildrenIterator();
-    if (currentIterator.hasNext()) {
-      nodeStack.push(currentIterator);
-      currentCallstackNode = currentIterator.next();
-    } else {
-      logger.log(Level.WARNING, "Empty error path, can't proceed");
-      return;
-    }
     writer.append("Line 0:     N0 -{/*_____________________*/}-> N0\n");
     writer.append("Line 0:     N0 -{/*" + Locks.toString() + "*/}-> N0\n");
     if (usage.failureFlag) {
@@ -162,23 +130,20 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     edges = from(edges).filter(new Predicate<CFAEdge>() {
       @Override
       public boolean apply(@Nullable CFAEdge pInput) {
-        if (pInput instanceof CDeclarationEdge && ((CDeclarationEdge)pInput).getDeclaration().isGlobal()) {
+        if (pInput instanceof CDeclarationEdge) {
+          if (((CDeclarationEdge)pInput).getDeclaration().isGlobal() ||
+              pInput.getSuccessor().getFunctionName().equals("ldv_main")) {
+          }
           return false;
-        } /*else if (pInput.getPredecessor().getFunctionName().equals("ldv_main")) {
+        } else if (pInput.getSuccessor().getFunctionName().equals("ldv_main")
+            && pInput instanceof CAssumeEdge) {
           //Remove infinite switch, it's too long
           return false;
-        } */else {
+        } else {
           return true;
         }
       }
     }).toList();
-    /*Iterator<CFAEdge> edgeIterator = edges.iterator();
-    while (edgeIterator.hasNext()) {
-      CFAEdge edge = edgeIterator.next();
-      if (edge instanceof CDeclarationEdge && ((CDeclarationEdge)edge).getDeclaration().isGlobal()) {
-        edgeIterator.remove();
-      }
-    }*/
     int callstackDepth = 1;
     for (CFAEdge edge : edges) {
       if (edge instanceof CFunctionCallEdge && edges.get(edges.size() - 1) != edge) {
@@ -192,59 +157,10 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       }
       writer.write(edge.toString() + "\n");
     }
-    //writer.write(edges.toString());
     for (int i = 0; i < callstackDepth; i++) {
       writer.append("Line 0:     N0 -{return;}-> N0\n");
     }
     writer.write("\n");
-    /*while (currentCallstackNode != null) {
-      writer.append(currentCallstackNode.toString());
-      currentIterator = currentCallstackNode.getChildrenIterator();
-      if (currentIterator.hasNext()) {
-        writer.append("Line 0:     N0 -{Function start dummy edge}-> N0" + "\n");
-        nodeStack.push(currentIterator);
-        currentCallstackNode = currentIterator.next();
-      } else {
-        currentCallstackNode = findFork(writer, nodeStack);
-      }
-    }*/
-  }
-
-  private CallTreeNode findFork(final Writer writer, final LinkedList<Iterator<CallTreeNode>> callTreeStack) throws IOException {
-    Iterator<CallTreeNode> tmpIterator;
-
-    //The first element is root, not an ordinary callstack node
-    while (callTreeStack.size() > 1) {
-      tmpIterator = callTreeStack.peek();
-      if (tmpIterator.hasNext()) {
-        return tmpIterator.next();
-      } else {
-        callTreeStack.removeFirst();
-      }
-      writer.append("Line 0:     N0 -{return;}-> N0\n");
-    }
-    return null;
-  }
-
-  private CallTreeNode createTree(final CallstackState state) {
-    final LinkedList<CallstackState> tmpList = revertCallstack(state);
-
-    //add to tree of calls this path
-    CallTreeNode currentNode = CallTreeNode.getTrunkState();
-    for (CallstackState callstack : tmpList) {
-      currentNode = currentNode.add(callstack);
-    }
-    return currentNode;
-  }
-
-  private LinkedList<CallstackState> revertCallstack(CallstackState tmpState) {
-    final LinkedList<CallstackState> tmpList = new LinkedList<>();
-
-    while (tmpState != null) {
-      tmpList.push(tmpState);
-      tmpState = tmpState.getPreviousState();
-    }
-    return tmpList;
   }
 
   private void countUsageStatistics(UnrefinedUsagePointSet l) {
