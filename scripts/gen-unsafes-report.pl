@@ -208,16 +208,25 @@ foreach my $current_fname(sort keys %unsafe_list)
 	open($reqs, "<", "reqs") or die("Can't open file reqs for read");
 	unlink "srcs" if -e "srcs";
 	open(my $srcs, ">>", "srcs") or die("Can't open file srcs for write");
+	my $isEmpty = 1;
 	while (<$reqs>) {
 	  my $nextline = $_;
 	  chomp($nextline);
 	  if ($nextline) {
+	    $isEmpty = 0;
 	    print($srcs "---LDV---$nextline---LDV---\n");
 	    system("cat $nextline >> srcs");
 	    die ("Can't cat srcs") if ($? == -1);
 	  }
 	}
-	`etv -c $current_fname -i $cilpath --format "CPAchecker error trace v1.1" -s srcs -o $current_fname.tmp`;
+	if ($isEmpty) {
+	  #Add the origin file
+	  print($srcs "---LDV---$cilpath---LDV---\n");
+          system("cat $cilpath >> srcs");
+          die ("Can't cat srcs") if ($? == -1);
+	}
+        $current_fname =~ m/.*\.(\w*)$/;
+	`etv -c $current_fname -i $cilpath --format "CPAchecker error trace v1.1" -s srcs -o $current_fname.tmp -l $1`;
 	die ("etv failed") if( $? == -1 ) ;
 	open(my $html_tmp, ">", "$current_fname.html") or die("Can't open html-file for write");
 	print($html_tmp "<html> <body> <div id='SSHeader'><div id='SSHeaderLogo'>@{$unsafe_list{$current_fname}}</div></div>");
