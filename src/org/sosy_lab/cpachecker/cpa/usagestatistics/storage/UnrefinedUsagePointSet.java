@@ -94,8 +94,22 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     if (points.size() >= 1) {
       Iterator<UsagePoint> iterator = points.iterator();
       UsagePoint point = iterator.next();
+      Set<LockIdentifier> lockSet = null;
+      if (point.isTrue() && point.access == Access.READ) {
+        //The first one may be read access if it is refined
+        lockSet = new HashSet<>(point.locks);
+        if (iterator.hasNext()) {
+          point = iterator.next();
+        } else {
+          return false;
+        }
+      }
       if (point.access == Access.WRITE) {
-        Set<LockIdentifier> lockSet = new HashSet<>(point.locks);
+        if (lockSet == null) {
+          lockSet = new HashSet<>(point.locks);
+        } else {
+          lockSet.retainAll(point.locks);
+        }
         while (iterator.hasNext() && !lockSet.isEmpty()) {
           lockSet.retainAll(iterator.next().locks);
         }
