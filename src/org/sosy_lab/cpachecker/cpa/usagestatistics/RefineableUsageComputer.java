@@ -30,7 +30,7 @@ import java.util.logging.Level;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.caches.UsageCache;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.caches.UsageCallstackCache;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.caches.UsageEmptyCache;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.AbstractUsageInfoSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UnrefinedUsagePointSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsageContainer;
@@ -52,7 +52,7 @@ public class RefineableUsageComputer {
 
   RefineableUsageComputer(UsageContainer c, LogManager l) {
     container = c;
-    cache = new UsageCallstackCache();
+    cache = new UsageEmptyCache();
     unrefinedUsagePointSetIterator = container.getUnrefinedUnsafes().iterator();
     logger = l;
     waitRefinementResult = false;

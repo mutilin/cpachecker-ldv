@@ -130,9 +130,7 @@ public class UsagePoint implements Comparable<UsagePoint> {
       if (locks.size() > 0/* || access == Access.READ*/) {
         return true;
       } else {
-        if (keyUsage != null
-         && o.keyUsage != null
-         /*&& keyUsage.getCallStack().equalsWithoutNode(o.keyUsage.getCallStack())*/) {
+        if (keyUsage != null && o.keyUsage != null) {
           if (access.ordinal() < o.access.ordinal()) {
             //write accesses are always higher than read ones (if we merge read accesses)
             return true;

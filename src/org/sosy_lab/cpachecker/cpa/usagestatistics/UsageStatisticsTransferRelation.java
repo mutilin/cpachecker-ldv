@@ -70,8 +70,8 @@ import org.sosy_lab.cpachecker.cpa.callstack.CallstackTransferRelation;
 import org.sosy_lab.cpachecker.cpa.local.LocalState.DataType;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.BinderFunctionInfo.LinkerInfo;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.EdgeInfo.EdgeType;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.EdgeType;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCFAEdgeException;
@@ -309,7 +309,9 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       String funcName = AbstractStates.extractStateByType(pNewState, CallstackState.class).getCurrentFunction();
 
       AbstractIdentifier id = IdentifierCreator.createIdentifier(decl, funcName, 0);
-      visitId(pNewState, pPrecision, id, Access.WRITE, EdgeType.DECLARATION, declEdge.getLineNumber());
+      UsageInfo usage = new UsageInfo(Access.WRITE,
+          declEdge.getLineNumber(), EdgeType.DECLARATION, pNewState);
+      visitId(pNewState, pPrecision, id, usage);
     }
   }
 
@@ -334,7 +336,9 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       for (int i = 0; i < params.size(); i++) {
         creator.setDereference(currentInfo.pInfo.get(i).dereference);
         id = params.get(i).accept(creator);
-        visitId(pNewState, pPrecision, id, currentInfo.pInfo.get(i).access, EdgeType.FUNCTION_CALL, fcExpression.getFileLocation().getStartingLineNumber());
+        UsageInfo usage = new UsageInfo(currentInfo.pInfo.get(i).access,
+            fcExpression.getFileLocation().getStartingLineNumber(), EdgeType.FUNCTION_CALL, pNewState);
+        visitId(pNewState, pPrecision, id, usage);
       }
 
     } else {
@@ -436,13 +440,14 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     expression.accept(handler);
 
     for (Pair<AbstractIdentifier, Access> pair : handler.result) {
-      visitId(state, pPrecision, pair.getFirst(), pair.getSecond(), eType, expression.getFileLocation().getStartingLineNumber());
+      UsageInfo usage = new UsageInfo(pair.getSecond(), expression.getFileLocation().getStartingLineNumber(), eType, state);
+      visitId(state, pPrecision, pair.getFirst(), usage);
     }
 
   }
 
   private void visitId(final UsageStatisticsState state, final UsageStatisticsPrecision pPrecision
-      , final AbstractIdentifier id, final Access access, final EdgeType eType, final int line) throws HandleCodeException {
+      , final AbstractIdentifier id, UsageInfo usage) throws HandleCodeException {
 
     //Precise information, using results of shared analysis
     if (! (id instanceof SingleIdentifier)) {
@@ -489,11 +494,6 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     logger.log(Level.FINER, "Add id " + singleId + " to unsafe statistics");
     LockStatisticsState lockState = AbstractStates.extractStateByType(state, LockStatisticsState.class);
     logger.log(Level.FINEST, "Its locks are: " + lockState);
-
-    //We can't get line from location, because it is old state
-    LineInfo lineInfo = new LineInfo(line, node);
-    EdgeInfo info = new EdgeInfo(eType);
-    UsageInfo usage = new UsageInfo(access, lineInfo, info, lockState);
 
     state.addUsage(singleId, usage);
   }
