@@ -33,27 +33,27 @@ import java.util.TreeSet;
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsState;
 
 public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
   private final TreeSet<UsagePoint> topUsages;
   private final Map<UsagePoint, UnrefinedUsageInfoSet> unrefinedInformation;
   private final Map<UsagePoint, RefinedUsageInfoSet> refinedInformation;
-  
+
   public UnrefinedUsagePointSet() {
     topUsages = new TreeSet<>();
     unrefinedInformation = new HashMap<>();
     refinedInformation = new HashMap<>();
   }
-  
-  private UnrefinedUsagePointSet(TreeSet<UsagePoint> top, Map<UsagePoint, UnrefinedUsageInfoSet> detail, 
+
+  private UnrefinedUsagePointSet(TreeSet<UsagePoint> top, Map<UsagePoint, UnrefinedUsageInfoSet> detail,
       Map<UsagePoint, RefinedUsageInfoSet> trueUsages) {
     topUsages = top;
     unrefinedInformation = detail;
     refinedInformation = trueUsages;
   }
-  
+
   public void add(UsageInfo newInfo) {
     UnrefinedUsageInfoSet targetSet;
     UsagePoint newPoint = newInfo.getUsagePoint();
@@ -69,7 +69,7 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     add(newPoint);
     targetSet.add(newInfo);
   }
-  
+
   private void add(UsagePoint newPoint) {
     if (!topUsages.contains(newPoint)) {
       //Put newPoint in the right place in tree
@@ -87,13 +87,27 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
       topUsages.add(newPoint);
     }
   }
-  
+
   private boolean isUnsafe(Set<UsagePoint> points) {
     if (points.size() >= 1) {
       Iterator<UsagePoint> iterator = points.iterator();
       UsagePoint point = iterator.next();
+      Set<LockIdentifier> lockSet = null;
+      if (point.isTrue() && point.access == Access.READ) {
+        //The first one may be read access if it is refined
+        lockSet = new HashSet<>(point.locks);
+        if (iterator.hasNext()) {
+          point = iterator.next();
+        } else {
+          return false;
+        }
+      }
       if (point.access == Access.WRITE) {
-        Set<LockIdentifier> lockSet = new HashSet<>(point.locks);
+        if (lockSet == null) {
+          lockSet = new HashSet<>(point.locks);
+        } else {
+          lockSet.retainAll(point.locks);
+        }
         while (iterator.hasNext() && !lockSet.isEmpty()) {
           lockSet.retainAll(iterator.next().locks);
         }
@@ -102,7 +116,8 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     }
     return false;
   }
-  
+
+  @Override
   public AbstractUsageInfoSet getUsageInfo(UsagePoint point) {
     if (point.isTrue()) {
       return refinedInformation.get(point);
@@ -110,10 +125,11 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
       return unrefinedInformation.get(point);
     }
   }
-  
+
+  @Override
   public Pair<UsageInfo, UsageInfo> getUnsafePair() {
     assert isUnsafe();
-    
+
     Iterator<UsagePoint> iterator = topUsages.iterator();
     AbstractUsageInfoSet firstSet = getUsageInfo(iterator.next());
     AbstractUsageInfoSet secondSet;
@@ -126,12 +142,12 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     }
     return Pair.of(firstSet.getOneExample(), secondSet.getOneExample());
   }
-  
+
   public boolean checkTrueUnsafe() {
     if (!isUnsafe()) {
       return false;
     }
-    
+
     boolean result = checkRefinedUsages();
     if (result) {
       if (refinedInformation.size() > 1 || topUsages.size() == 1) {
@@ -144,7 +160,7 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
       return false;
     }
   }
-  
+
   private boolean checkRefinedUsages() {
     Iterator<UsagePoint> iterator = topUsages.iterator();
     Set<UsagePoint> refinedPoints = new TreeSet<>();
@@ -159,25 +175,27 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     }
     return isUnsafe(refinedPoints);
   }
-  
+
+  @Override
   public boolean isTrueUnsafe() {
     //Is called at the end, so return true even if we have only one refined usage
     return checkRefinedUsages();
   }
 
+  @Override
   public int size() {
     int result = 0;
-    
+
     for (UsagePoint point : refinedInformation.keySet()) {
       result += refinedInformation.get(point).size();
     }
     for (UsagePoint point : unrefinedInformation.keySet()) {
       result += unrefinedInformation.get(point).size();
     }
-    
+
     return result;
   }
-  
+
   public void reset() {
     Iterator<UsagePoint> iterator = topUsages.iterator();
     while (iterator.hasNext()) {
@@ -189,6 +207,7 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     unrefinedInformation.clear();
   }
 
+  @Override
   public void remove(UsageStatisticsState pUstate) {
     for (UsagePoint point : unrefinedInformation.keySet()) {
       unrefinedInformation.get(point).remove(pUstate);
@@ -198,26 +217,28 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
   public Iterator<UsagePoint> getPointIterator() {
     return topUsages.iterator();
   }
-  
+
+  @Override
   public int getNumberOfTopUsagePoints() {
     return topUsages.size();
   }
 
   public void markAsTrue(UsageInfo uinfo) {
-    
+
     UsagePoint p = uinfo.getUsagePoint();
     assert topUsages.contains(p);
-    
+
     topUsages.remove(p);
     p.markAsTrue();
     topUsages.add(p);
     refinedInformation.put(p, new RefinedUsageInfoSet(uinfo));
   }
-  
+
+  @Override
   public UnrefinedUsagePointSet clone() {
     return new UnrefinedUsagePointSet(new TreeSet<>(topUsages), new HashMap<>(unrefinedInformation), new HashMap<>(refinedInformation));
   }
-  
+
   public void remove(UsagePoint currentUsagePoint) {
     unrefinedInformation.remove(currentUsagePoint);
     topUsages.remove(currentUsagePoint);
