@@ -27,7 +27,6 @@ import javax.annotation.Nonnull;
 
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
-import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.EdgeInfo.EdgeType;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsagePoint;
@@ -58,20 +57,17 @@ public class UsageInfo implements Comparable<UsageInfo> {
   private final LineInfo line;
   private final EdgeInfo info;
   private final LockStatisticsState locks;
-  private final CallstackState callstack;
   private AbstractState keyState;
   private final Access accessType;
   public boolean failureFlag;
-  
+
   private static final boolean mergeUsagesWithEqualCallstacks = false;
 
   public UsageInfo(@Nonnull Access atype, @Nonnull LineInfo l,
-  								 @Nonnull EdgeInfo t, @Nonnull LockStatisticsState lock,
-  								 @Nonnull CallstackState call) {
+  								 @Nonnull EdgeInfo t, @Nonnull LockStatisticsState lock) {
     line = l;
     info = t;
     locks = lock;
-    callstack = call;
     accessType = atype;
     keyState = null;
     failureFlag = false;
@@ -83,10 +79,6 @@ public class UsageInfo implements Comparable<UsageInfo> {
 
   public @Nonnull Access getAccess() {
     return accessType;
-  }
-
-  public @Nonnull CallstackState getCallStack() {
-    return callstack;
   }
 
   public @Nonnull LineInfo getLine() {
@@ -116,13 +108,11 @@ public class UsageInfo implements Comparable<UsageInfo> {
       return result;
     }
     if (locks.getSize() == 0 && other.locks.getSize() == 0 ){
-      if (this.callstack.getCurrentFunction().equals(other.callstack.getCurrentFunction())) {
-        return true; //this is equal states, like for a++;
-      }
+      return true; //this is equal states, like for a++;
     }
     return false;
   }
-  
+
   public UsagePoint getUsagePoint() {
     if (this.locks.getSize() > 0 || !mergeUsagesWithEqualCallstacks && this.accessType == Access.READ) {
       return new UsagePoint(locks.getLockIdentifiers(), accessType);
@@ -136,7 +126,6 @@ public class UsageInfo implements Comparable<UsageInfo> {
     final int prime = 31;
     int result = 1;
     result = prime * result + ((accessType == null) ? 0 : accessType.hashCode());
-    result = prime * result + ((callstack == null) ? 0 : callstack.hashCodeWithoutNode());
     result = prime * result + ((line == null) ? 0 : line.hashCode());
     result = prime * result + ((locks == null) ? 0 : locks.hashCode());
     result = prime * result + ((info == null) ? 0 : info.hashCode());
@@ -156,14 +145,6 @@ public class UsageInfo implements Comparable<UsageInfo> {
     }
     UsageInfo other = (UsageInfo) obj;
     if (accessType != other.accessType) {
-      return false;
-    }
-    //Callstack is important for refinement
-    if (callstack == null) {
-      if (other.callstack != null) {
-        return false;
-      }
-    } else if (!callstack.equalsWithoutNode(other.callstack)) {
       return false;
     }
     if (line == null) {
@@ -196,9 +177,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
 
     sb.append("Line ");
     sb.append(line.toString());
-    sb.append(" (" + info.toString() + ", " + accessType.toASTString() + ") from ");
-    CallstackState e = callstack;
-    sb.append(e.getCurrentFunction());
+    sb.append(" (" + info.toString() + ", " + accessType.toASTString() + ")");
     sb.append(", " + locks);
 
     return sb.toString();
@@ -225,7 +204,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
   public void setKeyState(AbstractState state) {
     keyState = state;
   }
-  
+
   public void resetKeyState() {
     keyState = null;
   }
@@ -240,16 +219,11 @@ public class UsageInfo implements Comparable<UsageInfo> {
     if (this == pO) {
       return 0;
     }
-    
+
     int result = this.locks.compareTo(pO.locks);
     if (result != 0) {
       //Usages without locks are more convenient to analyze
       return -result;
-    }
-    result = this.getCallStack().getDepth() - pO.getCallStack().getDepth();
-    if (result != 0) {
-      //Experiments show that callstacks should be ordered as it is done now
-      return result;
     }
     result = this.line.getLine() - pO.line.getLine();
     if (result != 0) {
@@ -263,21 +237,6 @@ public class UsageInfo implements Comparable<UsageInfo> {
     result = this.accessType.compareTo(pO.accessType);
     if (result != 0) {
       return result;
-    }
-
-    if (!this.getCallStack().equalsWithoutNode(pO.getCallStack())) {
-      //we should somehow order them 
-      CallstackState currentStack1 = getCallStack();
-      CallstackState currentStack2 = pO.getCallStack();
-      while (currentStack1 != null) {
-        result = currentStack1.getCurrentFunction().compareTo(currentStack2.getCurrentFunction());
-        if (result != 0) {
-          return result;
-        }
-        currentStack1 = currentStack1.getPreviousState();
-        currentStack2 = currentStack2.getPreviousState();
-      }
-     // return this.getCallStack().hashCodeWithoutNode() - pO.getCallStack().hashCodeWithoutNode();
     }
     /* We can't use key states for ordering, because the treeSets can't understand,
      * that old refined usage with zero key state is the same as new one

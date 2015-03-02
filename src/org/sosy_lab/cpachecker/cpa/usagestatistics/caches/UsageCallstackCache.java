@@ -35,16 +35,16 @@ public class UsageCallstackCache implements UsageCache {
 
   @Override
   public void add(UsageInfo pUinfo) {
-    visitedFunctions.add(pUinfo.getCallStack());
+   // visitedFunctions.add(pUinfo.getCallStack());
   }
 
   @Override
   public boolean contains(UsageInfo pUinfo) {
-    for (CallstackState tmp : visitedFunctions) {
+    /*for (CallstackState tmp : visitedFunctions) {
       if (tmp.equalsWithoutNode(pUinfo.getCallStack())) {
         return true;
       }
-    }
+    }*/
     return false;
   }
 

@@ -503,7 +503,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     //We can't get line from location, because it is old state
     LineInfo lineInfo = new LineInfo(line, node);
     EdgeInfo info = new EdgeInfo(eType);
-    UsageInfo usage = new UsageInfo(access, lineInfo, info, lockState, fullCallstack);
+    UsageInfo usage = new UsageInfo(access, lineInfo, info, lockState);
 
     state.addUsage(singleId, usage);
   }

@@ -34,12 +34,12 @@ public class UsageFunctionCache implements UsageCache {
 
   @Override
   public void add(UsageInfo pUinfo) {
-    visitedFunctions.add(pUinfo.getCallStack().getCurrentFunction());
+    //visitedFunctions.add(pUinfo.getCallStack().getCurrentFunction());
   }
 
   @Override
   public boolean contains(UsageInfo pUinfo) {
-    return visitedFunctions.contains(pUinfo.getCallStack().getCurrentFunction());
+    return false;//visitedFunctions.contains(pUinfo.getCallStack().getCurrentFunction());
   }
 
 }
