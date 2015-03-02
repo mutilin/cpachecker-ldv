@@ -69,7 +69,6 @@ import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackTransferRelation;
 import org.sosy_lab.cpachecker.cpa.local.LocalState.DataType;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsTransferRelation;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.BinderFunctionInfo.LinkerInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.EdgeInfo.EdgeType;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
@@ -104,18 +103,16 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
   private Set<String> abortfunctions;
 
   private final CallstackTransferRelation callstackTransfer;
-  private final LockStatisticsTransferRelation lockstatTransfer;
 
   private Map<String, BinderFunctionInfo> binderFunctionInfo;
   private final LogManager logger;
 
   public UsageStatisticsTransferRelation(TransferRelation pWrappedTransfer,
       Configuration config, LogManager pLogger, UsageStatisticsCPAStatistics s,
-      CallstackTransferRelation transfer, LockStatisticsTransferRelation lTransfer) throws InvalidConfigurationException {
+      CallstackTransferRelation transfer) throws InvalidConfigurationException {
     config.inject(this);
     wrappedTransfer = pWrappedTransfer;
     callstackTransfer = transfer;
-    lockstatTransfer = lTransfer;
     statistics = s;
 
     binderFunctionInfo = new HashMap<>();
@@ -168,7 +165,6 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       callstackTransfer.setFlag();
       needToReset = true;
       //Find right summary edge
-      //CFANode node = AbstractStates.extractLocation(oldState);
       for (int k = 0; k < node.getNumLeavingEdges(); k++) {
         currentEdge = node.getLeavingEdge(k);
         if (currentEdge instanceof CFunctionSummaryStatementEdge) {

@@ -39,8 +39,6 @@ import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
-import org.sosy_lab.cpachecker.cpa.bam.BAMRestoreStack;
-import org.sosy_lab.cpachecker.cpa.callstack.CallstackReducer;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState.LockStatisticsStateBuilder;
 
 import com.google.common.base.Function;
@@ -48,9 +46,6 @@ import com.google.common.base.Predicate;
 
 @Options(prefix="cpa.lockstatistics")
 public class LockStatisticsReducer implements Reducer {
-  //this field should be initialized by ABM
-  private BAMRestoreStack restorator;
-  private CallstackReducer cReducer;
   private final Set<String> restrictedFunctions;
   private final Set<String> restrictedLocks;
 
@@ -93,7 +88,7 @@ public class LockStatisticsReducer implements Reducer {
     LockStatisticsState reducedState = (LockStatisticsState)pReducedElement;
     LockStatisticsState rootState = (LockStatisticsState) pRootElement;
     LockStatisticsStateBuilder builder = reducedState.builder();
-    builder.expand(rootState, restorator, cReducer, pReducedContext.getCallNode());
+    builder.expand(rootState);
     if (aggressiveReduction && !restrictedFunctions.contains(pReducedContext.getCallNode().getFunctionName())) {
       builder.expandLocks(rootState, restrictedLocks);
     }
@@ -133,14 +128,6 @@ public class LockStatisticsReducer implements Reducer {
   public AbstractState getVariableExpandedStateForProofChecking(AbstractState pRootState, Block pReducedContext,
       AbstractState pReducedState) {
     return getVariableExpandedState(pRootState, pReducedContext, pReducedState);
-  }
-
-  public void setRestorator(BAMRestoreStack r) {
-    restorator = r;
-  }
-
-  public void setCallstackReducer(CallstackReducer r) {
-    cReducer = r;
   }
 
   @Override

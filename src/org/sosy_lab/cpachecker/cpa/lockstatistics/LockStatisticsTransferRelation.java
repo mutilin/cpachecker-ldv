@@ -90,7 +90,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
   public Collection<LockStatisticsState> getAbstractSuccessorsForEdge(AbstractState element, Precision pPrecision
       , CFAEdge cfaEdge) {
 
-    return Collections.singleton(((LockStatisticsState)element).clone());
+    return Collections.singleton((LockStatisticsState)element);
   }
 
   public Collection<LockStatisticsState> getAbstractSuccessors0(AbstractState element, CFAEdge cfaEdge) throws UnrecognizedCCodeException {

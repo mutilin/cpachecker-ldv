@@ -34,10 +34,7 @@ import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.defaults.AbstractSingleWrapperCPA;
 import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
-import org.sosy_lab.cpachecker.core.defaults.MergeJoinOperator;
 import org.sosy_lab.cpachecker.core.defaults.MergeSepOperator;
-import org.sosy_lab.cpachecker.core.defaults.StopJoinOperator;
-import org.sosy_lab.cpachecker.core.defaults.StopNeverOperator;
 import org.sosy_lab.cpachecker.core.defaults.StopSepOperator;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractDomain;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
@@ -54,8 +51,6 @@ import org.sosy_lab.cpachecker.core.interfaces.StopOperator;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackCPA;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackTransferRelation;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsCPA;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsTransferRelation;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsageContainer;
 import org.sosy_lab.cpachecker.util.CPAs;
 @Options(prefix="cpa.usagestatistics")
@@ -77,14 +72,6 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
   public static CPAFactory factory() {
     return AutomaticCPAFactory.forType(UsageStatisticsCPA.class);
   }
-
-  @Option(name="merge", toUppercase=true, values={"SEP", "JOIN"},
-      description="which merge operator to use for LockStatisticsCPA")
-  private String mergeType = "SEP";
-
-  @Option(name="stop", toUppercase=true, values={"SEP", "JOIN", "NEVER"},
-      description="which stop operator to use for LockStatisticsCPA")
-  private String stopType = "SEP";
 
   @Option(name="precisionReset", description="The value of marked unsafes, after which the precision should be cleaned")
   private int precisionReset = Integer.MAX_VALUE;
@@ -114,8 +101,7 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
     }
     logger = pLogger;
     this.transferRelation = new UsageStatisticsTransferRelation(pCpa.getTransferRelation(), pConfig, pLogger, statistics
-        , (CallstackTransferRelation) (CPAs.retrieveCPA(this, CallstackCPA.class)).getTransferRelation()
-        , (LockStatisticsTransferRelation) (CPAs.retrieveCPA(this, LockStatisticsCPA.class)).getTransferRelation());
+        , (CallstackTransferRelation) (CPAs.retrieveCPA(this, CallstackCPA.class)).getTransferRelation());
 
     String tmpString = pConfig.getProperty("precision.path");
     if (tmpString != null) {
@@ -124,30 +110,11 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
   }
 
   private MergeOperator initializeMergeOperator() {
-    if(mergeType.equals("SEP")) {
-      return MergeSepOperator.getInstance();
-    }
-
-    else if(mergeType.equals("JOIN")) {
-      return new MergeJoinOperator(abstractDomain);
-    }
-
-    return null;
+    return MergeSepOperator.getInstance();
   }
 
   private StopOperator initializeStopOperator() {
-    if(stopType.equals("SEP")) {
-      return new StopSepOperator(abstractDomain);
-    }
-
-    else if(stopType.equals("JOIN")) {
-      return new StopJoinOperator(abstractDomain);
-    }
-
-    else if(stopType.equals("NEVER")) {
-      return new StopNeverOperator();
-    }
-    return null;
+    return new StopSepOperator(abstractDomain);
   }
 
   @Override

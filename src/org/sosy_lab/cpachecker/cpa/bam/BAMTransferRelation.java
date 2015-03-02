@@ -66,15 +66,9 @@ import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
 import org.sosy_lab.cpachecker.cpa.arg.ARGReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackCPA;
-import org.sosy_lab.cpachecker.cpa.callstack.CallstackReducer;
-import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackTransferRelation;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsCPA;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsReducer;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsTransferRelation;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
-import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.CFAUtils;
 import org.sosy_lab.cpachecker.util.CPAs;
@@ -85,7 +79,7 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Multimap;
 
 @Options(prefix = "cpa.bam")
-public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
+public class BAMTransferRelation implements TransferRelation {
 
   @Options
   static class PCCInformation {
@@ -169,11 +163,6 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
     bamCPA = bamCpa;
     wrappedProofChecker = wrappedChecker;
     argCache = cache;
-    LockStatisticsCPA tmpCpa;
-    if ((tmpCpa = CPAs.retrieveCPA(bamCpa, LockStatisticsCPA.class)) != null) {
-      ((LockStatisticsReducer)tmpCpa.getReducer()).setRestorator(this);
-      ((LockStatisticsReducer)tmpCpa.getReducer()).setCallstackReducer((CallstackReducer)CPAs.retrieveCPA(bamCPA, CallstackCPA.class).getReducer());
-    }
 
     assert wrappedReducer != null;
 
@@ -593,27 +582,10 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
 
       forwardPrecisionToExpandedPrecision.put(expandedState, expandedPrecision);
     }
-    setLockStatisticsPrecision(AbstractStates.extractStateByType(state, CallstackState.class).getPreviousState());
 
     logger.log(Level.ALL, "Expanded results:", expandedResult);
 
     return expandedResult;
-  }
-
-  private void setLockStatisticsPrecision(final CallstackState state) {
-    if (state == null) {
-      //The last state
-      return;
-    }
-    try {
-      LockStatisticsCPA lockCPA = CPAs.retrieveCPA(bamCPA, LockStatisticsCPA.class);
-      if (lockCPA != null) {
-        CallstackState fullState = restoreCallstack(state);
-        ((LockStatisticsTransferRelation)lockCPA.getTransferRelation()).setCallstackState(fullState);
-      }
-    } catch (HandleCodeException e) {
-      logger.log(Level.WARNING, "Can't restore callstack");
-    }
   }
 
   private boolean isRecursionEdge(CFAEdge e) {
@@ -648,7 +620,6 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
     final Collection<AbstractState> cachedReturnStates = pair.getSecond();
 
     assert cachedReturnStates == null || reached != null : "there cannot be result-states without reached-states";
-    setLockStatisticsPrecision(AbstractStates.extractStateByType(initialState, CallstackState.class));
     if (cachedReturnStates != null && !reached.hasWaitingState()) {
 
       // cache hit, return element from cache
@@ -1066,48 +1037,6 @@ throws InterruptedException, RecursiveAnalysisFailedException {
       }
     }
     return true;
-  }
-
-  @Override
-  public CallstackState restoreCallstack(CallstackState state) throws HandleCodeException {
-    CallstackState fullState = null, tmpState;
-    CFANode currentNode, previousNode, predecessor;
-
-    previousNode = null;
-    for (int i = 0; i < stack.size(); i++) {
-      currentNode = stack.get(i).getThird().getCallNode();
-      predecessor = currentNode;
-      for (int j = 0; j < currentNode.getNumEnteringEdges(); j++) {
-        predecessor = currentNode.getEnteringEdge(j).getPredecessor();
-        if (previousNode == null && predecessor.getFunctionName().equals(entryFunction)) {
-          break;
-        } else if (previousNode != null && predecessor.getFunctionName().equals(previousNode.getFunctionName())) {
-          break;
-        }
-      }
-      fullState = new CallstackState(fullState, currentNode.getFunctionName(), predecessor);
-      previousNode = currentNode;
-      if (fullState.getCurrentFunction().equals(state.getCurrentFunction())) {
-        return fullState;
-      }
-    }
-    tmpState = state;
-    if (!tmpState.getCurrentFunction().equals(fullState.getCurrentFunction()) && tmpState.getPreviousState() != null) {
-      Stack<CallstackState> callstack = new Stack<>();
-      while (!tmpState.getCurrentFunction().equals(fullState.getCurrentFunction())) {
-        callstack.push(tmpState);
-        tmpState = tmpState.getPreviousState();
-        if (tmpState == null) {
-          throw new HandleCodeException("Can't restore callstack");
-        }
-      }
-      while (!callstack.empty()) {
-        tmpState = callstack.pop();
-        fullState = new CallstackState(fullState, tmpState.getCurrentFunction(), tmpState.getCallNode());
-      }
-      return fullState;
-    }
-    throw new HandleCodeException("Can't find called function");
   }
 
   private Pair<Boolean, Collection<ARGState>> checkARGBlock(ARGState rootNode,

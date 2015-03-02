@@ -31,10 +31,7 @@ import java.util.Set;
 import java.util.SortedMap;
 
 import org.sosy_lab.common.log.LogManager;
-import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
-import org.sosy_lab.cpachecker.cpa.bam.BAMRestoreStack;
-import org.sosy_lab.cpachecker.cpa.callstack.CallstackReducer;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier.LockType;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.LineInfo;
 
@@ -46,12 +43,10 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
   public class LockStatisticsStateBuilder {
     private SortedMap<LockIdentifier, Integer> mutableLocks;
     private LockStatisticsState mutableToRestore;
-   // private boolean forceChanged;
 
     public LockStatisticsStateBuilder(LockStatisticsState state) {
       mutableLocks = Maps.newTreeMap(state.locks);
       mutableToRestore = state.toRestore;
-    //  forceChanged = false;
     }
 
     private void put(LockIdentifier lockId) {
@@ -138,7 +133,7 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
     }
 
     LockStatisticsState build() {
-      if (locks.equals(mutableLocks) && mutableToRestore == toRestore/* && !forceChanged*/) {
+      if (locks.equals(mutableLocks) && mutableToRestore == toRestore) {
         return getParentLink();
       } else {
         return new LockStatisticsState(mutableLocks, mutableToRestore);
@@ -160,7 +155,7 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
       }
     }
 
-    public void expand(LockStatisticsState rootState, BAMRestoreStack restorator, CallstackReducer pReducer, CFANode pNode) {
+    public void expand(LockStatisticsState rootState) {
       mutableToRestore = rootState.toRestore;
     }
 
@@ -239,11 +234,6 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
     LockIdentifier lock = LockIdentifier.of(lockName, varName, LockType.GLOBAL_LOCK);
     Integer size = locks.get(lock);
     return (size == null ? 0 : size);
-  }
-
-  @Override
-  public LockStatisticsState clone() {
-    return new LockStatisticsState(Maps.newTreeMap(locks), toRestore);
   }
 
   @Override
@@ -345,15 +335,6 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
   LockStatisticsStateBuilder builder() {
     return new LockStatisticsStateBuilder(this);
   }
-
-  /*public UnmodifiableIterator<AccessPoint> getAccessPointIterator(String pLockName, String pVariable) {
-    LockIdentifier lockId = LockIdentifier.of(pLockName, pVariable, LockType.GLOBAL_LOCK);
-    return getAccessPointIterator(lockId);
-  }
-
-  public UnmodifiableIterator<AccessPoint> getAccessPointIterator(LockIdentifier lockId) {
-    return locks.get(lockId).iterator();
-  }*/
 
   private LockStatisticsState getParentLink() {
     return this;

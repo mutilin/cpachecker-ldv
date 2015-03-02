@@ -162,7 +162,7 @@ top:while ((target = computer.getNextRefineableUsage()) != null) {
       }).toList();
       for (List<ARGState> previousTrace : refinedStates) {
         if (abstractTrace.containsAll(previousTrace)) {
-          logger.log(Level.INFO, "Hey! I found repeated trace " + target + ". I don't want to refine it");
+          //logger.log(Level.INFO, "Hey! I found repeated trace " + target + ". I don't want to refine it");
           computer.setResultOfRefinement(target, false, pPath.getInnerEdges());
           pStat.CacheInterpolantsTime.stop();
           pStat.UnsafeCheck.start();
