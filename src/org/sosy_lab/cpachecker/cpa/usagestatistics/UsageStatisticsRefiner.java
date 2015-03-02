@@ -163,7 +163,7 @@ top:while ((target = computer.getNextRefineableUsage()) != null) {
       for (List<ARGState> previousTrace : refinedStates) {
         if (abstractTrace.containsAll(previousTrace)) {
           logger.log(Level.INFO, "Hey! I found repeated trace " + target + ". I don't want to refine it");
-          computer.setResultOfRefinement(target, false);
+          computer.setResultOfRefinement(target, false, pPath.getInnerEdges());
           pStat.CacheInterpolantsTime.stop();
           pStat.UnsafeCheck.start();
           continue top;
@@ -192,21 +192,21 @@ top:while ((target = computer.getNextRefineableUsage()) != null) {
           pStat.CacheInterpolantsTime.stop();
           pStat.CacheTime.start();
           if (iCache.contains(target, formulas)) {
-          	computer.setResultOfRefinement(target, true);
+          	computer.setResultOfRefinement(target, true, pPath.getInnerEdges());
             target.failureFlag = true;
           } else {
             iCache.add(target, formulas);
-          	computer.setResultOfRefinement(target, false);
+          	computer.setResultOfRefinement(target, false, pPath.getInnerEdges());
           }
           pStat.CacheTime.stop();
         } else {
-          computer.setResultOfRefinement(target, !counterexample.isSpurious());
+          computer.setResultOfRefinement(target, !counterexample.isSpurious(), pPath.getInnerEdges());
         }
       } catch (IllegalStateException e) {
         //msat_solver return -1 <=> unknown
         //consider its as true;
         logger.log(Level.WARNING, "Solver exception, consider " + target + " as true");
-        computer.setResultOfRefinement(target, true);
+        computer.setResultOfRefinement(target, true, pPath.getInnerEdges());
         target.failureFlag = true;
       } finally {
         pStat.Refinement.stopIfRunning();

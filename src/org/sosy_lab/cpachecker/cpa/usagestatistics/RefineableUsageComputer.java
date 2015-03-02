@@ -24,9 +24,11 @@
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
 import java.util.Iterator;
+import java.util.List;
 import java.util.logging.Level;
 
 import org.sosy_lab.common.log.LogManager;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.caches.UsageCache;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.caches.UsageCallstackCache;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.AbstractUsageInfoSet;
@@ -56,7 +58,7 @@ public class RefineableUsageComputer {
     waitRefinementResult = false;
   }
 
-  public void setResultOfRefinement(UsageInfo uinfo, boolean result) {
+  public void setResultOfRefinement(UsageInfo uinfo, boolean result, List<CFAEdge> path) {
 
     assert (waitRefinementResult);
 
@@ -75,7 +77,7 @@ public class RefineableUsageComputer {
       }
     } else {
       logger.log(Level.INFO, "Usage " + uinfo + " is reachable, mark it as true");
-      currentRefineableUsageList.markAsTrue(uinfo);
+      currentRefineableUsageList.markAsTrue(uinfo, path);
       if (currentRefineableUsageList.checkTrueUnsafe()) {
         container.setAsRefined(currentRefineableUsageList);
         usagePointIterator = null;

@@ -56,7 +56,6 @@ import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
-import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState.LockStatisticsStateBuilder;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.LineInfo;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
@@ -75,8 +74,6 @@ public class LockStatisticsTransferRelation implements TransferRelation
 
   final Set<LockInfo> locks;
   private LogManager logger;
-
-  private CallstackState fullCallstack = null;
 
   int i = 0;
   public LockStatisticsTransferRelation(Configuration config, LogManager logger) throws InvalidConfigurationException {
@@ -249,14 +246,6 @@ public class LockStatisticsTransferRelation implements TransferRelation
     throws UnrecognizedCCodeException {
 
     logger.log(Level.FINEST, "Strengthen LockStatistics result");
-    if (fullCallstack == null) {
-      for (AbstractState tmpState : elements) {
-        if (tmpState instanceof CallstackState) {
-          fullCallstack = (CallstackState)tmpState;
-          break;
-        }
-      }
-    }
     return getAbstractSuccessors0(element, cfaEdge);
   }
 
@@ -389,11 +378,11 @@ public class LockStatisticsTransferRelation implements TransferRelation
 
   private void processLock(LockStatisticsState oldElement, LockStatisticsStateBuilder builder,
       LineInfo line, LockInfo lock, String variable) {
-    logger.log(Level.FINER, "Lock at line " + line + ", Callstack: " + fullCallstack);
+    logger.log(Level.FINER, "Lock at line " + line);
     int d = oldElement.getCounter(lock.lockName, variable);
 
     if (d < lock.maxLock) {
-      builder.add(lock.lockName, line, fullCallstack, variable, logger);
+      builder.add(lock.lockName, line, variable, logger);
     } else {
       /*UnmodifiableIterator<AccessPoint> accessPointIterator =
           oldElement.getAccessPointIterator(lock.lockName, variable);
@@ -408,16 +397,8 @@ public class LockStatisticsTransferRelation implements TransferRelation
   }
 
   private void processSetLevel(LockStatisticsStateBuilder builder, LineInfo line, int level, LockInfo lock) {
-    logger.log(Level.FINER, "Set a lock level " + level + " at line " + line + ", Callstack: " + fullCallstack);
-    builder.set(lock.lockName, level, line, fullCallstack, "");
-  }
-
-  public void setCallstackState(CallstackState state) {
-    fullCallstack = state;
-  }
-
-  public CallstackState getFullCallstack() {
-    return fullCallstack;
+    logger.log(Level.FINER, "Set a lock level " + level + " at line " + line);
+    builder.set(lock.lockName, level, line, "");
   }
 
   @Override

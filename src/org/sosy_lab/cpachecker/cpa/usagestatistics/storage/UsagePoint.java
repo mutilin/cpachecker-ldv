@@ -1,9 +1,11 @@
 package org.sosy_lab.cpachecker.cpa.usagestatistics.storage;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
@@ -153,10 +155,10 @@ public class UsagePoint implements Comparable<UsagePoint> {
     return result + ")";
   }
 
-  public void markAsTrue() {
+  public void markAsTrue(List<CFAEdge> path) {
     isTrue = true;
     if (keyUsage != null) {
-      keyUsage.resetKeyState();
+      keyUsage.resetKeyState(path);
     }
   }
 

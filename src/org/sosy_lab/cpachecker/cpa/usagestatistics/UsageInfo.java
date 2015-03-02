@@ -23,9 +23,12 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
+import java.util.List;
+
 import javax.annotation.Nonnull;
 
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.EdgeInfo.EdgeType;
@@ -58,6 +61,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
   private final EdgeInfo info;
   private final LockStatisticsState locks;
   private AbstractState keyState;
+  private List<CFAEdge> path;
   private final Access accessType;
   public boolean failureFlag;
 
@@ -205,12 +209,18 @@ public class UsageInfo implements Comparable<UsageInfo> {
     keyState = state;
   }
 
-  public void resetKeyState() {
+  public void resetKeyState(List<CFAEdge> p) {
     keyState = null;
+    path = p;
   }
 
   public AbstractState getKeyState() {
     return keyState;
+  }
+
+  public List<CFAEdge> getPath() {
+    assert path != null;
+    return path;
   }
 
   @Override

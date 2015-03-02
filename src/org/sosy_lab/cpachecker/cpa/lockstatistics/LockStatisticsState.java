@@ -24,6 +24,7 @@
 package org.sosy_lab.cpachecker.cpa.lockstatistics;
 
 import java.io.Serializable;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
@@ -34,7 +35,6 @@ import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.bam.BAMRestoreStack;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackReducer;
-import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier.LockType;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.LineInfo;
 
@@ -46,21 +46,23 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
   public class LockStatisticsStateBuilder {
     private SortedMap<LockIdentifier, Integer> mutableLocks;
     private LockStatisticsState mutableToRestore;
-    private boolean forceChanged;
+   // private boolean forceChanged;
 
     public LockStatisticsStateBuilder(LockStatisticsState state) {
       mutableLocks = Maps.newTreeMap(state.locks);
       mutableToRestore = state.toRestore;
-      forceChanged = false;
+    //  forceChanged = false;
     }
 
     private void put(LockIdentifier lockId) {
-      int a;
+      Integer a;
       if (mutableLocks.containsKey(lockId)) {
         a = mutableLocks.get(lockId);
+        a++;
       } else {
         a = 1;
       }
+      assert (a != null);
       mutableLocks.put(lockId, a);
     }
 
@@ -78,7 +80,7 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
       }
     }
 
-    public void add(String lockName, LineInfo line, CallstackState state, String variable, LogManager logger) {
+    public void add(String lockName, LineInfo line, String variable, LogManager logger) {
       LockIdentifier lockId = LockIdentifier.of(lockName, variable, LockType.GLOBAL_LOCK);
       put(lockId);
     }
@@ -93,7 +95,7 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
       mutableLocks.remove(lockId);
     }
 
-    public void set(String lockName, int num, LineInfo line, CallstackState state, String variable) {
+    public void set(String lockName, int num, LineInfo line, String variable) {
       //num can be equal 0, this means, that in origin file it is 0 and we should delete locks
       LockIdentifier lockId = LockIdentifier.of(lockName, variable, LockType.GLOBAL_LOCK);
 
@@ -127,14 +129,16 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
           LockIdentifier lockId = LockIdentifier.of(lockName, lockNames.get(lockName), LockType.GLOBAL_LOCK);
           Integer size = mutableToRestore.locks.get(lockId);
           mutableLocks.remove(lockId);
-          mutableLocks.put(lockId, size);
+          if (size != null) {
+            mutableLocks.put(lockId, size);
+          }
         }
       }
       mutableToRestore = mutableToRestore.toRestore;
     }
 
     LockStatisticsState build() {
-      if (locks.equals(mutableLocks) && mutableToRestore == toRestore && !forceChanged) {
+      if (locks.equals(mutableLocks) && mutableToRestore == toRestore/* && !forceChanged*/) {
         return getParentLink();
       } else {
         return new LockStatisticsState(mutableLocks, mutableToRestore);
@@ -146,98 +150,40 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
     }
 
     public void reduce() {
-      /*Set<LockIdentifier> iterativeLocks = Sets.newHashSet(mutableLocks.keySet());
-      for (LockIdentifier lockId : iterativeLocks) {
-        LinkedList<AccessPoint> tmpAccessPoints = new LinkedList<>();
-        AccessPoint tmpPoint;
-        for (AccessPoint point : mutableLocks.get(lockId)) {
-          tmpPoint = point.markAsOld();
-          tmpAccessPoints.add(tmpPoint);
-          if (point != tmpPoint) {
-            mutableLocks.remove(lockId, point);
-            mutableLocks.put(lockId, tmpPoint);
-            forceChanged = true;
-          }
-        }
-      }*/
       mutableToRestore = null;
     }
 
     public void reduceLocks(Set<String> exceptLocks) {
-      /*for (LockIdentifier lock : new HashSet<>(mutableLocks.keySet())) {
-        if (!exceptLocks.contains(lock.getName())) {
-          List<AccessPoint> list = mutableLocks.get(lock);
-
-          assert (!list.isEmpty());
-          if (list.size() == 1) {
-            continue;
-          } else {
-            AccessPoint first = list.get(0);
-            mutableLocks.removeAll(lock);
-            put(lock, first);
-          }
-        }
-      }*/
+      for (LockIdentifier lock : new HashSet<>(mutableLocks.keySet())) {
+        mutableLocks.remove(lock);
+        put(lock);
+      }
     }
 
     public void expand(LockStatisticsState rootState, BAMRestoreStack restorator, CallstackReducer pReducer, CFANode pNode) {
-      /*Set<LockIdentifier> iterativeLocks = Sets.newHashSet(mutableLocks.keySet());
-      for (LockIdentifier lock : iterativeLocks) {
-        //tmpLock = rootState.findLock(lock);
-        List<AccessPoint> rootList = rootState.locks.get(lock);
-        //null is also correct (it shows, that we've found new lock)
-        boolean changed = false;
-
-        AccessPoint tmpPoint, newPoint;
-        List<AccessPoint> accessPoints = mutableLocks.get(lock);
-        LinkedList<AccessPoint> newAccessPoints = new LinkedList<>(accessPoints);
-
-        for (int i = 0; i < accessPoints.size(); i++) {
-          tmpPoint = accessPoints.get(i);
-          if (tmpPoint.isNew() || rootList == null) {
-            newPoint = tmpPoint.expandCallstack(restorator, pReducer, pNode);
-            if (newPoint != tmpPoint) {
-              changed = true;
-              newAccessPoints.set(i, newPoint);
-            }
-          } else if (rootList.size() > i) {
-            //restore marks, which were new before function call
-            changed = true;
-            newAccessPoints.set(i, rootList.get(i).clone());
-          } else {
-            //Also strange situation...
-            System.out.println("size < i");
-          }
-        }
-        if (changed) {
-          mutableLocks.removeAll(lock);
-          mutableLocks.putAll(lock, newAccessPoints);
-          forceChanged = true;
-        }
-      }*/
       mutableToRestore = rootState.toRestore;
     }
 
     public void expandLocks(LockStatisticsState pRootState, Set<String> pRestrictedLocks) {
-      /*for (LockIdentifier lock : pRootState.locks.keySet()) {
+      for (LockIdentifier lock : pRootState.locks.keySet()) {
         if (!pRestrictedLocks.contains(lock.getName())) {
-          List<AccessPoint> accessPoints = mutableLocks.get(lock);
-          List<AccessPoint> rootPoints = pRootState.locks.get(lock);
+          Integer size = mutableLocks.get(lock);
+          Integer rootSize = pRootState.locks.get(lock);
           //null is also correct (it shows, that we've found new lock)
 
-          LinkedList<AccessPoint> newAccessPoints;
-          if (accessPoints.isEmpty()) {
-            newAccessPoints = new LinkedList<>(rootPoints);
-            newAccessPoints.removeLast();
+          Integer newSize;
+          if (size == null) {
+            newSize = rootSize - 1;
           } else {
-            newAccessPoints = new LinkedList<>(accessPoints);
-            newAccessPoints.removeFirst();
-            newAccessPoints.addAll(0, rootPoints);
+            newSize = size + rootSize - 1;
           }
-          mutableLocks.removeAll(lock);
-          mutableLocks.putAll(lock, newAccessPoints);
+          if (newSize > 0) {
+            mutableLocks.put(lock, newSize);
+          } else {
+            mutableLocks.remove(lock);
+          }
         }
-      }*/
+      }
     }
 
     public void setRestoreState(LockStatisticsState pOldState) {
@@ -380,9 +326,9 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
       if (result != 0) {
         return result;
       }
-      result = locks.get(lockId1) - other.locks.get(lockId1);
-      if (result != 0) {
-        return result;
+      Integer Result = locks.get(lockId1) - other.locks.get(lockId1);
+      if (Result != 0) {
+        return Result;
       }
     }
     return 0;

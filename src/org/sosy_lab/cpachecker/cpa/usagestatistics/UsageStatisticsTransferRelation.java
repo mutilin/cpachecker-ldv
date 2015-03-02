@@ -462,12 +462,6 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       logger.log(Level.FINER, singleId + " is considered to be local, so it wasn't add to statistics");
       return;
     }
-    CallstackState fullCallstack = lockstatTransfer.getFullCallstack();
-
-    if (fullCallstack == null) {
-      //No ABM, so get real callstack
-      fullCallstack = AbstractStates.extractStateByType(state, CallstackState.class);
-    }
 
     if (state.containsLinks(singleId)) {
       singleId = (SingleIdentifier) state.getLinks(id);

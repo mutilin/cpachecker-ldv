@@ -124,9 +124,14 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     if (usage.failureFlag) {
       writer.append("Line 0:     N0 -{/*Failure in refinement*/}-> N0\n");
     }
-    ARGState root = transfer.findPath((ARGState)usage.getKeyState(), new HashMap<ARGState, ARGState>());
-    ARGPath path = ARGUtils.getRandomPath(root);
-    List<CFAEdge> edges = path.getInnerEdges();
+    List<CFAEdge> edges;
+    if (usage.getKeyState() != null) {
+      ARGState root = transfer.findPath((ARGState)usage.getKeyState(), new HashMap<ARGState, ARGState>());
+      ARGPath path = ARGUtils.getRandomPath(root);
+      edges = path.getInnerEdges();
+    } else {
+      edges = usage.getPath();
+    }
     edges = from(edges).filter(new Predicate<CFAEdge>() {
       @Override
       public boolean apply(@Nullable CFAEdge pInput) {
