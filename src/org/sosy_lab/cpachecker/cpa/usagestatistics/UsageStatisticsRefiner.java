@@ -239,13 +239,13 @@ top:while ((target = computer.getNextRefineableUsage()) != null) {
       pReached.updatePrecision(pReached.getFirstState(),
           Precisions.replaceByType(p, PredicatePrecision.empty(), Predicates.instanceOf(PredicatePrecision.class)));
       iCache.reset();
-      bamcpa.clearAllCaches();
       lastFalseUnsafeSize = originUnsafeSize;
       lastTrueUnsafes = newTrueUnsafeSize;
     }
     if (refinementFinish) {
       iCache.removeUnusedCacheEntries();
       transfer.clearCaches();
+      bamcpa.clearAllCaches();
       ARGState firstState = (ARGState) pReached.getFirstState();
       CFANode firstNode = AbstractStates.extractLocation(firstState);
       ARGState.clearIdGenerator();
