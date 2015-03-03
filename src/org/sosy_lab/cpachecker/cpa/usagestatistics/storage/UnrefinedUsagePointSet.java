@@ -176,6 +176,7 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     return isUnsafe(refinedPoints);
   }
 
+  //TODO merge with checkTrueUnsafe()
   @Override
   public boolean isTrueUnsafe() {
     //Is called at the end, so return true even if we have only one refined usage
@@ -209,6 +210,7 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
 
   @Override
   public void remove(UsageStatisticsState pUstate) {
+    //Attention! Use carefully
     for (UsagePoint point : unrefinedInformation.keySet()) {
       unrefinedInformation.get(point).remove(pUstate);
     }
@@ -223,7 +225,7 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     return topUsages.size();
   }
 
-  public void markAsTrue(UsageInfo uinfo) {
+  public void markAsReachableUsage(UsageInfo uinfo) {
 
     UsagePoint p = uinfo.getUsagePoint();
     assert topUsages.contains(p);

@@ -75,7 +75,7 @@ public class RefineableUsageComputer {
       }
     } else {
       logger.log(Level.INFO, "Usage " + uinfo + " is reachable, mark it as true");
-      currentRefineableUsageList.markAsTrue(uinfo);
+      currentRefineableUsageList.markAsReachableUsage(uinfo);
       if (currentRefineableUsageList.checkTrueUnsafe()) {
         container.setAsRefined(currentRefineableUsageList);
         usagePointIterator = null;

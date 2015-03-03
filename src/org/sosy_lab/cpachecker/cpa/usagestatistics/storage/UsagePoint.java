@@ -2,38 +2,39 @@ package org.sosy_lab.cpachecker.cpa.usagestatistics.storage;
 
 import java.util.HashSet;
 import java.util.Set;
+import java.util.SortedSet;
 import java.util.TreeSet;
 
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
 
-import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableSortedSet;
 
 public class UsagePoint implements Comparable<UsagePoint> {
-  public final ImmutableSet<LockIdentifier> locks;
+  public final ImmutableSortedSet<LockIdentifier> locks;
   public final Access access;
   //This usage is used to distinct usage points with empty lock sets with write access from each other
   public final UsageInfo keyUsage;
   private final Set<UsagePoint> coveredUsages;
   private boolean isTrue;
-    
-  private UsagePoint(Set<LockIdentifier> pLocks, Access pAccess, UsageInfo pInfo) {
-    locks = ImmutableSet.copyOf(pLocks);
+
+  private UsagePoint(SortedSet<LockIdentifier> pLocks, Access pAccess, UsageInfo pInfo) {
+    locks = ImmutableSortedSet.copyOf(pLocks);
     access = pAccess;
     coveredUsages = new HashSet<>();
     isTrue = false;
     keyUsage = pInfo;
   }
-  
-  public UsagePoint(Set<LockIdentifier> pLocks, Access pAccess) {
+
+  public UsagePoint(SortedSet<LockIdentifier> pLocks, Access pAccess) {
     this(pLocks, pAccess, null);
   }
-  
+
   public UsagePoint(Access pAccess, UsageInfo pInfo) {
     this(new TreeSet<LockIdentifier>(), pAccess, pInfo);
   }
-  
+
   public boolean addCoveredUsage(UsagePoint newChild) {
     if (isTrue()) {
       //The covered usages by true point won't be refined
@@ -50,7 +51,7 @@ public class UsagePoint implements Comparable<UsagePoint> {
     }
     return false;
   }
-  
+
   public Set<UsagePoint> getCoveredUsages() {
     return coveredUsages;
   }
@@ -68,29 +69,37 @@ public class UsagePoint implements Comparable<UsagePoint> {
 
   @Override
   public boolean equals(Object obj) {
-    if (this == obj)
+    if (this == obj) {
       return true;
-    if (obj == null)
+    }
+    if (obj == null) {
       return false;
-    if (getClass() != obj.getClass())
+    }
+    if (getClass() != obj.getClass()) {
       return false;
+    }
     UsagePoint other = (UsagePoint) obj;
-    if (access != other.access)
+    if (access != other.access) {
       return false;
+    }
     if (locks == null) {
-      if (other.locks != null)
+      if (other.locks != null) {
         return false;
-    } else if (!locks.equals(other.locks))
+      }
+    } else if (!locks.equals(other.locks)) {
       return false;
+    }
     //This is for distinction usages with empty sets of locks
     if (keyUsage == null) {
-      if (other.keyUsage != null)
+      if (other.keyUsage != null) {
         return false;
-    } else if (!keyUsage.equals(other.keyUsage))
+      }
+    } else if (!keyUsage.equals(other.keyUsage)) {
       return false;
+    }
     return true;
   }
-  
+
   @Override
   public int compareTo(UsagePoint o) {
     int result = (isTrue == o.isTrue) ? 0 : (isTrue ? -1 : 1);
@@ -106,6 +115,7 @@ public class UsagePoint implements Comparable<UsagePoint> {
     if (result != 0) {
       return result;
     }
+    //TODO String ->for()
     result = locks.toString().compareTo(o.locks.toString());
     if (result != 0 || keyUsage == null) {
       return result;
@@ -113,29 +123,35 @@ public class UsagePoint implements Comparable<UsagePoint> {
       return keyUsage.compareTo(o.keyUsage);
     }
   }
-  
+
+  //TODO CompareTo? with enums
   public boolean isHigher(UsagePoint o) {
     // access 'write' is higher than 'read', but only for nonempty locksets
+    //TODO CompareTo
     if (o.locks.containsAll(locks) && access.ordinal() <= o.access.ordinal()) {
       if (locks.size() > 0/* || access == Access.READ*/) {
         return true;
       } else {
+        //TODO assert keyUsage != null
+        //TODO o.locks.size()
         if (keyUsage != null
          && o.keyUsage != null
+         //TODO remove
          && keyUsage.getCallStack().equalsWithoutNode(o.keyUsage.getCallStack())) {
           if (access.ordinal() < o.access.ordinal()) {
             //write accesses are always higher than read ones (if we merge read accesses)
             return true;
           }
           //This ordering is very important, do not remove
+          //TODO Remove if the previous TODO is right
           return (keyUsage.compareTo(o.keyUsage) <= 0);
         }
         return false;
       }
-    } 
+    }
     return false;
   }
-  
+
   @Override
   public String toString() {
     String result = "(" + locks.toString() + ", " + access;
@@ -144,14 +160,15 @@ public class UsagePoint implements Comparable<UsagePoint> {
     }
     return result + ")";
   }
-  
+
   public void markAsTrue() {
     isTrue = true;
     if (keyUsage != null) {
       keyUsage.resetKeyState();
     }
+    coveredUsages.clear();
   }
-  
+
   public boolean isTrue() {
     return isTrue;
   }
