@@ -109,7 +109,19 @@ public class RefineableUsageComputer {
         usageIterator = refineableUsageInfoSet.getUsages().iterator();
       }
       resultUsage = usageIterator.next();
-    } while (cache.contains(resultUsage));
+
+      if (cache.contains(resultUsage)) {
+        /* It is important to remove usage from the container,
+         * because we determine unsafes with the suggestion,
+         * that all unsafes are ordered correctly
+         */
+        waitRefinementResult = true;
+        logger.log(Level.INFO, "Usage " + resultUsage + " is contained in cache, skip it");
+        setResultOfRefinement(resultUsage, false);
+      } else {
+        break;
+      }
+    } while (true);
     waitRefinementResult = true;
     return resultUsage;
   }
