@@ -131,12 +131,14 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     return Pair.of(firstSet.getOneExample(), secondSet.getOneExample());
   }
 
-  public boolean checkTrueUnsafe() {
+  @Override
+  public boolean isTrueUnsafe() {
+    //Is called at the end, so return true even if we have only one refined usage
     if (!isUnsafe()) {
       return false;
     }
 
-    boolean result = checkRefinedUsages();
+    boolean result = isUnsafe(new TreeSet<>(refinedInformation.keySet()));
     if (result) {
       if (refinedInformation.size() > 1 || topUsages.size() == 1) {
         return true;
@@ -147,28 +149,6 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     } else {
       return false;
     }
-  }
-
-  private boolean checkRefinedUsages() {
-    /*Iterator<UsagePoint> iterator = topUsages.iterator();
-    Set<UsagePoint> refinedPoints = new TreeSet<>();
-    UsagePoint tmpPoint = iterator.next();
-    while (tmpPoint.isTrue()) {
-      refinedPoints.add(tmpPoint);
-      if (iterator.hasNext()) {
-        tmpPoint = iterator.next();
-      } else {
-        break;
-      }
-    }*/
-    return isUnsafe(new TreeSet<>(refinedInformation.keySet()));
-  }
-
-  //TODO merge with checkTrueUnsafe()
-  @Override
-  public boolean isTrueUnsafe() {
-    //Is called at the end, so return true even if we have only one refined usage
-    return checkRefinedUsages();
   }
 
   @Override
