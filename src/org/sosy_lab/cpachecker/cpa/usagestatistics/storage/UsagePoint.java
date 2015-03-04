@@ -134,20 +134,11 @@ public class UsagePoint implements Comparable<UsagePoint> {
   //TODO CompareTo? with enums
   public boolean isHigher(UsagePoint o) {
     // access 'write' is higher than 'read', but only for nonempty locksets
-    if (o.locks.containsAll(locks) && access.compareTo(o.access) <= 0) {
-      if (keyUsage == null) {
-        //It means: if (!locks.isEmpty()  || access == Access.READ) {
-        return true;
-      } else {
-        if (o.keyUsage != null
-         //TODO remove
-         && keyUsage.getCallStack().equalsWithoutNode(o.keyUsage.getCallStack())) {
-          //This ordering is very important, do not remove
-          //TODO Remove if the previous TODO is right
-          return (keyUsage.compareTo(o.keyUsage) <= 0);
-        }
-        return false;
-      }
+    if (o.locks.containsAll(locks) && access.compareTo(o.access) <= 0 && keyUsage == null) {
+      /* Key usage is important, if it is present, it is write access without locks,
+       * and we should handle all of them without inserting into covered elements of the tree structure
+       */
+      return true;
     }
     return false;
   }
