@@ -162,7 +162,7 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
   }
 
   private boolean checkRefinedUsages() {
-    Iterator<UsagePoint> iterator = topUsages.iterator();
+    /*Iterator<UsagePoint> iterator = topUsages.iterator();
     Set<UsagePoint> refinedPoints = new TreeSet<>();
     UsagePoint tmpPoint = iterator.next();
     while (tmpPoint.isTrue()) {
@@ -172,8 +172,8 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
       } else {
         break;
       }
-    }
-    return isUnsafe(refinedPoints);
+    }*/
+    return isUnsafe(refinedInformation.keySet());
   }
 
   //TODO merge with checkTrueUnsafe()
