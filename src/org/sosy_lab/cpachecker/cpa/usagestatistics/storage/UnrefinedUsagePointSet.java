@@ -28,6 +28,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedSet;
 import java.util.TreeSet;
 
 import org.sosy_lab.common.Pair;
@@ -88,7 +89,7 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     }
   }
 
-  private boolean isUnsafe(Set<UsagePoint> points) {
+  private boolean isUnsafe(SortedSet<UsagePoint> points) {
     if (points.size() >= 1) {
       Iterator<UsagePoint> iterator = points.iterator();
       UsagePoint point = iterator.next();
@@ -160,7 +161,7 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
         break;
       }
     }*/
-    return isUnsafe(refinedInformation.keySet());
+    return isUnsafe(new TreeSet<>(refinedInformation.keySet()));
   }
 
   //TODO merge with checkTrueUnsafe()

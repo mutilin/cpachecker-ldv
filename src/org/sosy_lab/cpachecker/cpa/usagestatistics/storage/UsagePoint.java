@@ -1,6 +1,7 @@
 package org.sosy_lab.cpachecker.cpa.usagestatistics.storage;
 
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -31,8 +32,8 @@ public class UsagePoint implements Comparable<UsagePoint> {
     this(pLocks, pAccess, null);
   }
 
-  public UsagePoint(Access pAccess, UsageInfo pInfo) {
-    this(new TreeSet<LockIdentifier>(), pAccess, pInfo);
+  public UsagePoint(UsageInfo pInfo) {
+    this(new TreeSet<LockIdentifier>(), Access.WRITE, pInfo);
   }
 
   public boolean addCoveredUsage(UsagePoint newChild) {
@@ -115,9 +116,15 @@ public class UsagePoint implements Comparable<UsagePoint> {
     if (result != 0) {
       return result;
     }
-    //TODO String ->for()
-    result = locks.toString().compareTo(o.locks.toString());
-    if (result != 0 || keyUsage == null) {
+    Iterator<LockIdentifier> lockIterator = locks.iterator();
+    Iterator<LockIdentifier> lockIterator2 = o.locks.iterator();
+    while (lockIterator.hasNext()) {
+      result = lockIterator.next().compareTo(lockIterator2.next());
+      if (result != 0) {
+        return result;
+      }
+    }
+    if (keyUsage == null) {
       return result;
     } else {
       return keyUsage.compareTo(o.keyUsage);
@@ -127,21 +134,14 @@ public class UsagePoint implements Comparable<UsagePoint> {
   //TODO CompareTo? with enums
   public boolean isHigher(UsagePoint o) {
     // access 'write' is higher than 'read', but only for nonempty locksets
-    //TODO CompareTo
-    if (o.locks.containsAll(locks) && access.ordinal() <= o.access.ordinal()) {
-      if (locks.size() > 0/* || access == Access.READ*/) {
+    if (o.locks.containsAll(locks) && access.compareTo(o.access) <= 0) {
+      if (keyUsage == null) {
+        //It means: if (!locks.isEmpty()  || access == Access.READ) {
         return true;
       } else {
-        //TODO assert keyUsage != null
-        //TODO o.locks.size()
-        if (keyUsage != null
-         && o.keyUsage != null
+        if (o.keyUsage != null
          //TODO remove
          && keyUsage.getCallStack().equalsWithoutNode(o.keyUsage.getCallStack())) {
-          if (access.ordinal() < o.access.ordinal()) {
-            //write accesses are always higher than read ones (if we merge read accesses)
-            return true;
-          }
           //This ordering is very important, do not remove
           //TODO Remove if the previous TODO is right
           return (keyUsage.compareTo(o.keyUsage) <= 0);
