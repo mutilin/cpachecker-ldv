@@ -93,9 +93,8 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     if (points.size() >= 1) {
       Iterator<UsagePoint> iterator = points.iterator();
       UsagePoint point = iterator.next();
-      Set<LockIdentifier> lockSet = null;
       if (point.access == Access.WRITE) {
-        lockSet = new HashSet<>(point.locks);
+        Set<LockIdentifier> lockSet = new HashSet<>(point.locks);
         while (iterator.hasNext() && !lockSet.isEmpty()) {
           lockSet.retainAll(iterator.next().locks);
         }
@@ -178,7 +177,7 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
 
   @Override
   public void remove(UsageStatisticsState pUstate) {
-    //Attention! Use carefully
+    //Attention! Use carefully. May not mork
     for (UsagePoint point : unrefinedInformation.keySet()) {
       unrefinedInformation.get(point).remove(pUstate);
     }
@@ -201,6 +200,7 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     topUsages.remove(p);
     p.markAsTrue();
     topUsages.add(p);
+    unrefinedInformation.remove(p);
     refinedInformation.put(p, new RefinedUsageInfoSet(uinfo));
   }
 
