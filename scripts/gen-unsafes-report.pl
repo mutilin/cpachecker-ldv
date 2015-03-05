@@ -225,8 +225,7 @@ foreach my $current_fname(sort keys %unsafe_list)
           system("cat $cilpath >> srcs");
           die ("Can't cat srcs") if ($? == -1);
 	}
-        $current_fname =~ m/.*\.(\w*)$/;
-	`etv -c $current_fname -i $cilpath --format "CPAchecker error trace v1.1" -s srcs -o $current_fname.tmp -l $1`;
+	`etv -c $current_fname -i $cilpath --format "CPAchecker error trace v1.1" -s srcs -o $current_fname.tmp`;
 	die ("etv failed") if( $? == -1 ) ;
 	open(my $html_tmp, ">", "$current_fname.html") or die("Can't open html-file for write");
 	print($html_tmp "<html> <body> <div id='SSHeader'><div id='SSHeaderLogo'>@{$unsafe_list{$current_fname}}</div></div>");

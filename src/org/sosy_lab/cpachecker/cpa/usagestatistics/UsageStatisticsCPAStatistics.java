@@ -160,6 +160,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         assert callstackDepth > 0;
         callstackDepth--;
       }
+      if (edge.getLineNumber() == usage.getLine().getLine()) {
+        writer.write("Line 0:     N0 -{highlight}-> N0\n");
+      }
       writer.write(edge.toString() + "\n");
     }
     for (int i = 0; i < callstackDepth; i++) {
