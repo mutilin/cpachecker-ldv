@@ -92,6 +92,7 @@ public class RefineableUsageComputer {
 
     do {
       while (usageIterator == null || !usageIterator.hasNext()) {
+        AbstractUsageInfoSet refineableUsageInfoSet;
         do {
           while (usagePointIterator == null || !usagePointIterator.hasNext()) {
             if (unrefinedUsagePointSetIterator.hasNext()) {
@@ -103,9 +104,8 @@ public class RefineableUsageComputer {
             }
           }
           currentUsagePoint = usagePointIterator.next();
-        } while (currentUsagePoint.isTrue());
-        AbstractUsageInfoSet refineableUsageInfoSet = currentRefineableUsageList.getUsageInfo(currentUsagePoint);
-        assert (!refineableUsageInfoSet.isTrue());
+          refineableUsageInfoSet = currentRefineableUsageList.getUsageInfo(currentUsagePoint);
+        } while (refineableUsageInfoSet.isTrue());
         usageIterator = refineableUsageInfoSet.getUsages().iterator();
       }
       resultUsage = usageIterator.next();

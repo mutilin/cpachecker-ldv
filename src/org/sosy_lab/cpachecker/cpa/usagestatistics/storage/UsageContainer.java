@@ -183,7 +183,6 @@ public class UsageContainer {
     SingleIdentifier id = toId.get(set);
     refinedStat.put(id, set.asTrueUnsafe());
     removeIdFromCaches(id);
-    toId.remove(set);
   }
 
   public void printUsagesStatistics(final PrintStream out) {

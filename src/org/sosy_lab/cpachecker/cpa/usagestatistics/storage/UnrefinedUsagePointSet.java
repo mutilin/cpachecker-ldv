@@ -81,7 +81,9 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
           iterator.remove();
           newPoint.addCoveredUsage(point);
         } else if (point.isHigher(newPoint)) {
-          point.addCoveredUsage(newPoint);
+          if (!refinedInformation.containsKey(point)) {
+            point.addCoveredUsage(newPoint);
+          }
           return;
         }
       }
@@ -106,7 +108,7 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
 
   @Override
   public AbstractUsageInfoSet getUsageInfo(UsagePoint point) {
-    if (point.isTrue()) {
+    if (refinedInformation.containsKey(point)) {
       return refinedInformation.get(point);
     } else {
       return unrefinedInformation.get(point);
@@ -168,7 +170,7 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     Iterator<UsagePoint> iterator = topUsages.iterator();
     while (iterator.hasNext()) {
       UsagePoint point = iterator.next();
-      if (!point.isTrue()) {
+      if (refinedInformation.containsKey(point)) {
         iterator.remove();
       }
     }
@@ -223,7 +225,7 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     UsagePoint first = iterator.next();
     if (iterator.hasNext()) {
       UsagePoint second = iterator.next();
-      if (second.isTrue()) {
+      if (refinedInformation.containsKey(second)) {
         return RefinedUsagePointSet.create(refinedInformation.get(first), refinedInformation.get(second));
       }
     }

@@ -37,10 +37,7 @@ public class UsagePoint implements Comparable<UsagePoint> {
   }
 
   public boolean addCoveredUsage(UsagePoint newChild) {
-    if (isTrue()) {
-      //The covered usages by true point won't be refined
-      return false;
-    }
+    assert (!isTrue);
     if (!coveredUsages.contains(newChild)) {
       for (UsagePoint usage : coveredUsages) {
         if (usage.isHigher(newChild)) {
@@ -158,9 +155,5 @@ public class UsagePoint implements Comparable<UsagePoint> {
       keyUsage.resetKeyState();
     }
     coveredUsages.clear();
-  }
-
-  public boolean isTrue() {
-    return isTrue;
   }
 }
