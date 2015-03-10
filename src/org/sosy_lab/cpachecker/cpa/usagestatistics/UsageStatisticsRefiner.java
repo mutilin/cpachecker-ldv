@@ -213,7 +213,7 @@ top:while ((target = computer.getNextRefineableUsage()) != null) {
             }
           }).toList();
           for (CFAEdge edge : edges) {
-            System.out.println(edge + "\n");
+            System.out.println(edge);
           }
           Iterator<Pair<Object, PathTemplate>> pairIterator = counterexample.getAllFurtherInformation().iterator();
           List<BooleanFormula> formulas = (List<BooleanFormula>) pairIterator.next().getFirst();
