@@ -179,7 +179,7 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
 
   @Override
   public void remove(UsageStatisticsState pUstate) {
-    //Attention! Use carefully. May not mork
+    //Attention! Use carefully. May not work
     for (UsagePoint point : unrefinedInformation.keySet()) {
       unrefinedInformation.get(point).remove(pUstate);
     }
