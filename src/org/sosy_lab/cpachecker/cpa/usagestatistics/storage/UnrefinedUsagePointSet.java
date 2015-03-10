@@ -180,8 +180,16 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
   @Override
   public void remove(UsageStatisticsState pUstate) {
     //Attention! Use carefully. May not work
-    for (UsagePoint point : unrefinedInformation.keySet()) {
-      unrefinedInformation.get(point).remove(pUstate);
+    for (UsagePoint point : new TreeSet<>(unrefinedInformation.keySet())) {
+      UnrefinedUsageInfoSet uset = unrefinedInformation.get(point);
+      boolean b = uset.remove(pUstate);
+      if (b) {
+        if (uset.getUsages().isEmpty()) {
+          unrefinedInformation.remove(point);
+        }
+        //May be two usages related to the same state. This is abstractState !
+        //return;
+      }
     }
   }
 

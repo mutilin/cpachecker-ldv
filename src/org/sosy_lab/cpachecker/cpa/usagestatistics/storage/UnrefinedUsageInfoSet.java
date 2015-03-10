@@ -28,16 +28,19 @@ public class UnrefinedUsageInfoSet implements AbstractUsageInfoSet {
   }
 
   @Override
-  public void remove(UsageStatisticsState pUstate) {
+  public boolean remove(UsageStatisticsState pUstate) {
     Iterator<UsageInfo> iterator = unrefinedUsages.iterator();
+    boolean changed = false;
     while (iterator.hasNext()) {
       UsageInfo uinfo = iterator.next();
       AbstractState keyState = uinfo.getKeyState();
       assert (keyState != null);
       if (AbstractStates.extractStateByType(keyState, UsageStatisticsState.class).equals(pUstate)) {
         iterator.remove();
+        changed = true;
       }
     }
+    return changed;
   }
 
   @Override

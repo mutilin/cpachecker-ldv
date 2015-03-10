@@ -13,14 +13,15 @@ public class RefinedUsageInfoSet implements AbstractUsageInfoSet {
     refinedUsage = uinfo;
     refinedUsage.resetKeyState();
   }
-  
+
   @Override
   public UsageInfo getOneExample() {
     return refinedUsage;
   }
 
   @Override
-  public void remove(UsageStatisticsState pUstate) {
+  public boolean remove(UsageStatisticsState pUstate) {
+    return false;
   }
 
   @Override
