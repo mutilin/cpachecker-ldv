@@ -40,7 +40,10 @@ import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.io.PathTemplate;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.CounterexampleInfo;
 import org.sosy_lab.cpachecker.core.MainCPAStatistics;
@@ -69,6 +72,7 @@ import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 
 import com.google.common.base.Function;
+import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 
 
@@ -189,6 +193,28 @@ top:while ((target = computer.getNextRefineableUsage()) != null) {
             new BAMReachedSet(transfer, new ARGReachedSet(pReached), pPath, pathStateToReachedState), pPath);
         refinementFinish |= counterexample.isSpurious();
         if (counterexample.isSpurious()) {
+
+          List<CFAEdge> edges = pPath.getInnerEdges();
+          edges = from(edges).filter(new Predicate<CFAEdge>() {
+            @Override
+            public boolean apply(@Nullable CFAEdge pInput) {
+              if (pInput instanceof CDeclarationEdge) {
+                if (((CDeclarationEdge)pInput).getDeclaration().isGlobal() ||
+                    pInput.getSuccessor().getFunctionName().equals("ldv_main")) {
+                }
+                return false;
+              } else if (pInput.getSuccessor().getFunctionName().equals("ldv_main")
+                  && pInput instanceof CAssumeEdge) {
+                //Remove infinite switch, it's too long
+                return false;
+              } else {
+                return true;
+              }
+            }
+          }).toList();
+          for (CFAEdge edge : edges) {
+            System.out.println(edge + "\n");
+          }
           Iterator<Pair<Object, PathTemplate>> pairIterator = counterexample.getAllFurtherInformation().iterator();
           List<BooleanFormula> formulas = (List<BooleanFormula>) pairIterator.next().getFirst();
           List<ARGState> interpolants = (List<ARGState>) pairIterator.next().getFirst();
