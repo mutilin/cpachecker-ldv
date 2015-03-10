@@ -40,7 +40,7 @@ public class UsagePoint implements Comparable<UsagePoint> {
     assert (!isTrue);
     if (!coveredUsages.contains(newChild)) {
       for (UsagePoint usage : coveredUsages) {
-        if (usage.isHigher(newChild)) {
+        if (usage.isHigher(newChild) && !usage.isTrue) {
           assert !usage.equals(newChild);
           return usage.addCoveredUsage(newChild);
         }

@@ -170,7 +170,7 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     Iterator<UsagePoint> iterator = topUsages.iterator();
     while (iterator.hasNext()) {
       UsagePoint point = iterator.next();
-      if (refinedInformation.containsKey(point)) {
+      if (!refinedInformation.containsKey(point)) {
         iterator.remove();
       }
     }
