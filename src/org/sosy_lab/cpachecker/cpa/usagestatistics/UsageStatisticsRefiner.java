@@ -212,9 +212,9 @@ top:while ((target = computer.getNextRefineableUsage()) != null) {
               }
             }
           }).toList();
-          for (CFAEdge edge : edges) {
+          /*for (CFAEdge edge : edges) {
             System.out.println(edge);
-          }
+          }*/
           Iterator<Pair<Object, PathTemplate>> pairIterator = counterexample.getAllFurtherInformation().iterator();
           List<BooleanFormula> formulas = (List<BooleanFormula>) pairIterator.next().getFirst();
           List<ARGState> interpolants = (List<ARGState>) pairIterator.next().getFirst();

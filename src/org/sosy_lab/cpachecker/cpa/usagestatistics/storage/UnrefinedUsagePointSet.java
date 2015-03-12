@@ -79,7 +79,9 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
         UsagePoint point = iterator.next();
         if (newPoint.isHigher(point)) {
           iterator.remove();
-          newPoint.addCoveredUsage(point);
+          if (!refinedInformation.containsKey(newPoint)) {
+            newPoint.addCoveredUsage(point);
+          }
         } else if (point.isHigher(newPoint)) {
           if (!refinedInformation.containsKey(point)) {
             point.addCoveredUsage(newPoint);

@@ -173,9 +173,9 @@ public class UsageContainer {
     LinkedList<UnrefinedUsagePointSet> result = new LinkedList<>();
     //Not just values()! We must create a collection deterministically
     for (SingleIdentifier id : unrefinedStat.keySet()) {
-      if (id.getName().equals("unp_count")) {
+      //if (id.getName().equals("unp_count")) {
         result.add(unrefinedStat.get(id));
-      }
+      //}
     }
     return result;
   }
