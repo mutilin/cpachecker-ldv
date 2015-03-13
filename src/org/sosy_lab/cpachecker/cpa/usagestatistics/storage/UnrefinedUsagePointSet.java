@@ -88,31 +88,57 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     }
   }
 
+  boolean ignoreEmptyLockset = true;
+
   private boolean isUnsafe(Set<UsagePoint> points) {
-    if (points.size() >= 1) {
-      Iterator<UsagePoint> iterator = points.iterator();
+    Iterator<UsagePoint> iterator = points.iterator();
+    if (iterator.hasNext()) {//points.size() >= 1
       UsagePoint point = iterator.next();
       Set<LockIdentifier> lockSet = null;
-      if (point.isTrue() && point.access == Access.READ) {
-        //The first one may be read access if it is refined
-        lockSet = new HashSet<>(point.locks);
+
+      if(point.access == Access.READ) {
+        //no WRITE access is possible after READ access
+        //if READ access is refined then no WRITE access is reachable
         if (iterator.hasNext()) {
           point = iterator.next();
+          assert point.access == Access.READ;
+        }
+        return false;
+      }
+
+      //we have at least one write access
+      assert point.access == Access.WRITE;
+
+      if(ignoreEmptyLockset && point.locks.isEmpty()) {
+        //special case when we ignore intersection of empty sets
+        //at least one lockSet should be nonempty
+
+        //we go with while locks is empty until first nonempty
+        //search for non empty lockset
+        while(point.locks.isEmpty() && iterator.hasNext()) {
+          //skip accesses without locks
+          point = iterator.next();
+        }
+        if(!point.locks.isEmpty()) {
+          //we already have an empty intersection
+          //since we had an access without locks
+          //and now have an access with some locks
+          return true;
         } else {
+          //only empty locksets
           return false;
         }
+
+        //if the first lock set is already a non empty set
+        // (i.e. !point.locks.isEmpty())
+        //then we proceed with the standard algorithm
       }
-      if (point.access == Access.WRITE) {
-        if (lockSet == null) {
-          lockSet = new HashSet<>(point.locks);
-        } else {
-          lockSet.retainAll(point.locks);
-        }
-        while (iterator.hasNext() && !lockSet.isEmpty()) {
-          lockSet.retainAll(iterator.next().locks);
-        }
-        return lockSet.isEmpty();
+
+      lockSet = new HashSet<>(point.locks);
+      while (iterator.hasNext() && !lockSet.isEmpty()) {
+        lockSet.retainAll(iterator.next().locks);
       }
+      return lockSet.isEmpty();
     }
     return false;
   }
