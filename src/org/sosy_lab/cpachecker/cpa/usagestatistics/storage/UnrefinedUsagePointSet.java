@@ -97,22 +97,8 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     if (points.size() >= 1) {
       Iterator<UsagePoint> iterator = points.iterator();
       UsagePoint point = iterator.next();
-      Set<LockIdentifier> lockSet = null;
-      if (point.isTrue() && point.access == Access.READ) {
-        //The first one may be read access if it is refined
-        lockSet = new HashSet<>(point.locks);
-        if (iterator.hasNext()) {
-          point = iterator.next();
-        } else {
-          return false;
-        }
-      }
       if (point.access == Access.WRITE) {
-        if (lockSet == null) {
-          lockSet = new HashSet<>(point.locks);
-        } else {
-          lockSet.retainAll(point.locks);
-        }
+        Set<LockIdentifier> lockSet = new HashSet<>(point.locks);
         while (iterator.hasNext() && !lockSet.isEmpty()) {
           lockSet.retainAll(iterator.next().locks);
         }
@@ -148,22 +134,15 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     return Pair.of(firstSet.getOneExample(), secondSet.getOneExample());
   }
 
-<<<<<<< HEAD
-  public boolean checkTrueUnsafe() {
-=======
   @Override
   public boolean isTrueUnsafe() {
     //Is called at the end, so return true even if we have only one refined usage
->>>>>>> branchForMerge
     if (!isUnsafe()) {
       return false;
     }
 
-<<<<<<< HEAD
-    boolean result = checkRefinedUsages();
-=======
     boolean result = isUnsafe(new TreeSet<>(refinedInformation.keySet()));
->>>>>>> branchForMerge
+
     if (result) {
       if (refinedInformation.size() > 1 || topUsages.size() == 1) {
         return true;
@@ -175,30 +154,6 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
       return false;
     }
   }
-<<<<<<< HEAD
-
-  private boolean checkRefinedUsages() {
-    Iterator<UsagePoint> iterator = topUsages.iterator();
-    Set<UsagePoint> refinedPoints = new TreeSet<>();
-    UsagePoint tmpPoint = iterator.next();
-    while (tmpPoint.isTrue()) {
-      refinedPoints.add(tmpPoint);
-      if (iterator.hasNext()) {
-        tmpPoint = iterator.next();
-      } else {
-        break;
-      }
-    }
-    return isUnsafe(refinedPoints);
-  }
-
-  @Override
-  public boolean isTrueUnsafe() {
-    //Is called at the end, so return true even if we have only one refined usage
-    return checkRefinedUsages();
-  }
-=======
->>>>>>> branchForMerge
 
   @Override
   public int size() {
@@ -250,11 +205,7 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     return topUsages.size();
   }
 
-<<<<<<< HEAD
-  public void markAsTrue(UsageInfo uinfo) {
-=======
   public void markAsReachableUsage(UsageInfo uinfo) {
->>>>>>> branchForMerge
 
     UsagePoint p = uinfo.getUsagePoint();
     assert topUsages.contains(p);
