@@ -62,8 +62,6 @@ public class UsageInfo implements Comparable<UsageInfo> {
   private AbstractState keyState;
   private final Access accessType;
   public boolean failureFlag;
-  
-  private static final boolean mergeUsagesWithEqualCallstacks = false;
 
   public UsageInfo(@Nonnull Access atype, @Nonnull LineInfo l,
   								 @Nonnull EdgeInfo t, @Nonnull LockStatisticsState lock,
@@ -122,12 +120,12 @@ public class UsageInfo implements Comparable<UsageInfo> {
     }
     return false;
   }
-  
+
   public UsagePoint getUsagePoint() {
-    if (this.locks.getSize() > 0 || !mergeUsagesWithEqualCallstacks && this.accessType == Access.READ) {
+    if (this.locks.getSize() > 0 || this.accessType == Access.READ) {
       return new UsagePoint(locks.getLockIdentifiers(), accessType);
     } else {
-      return new UsagePoint(accessType, this);
+      return new UsagePoint(this);
     }
   }
 
@@ -225,7 +223,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
   public void setKeyState(AbstractState state) {
     keyState = state;
   }
-  
+
   public void resetKeyState() {
     keyState = null;
   }
@@ -240,7 +238,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
     if (this == pO) {
       return 0;
     }
-    
+
     int result = this.locks.compareTo(pO.locks);
     if (result != 0) {
       //Usages without locks are more convenient to analyze
@@ -266,7 +264,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
     }
 
     if (!this.getCallStack().equalsWithoutNode(pO.getCallStack())) {
-      //we should somehow order them 
+      //we should somehow order them
       CallstackState currentStack1 = getCallStack();
       CallstackState currentStack2 = pO.getCallStack();
       while (currentStack1 != null) {

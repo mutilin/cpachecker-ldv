@@ -251,11 +251,11 @@ public class PredicateAbstractionManager {
   }
 
   public void clear() {
-    if (abstractionCache != null) {
+    if (useCache) {
       abstractionCache.clear();
+      unsatisfiabilityCache.clear();
     }
   }
-
   /**
    * Compute an abstraction of the conjunction of an AbstractionFormula and
    * a PathFormula. The AbstractionFormula will be used in its instantiated form,
@@ -516,7 +516,6 @@ public class PredicateAbstractionManager {
       }
     }
     AbstractionFormula result = makeAbstractionFormula(abs, ssa, pathFormula);
-
     if (useCache) {
       abstractionCache.put(absKey, result);
 

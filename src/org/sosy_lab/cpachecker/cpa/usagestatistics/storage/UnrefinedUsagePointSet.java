@@ -78,9 +78,13 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
         UsagePoint point = iterator.next();
         if (newPoint.isHigher(point)) {
           iterator.remove();
-          newPoint.addCoveredUsage(point);
+          if (!refinedInformation.containsKey(newPoint)) {
+            newPoint.addCoveredUsage(point);
+          }
         } else if (point.isHigher(newPoint)) {
-          point.addCoveredUsage(newPoint);
+          if (!refinedInformation.containsKey(point)) {
+            point.addCoveredUsage(newPoint);
+          }
           return;
         }
       }
@@ -92,60 +96,52 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
 
   private boolean isUnsafe(Set<UsagePoint> points) {
     Iterator<UsagePoint> iterator = points.iterator();
-    if (iterator.hasNext()) {//points.size() >= 1
+    if (iterator.hasNext()) {
       UsagePoint point = iterator.next();
       Set<LockIdentifier> lockSet = null;
 
-      if(point.access == Access.READ) {
-        //no WRITE access is possible after READ access
-        //if READ access is refined then no WRITE access is reachable
-        if (iterator.hasNext()) {
-          point = iterator.next();
-          assert point.access == Access.READ;
+      //if we have first READ access then no WRITE access is possible
+      //(all the other accesses are READs)
+      //so no race is possible - we return false below
+      if (point.access == Access.WRITE) {
+        //we have at least one write access
+        if(ignoreEmptyLockset && point.locks.isEmpty()) {
+          //special case when we ignore intersection of empty sets
+          //at least one lockSet should be nonempty
+
+          //we go with while locks is empty until first nonempty
+          //search for non empty lockset
+          while(point.locks.isEmpty() && iterator.hasNext()) {
+            //skip accesses without locks
+            point = iterator.next();
+          }
+          if(!point.locks.isEmpty()) {
+            //we already have an empty intersection
+            //since we had an access without locks
+            //and now have an access with some locks
+            return true;
+          } else {
+            //only empty locksets
+            return false;
+          }
         }
-        return false;
-      }
-
-      //we have at least one write access
-      assert point.access == Access.WRITE;
-
-      if(ignoreEmptyLockset && point.locks.isEmpty()) {
-        //special case when we ignore intersection of empty sets
-        //at least one lockSet should be nonempty
-
-        //we go with while locks is empty until first nonempty
-        //search for non empty lockset
-        while(point.locks.isEmpty() && iterator.hasNext()) {
-          //skip accesses without locks
-          point = iterator.next();
-        }
-        if(!point.locks.isEmpty()) {
-          //we already have an empty intersection
-          //since we had an access without locks
-          //and now have an access with some locks
-          return true;
-        } else {
-          //only empty locksets
-          return false;
-        }
-
         //if the first lock set is already a non empty set
         // (i.e. !point.locks.isEmpty())
         //then we proceed with the standard algorithm
-      }
 
-      lockSet = new HashSet<>(point.locks);
-      while (iterator.hasNext() && !lockSet.isEmpty()) {
-        lockSet.retainAll(iterator.next().locks);
+        lockSet = new HashSet<>(point.locks);
+        while (iterator.hasNext() && !lockSet.isEmpty()) {
+          lockSet.retainAll(iterator.next().locks);
+        }
+        return lockSet.isEmpty();
       }
-      return lockSet.isEmpty();
     }
     return false;
   }
 
   @Override
   public AbstractUsageInfoSet getUsageInfo(UsagePoint point) {
-    if (point.isTrue()) {
+    if (refinedInformation.containsKey(point)) {
       return refinedInformation.get(point);
     } else {
       return unrefinedInformation.get(point);
@@ -169,12 +165,15 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     return Pair.of(firstSet.getOneExample(), secondSet.getOneExample());
   }
 
-  public boolean checkTrueUnsafe() {
+  @Override
+  public boolean isTrueUnsafe() {
+    //Is called at the end, so return true even if we have only one refined usage
     if (!isUnsafe()) {
       return false;
     }
 
-    boolean result = checkRefinedUsages();
+    boolean result = isUnsafe(new TreeSet<>(refinedInformation.keySet()));
+
     if (result) {
       if (refinedInformation.size() > 1 || topUsages.size() == 1) {
         return true;
@@ -185,27 +184,6 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     } else {
       return false;
     }
-  }
-
-  private boolean checkRefinedUsages() {
-    Iterator<UsagePoint> iterator = topUsages.iterator();
-    Set<UsagePoint> refinedPoints = new TreeSet<>();
-    UsagePoint tmpPoint = iterator.next();
-    while (tmpPoint.isTrue()) {
-      refinedPoints.add(tmpPoint);
-      if (iterator.hasNext()) {
-        tmpPoint = iterator.next();
-      } else {
-        break;
-      }
-    }
-    return isUnsafe(refinedPoints);
-  }
-
-  @Override
-  public boolean isTrueUnsafe() {
-    //Is called at the end, so return true even if we have only one refined usage
-    return checkRefinedUsages();
   }
 
   @Override
@@ -226,7 +204,7 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     Iterator<UsagePoint> iterator = topUsages.iterator();
     while (iterator.hasNext()) {
       UsagePoint point = iterator.next();
-      if (!point.isTrue()) {
+      if (!refinedInformation.containsKey(point)) {
         iterator.remove();
       }
     }
@@ -235,8 +213,17 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
 
   @Override
   public void remove(UsageStatisticsState pUstate) {
-    for (UsagePoint point : unrefinedInformation.keySet()) {
-      unrefinedInformation.get(point).remove(pUstate);
+    //Attention! Use carefully. May not work
+    for (UsagePoint point : new TreeSet<>(unrefinedInformation.keySet())) {
+      UnrefinedUsageInfoSet uset = unrefinedInformation.get(point);
+      boolean b = uset.remove(pUstate);
+      if (b) {
+        if (uset.getUsages().isEmpty()) {
+          unrefinedInformation.remove(point);
+        }
+        //May be two usages related to the same state. This is abstractState !
+        //return;
+      }
     }
   }
 
@@ -249,7 +236,7 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     return topUsages.size();
   }
 
-  public void markAsTrue(UsageInfo uinfo) {
+  public void markAsReachableUsage(UsageInfo uinfo) {
 
     UsagePoint p = uinfo.getUsagePoint();
     assert topUsages.contains(p);
@@ -257,6 +244,7 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     topUsages.remove(p);
     p.markAsTrue();
     topUsages.add(p);
+    unrefinedInformation.remove(p);
     refinedInformation.put(p, new RefinedUsageInfoSet(uinfo));
   }
 
@@ -279,7 +267,7 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     UsagePoint first = iterator.next();
     if (iterator.hasNext()) {
       UsagePoint second = iterator.next();
-      if (second.isTrue()) {
+      if (refinedInformation.containsKey(second)) {
         return RefinedUsagePointSet.create(refinedInformation.get(first), refinedInformation.get(second));
       }
     }
