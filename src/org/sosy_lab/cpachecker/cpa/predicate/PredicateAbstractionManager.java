@@ -54,6 +54,7 @@ import org.sosy_lab.common.time.NestedTimer;
 import org.sosy_lab.common.time.TimeSpan;
 import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
 import org.sosy_lab.cpachecker.cpa.predicate.persistence.PredicateAbstractionsStorage;
 import org.sosy_lab.cpachecker.cpa.predicate.persistence.PredicateAbstractionsStorage.AbstractionNode;
 import org.sosy_lab.cpachecker.cpa.predicate.persistence.PredicatePersistenceUtils.PredicateParsingFailedException;
@@ -256,7 +257,7 @@ public class PredicateAbstractionManager {
       unsatisfiabilityCache.clear();
     }
   }
-
+  int counter = 0;
   /**
    * Compute an abstraction of the conjunction of an AbstractionFormula and
    * a PathFormula. The AbstractionFormula will be used in its instantiated form,
@@ -517,7 +518,22 @@ public class PredicateAbstractionManager {
       }
     }
     AbstractionFormula result = makeAbstractionFormula(abs, ssa, pathFormula);
-
+    BooleanFormula newFormula = result.asInstantiatedFormula();
+    String formula = newFormula.toString();
+    if (!formula.equals("true") && !formula.equals("false") && !(location instanceof FunctionEntryNode)) {
+      String targetString = location.getFunctionName() + "::";
+      if (!formula.contains(targetString) && formula.contains("::")) {
+        System.out.println("Attention! " + formula + " not contains " + targetString);
+        System.out.println(counter++);
+      }
+      for (AbstractionPredicate pr : pPredicates) {
+        if (!pr.toString().contains(location.getFunctionName()) && pr.toString().contains("::") && !pr.toString().contains("false")) {
+          System.out.println("Attention! " + pr + " not contains " + targetString);
+          System.out.println(counter++);
+        }
+      }
+      //assert formula.contains(targetString) : "Attention! " + formula + " not contains " + targetString;
+    }
     if (useCache) {
       abstractionCache.put(absKey, result);
 
