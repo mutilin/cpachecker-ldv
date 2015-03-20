@@ -29,9 +29,9 @@ import org.sosy_lab.cpachecker.cfa.model.CFANode;
 
 public interface Reducer {
 
-  AbstractState getVariableReducedState(AbstractState expandedState, Block context, CFANode callNode);
+  AbstractState getVariableReducedState(AbstractState expandedState, Block context, Block outerContext, CFANode callNode);
 
-  AbstractState getVariableExpandedState(AbstractState rootState, Block reducedContext, AbstractState reducedState);
+  AbstractState getVariableExpandedState(AbstractState rootState, Block reducedContext, Block outerContext, AbstractState reducedState);
 
   Precision getVariableReducedPrecision(Precision precision, Block context);
 

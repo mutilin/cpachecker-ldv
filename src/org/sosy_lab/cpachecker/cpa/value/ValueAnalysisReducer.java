@@ -46,7 +46,7 @@ public class ValueAnalysisReducer implements Reducer {
   }
 
   @Override
-  public AbstractState getVariableReducedState(AbstractState pExpandedState, Block pContext, CFANode pCallNode) {
+  public AbstractState getVariableReducedState(AbstractState pExpandedState, Block pContext, Block outerContext, CFANode pCallNode) {
     ValueAnalysisState expandedState = (ValueAnalysisState)pExpandedState;
 
     ValueAnalysisState clonedElement = ValueAnalysisState.copyOf(expandedState);
@@ -62,7 +62,7 @@ public class ValueAnalysisReducer implements Reducer {
   }
 
   @Override
-  public AbstractState getVariableExpandedState(AbstractState pRootState, Block pReducedContext,
+  public AbstractState getVariableExpandedState(AbstractState pRootState, Block pReducedContext, Block outerSubtree,
       AbstractState pReducedState) {
     ValueAnalysisState rootState = (ValueAnalysisState)pRootState;
     ValueAnalysisState reducedState = (ValueAnalysisState)pReducedState;
@@ -124,13 +124,13 @@ public class ValueAnalysisReducer implements Reducer {
   @Override
   public AbstractState getVariableReducedStateForProofChecking(AbstractState pExpandedState, Block pContext,
       CFANode pCallNode) {
-    return getVariableReducedState(pExpandedState, pContext, pCallNode);
+    return getVariableReducedState(pExpandedState, pContext, null, pCallNode);
   }
 
   @Override
   public AbstractState getVariableExpandedStateForProofChecking(AbstractState pRootState, Block pReducedContext,
       AbstractState pReducedState) {
-    return getVariableExpandedState(pRootState, pReducedContext, pReducedState);
+    return getVariableExpandedState(pRootState, pReducedContext, null, pReducedState);
   }
 
   @Override

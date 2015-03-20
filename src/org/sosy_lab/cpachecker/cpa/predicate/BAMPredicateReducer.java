@@ -22,7 +22,7 @@
  *    http://cpachecker.sosy-lab.org
  */
 package org.sosy_lab.cpachecker.cpa.predicate;
-
+import static com.google.common.collect.FluentIterable.from;
 import static org.sosy_lab.cpachecker.util.predicates.pathformula.ctoformula.CtoFormulaConverter.*;
 
 import java.util.Collection;
@@ -32,12 +32,15 @@ import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
 
+import javax.annotation.Nullable;
+
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.collect.PersistentMap;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionEntryNode;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
@@ -55,6 +58,7 @@ import org.sosy_lab.cpachecker.util.predicates.pathformula.SSAMap.SSAMapBuilder;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.pointeraliasing.PointerTargetSet;
 
 import com.google.common.base.Preconditions;
+import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSetMultimap;
 import com.google.common.collect.SetMultimap;
@@ -62,6 +66,8 @@ import com.google.common.collect.Sets;
 
 
 public class BAMPredicateReducer implements Reducer {
+
+  private final static boolean tmp_option_for_aggressive_reduce = true;
 
   final Timer reduceTimer = new Timer();
   final Timer expandTimer = new Timer();
@@ -83,7 +89,7 @@ public class BAMPredicateReducer implements Reducer {
 
   @Override
   public AbstractState getVariableReducedState(
-      AbstractState pExpandedState, Block pContext,
+      AbstractState pExpandedState, Block pContext, Block outerContext,
       CFANode pLocation) {
 
     PredicateAbstractState predicateElement = (PredicateAbstractState) pExpandedState;
@@ -99,7 +105,22 @@ public class BAMPredicateReducer implements Reducer {
       Collection<AbstractionPredicate> predicates = extractPredicates(oldRegion);
       Collection<AbstractionPredicate> removePredicates =
           relevantComputer.getIrrelevantPredicates(pContext, predicates);
+      if (outerContext != null && tmp_option_for_aggressive_reduce) {
+        removePredicates = new HashSet<>(removePredicates);
 
+        assert pLocation instanceof FunctionEntryNode;
+
+        final String outerFunctionName = outerContext.getCallNode().getFunctionName() + "::";
+
+        ImmutableSet<AbstractionPredicate> currentFunctionPredicates = from(predicates).filter(new Predicate<AbstractionPredicate>() {
+          @Override
+          public boolean apply(@Nullable AbstractionPredicate pInput) {
+            return pInput.toString().contains(outerFunctionName);
+          }
+
+        }).toSet();
+        removePredicates.addAll(currentFunctionPredicates);
+      }
       PathFormula pathFormula = predicateElement.getPathFormula();
 
       assert bfmgr.isTrue(pathFormula.getFormula());
@@ -118,7 +139,7 @@ public class BAMPredicateReducer implements Reducer {
 
   @Override
   public AbstractState getVariableExpandedState(
-      AbstractState pRootState, Block pReducedContext,
+      AbstractState pRootState, Block pReducedContext, Block outerContext,
       AbstractState pReducedState) {
 
     PredicateAbstractState rootState = (PredicateAbstractState) pRootState;
@@ -135,6 +156,17 @@ public class BAMPredicateReducer implements Reducer {
       Collection<AbstractionPredicate> rootPredicates = extractPredicates(rootAbstraction.asRegion());
       Collection<AbstractionPredicate> relevantRootPredicates =
           relevantComputer.getRelevantPredicates(pReducedContext, rootPredicates);
+      if (outerContext != null && tmp_option_for_aggressive_reduce) {
+        final String outerFunctionName = outerContext.getCallNode().getFunctionName() + "::";
+
+        relevantRootPredicates = from(relevantRootPredicates).filter(new Predicate<AbstractionPredicate>() {
+          @Override
+          public boolean apply(@Nullable AbstractionPredicate pInput) {
+            return !pInput.toString().contains(outerFunctionName);
+          }
+
+        }).toSet();
+      }
       //for each removed predicate, we have to lookup the old (expanded) value and insert it to the reducedStates region
 
       PathFormula oldPathFormula = reducedState.getPathFormula();
@@ -271,8 +303,10 @@ public class BAMPredicateReducer implements Reducer {
     private void computeView() {
       if (evaluatedPredicateMap == null) {
         ReducedPredicatePrecision lExpandedPredicatePrecision = null;
+        String previousFunction = null;
         if (expandedPredicatePrecision instanceof ReducedPredicatePrecision) {
           lExpandedPredicatePrecision = (ReducedPredicatePrecision) expandedPredicatePrecision;
+          previousFunction = lExpandedPredicatePrecision.context.getCallNode().getFunctionName();
         }
 
         evaluatedGlobalPredicates =
@@ -289,6 +323,21 @@ public class BAMPredicateReducer implements Reducer {
             // Without support for them, we can just pass 0 as locInstance parameter
             Collection<AbstractionPredicate> set = //rootPredicatePrecision.getPredicates(node, 0);
                 relevantComputer.getRelevantPredicates(context, rootPredicatePrecision.getPredicates(node, 0));
+
+            //aggressive reduce, temporary feature. reduce predicates, if we leave function
+            if (previousFunction != null && tmp_option_for_aggressive_reduce) {
+              final String outerFunctionName = "|" + previousFunction + "::";
+              final String outerAddressFunctionName = "|__ADDRESS_OF_" + previousFunction + "::";
+              set = from(set).filter(new Predicate<AbstractionPredicate>() {
+                    @Override
+                    public boolean apply(@Nullable AbstractionPredicate pInput) {
+                      return !pInput.toString().contains(outerFunctionName) && !pInput.toString().contains(outerAddressFunctionName);
+                    }
+
+                 }).toSet();
+
+            }
+
             pmapBuilder.putAll(node, set);
           }
         }
@@ -320,6 +369,11 @@ public class BAMPredicateReducer implements Reducer {
     public ImmutableSetMultimap<CFANode, AbstractionPredicate> getLocalPredicates() {
       computeView();
       return evaluatedPredicateMap;
+    }
+
+    @Override
+    public ImmutableSetMultimap<String, AbstractionPredicate> getFunctionPredicates() {
+      return rootPredicatePrecision.getFunctionPredicates();
     }
 
     @Override

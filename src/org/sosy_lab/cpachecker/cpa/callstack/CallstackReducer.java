@@ -34,7 +34,7 @@ public class CallstackReducer implements Reducer {
 
   @Override
   public AbstractState getVariableReducedState(
-      AbstractState pExpandedState, Block pContext, CFANode callNode) {
+      AbstractState pExpandedState, Block pContext, Block outerContext, CFANode callNode) {
 
     CallstackState element = (CallstackState) pExpandedState;
 
@@ -54,7 +54,7 @@ public class CallstackReducer implements Reducer {
 
   @Override
   public AbstractState getVariableExpandedState(
-      AbstractState pRootState, Block pReducedContext,
+      AbstractState pRootState, Block pReducedContext, Block outerSubtree,
       AbstractState pReducedState) {
 
     CallstackState rootState = (CallstackState) pRootState;
@@ -137,13 +137,13 @@ public class CallstackReducer implements Reducer {
   @Override
   public AbstractState getVariableReducedStateForProofChecking(AbstractState pExpandedState, Block pContext,
       CFANode pCallNode) {
-    return getVariableReducedState(pExpandedState, pContext, pCallNode);
+    return getVariableReducedState(pExpandedState, pContext, null, pCallNode);
   }
 
   @Override
   public AbstractState getVariableExpandedStateForProofChecking(AbstractState pRootState, Block pReducedContext,
       AbstractState pReducedState) {
-    return getVariableExpandedState(pRootState, pReducedContext, pReducedState);
+    return getVariableExpandedState(pRootState, pReducedContext, null, pReducedState);
   }
 
   @Override
