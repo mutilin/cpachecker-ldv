@@ -22,22 +22,24 @@
  *    http://cpachecker.sosy-lab.org
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
+import static com.google.common.collect.FluentIterable.from;
 
 import java.io.PrintStream;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 import java.util.logging.Level;
+
+import javax.annotation.Nullable;
 
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.io.PathTemplate;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
-import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
-import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
-import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.CounterexampleInfo;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
@@ -63,6 +65,7 @@ import org.sosy_lab.cpachecker.util.CPAs;
 import org.sosy_lab.cpachecker.util.Precisions;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 
+import com.google.common.base.Function;
 import com.google.common.base.Predicates;
 
 
@@ -74,6 +77,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     public final Timer Refinement = new Timer();
     public final Timer UnsafeCheck = new Timer();
     public final Timer CacheTime = new Timer();
+    public final Timer CacheInterpolantsTime = new Timer();
 
     @Override
     public void printStatistics(PrintStream pOut, Result pResult, ReachedSet pReached) {
@@ -81,6 +85,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       pOut.println("Time for computing path             " + ComputePath);
       pOut.println("Time for refinement                 " + Refinement);
       pOut.println("Time for formula cache              " + CacheTime);
+      pOut.println("Time for interpolant cache          " + CacheInterpolantsTime);
     }
 
     @Override
@@ -170,28 +175,6 @@ top:while ((target = computer.getNextRefineableUsage()) != null) {
             new BAMReachedSet(transfer, new ARGReachedSet(pReached), pPath, pathStateToReachedState), pPath);
         refinementFinish |= counterexample.isSpurious();
         if (counterexample.isSpurious()) {
-
-          List<CFAEdge> edges = pPath.getInnerEdges();
-          edges = from(edges).filter(new Predicate<CFAEdge>() {
-            @Override
-            public boolean apply(@Nullable CFAEdge pInput) {
-              if (pInput instanceof CDeclarationEdge) {
-                if (((CDeclarationEdge)pInput).getDeclaration().isGlobal() ||
-                    pInput.getSuccessor().getFunctionName().equals("ldv_main")) {
-                }
-                return false;
-              } else if (pInput.getSuccessor().getFunctionName().equals("ldv_main")
-                  && pInput instanceof CAssumeEdge) {
-                //Remove infinite switch, it's too long
-                return false;
-              } else {
-                return true;
-              }
-            }
-          }).toList();
-          /*for (CFAEdge edge : edges) {
-            System.out.println(edge);
-          }*/
           Iterator<Pair<Object, PathTemplate>> pairIterator = counterexample.getAllFurtherInformation().iterator();
           List<BooleanFormula> formulas = (List<BooleanFormula>) pairIterator.next().getFirst();
           List<ARGState> interpolants = (List<ARGState>) pairIterator.next().getFirst();
