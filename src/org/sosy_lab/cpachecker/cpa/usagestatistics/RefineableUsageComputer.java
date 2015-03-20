@@ -23,7 +23,6 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.logging.Level;
 
@@ -48,11 +47,11 @@ public class RefineableUsageComputer {
   private final LogManager logger;
   //Self-checking
   private boolean waitRefinementResult;
-  
+
   RefineableUsageComputer(UsageContainer c, LogManager l) {
     container = c;
     cache = new UsageCallstackCache();
-    unrefinedUsagePointSetIterator = new HashSet<>(container.getUnrefinedUnsafes()).iterator();
+    unrefinedUsagePointSetIterator = container.getUnrefinedUnsafes().iterator();
     logger = l;
     waitRefinementResult = false;
   }
@@ -63,7 +62,7 @@ public class RefineableUsageComputer {
 
     if (!result) {
       logger.log(Level.INFO, "Usage " + uinfo + " is not reachable, remove it from container");
-      cache.add(uinfo); 
+      cache.add(uinfo);
       if (!usageIterator.hasNext()) {
         //There are no usages in the point
         currentRefineableUsageList.remove(currentUsagePoint);
@@ -76,8 +75,8 @@ public class RefineableUsageComputer {
       }
     } else {
       logger.log(Level.INFO, "Usage " + uinfo + " is reachable, mark it as true");
-      currentRefineableUsageList.markAsTrue(uinfo); 
-      if (currentRefineableUsageList.checkTrueUnsafe()) {
+      currentRefineableUsageList.markAsReachableUsage(uinfo);
+      if (currentRefineableUsageList.isTrueUnsafe()) {
         container.setAsRefined(currentRefineableUsageList);
         usagePointIterator = null;
       }
@@ -93,6 +92,7 @@ public class RefineableUsageComputer {
 
     do {
       while (usageIterator == null || !usageIterator.hasNext()) {
+        AbstractUsageInfoSet refineableUsageInfoSet;
         do {
           while (usagePointIterator == null || !usagePointIterator.hasNext()) {
             if (unrefinedUsagePointSetIterator.hasNext()) {
@@ -104,13 +104,24 @@ public class RefineableUsageComputer {
             }
           }
           currentUsagePoint = usagePointIterator.next();
-        } while (currentUsagePoint.isTrue());
-        AbstractUsageInfoSet refineableUsageInfoSet = currentRefineableUsageList.getUsageInfo(currentUsagePoint);
-        assert (!refineableUsageInfoSet.isTrue());
+          refineableUsageInfoSet = currentRefineableUsageList.getUsageInfo(currentUsagePoint);
+        } while (refineableUsageInfoSet.isTrue());
         usageIterator = refineableUsageInfoSet.getUsages().iterator();
       }
       resultUsage = usageIterator.next();
-    } while (cache.contains(resultUsage));
+
+      if (cache.contains(resultUsage)) {
+        /* It is important to remove usage from the container,
+         * because we determine unsafes with the suggestion,
+         * that all unsafes are ordered correctly
+         */
+        waitRefinementResult = true;
+        logger.log(Level.INFO, "Usage " + resultUsage + " is contained in cache, skip it");
+        setResultOfRefinement(resultUsage, false);
+      } else {
+        break;
+      }
+    } while (true);
     waitRefinementResult = true;
     return resultUsage;
   }

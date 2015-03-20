@@ -30,6 +30,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedSet;
 
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.log.LogManager;
@@ -271,7 +272,7 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
     return result;
   }
 
-  public Set<LockIdentifier> getLockIdentifiers() {
+  public SortedSet<LockIdentifier> getLockIdentifiers() {
     return Sets.newTreeSet(locks.keySet());
   }
 

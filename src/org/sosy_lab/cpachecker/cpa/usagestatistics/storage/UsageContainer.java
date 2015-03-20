@@ -24,9 +24,10 @@
 package org.sosy_lab.cpachecker.cpa.usagestatistics.storage;
 
 import java.io.PrintStream;
-import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -43,6 +44,7 @@ import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 public class UsageContainer {
   private final Map<SingleIdentifier, UnrefinedUsagePointSet> unrefinedStat;
+  private final Map<UnrefinedUsagePointSet, SingleIdentifier> toId;
   private final Map<SingleIdentifier, RefinedUsagePointSet> refinedStat;
 
   private final Set<SingleIdentifier> falseUnsafes;
@@ -56,6 +58,7 @@ public class UsageContainer {
 
   public UsageContainer(Configuration config, LogManager l) throws InvalidConfigurationException {
     unrefinedStat = new TreeMap<>();
+    toId = new HashMap<>();
     refinedStat = new TreeMap<>();
     falseUnsafes = new TreeSet<>();
     logger = l;
@@ -73,6 +76,7 @@ public class UsageContainer {
     if (!unrefinedStat.containsKey(id)) {
       uset = new UnrefinedUsagePointSet();
       unrefinedStat.put(id, uset);
+      toId.put(uset, id);
     } else {
       uset = unrefinedStat.get(id);
     }
@@ -93,13 +97,20 @@ public class UsageContainer {
         }
       }
       for (SingleIdentifier id : toDelete) {
-        unrefinedStat.remove(id);
+        removeIdFromCaches(id);
       }
       for (SingleIdentifier id : refinedStat.keySet()) {
         RefinedUsagePointSet tmpList = refinedStat.get(id);
         unsafeUsages += tmpList.size();
       }
     }
+  }
+
+  private void removeIdFromCaches(SingleIdentifier id) {
+    //It is important to remove it from both of the caches
+    UnrefinedUsagePointSet uset = unrefinedStat.get(id);
+    unrefinedStat.remove(id);
+    toId.remove(uset);
   }
 
   public Iterator<SingleIdentifier> getUnsafeIterator() {
@@ -152,26 +163,28 @@ public class UsageContainer {
   public AbstractUsagePointSet getUsages(SingleIdentifier id) {
     if (unrefinedStat.containsKey(id)) {
       return unrefinedStat.get(id);
-    }  else {
+    } else {
       return refinedStat.get(id);
     }
   }
 
-  public Collection<UnrefinedUsagePointSet> getUnrefinedUnsafes() {
+  public LinkedList<UnrefinedUsagePointSet> getUnrefinedUnsafes() {
     getUnsafesIfNecessary();
-    return unrefinedStat.values();
+    LinkedList<UnrefinedUsagePointSet> result = new LinkedList<>();
+    //Not just values()! We must create a collection deterministically
+    for (SingleIdentifier id : unrefinedStat.keySet()) {
+      //if (id.getName().equals("unp_count")) {
+        result.add(unrefinedStat.get(id));
+      //}
+    }
+    return result;
   }
 
   public void setAsRefined(UnrefinedUsagePointSet set) {
-    for (SingleIdentifier id : unrefinedStat.keySet()) {
-      UnrefinedUsagePointSet stored = unrefinedStat.get(id);
-      if (stored.equals(set)) {
-        refinedStat.put(id, set.asTrueUnsafe());
-        unrefinedStat.remove(id);
-        return;
-      }
-    }
-    System.out.println("Can't find id to replace");
+    assert toId.containsKey(set);
+    SingleIdentifier id = toId.get(set);
+    refinedStat.put(id, set.asTrueUnsafe());
+    removeIdFromCaches(id);
   }
 
   public void printUsagesStatistics(final PrintStream out) {
