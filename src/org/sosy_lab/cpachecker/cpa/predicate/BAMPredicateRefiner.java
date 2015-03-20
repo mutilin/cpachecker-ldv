@@ -290,9 +290,9 @@ public class BAMPredicateRefiner extends AbstractBAMBasedRefiner implements Stat
           BooleanFormula f = currentFormula.getFormula();
           if (fmgr.useBitwiseAxioms()) {
             BooleanFormula a = fmgr.getBitwiseAxioms(f);
-              if (!fmgr.getBooleanFormulaManager().isTrue(a)) {
-                f =  fmgr.getBooleanFormulaManager().and(f, a);
-              }
+            if (!fmgr.getBooleanFormulaManager().isTrue(a)) {
+              f =  fmgr.getBooleanFormulaManager().and(f, a);
+            }
           }
           abstractionFormulas.add(f);
           currentFormula = pfmgr.makeEmptyPathFormula(currentFormula);
