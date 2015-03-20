@@ -4,7 +4,8 @@ use Getopt::Long qw(GetOptions);
 Getopt::Long::Configure qw(posix_default no_ignore_case);
 use strict;
 
-
+my $current_folder = `pwd`;
+chomp($current_folder);
 my $prefix="/home/alpha/git/cpachecker";
 my $passed_tests=0;
 my $failed_tests=0;
@@ -52,9 +53,14 @@ sub run_test {
         print "WARNING: Tool failed on test $name!\n";
     }
 }
-
 system("rm -rf output");
 system("mkdir output");
+chdir $prefix or die("Can't change directory to $prefix");
+my $build_log = $current_folder."/build_log";
+system("ant > $build_log");
+die("Build failed") if ($? == -1);
+print "INFO: Tool was successfully built\n";
+chdir $current_folder or die("Can't change directory to $current_folder");
 
 my $target_test = $ARGV[0];
 if (defined($target_test)) {
