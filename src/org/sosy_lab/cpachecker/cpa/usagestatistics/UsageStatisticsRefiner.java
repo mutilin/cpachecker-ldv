@@ -108,6 +108,15 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
   private final int NUMBER_FOR_RESET_PRECISION;
   private InterpolantCache iCache = new InterpolantCache();
 
+  private Function<ARGState, ARGState> TRANSLATE_TO_ORIGIN_STATES = new Function<ARGState, ARGState>() {
+    @Override
+    @Nullable
+    public ARGState apply(@Nullable ARGState pInput) {
+      assert pathStateToReachedState.containsKey(pInput);
+      return pathStateToReachedState.get(pInput);
+    }
+  };
+
   public UsageStatisticsRefiner(ConfigurableProgramAnalysis pCpa) throws CPAException, InvalidConfigurationException {
     super(pCpa);
     cpa = pCpa;
@@ -169,14 +178,7 @@ top:while ((target = computer.getNextRefineableUsage()) != null) {
         public boolean apply(@Nullable ARGState pInput) {
           return AbstractStates.extractStateByType(pInput, PredicateAbstractState.class).isAbstractionState();
         }
-      }).*/transform(new Function<ARGState, ARGState>() {
-        @Override
-        @Nullable
-        public ARGState apply(@Nullable ARGState pInput) {
-          assert pathStateToReachedState.containsKey(pInput);
-          return pathStateToReachedState.get(pInput);
-        }
-      }).toList();
+      }).*/transform(TRANSLATE_TO_ORIGIN_STATES).toList();
       for (List<ARGState> previousTrace : refinedStates) {
         if (abstractTrace.containsAll(previousTrace)) {
           logger.log(Level.INFO, "Hey! I found repeated trace " + target + ". I don't want to refine it");
@@ -212,29 +214,20 @@ top:while ((target = computer.getNextRefineableUsage()) != null) {
               }
             }
           }).toList();
-          /*for (CFAEdge edge : edges) {
-            System.out.println(edge);
-          }*/
           Iterator<Pair<Object, PathTemplate>> pairIterator = counterexample.getAllFurtherInformation().iterator();
           List<BooleanFormula> formulas = (List<BooleanFormula>) pairIterator.next().getFirst();
           List<ARGState> interpolants = (List<ARGState>) pairIterator.next().getFirst();
           pStat.CacheInterpolantsTime.start();
-          interpolants = from(interpolants).transform(new Function<ARGState, ARGState>() {
-            @Override
-            @Nullable
-            public ARGState apply(@Nullable ARGState pInput) {
-              assert pathStateToReachedState.containsKey(pInput);
-              return pathStateToReachedState.get(pInput);
-            }
-          }).toList();
+          interpolants = from(interpolants).transform(TRANSLATE_TO_ORIGIN_STATES).toList();
           refinedStates.add(interpolants);
           pStat.CacheInterpolantsTime.stop();
           pStat.CacheTime.start();
-          if (iCache.contains(target, formulas)) {
+          if (iCache.contains(target, formulas, abstractTrace)) {
           	computer.setResultOfRefinement(target, true);
+            logger.log(Level.WARNING, "Interpolants are repeated, consider " + target + " as true");
             target.failureFlag = true;
           } else {
-            iCache.add(target, formulas);
+            iCache.add(target, formulas, abstractTrace);
           	computer.setResultOfRefinement(target, false);
           }
           pStat.CacheTime.stop();
