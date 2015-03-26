@@ -110,7 +110,7 @@ public class BAMPredicateReducer implements Reducer {
 
         assert pLocation instanceof FunctionEntryNode;
 
-        final String outerFunctionName = outerContext.getCallNode().getFunctionName() + "::";
+        final String outerFunctionName = "|" + outerContext.getCallNode().getFunctionName() + "::";
 
         ImmutableSet<AbstractionPredicate> currentFunctionPredicates = from(predicates).filter(new Predicate<AbstractionPredicate>() {
           @Override
@@ -157,7 +157,7 @@ public class BAMPredicateReducer implements Reducer {
       Collection<AbstractionPredicate> relevantRootPredicates =
           relevantComputer.getRelevantPredicates(pReducedContext, rootPredicates);
       if (outerContext != null && tmp_option_for_aggressive_reduce) {
-        final String outerFunctionName = outerContext.getCallNode().getFunctionName() + "::";
+        final String outerFunctionName = "|" + outerContext.getCallNode().getFunctionName() + "::";
 
         relevantRootPredicates = from(relevantRootPredicates).filter(new Predicate<AbstractionPredicate>() {
           @Override
@@ -326,12 +326,12 @@ public class BAMPredicateReducer implements Reducer {
 
             //aggressive reduce, temporary feature. reduce predicates, if we leave function
             if (previousFunction != null && tmp_option_for_aggressive_reduce) {
+              //Keep the __ADDRESS_OF_ predicates
               final String outerFunctionName = "|" + previousFunction + "::";
-              final String outerAddressFunctionName = "|__ADDRESS_OF_" + previousFunction + "::";
               set = from(set).filter(new Predicate<AbstractionPredicate>() {
                     @Override
                     public boolean apply(@Nullable AbstractionPredicate pInput) {
-                      return !pInput.toString().contains(outerFunctionName) && !pInput.toString().contains(outerAddressFunctionName);
+                      return !pInput.toString().contains(outerFunctionName);
                     }
 
                  }).toSet();
