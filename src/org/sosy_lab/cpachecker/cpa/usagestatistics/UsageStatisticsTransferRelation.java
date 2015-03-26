@@ -268,6 +268,9 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
   private void handleFunctionCall(UsageStatisticsState pNewState
       , UsageStatisticsPrecision pPrecision, CFunctionCallEdge edge) throws HandleCodeException {
     CStatement statement = edge.getRawAST().get();
+    if (edge.getSuccessor().getFunctionName().equals("ath9k_enable_ps")) {
+      System.out.println("ath9k_enable_ps");
+    }
     if (statement instanceof CFunctionCallAssignmentStatement) {
       /*
        * a = f(b)
@@ -300,11 +303,6 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     }
     CVariableDeclaration decl = (CVariableDeclaration)declEdge.getDeclaration();
 
-    if (!decl.toASTString().equals(declEdge.getRawStatement())) {
-      //CPA replace "int t;" into "int t = 0;", so here there isn't assignment
-      //It is right, but creates false unsafes.
-      return;
-    }
     if (decl.isGlobal()) {
       return;
     }
@@ -320,6 +318,11 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       CExpression initExpression = ((CInitializerExpression)init).getExpression();
       visitStatement(pNewState, pPrecision, initExpression, Access.READ, EdgeType.DECLARATION);
 
+      if (!decl.toASTString().equals(declEdge.getRawStatement())) {
+        //CPA replace "int t;" into "int t = 0;", so here there isn't assignment
+        //It is right, but creates false unsafes.
+        return;
+      }
       String funcName = AbstractStates.extractStateByType(pNewState, CallstackState.class).getCurrentFunction();
 
       AbstractIdentifier id = IdentifierCreator.createIdentifier(decl, funcName, 0);
@@ -465,6 +468,9 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
     SingleIdentifier singleId = (SingleIdentifier) id;
 
+    if (singleId.getName().equals("ps_enabled")) {
+      System.out.println("ps_enabled");
+    }
     CFANode node = AbstractStates.extractLocation(state);
     Map<GeneralIdentifier, DataType> localInfo = pPrecision.get(node);
 
