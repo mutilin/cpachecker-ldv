@@ -59,7 +59,6 @@ import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
-import org.sosy_lab.cpachecker.cfa.model.c.CFunctionEntryNode;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionSummaryStatementEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
@@ -157,10 +156,21 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     CFAEdge currentEdge = pCfaEdge;
     UsageStatisticsState oldState = (UsageStatisticsState) pState;
     CFANode node = AbstractStates.extractLocation(oldState);
-    if (node instanceof CFunctionEntryNode && abortfunctions != null && abortfunctions.contains(node.getFunctionName())) {
-      logger.log(Level.FINEST, currentEdge + " is abort edge, analysis was stopped");
-      statistics.transferRelationTimer.stop();
-      return Collections.emptySet();
+    if (pCfaEdge instanceof CFunctionCallEdge || pCfaEdge instanceof CStatementEdge) {
+      String functionName = null;
+      if (pCfaEdge instanceof CFunctionCallEdge) {
+        functionName = ((CFunctionCallEdge)pCfaEdge).getSuccessor().getFunctionName();
+      } else {
+        CStatement statement = ((CStatementEdge)pCfaEdge).getStatement();
+        if (statement instanceof CFunctionCallStatement) {
+          functionName = ((CFunctionCallStatement)statement).getFunctionCallExpression().getFunctionNameExpression().toString();
+        }
+      }
+      if (functionName != null && abortfunctions != null && abortfunctions.contains(functionName)) {
+        logger.log(Level.FINEST, currentEdge + " is abort edge, analysis was stopped");
+        statistics.transferRelationTimer.stop();
+        return Collections.emptySet();
+      }
     }
 
     boolean needToReset = false;

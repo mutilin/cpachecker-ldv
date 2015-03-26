@@ -22,6 +22,7 @@
  *    http://cpachecker.sosy-lab.org
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
+import static com.google.common.collect.FluentIterable.from;
 
 import static com.google.common.collect.FluentIterable.from;
 
@@ -226,13 +227,13 @@ top:while ((target = computer.getNextRefineableUsage()) != null) {
       pReached.updatePrecision(pReached.getFirstState(),
           Precisions.replaceByType(p, PredicatePrecision.empty(), Predicates.instanceOf(PredicatePrecision.class)));
       iCache.reset();
-      bamcpa.clearAllCaches();
       lastFalseUnsafeSize = originUnsafeSize;
       lastTrueUnsafes = newTrueUnsafeSize;
     }
     if (refinementFinish) {
       iCache.removeUnusedCacheEntries();
       transfer.clearCaches();
+      bamcpa.clearAllCaches();
       ARGState firstState = (ARGState) pReached.getFirstState();
       CFANode firstNode = AbstractStates.extractLocation(firstState);
       ARGState.clearIdGenerator();

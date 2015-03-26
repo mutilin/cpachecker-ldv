@@ -56,14 +56,6 @@ public class OccurrenceComputer extends AbstractRelevantPredicatesComputer<Block
         //TODO: contains is a quite rough approximation; for example "foo <= 5" also contains "f", although the variable f does in fact not occur in the predicate.
         return true;
       }
-      if (predicateString.contains("(*")) {
-        String varName = var.getName();
-        int index = varName.indexOf("::");
-        varName = varName.substring(index + 2);
-        if (predicateString.contains(varName)) {
-          return true;
-        }
-      }
     }
     return false;
   }

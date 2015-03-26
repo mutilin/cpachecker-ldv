@@ -51,6 +51,7 @@ import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.AbstractUsageInfoSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.AbstractUsagePointSet;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.RefinedUsageInfoSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.RefinedUsagePointSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UnrefinedUsagePointSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsageContainer;
@@ -194,7 +195,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       UsagePoint point = pointIterator.next();
       totalNumberOfUsagePoints++;
       AbstractUsageInfoSet uset = l.getUsageInfo(point);
-      if (point.isTrue()) {
+      if (uset instanceof RefinedUsageInfoSet) {
         //Refined and contains only one usage, which realizes this point
         trueUsagesInAllUnsafes++;
         if (l.isTrueUnsafe()) {
