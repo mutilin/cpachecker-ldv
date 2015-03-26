@@ -28,7 +28,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
-import java.util.SortedSet;
 import java.util.TreeSet;
 
 import org.sosy_lab.common.Pair;
@@ -92,6 +91,7 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
       topUsages.add(newPoint);
     }
   }
+
   boolean ignoreEmptyLockset = true;
 
   private boolean isUnsafe(SortedSet<UsagePoint> points) {
