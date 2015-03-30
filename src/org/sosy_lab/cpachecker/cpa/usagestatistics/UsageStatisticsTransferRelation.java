@@ -267,9 +267,6 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
   private void handleFunctionCall(UsageStatisticsState pNewState
       , UsageStatisticsPrecision pPrecision, CFunctionCallEdge edge) throws HandleCodeException {
     CStatement statement = edge.getRawAST().get();
-    if (edge.getSuccessor().getFunctionName().equals("ath9k_enable_ps")) {
-      System.out.println("ath9k_enable_ps");
-    }
     if (statement instanceof CFunctionCallAssignmentStatement) {
       /*
        * a = f(b)
