@@ -24,17 +24,13 @@
 package org.sosy_lab.cpachecker.cpa.usagestatistics.storage;
 
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
-import org.sosy_lab.common.Pair;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsState;
 
 public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
@@ -93,88 +89,12 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     }
   }
 
-  boolean ignoreEmptyLockset = true;
-
-  private boolean isUnsafe(SortedSet<UsagePoint> points) {
-    if (points.size() >= 1) {
-      Iterator<UsagePoint> iterator = points.iterator();
-      UsagePoint point = iterator.next();
-
-      if(ignoreEmptyLockset && point.locks.isEmpty()) {
-        //special case when we ignore intersection of empty sets
-        //at least one lockSet should be nonempty
-
-        //we go with while locks is empty until first nonempty
-        //search for non empty lockset
-        while(point.locks.isEmpty() && iterator.hasNext()) {
-          //skip accesses without locks
-          point = iterator.next();
-        }
-        if(!point.locks.isEmpty()) {
-          //we already have an empty intersection
-          //since we had an access without locks
-          //and now have an access with some locks
-          return true;
-        } else {
-          //only empty locksets
-          return false;
-        }
-      }
-      if (point.access == Access.WRITE) {
-        Set<LockIdentifier> lockSet = new HashSet<>(point.locks);
-        while (iterator.hasNext() && !lockSet.isEmpty()) {
-          lockSet.retainAll(iterator.next().locks);
-        }
-        return lockSet.isEmpty();
-      }
-    }
-    return false;
-  }
-
   @Override
   public AbstractUsageInfoSet getUsageInfo(UsagePoint point) {
     if (refinedInformation.containsKey(point)) {
       return refinedInformation.get(point);
     } else {
       return unrefinedInformation.get(point);
-    }
-  }
-
-  @Override
-  public Pair<UsageInfo, UsageInfo> getUnsafePair() {
-    assert isUnsafe();
-
-    Iterator<UsagePoint> iterator = topUsages.iterator();
-    AbstractUsageInfoSet firstSet = getUsageInfo(iterator.next());
-    AbstractUsageInfoSet secondSet;
-    if (iterator.hasNext()) {
-      UsagePoint point = iterator.next();
-      secondSet = getUsageInfo(point);
-    } else {
-      //One write usage is also unsafe, as we consider the function to be able to run in parallel with itself
-      secondSet = firstSet;
-    }
-    return Pair.of(firstSet.getOneExample(), secondSet.getOneExample());
-  }
-
-  @Override
-  public boolean isTrueUnsafe() {
-    //Is called at the end, so return true even if we have only one refined usage
-    if (!isUnsafe()) {
-      return false;
-    }
-
-    boolean result = isUnsafe(new TreeSet<>(refinedInformation.keySet()));
-
-    if (result) {
-      if (refinedInformation.size() > 1 || topUsages.size() == 1) {
-        return true;
-      } else {
-        //Try to refine the second usage, if it is possible
-        return false;
-      }
-    } else {
-      return false;
     }
   }
 
@@ -253,7 +173,7 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     }
   }
 
-  public RefinedUsagePointSet asTrueUnsafe() {
+  RefinedUsagePointSet asTrueUnsafe() {
     //TODO Wrong! First two refined usages may not create an unsafe pair
     Iterator<UsagePoint> iterator = topUsages.iterator();
     UsagePoint first = iterator.next();
@@ -266,8 +186,11 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     return RefinedUsagePointSet.create(refinedInformation.get(first));
   }
 
-  @Override
-  public boolean isUnsafe() {
-    return isUnsafe(topUsages);
+  SortedSet<UsagePoint> getTopUsages() {
+    return topUsages;
+  }
+
+  Set<UsagePoint> getRefinedInformation() {
+    return refinedInformation.keySet();
   }
 }

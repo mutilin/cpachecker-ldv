@@ -53,16 +53,6 @@ public class RefinedUsagePointSet implements AbstractUsagePointSet {
   }
 
   @Override
-  public boolean isUnsafe() {
-    return true;
-  }
-
-  @Override
-  public boolean isTrueUnsafe() {
-    return true;
-  }
-
-  @Override
   public int size() {
     return 1;
   }
@@ -81,7 +71,6 @@ public class RefinedUsagePointSet implements AbstractUsagePointSet {
     return size();
   }
 
-  @Override
   public Pair<UsageInfo, UsageInfo> getUnsafePair() {
     return Pair.of(target.getOneExample(), target.getOneExample());
   }

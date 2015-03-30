@@ -47,6 +47,8 @@ public class UsageContainer {
   private final Map<UnrefinedUsagePointSet, SingleIdentifier> toId;
   private final Map<SingleIdentifier, RefinedUsagePointSet> refinedStat;
 
+  private final UnsafeDetector detector;
+
   private final Set<SingleIdentifier> falseUnsafes;
 
   private final LogManager logger;
@@ -62,6 +64,7 @@ public class UsageContainer {
     refinedStat = new TreeMap<>();
     falseUnsafes = new TreeSet<>();
     logger = l;
+    detector = new UnsafeDetector(config);
   }
 
   public void add(final SingleIdentifier id, final UsageInfo usage) {
@@ -89,7 +92,7 @@ public class UsageContainer {
       Set<SingleIdentifier> toDelete = new HashSet<>();
       for (SingleIdentifier id : unrefinedStat.keySet()) {
         UnrefinedUsagePointSet tmpList = unrefinedStat.get(id);
-        if (tmpList.isUnsafe()) {
+        if (detector.isUnsafe(tmpList)) {
           unsafeUsages += tmpList.size();
         } else {
           toDelete.add(id);
@@ -141,6 +144,10 @@ public class UsageContainer {
 
   public int getFalseUnsafeSize() {
     return falseUnsafes.size();
+  }
+
+  public UnsafeDetector getUnsafeDetector() {
+    return detector;
   }
 
   public void resetUnrefinedUnsafes() {
