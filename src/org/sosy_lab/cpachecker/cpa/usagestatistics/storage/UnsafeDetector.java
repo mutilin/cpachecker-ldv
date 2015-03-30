@@ -101,7 +101,7 @@ public class UnsafeDetector {
       UsagePoint point = iterator.next();
 
       firstSet = set.getUsageInfo(point);
-      if (!ignoreEmptyLockset) {
+      if (!ignoreEmptyLockset || !point.locks.isEmpty()) {
         if (iterator.hasNext()) {
           point = iterator.next();
           secondSet = set.getUsageInfo(point);
