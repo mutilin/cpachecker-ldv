@@ -315,7 +315,8 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
     if (init instanceof CInitializerExpression) {
       CExpression initExpression = ((CInitializerExpression)init).getExpression();
-      visitStatement(pNewState, pPrecision, initExpression, Access.READ, EdgeType.DECLARATION);
+      //Use EdgeType assignement for initializer expression to avoid mistakes related to expressions "int CPACHECKER_TMP_0 = global;"
+      visitStatement(pNewState, pPrecision, initExpression, Access.READ, EdgeType.ASSIGNMENT);
 
       if (!decl.toASTString().equals(declEdge.getRawStatement())) {
         //CPA replace "int t;" into "int t = 0;", so here there isn't assignment
