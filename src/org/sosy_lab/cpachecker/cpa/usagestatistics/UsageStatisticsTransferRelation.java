@@ -59,7 +59,7 @@ import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
-import org.sosy_lab.cpachecker.cfa.model.c.CFunctionSummaryStatementEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionSummaryEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
@@ -176,16 +176,12 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     if (checkFunciton(pCfaEdge, skippedfunctions)) {
       callstackTransfer.setFlag();
       needToReset = true;
-      //Find right summary edge
-      //CFANode node = AbstractStates.extractLocation(oldState);
-      for (int k = 0; k < node.getNumLeavingEdges(); k++) {
-        currentEdge = node.getLeavingEdge(k);
-        if (currentEdge instanceof CFunctionSummaryStatementEdge) {
-          break;
-        }
+      if (node.getLeavingSummaryEdge() != null) {
+        currentEdge = node.getLeavingSummaryEdge();
+        logger.log(Level.FINEST, ((CFunctionSummaryEdge)currentEdge).getFunctionEntry().getFunctionName() + " is skipped");
+      } else {
+        throw new CPATransferException("Cannot find summary edge for " + pCfaEdge + " as skipped function");
       }
-      assert (currentEdge instanceof CFunctionSummaryStatementEdge);
-      logger.log(Level.FINEST, ((CFunctionSummaryStatementEdge)currentEdge).getFunctionName() + " is skipped due to configuration");
     }
 
     AbstractState oldWrappedState = oldState.getWrappedState();
