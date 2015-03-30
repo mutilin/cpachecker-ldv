@@ -29,6 +29,8 @@ import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
+import org.sosy_lab.cpachecker.cfa.types.c.CArrayType;
+import org.sosy_lab.cpachecker.cfa.types.c.CType;
 import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.StructureIdentifier;
@@ -51,7 +53,7 @@ public class VariableSkipper {
       SingleIdentifier singleId = (SingleIdentifier) id;
       if (checkId(singleId)) {
         return true;
-      } else if (byName != null && singleId instanceof StructureIdentifier) {
+      } else if (singleId instanceof StructureIdentifier) {
         AbstractIdentifier owner = singleId;
         while (owner instanceof StructureIdentifier) {
           owner = ((StructureIdentifier)owner).getOwner();
@@ -71,10 +73,14 @@ public class VariableSkipper {
       }
     }
     if (byType != null) {
-      String idType = singleId.getType().toString();
-      idType = idType.replaceAll("\\(", "");
-      idType = idType.replaceAll("\\)", "");
-      if (byType.contains(idType)) {
+      CType idType = singleId.getType();
+      if (idType instanceof CArrayType) {
+        idType = ((CArrayType)idType).getType();
+      }
+      String typeString = idType.toString();
+      typeString = typeString.replaceAll("\\(", "");
+      typeString = typeString.replaceAll("\\)", "");
+      if (byType.contains(typeString)) {
         return true;
       }
     }
