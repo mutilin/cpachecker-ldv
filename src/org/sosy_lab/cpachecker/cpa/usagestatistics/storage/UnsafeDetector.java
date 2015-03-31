@@ -96,34 +96,15 @@ public class UnsafeDetector {
       assert set instanceof UnrefinedUsagePointSet;
 
       UnrefinedUsagePointSet unrefinedSet = (UnrefinedUsagePointSet) set;
-      Iterator<UsagePoint> iterator = unrefinedSet.getTopUsages().iterator();
-      AbstractUsageInfoSet firstSet, secondSet;
-      UsagePoint point = iterator.next();
+      Pair<UsagePoint, UsagePoint> result = getUnsafePair(unrefinedSet.getTopUsages());
 
-      firstSet = set.getUsageInfo(point);
-      if (!ignoreEmptyLockset || !point.locks.isEmpty()) {
-        if (iterator.hasNext()) {
-          point = iterator.next();
-          secondSet = set.getUsageInfo(point);
-        } else {
-          //One write usage is also unsafe, as we consider the function to be able to run in parallel with itself
-          secondSet = firstSet;
-        }
-      } else {
-        while(point.locks.isEmpty()) {
-          //skip accesses without locks
-          //We must find point with locks, if we check, that this is an unsafe case
-          point = iterator.next();
-        }
-        secondSet = set.getUsageInfo(point);
-        //TODO It is possible to obtain a safe pair, but this case has a very small chance. Wait for real bugs.
-      }
-      return Pair.of(firstSet.getOneExample(), secondSet.getOneExample());
+      return Pair.of(unrefinedSet.getUsageInfo(result.getFirst()).getOneExample(),
+          unrefinedSet.getUsageInfo(result.getSecond()).getOneExample());
     }
   }
 
   private boolean isUnsafe(SortedSet<UsagePoint> points) {
-    if (points.size() >= 2) {
+    if (points.size() >= 1) {
       Iterator<UsagePoint> iterator = points.iterator();
       UsagePoint point = iterator.next();
 
@@ -157,4 +138,46 @@ public class UnsafeDetector {
     }
     return false;
   }
-}
+
+  public Pair<RefinedUsageInfoSet, RefinedUsageInfoSet> getTrueUnsafePair(UnrefinedUsagePointSet pSet) {
+    Set<UsagePoint> refinedInformation = pSet.getRefinedInformation();
+
+    Pair<UsagePoint, UsagePoint> result = getUnsafePair(new TreeSet<>(refinedInformation));
+    //We must obtain refined sets
+    RefinedUsageInfoSet set1 = (RefinedUsageInfoSet) pSet.getUsageInfo(result.getFirst());
+    RefinedUsageInfoSet set2 = (RefinedUsageInfoSet) pSet.getUsageInfo(result.getSecond());
+    return Pair.of(set1, set2);
+  }
+
+  private Pair<UsagePoint, UsagePoint> getUnsafePair(SortedSet<UsagePoint> set) {
+
+    for (UsagePoint point1 : set) {
+      for (UsagePoint point2 : set.tailSet(point1)) {
+        if (point1.equals(point2)) {
+          /* There can be an unsafe even with only one usage,
+           * but at first we find two different usages
+           */
+          continue;
+        }
+        TreeSet<UsagePoint> unsafePair = new TreeSet<>();
+        unsafePair.add(point1);
+        unsafePair.add(point2);
+        if (isUnsafe(unsafePair)) {
+          return Pair.of(point1, point2);
+        }
+      }
+    }
+    //Now we find an unsafe only from one usage
+    if (!ignoreEmptyLockset) {
+      for (UsagePoint point1 : set) {
+        TreeSet<UsagePoint> unsafePair = new TreeSet<>();
+        unsafePair.add(point1);
+        if (isUnsafe(unsafePair)) {
+          return Pair.of(point1, point1);
+        }
+      }
+    }
+    //If we can not find an unsafe here, fail
+    return null;
+  }
+ }

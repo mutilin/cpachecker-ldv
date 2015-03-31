@@ -34,6 +34,7 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.logging.Level;
 
+import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.log.LogManager;
@@ -188,7 +189,8 @@ public class UsageContainer {
   public void setAsRefined(UnrefinedUsagePointSet set) {
     assert toId.containsKey(set);
     SingleIdentifier id = toId.get(set);
-    refinedStat.put(id, set.asTrueUnsafe());
+    Pair<RefinedUsageInfoSet, RefinedUsageInfoSet> unsafePair = detector.getTrueUnsafePair(set);
+    refinedStat.put(id, RefinedUsagePointSet.create(unsafePair.getFirst(), unsafePair.getSecond()));
     removeIdFromCaches(id);
   }
 

@@ -173,19 +173,6 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     }
   }
 
-  RefinedUsagePointSet asTrueUnsafe() {
-    //TODO Wrong! First two refined usages may not create an unsafe pair
-    Iterator<UsagePoint> iterator = topUsages.iterator();
-    UsagePoint first = iterator.next();
-    if (iterator.hasNext()) {
-      UsagePoint second = iterator.next();
-      if (refinedInformation.containsKey(second)) {
-        return RefinedUsagePointSet.create(refinedInformation.get(first), refinedInformation.get(second));
-      }
-    }
-    return RefinedUsagePointSet.create(refinedInformation.get(first));
-  }
-
   SortedSet<UsagePoint> getTopUsages() {
     return topUsages;
   }

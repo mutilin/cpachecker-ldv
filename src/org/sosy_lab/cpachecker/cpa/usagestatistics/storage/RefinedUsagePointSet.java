@@ -44,12 +44,12 @@ public class RefinedUsagePointSet implements AbstractUsagePointSet {
     target = newSet;
   }
 
-  public static RefinedUsagePointSet create(RefinedUsageInfoSet newSet) {
-    return new RefinedUsagePointSet(newSet);
-  }
-
   public static RefinedUsagePointSet create(RefinedUsageInfoSet newSet, RefinedUsageInfoSet newSet2) {
-    return new DoubleRefinedUsagePointSet(newSet, newSet2);
+    if (newSet.equals(newSet2)) {
+      return new RefinedUsagePointSet(newSet);
+    } else {
+      return new DoubleRefinedUsagePointSet(newSet, newSet2);
+    }
   }
 
   @Override
