@@ -47,12 +47,12 @@ class TimedReducer implements Reducer {
 
   @Override
   public AbstractState getVariableReducedState(
-      AbstractState pExpandedState, Block pContext,
+      AbstractState pExpandedState, Block pContext, Block outerContext,
       CFANode pCallNode) {
 
     reduceTime.start();
     try {
-      return wrappedReducer.getVariableReducedState(pExpandedState, pContext, pCallNode);
+      return wrappedReducer.getVariableReducedState(pExpandedState, pContext, outerContext, pCallNode);
     } finally {
       reduceTime.stop();
     }
@@ -60,12 +60,12 @@ class TimedReducer implements Reducer {
 
   @Override
   public AbstractState getVariableExpandedState(
-      AbstractState pRootState, Block pReducedContext,
+      AbstractState pRootState, Block pReducedContext, Block outerSubtree,
       AbstractState pReducedState) {
 
     expandTime.start();
     try {
-      return wrappedReducer.getVariableExpandedState(pRootState, pReducedContext, pReducedState);
+      return wrappedReducer.getVariableExpandedState(pRootState, pReducedContext, outerSubtree, pReducedState);
     } finally {
       expandTime.stop();
     }

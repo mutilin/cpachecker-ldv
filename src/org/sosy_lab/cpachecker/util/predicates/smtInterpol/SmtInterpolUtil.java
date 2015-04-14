@@ -36,7 +36,6 @@ import de.uni_freiburg.informatik.ultimate.logic.ApplicationTerm;
 import de.uni_freiburg.informatik.ultimate.logic.ConstantTerm;
 import de.uni_freiburg.informatik.ultimate.logic.FormulaUnLet;
 import de.uni_freiburg.informatik.ultimate.logic.FunctionSymbol;
-import de.uni_freiburg.informatik.ultimate.logic.LetTerm;
 import de.uni_freiburg.informatik.ultimate.logic.Rational;
 import de.uni_freiburg.informatik.ultimate.logic.Term;
 
@@ -211,8 +210,6 @@ class SmtInterpolUtil {
   public static int getArity(Term t) {
     if (t instanceof ApplicationTerm) {
       return ((ApplicationTerm) t).getParameters().length;
-    } else if (t instanceof LetTerm) {
-      return ((LetTerm)t).getValues().length + ((LetTerm)t).getVariables().length + 1;
     } else {
       return 0;
     }
@@ -221,14 +218,6 @@ class SmtInterpolUtil {
   public static Term getArg(Term t, int i) {
     if (t instanceof ApplicationTerm) {
       return ((ApplicationTerm) t).getParameters()[i];
-    } else if (t instanceof LetTerm) {
-      if (i == 0) {
-        return ((LetTerm)t).getSubTerm();
-      } else if (i > 0 && i <= ((LetTerm)t).getValues().length)  {
-        return ((LetTerm)t).getValues()[i - 1];
-      } else {
-        return ((LetTerm)t).getVariables()[i - ((LetTerm)t).getValues().length - 1];
-      }
     } else {
       return null;
     }

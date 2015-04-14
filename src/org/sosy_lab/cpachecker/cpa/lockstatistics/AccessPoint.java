@@ -117,7 +117,7 @@ public class AccessPoint {
   }
 
   public AccessPoint expandCallstack(BAMRestoreStack pRestorator, CallstackReducer pReducer, CFANode pNode) {
-    CallstackState reducedCallstack = (CallstackState)pReducer.getVariableReducedState(callstack, null, pNode);
+    CallstackState reducedCallstack = (CallstackState)pReducer.getVariableReducedState(callstack, null, null, pNode);
     try {
       AccessPoint result = new AccessPoint(line, pRestorator.restoreCallstack(reducedCallstack), isNewPoint);
       return result;

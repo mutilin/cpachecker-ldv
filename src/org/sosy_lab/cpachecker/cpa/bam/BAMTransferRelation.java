@@ -422,7 +422,8 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
     currentBlock = partitioning.getBlockForCallNode(node);
 
     logger.log(Level.ALL, "Reducing state", initialState);
-    final AbstractState reducedInitialState = wrappedReducer.getVariableReducedState(initialState, currentBlock, node);
+    Block previousSubtree = stack.isEmpty() ? null : stack.get(stack.size() - 1).getThird();
+    final AbstractState reducedInitialState = wrappedReducer.getVariableReducedState(initialState, currentBlock, previousSubtree, node);
     final Precision reducedInitialPrecision = wrappedReducer.getVariableReducedPrecision(pPrecision, currentBlock);
 
     final Triple<AbstractState, Precision, Block> currentLevel = Triple.of(reducedInitialState, reducedInitialPrecision, currentBlock);
@@ -582,8 +583,10 @@ public class BAMTransferRelation implements TransferRelation, BAMRestoreStack {
       AbstractState reducedState = reducedPair.getFirst();
       Precision reducedPrecision = reducedPair.getSecond();
 
+
+      Block outerBlock = stack.size() > 2 ? stack.get(stack.size() - 2).getThird() : null;
       AbstractState expandedState =
-              wrappedReducer.getVariableExpandedState(state, currentBlock, reducedState);
+              wrappedReducer.getVariableExpandedState(state, currentBlock, outerBlock, reducedState);
       expandedToReducedCache.put(expandedState, reducedState);
       expandedToBlockCache.put(expandedState, currentBlock);
 

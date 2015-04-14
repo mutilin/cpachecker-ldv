@@ -56,7 +56,7 @@ public class BDDReducer implements Reducer {
   }
 
   @Override
-  public AbstractState getVariableReducedState(AbstractState pExpandedState, Block pBlock, CFANode pCallNode) {
+  public AbstractState getVariableReducedState(AbstractState pExpandedState, Block pBlock, Block outerContext, CFANode pCallNode) {
     BDDState state = (BDDState)pExpandedState;
 
     final Set<String> trackedVars = predmgr.getTrackedVars().keySet();
@@ -73,7 +73,7 @@ public class BDDReducer implements Reducer {
   }
 
   @Override
-  public AbstractState getVariableExpandedState(AbstractState pRootState, Block reducedContext, AbstractState pReducedState) {
+  public AbstractState getVariableExpandedState(AbstractState pRootState, Block reducedContext, Block outerSubtree, AbstractState pReducedState) {
     BDDState state = (BDDState)pRootState;
     BDDState reducedState = (BDDState)pReducedState;
 
@@ -112,13 +112,13 @@ public class BDDReducer implements Reducer {
   @Override
   public AbstractState getVariableReducedStateForProofChecking(AbstractState pExpandedState, Block pContext, CFANode pCallNode) {
     // TODO what to do?
-    return getVariableReducedState(pExpandedState, pContext, pCallNode);
+    return getVariableReducedState(pExpandedState, pContext, null, pCallNode);
   }
 
   @Override
   public AbstractState getVariableExpandedStateForProofChecking(AbstractState pRootState, Block pReducedContext, AbstractState pReducedState) {
     // TODO what to do?
-    return getVariableExpandedState(pRootState, pReducedContext, pReducedState);
+    return getVariableExpandedState(pRootState, pReducedContext, null, pReducedState);
   }
 
   @Override

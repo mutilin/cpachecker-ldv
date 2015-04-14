@@ -42,6 +42,7 @@ import org.sosy_lab.cpachecker.core.interfaces.Reducer;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
+import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 
@@ -133,7 +134,7 @@ public class BAMCEXSubgraphComputer {
           // The returned 'innerTree' is the rootNode of the subtree, created from the cached reachedSet.
           // The current subtree (successors of child) is appended beyond the innerTree, to get a complete subgraph.
           final ARGState reducedTarget = (ARGState) expandedToReducedCache.get(child);
-          BackwardARGState innerTree = computeCounterexampleSubgraphForBlock(currentState, reducedTarget, newChild);
+          BackwardARGState innerTree = computeCounterexampleSubgraphForBlock(currentState, currentState.getParents().iterator().next(), reducedTarget, newChild);
           if (innerTree == DUMMY_STATE_FOR_MISSING_BLOCK) {
             ARGSubtreeRemover.removeSubtree(reachedSet, currentState);
             return DUMMY_STATE_FOR_MISSING_BLOCK;
@@ -201,7 +202,7 @@ public class BAMCEXSubgraphComputer {
    *         In that case we also perform some cleanup-operations.
    */
   private BackwardARGState computeCounterexampleSubgraphForBlock(
-          final ARGState expandedRoot, final ARGState reducedTarget, final BackwardARGState newTreeTarget) {
+          final ARGState expandedRoot, ARGState outerState, final ARGState reducedTarget, final BackwardARGState newTreeTarget) {
 
     // first check, if the cached state is valid.
     if (reducedTarget.isDestroyed()) {
@@ -228,7 +229,9 @@ public class BAMCEXSubgraphComputer {
       // TODO why do we use precision of reachedSet from 'abstractStateToReachedSet' here and not the reduced precision?
       final CFANode rootNode = extractLocation(expandedRoot);
       final Block rootBlock = partitioning.getBlockForCallNode(rootNode);
-      final AbstractState reducedRootState = reducer.getVariableReducedState(expandedRoot, rootBlock, rootNode);
+      final CFANode outerNode = AbstractStates.extractStateByType(outerState, CallstackState.class).getCallNode();
+      Block outerBlock = partitioning.getBlockForCallNode(outerNode);
+      final AbstractState reducedRootState = reducer.getVariableReducedState(expandedRoot, rootBlock, outerBlock, rootNode);
       bamCache.removeReturnEntry(reducedRootState, reachedSet.getPrecision(reachedSet.getFirstState()), rootBlock);
     }
     return result;
@@ -268,7 +271,7 @@ public class BAMCEXSubgraphComputer {
           //(we have to use the cached ones)
           ARGState targetARGState = (ARGState) expandedToReducedCache.get(currentElement);
           ARGState innerTree =
-              computeCounterexampleSubgraphForBlock(parent, targetARGState, newCurrentElement);
+              computeCounterexampleSubgraphForBlock(parent, parent.getParents().iterator().next(), targetARGState, newCurrentElement);
           if (innerTree == null) {
             return null;
           }

@@ -301,13 +301,18 @@ public class LocalTransferRelation implements TransferRelation {
   private void assign(LocalState pSuccessor, CExpression left, CRightHandSide right) throws HandleCodeException {
 
     int leftDereference = findDereference(left.getExpressionType());
-    if (leftDereference > 0) {
+
+    /* If we assign a = b, we should set *a <-> *b and **a <-> **b
+     */
+    while (leftDereference > 0) {
       AbstractIdentifier leftId = createId(left, leftDereference);
 
       if (right instanceof CExpression && !(leftId instanceof ConstantIdentifier)) {
-        int rightDereference = findDereference(right.getExpressionType());
-        AbstractIdentifier rightId = createId((CExpression)right, rightDereference);
-        //assume(pSuccessor, leftId, rightId);
+        /* Difference in leftDereference and right one appears in very specific cases, like
+         * 'int* t = 0' and 'int* t[]; void* b; b = malloc(..); t = b;'
+         * Therefore, we use left dereference as main one
+         */
+        AbstractIdentifier rightId = createId((CExpression)right, leftDereference);
         if (leftId.isGlobal() && !(leftId instanceof SingleIdentifier && LocalCPA.localVariables.contains(((SingleIdentifier)leftId).getName()))) {
           if (!(rightId instanceof ConstantIdentifier)) {
             //Variable is global, not memory location!
@@ -336,6 +341,7 @@ public class LocalTransferRelation implements TransferRelation {
 	    	  pSuccessor.set(leftId, null);
 	    	}
       }
+      leftDereference--;
     }
   }
 
