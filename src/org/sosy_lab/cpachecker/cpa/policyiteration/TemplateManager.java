@@ -1,7 +1,7 @@
 package org.sosy_lab.cpachecker.cpa.policyiteration;
 
 import java.util.HashSet;
-import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.logging.Level;
 
@@ -81,6 +81,7 @@ public class TemplateManager {
   // Temporary variables created by CPA checker.
   private static final String TMP_VARIABLE = "__CPAchecker_TMP";
   private static final String RET_VARIABLE = "__retval__";
+
   private static final String ASSERT_FUNC_NAME = "assert";
   private static final String ASSERT_H_FUNC_NAME = "__assert_fail";
 
@@ -91,8 +92,9 @@ public class TemplateManager {
       FormulaManagerView pFormulaManagerView,
       PathFormulaManager pPfmgr
       ) throws InvalidConfigurationException{
-    pfmgr = pPfmgr;
     pConfig.inject(this, TemplateManager.class);
+
+    pfmgr = pPfmgr;
     cfa = pCfa;
     logger = pLogger;
     rfmgr = pFormulaManagerView.getRationalFormulaManager();
@@ -107,14 +109,14 @@ public class TemplateManager {
     } else {
       generatedTemplates = ImmutableSet.of();
     }
-    logger.log(Level.FINE, "hello");
+    logger.log(Level.FINE, "Generated templates", generatedTemplates);
   }
 
 
   public ImmutableSet<Template> templatesForNode(CFANode node) {
     ImmutableSet.Builder<Template> out = ImmutableSet.builder();
     LiveVariables liveVariables = cfa.getLiveVariables().get();
-    Set<ASimpleDeclaration> liveVars = liveVariables.getLiveVariablesForNode(node);
+    Iterable<ASimpleDeclaration> liveVars = liveVariables.getLiveVariablesForNode(node);
     for (ASimpleDeclaration s : liveVars) {
 
       if (!shouldProcessVariable(s)) {
@@ -127,10 +129,10 @@ public class TemplateManager {
       );
       logger.log(Level.FINEST, "Processing variable", varName);
       if (generateUpperBound) {
-        out.add(new Template(LinearExpression.ofVariable(idExpression), type));
+        out.add(Template.of(LinearExpression.ofVariable(idExpression), type));
       }
       if (generateLowerBound) {
-        out.add(new Template(LinearExpression.ofVariable(idExpression).negate(), type));
+        out.add(Template.of(LinearExpression.ofVariable(idExpression).negate(), type));
       }
     }
 
@@ -141,7 +143,9 @@ public class TemplateManager {
               || !shouldProcessVariable(s2)) {
             continue;
           }
-          if (s1 == s2) { // Don't pair up the same var.
+          if (s1.getQualifiedName().equals(s2.getQualifiedName())) {
+
+            // Don't pair up the same var.
             continue;
           }
           if (!s1.getType().equals(s2.getType())) {
@@ -162,9 +166,10 @@ public class TemplateManager {
           LinearExpression<CIdExpression> expr2 = LinearExpression.ofVariable(
               idExpression2);
 
-          out.add(new Template(expr1.add(expr2), type));
-          out.add(new Template(expr1.sub(expr2), type));
-          out.add(new Template(expr2.sub(expr1), type));
+          out.add(Template.of(expr1.add(expr2), type));
+          out.add(Template.of(expr1.negate().sub(expr2), type));
+          out.add(Template.of(expr1.sub(expr2), type));
+          out.add(Template.of(expr2.sub(expr1), type));
         }
       }
     }
@@ -174,42 +179,47 @@ public class TemplateManager {
     return out.build();
   }
 
-  public Formula toFormula(Template template, PathFormula pPathFormula) {
-    return toFormula(template, pPathFormula, "");
-  }
 
-  public Formula toFormula(
-      Template template, PathFormula pPathFormula, String customPrefix
-  ) {
+  /**
+   * Convert {@code template} to {@link Formula}, using
+   * {@link org.sosy_lab.cpachecker.util.predicates.pathformula.SSAMap} and
+   * context provided by {@code contextFormula}.
+   *
+   * @return Resulting formula.
+   */
+  public Formula toFormula(Template template, PathFormula contextFormula) {
     boolean useRationals = shouldUseRationals(template);
     Formula sum = null;
 
-    for (Map.Entry<CIdExpression, Rational> entry : template.linearExpression) {
+    for (Entry<CIdExpression, Rational> entry : template.linearExpression) {
       Rational coeff = entry.getValue();
       CIdExpression declaration = entry.getKey();
 
-      Formula item;
+      final Formula item;
       try {
         item = pfmgr.expressionToFormula(
-            pPathFormula, declaration, dummyEdge);
+            contextFormula, declaration, dummyEdge);
       } catch (UnrecognizedCCodeException e) {
         throw new UnsupportedOperationException();
       }
 
+      final Formula multipliedItem;
       if (coeff == Rational.ZERO) {
         continue;
       } else if (coeff == Rational.NEG_ONE) {
-        item = fmgrv.makeNegate(item);
+        multipliedItem = fmgrv.makeNegate(item);
       } else if (coeff != Rational.ONE){
-        item = fmgrv.makeMultiply(
+        multipliedItem = fmgrv.makeMultiply(
             item, fmgrv.makeNumber(item, entry.getValue())
         );
+      } else {
+        multipliedItem = item;
       }
 
       if (sum == null) {
-        sum = item;
+        sum = multipliedItem;
       } else {
-        sum = fmgrv.makePlus(sum, item);
+        sum = fmgrv.makePlus(sum, multipliedItem);
       }
     }
 
@@ -220,11 +230,7 @@ public class TemplateManager {
         return ifmgr.makeNumber(0);
       }
     } else {
-      if (customPrefix.equals("")) {
-        return sum;
-      } else {
-        return fmgrv.addPrefixToAllVariables(sum, customPrefix);
-      }
+      return sum;
     }
   }
 
@@ -272,6 +278,8 @@ public class TemplateManager {
         String statement = edge.getRawStatement();
         Optional<Template> template = Optional.absent();
 
+        // todo: use the automaton instead to derive the error conditions,
+        // do not hardcode the function names.
         if (statement.contains(ASSERT_H_FUNC_NAME)
             && edge instanceof CStatementEdge) {
 
@@ -299,11 +307,14 @@ public class TemplateManager {
 
         if (template.isPresent()) {
           Template t = template.get();
+          if (t.linearExpression.isEmpty()) {
+            continue;
+          }
 
           // Add template and its negation.
           templates.add(t);
           templates.add(
-              new Template(t.linearExpression.negate(), t.type)
+              Template.of(t.linearExpression.negate(), t.type)
           );
         }
 
@@ -314,11 +325,11 @@ public class TemplateManager {
 
   private Optional<Template> recExpressionToTemplate(CExpression expression) {
     if (expression instanceof CBinaryExpression) {
-      CExpression operand1 = ((CBinaryExpression)expression).getOperand1();
-      CExpression operand2 = ((CBinaryExpression)expression).getOperand2();
+      CBinaryExpression binaryExpression = (CBinaryExpression)expression;
+      CExpression operand1 = binaryExpression.getOperand1();
+      CExpression operand2 = binaryExpression.getOperand2();
 
-      CBinaryExpression.BinaryOperator operator =
-          ((CBinaryExpression)expression).getOperator();
+      CBinaryExpression.BinaryOperator operator = binaryExpression.getOperator();
       Optional<Template> templateA = recExpressionToTemplate(operand1);
       Optional<Template> templateB = recExpressionToTemplate(operand2);
 
@@ -344,15 +355,19 @@ public class TemplateManager {
       }
 
       // Otherwise just add/subtract templates.
-      if (templateA.isPresent() && templateB.isPresent()) {
+      if (templateA.isPresent() && templateB.isPresent()
+          && binaryExpression.getCalculationType() instanceof CSimpleType) {
         LinearExpression<CIdExpression> a = templateA.get().linearExpression;
         LinearExpression<CIdExpression> b = templateB.get().linearExpression;
-        CSimpleType type = templateA.get().type;
+
+        // Calculation type is the casting of both types to a suitable "upper"
+        // type.
+        CSimpleType type = (CSimpleType)binaryExpression.getCalculationType();
         Template t;
         if (operator == CBinaryExpression.BinaryOperator.PLUS) {
-          t = new Template(a.add(b), type);
+          t = Template.of(a.add(b), type);
         } else {
-          t = new Template(a.sub(b), type);
+          t = Template.of(a.sub(b), type);
         }
         return Optional.of(t);
       } else {
@@ -360,14 +375,14 @@ public class TemplateManager {
       }
     } else if (expression instanceof CLiteralExpression
         && expression.getExpressionType() instanceof CSimpleType) {
-      return Optional.of(new Template(
+      return Optional.of(Template.of(
           LinearExpression.<CIdExpression>empty(),
           (CSimpleType)(expression).getExpressionType()
       ));
     } else if (expression instanceof CIdExpression
         && expression.getExpressionType() instanceof CSimpleType) {
       CIdExpression idExpression = (CIdExpression)expression;
-      return Optional.of(new Template(
+      return Optional.of(Template.of(
               LinearExpression.ofVariable(idExpression),
               (CSimpleType) expression.getExpressionType()));
     } else {
@@ -378,7 +393,7 @@ public class TemplateManager {
   private Template useCoeff(
       CIntegerLiteralExpression literal, Template other) {
     Rational coeff = Rational.ofBigInteger(literal.getValue());
-    return new Template(other.linearExpression.multByConst(coeff),
+    return Template.of(other.linearExpression.multByConst(coeff),
         other.type
     );
   }

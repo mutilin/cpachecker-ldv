@@ -41,6 +41,7 @@ import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
 import org.sosy_lab.cpachecker.cfa.types.c.CCompositeType;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableMap;
@@ -250,6 +251,100 @@ public class VariableClassification {
    * For the left-hand-side of the assignment of external functionCalls use -1. */
   private Partition getPartitionForEdge(CFAEdge edge, int index) {
     return edgeToPartitions.get(Pair.of(edge, index));
+  }
+
+  /**
+   * This method computes for a set of variables (qualified names) a score,
+   * which serves as rough estimate how expensive tracking it might be to
+   * track these variables, e.g. variables with a boolean character have a
+   * lower score than variables being used as loop counters.
+   *
+   * @param variableNames a collection of variables (qualified names)
+   * @param loopStructure the loop structure, to identify loop-counter variables
+   * @return the score for the given collection of variables
+   */
+  public int obtainDomainTypeScoreForVariables(Collection<String> variableNames,
+      Optional<LoopStructure> loopStructure) {
+    final int BOOLEAN_VAR   = 2;
+    final int INTEQUAL_VAR  = 4;
+    final int UNKNOWN_VAR   = 16;
+
+    if(variableNames.isEmpty()) {
+      return UNKNOWN_VAR;
+    }
+
+    int newScore = 1;
+    int oldScore = newScore;
+    for (String variableName : variableNames) {
+      int factor = UNKNOWN_VAR;
+
+      if (getIntBoolVars().contains(variableName)) {
+        factor = BOOLEAN_VAR;
+
+      } else if (getIntEqualVars().contains(variableName)) {
+        factor = INTEQUAL_VAR;
+      }
+
+      newScore = newScore * factor;
+
+      if (loopStructure.isPresent()
+          && loopStructure.get().getLoopIncDecVariables().contains(variableName)) {
+        return Integer.MAX_VALUE;
+      }
+
+      // check for overflow
+      if(newScore < oldScore) {
+        return Integer.MAX_VALUE - 1;
+      }
+      oldScore = newScore;
+    }
+
+    return newScore;
+  }
+
+  public int obtainDomainTypeScoreForVariables2(Collection<String> variableNames,
+      Optional<LoopStructure> loopStructure) {
+    final int BOOLEAN_VAR   = 1;
+    final int INTEQUAL_VAR  = 100;
+    final int INTADD_VAR    = 1000;
+    final int UNKNOWN_VAR   = 10000;
+    final int LOOP_VAR      = 1000000000;
+
+    if(variableNames.isEmpty()) {
+      return 0;
+    }
+
+    int newScore = 0;
+    int oldScore = newScore;
+    for (String variableName : variableNames) {
+      int summand = UNKNOWN_VAR;
+
+      if (getIntBoolVars().contains(variableName)) {
+        summand = BOOLEAN_VAR;
+
+      } else if (getIntEqualVars().contains(variableName)) {
+        summand = INTEQUAL_VAR;
+      }
+
+      else if (getIntAddVars().contains(variableName)) {
+        summand = INTADD_VAR;
+      }
+
+      if (loopStructure.isPresent()
+          && loopStructure.get().getLoopIncDecVariables().contains(variableName)) {
+        summand = LOOP_VAR;
+      }
+
+      newScore = newScore + summand;
+
+      // check for overflow
+      if(newScore < oldScore) {
+        return Integer.MAX_VALUE - 1;
+      }
+      oldScore = newScore;
+    }
+
+    return newScore;
   }
 
   /**

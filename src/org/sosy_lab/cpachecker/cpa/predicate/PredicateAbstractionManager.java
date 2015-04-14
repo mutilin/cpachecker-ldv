@@ -59,8 +59,6 @@ import org.sosy_lab.cpachecker.cpa.predicate.persistence.PredicateAbstractionsSt
 import org.sosy_lab.cpachecker.cpa.predicate.persistence.PredicatePersistenceUtils.PredicateParsingFailedException;
 import org.sosy_lab.cpachecker.exceptions.SolverException;
 import org.sosy_lab.cpachecker.util.LiveVariables;
-import org.sosy_lab.cpachecker.util.precondition.segkro.interfaces.Canonicalizer;
-import org.sosy_lab.cpachecker.util.precondition.segkro.rules.DefaultCanonicalizer;
 import org.sosy_lab.cpachecker.util.precondition.segkro.rules.LinCombineRule;
 import org.sosy_lab.cpachecker.util.predicates.AbstractionFormula;
 import org.sosy_lab.cpachecker.util.predicates.AbstractionManager;
@@ -87,7 +85,6 @@ import com.google.common.collect.Collections2;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
 
@@ -556,12 +553,12 @@ public class PredicateAbstractionManager {
     BooleanFormula eliminationResult = fmgr.uninstantiate(
         fmgr.eliminateDeadVariables(pF, pSsa));
 
-    Collection<BooleanFormula> atoms = fmgr.extractAtoms(eliminationResult, false, false);
+    Collection<BooleanFormula> atoms = fmgr.extractAtoms(eliminationResult, false);
     for (BooleanFormula atom: atoms) {
       amgr.makePredicate(atom);
       extractPredicates(atom);
     }
-
+    
     return amgr.buildRegionFromFormula(eliminationResult);
 
   }
@@ -648,43 +645,33 @@ public class PredicateAbstractionManager {
     return predicateBuilder.build();
   }
 
-  private Function<AbstractionPredicate, BooleanFormula> predicateToFormula = new Function<AbstractionPredicate, BooleanFormula>() {
-    @Override
-    public BooleanFormula apply(AbstractionPredicate pArg0) {
-      return pArg0.getSymbolicAtom();
-    }
-  };
-
-  private Function<BooleanFormula, AbstractionPredicate> formulaToPredicate = new Function<BooleanFormula, AbstractionPredicate>() {
-    @Override
-    public AbstractionPredicate apply(BooleanFormula pArg0) {
-      return createPredicateFor(pArg0);
-    }
-  };
-
   private Collection<AbstractionPredicate> deriveNewPredsWithoutVar(
       final Formula pDeadVar,
       final Collection<AbstractionPredicate> pReferencingPreds)
           throws SolverException, InterruptedException {
 
-    // TODO: We can use quantifier elimination instead of explicit inference-rules!
-
-    final LinCombineRule linComb = new LinCombineRule(solver, solver.getSmtAstMatcher());
-    final Canonicalizer canon = new DefaultCanonicalizer(solver, solver.getSmtAstMatcher());
+    LinCombineRule linComb = new LinCombineRule(solver, solver.getSmtAstMatcher());
 
     Multimap<String, Formula> ruleVarBinding = HashMultimap.create();
     ruleVarBinding.put("e", fmgr.uninstantiate(pDeadVar));
 
-    Collection<BooleanFormula> conjunctiveInputPredicates = Collections2.transform(pReferencingPreds, predicateToFormula);
-    Collection<BooleanFormula> canonicalized = Lists.newArrayListWithExpectedSize(conjunctiveInputPredicates.size());
-
-    for (BooleanFormula f: conjunctiveInputPredicates) {
-      canonicalized.add(canon.canonicalize(f));
-    }
+    Collection<BooleanFormula> conjunctiveInputPredicates = Collections2.transform(
+        pReferencingPreds, new Function<AbstractionPredicate, BooleanFormula>() {
+      @Override
+      public BooleanFormula apply(AbstractionPredicate pArg0) {
+        return pArg0.getSymbolicAtom();
+      }
+    });
 
     Set<BooleanFormula> inferred = linComb.apply(conjunctiveInputPredicates, ruleVarBinding);
 
-    return Collections2.transform(inferred, formulaToPredicate);
+    return Collections2.transform(
+        inferred, new Function<BooleanFormula, AbstractionPredicate>() {
+      @Override
+      public AbstractionPredicate apply(BooleanFormula pArg0) {
+        return createPredicateFor(pArg0);
+      }
+    });
   }
 
   /**
@@ -911,7 +898,7 @@ public class PredicateAbstractionManager {
   }
 
   private Region buildBooleanAbstraction(SSAMap ssa,
-      ProverEnvironment thmProver, Collection<AbstractionPredicate> predicates) throws InterruptedException {
+      ProverEnvironment thmProver, Collection<AbstractionPredicate> predicates) throws InterruptedException, SolverException {
 
     // build the definition of the predicates, and instantiate them
     // also collect all predicate variables so that the solver knows for which
@@ -1092,7 +1079,7 @@ public class PredicateAbstractionManager {
       return ImmutableList.of(amgr.makeFalsePredicate());
     }
 
-    Collection<BooleanFormula> atoms = fmgr.extractAtoms(pFormula, splitItpAtoms, false);
+    Collection<BooleanFormula> atoms = fmgr.extractAtoms(pFormula, splitItpAtoms);
 
     List<AbstractionPredicate> preds = new ArrayList<>(atoms.size());
 
@@ -1100,6 +1087,7 @@ public class PredicateAbstractionManager {
       preds.add(amgr.makePredicate(atom));
     }
 
+    amgr.reorderPredicates();
     return preds;
   }
 

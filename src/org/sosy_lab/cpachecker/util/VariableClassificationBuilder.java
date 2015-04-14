@@ -325,7 +325,7 @@ public class VariableClassificationBuilder {
   private void dumpVariableTypeMapping(Path target, VariableClassification vc) {
     try (Writer w = Files.openOutputFile(target)) {
         for (String var : allVars) {
-          byte type = 0;
+          int type = 0;
           if (vc.getIntBoolVars().contains(var)) {
             type += 1 + 2 + 4; // IntBool is subset of IntEqualBool and IntAddEqBool
           } else if (vc.getIntEqualVars().contains(var)) {
@@ -438,7 +438,8 @@ public class VariableClassificationBuilder {
                                 false,
                                 compositeType.getKind(),
                                 compositeType.getMembers(),
-                                compositeType.getName());
+                                compositeType.getName(),
+                                compositeType.getOrigName());
     } else {
       return compositeType;
     }

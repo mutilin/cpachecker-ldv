@@ -40,18 +40,10 @@ public class NumeralFormulaManagerView
 
   private final NumeralFormulaManager<ParamFormulaType, ResultFormulaType> manager;
 
-  public NumeralFormulaManagerView(FormulaManagerView pViewManager,
+  public NumeralFormulaManagerView(FormulaWrappingHandler pWrappingHandler,
       NumeralFormulaManager<ParamFormulaType, ResultFormulaType> pManager) {
-    super(pViewManager);
+    super(pWrappingHandler);
     this.manager = pManager;
-  }
-
-  private BooleanFormula wrapInView(BooleanFormula pFormula) {
-    return pFormula;
-  }
-
-  private BooleanFormula extractFromView(BooleanFormula pCast) {
-    return pCast;
   }
 
   @Override
@@ -60,8 +52,8 @@ public class NumeralFormulaManagerView
   }
 
   @Override
-  public ResultFormulaType add(ParamFormulaType pNumber1, ParamFormulaType pNumbe2) {
-    return manager.add(pNumber1, pNumbe2);
+  public ResultFormulaType add(ParamFormulaType pNumber1, ParamFormulaType pNumber2) {
+    return manager.add(pNumber1, pNumber2);
   }
 
   @Override
@@ -70,50 +62,44 @@ public class NumeralFormulaManagerView
   }
 
   @Override
-  public ResultFormulaType subtract(ParamFormulaType pNumber1, ParamFormulaType pNumbe2) {
-    return manager.subtract(pNumber1, pNumbe2);
+  public ResultFormulaType subtract(ParamFormulaType pNumber1, ParamFormulaType pNumber2) {
+    return manager.subtract(pNumber1, pNumber2);
   }
   @Override
-  public ResultFormulaType divide(ParamFormulaType pNumber1, ParamFormulaType pNumbe2) {
-    return manager.divide(pNumber1, pNumbe2);
+  public ResultFormulaType divide(ParamFormulaType pNumber1, ParamFormulaType pNumber2) {
+    return manager.divide(pNumber1, pNumber2);
   }
   @Override
-  public ResultFormulaType modulo(ParamFormulaType pNumber1, ParamFormulaType pNumbe2) {
-    return manager.modulo(pNumber1, pNumbe2);
+  public ResultFormulaType modulo(ParamFormulaType pNumber1, ParamFormulaType pNumber2) {
+    return manager.modulo(pNumber1, pNumber2);
   }
   @Override
   public BooleanFormula modularCongruence(ParamFormulaType pNumber1, ParamFormulaType pNumber2, long pModulo) {
-    return wrapInView(manager.modularCongruence(pNumber1, pNumber2, pModulo));
+    return manager.modularCongruence(pNumber1, pNumber2, pModulo);
   }
   @Override
-  public ResultFormulaType multiply(ParamFormulaType pNumber1, ParamFormulaType pNumbe2) {
-    return manager.multiply(pNumber1, pNumbe2);
+  public ResultFormulaType multiply(ParamFormulaType pNumber1, ParamFormulaType pNumber2) {
+    return manager.multiply(pNumber1, pNumber2);
   }
   @Override
-  public BooleanFormula equal(ParamFormulaType pNumber1, ParamFormulaType pNumbe2) {
-    return wrapInView(manager.equal(pNumber1, pNumbe2));
+  public BooleanFormula equal(ParamFormulaType pNumber1, ParamFormulaType pNumber2) {
+    return manager.equal(pNumber1, pNumber2);
   }
   @Override
-  public BooleanFormula greaterThan(ParamFormulaType pNumber1, ParamFormulaType pNumbe2) {
-    return wrapInView(manager.greaterThan(pNumber1, pNumbe2));
+  public BooleanFormula greaterThan(ParamFormulaType pNumber1, ParamFormulaType pNumber2) {
+    return manager.greaterThan(pNumber1, pNumber2);
   }
   @Override
-  public BooleanFormula greaterOrEquals(ParamFormulaType pNumber1, ParamFormulaType pNumbe2) {
-    return wrapInView(manager.greaterOrEquals(pNumber1, pNumbe2));
+  public BooleanFormula greaterOrEquals(ParamFormulaType pNumber1, ParamFormulaType pNumber2) {
+    return manager.greaterOrEquals(pNumber1, pNumber2);
   }
   @Override
-  public BooleanFormula lessThan(ParamFormulaType pNumber1, ParamFormulaType pNumbe2) {
-    return wrapInView(manager.lessThan(pNumber1, pNumbe2));
+  public BooleanFormula lessThan(ParamFormulaType pNumber1, ParamFormulaType pNumber2) {
+    return manager.lessThan(pNumber1, pNumber2);
   }
   @Override
-  public BooleanFormula lessOrEquals(ParamFormulaType pNumber1, ParamFormulaType pNumbe2) {
-    return wrapInView(manager.lessOrEquals(pNumber1, pNumbe2));
-  }
-
-
-  @Override
-  public boolean isEqual(BooleanFormula pNumber) {
-    return manager.isEqual(extractFromView(pNumber));
+  public BooleanFormula lessOrEquals(ParamFormulaType pNumber1, ParamFormulaType pNumber2) {
+    return manager.lessOrEquals(pNumber1, pNumber2);
   }
 
 
