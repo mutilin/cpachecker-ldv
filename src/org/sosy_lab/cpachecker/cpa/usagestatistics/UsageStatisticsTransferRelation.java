@@ -59,7 +59,7 @@ import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
-import org.sosy_lab.cpachecker.cfa.model.c.CFunctionSummaryStatementEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionSummaryEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
@@ -90,9 +90,6 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
   private final UsageStatisticsCPAStatistics statistics;
   private final ExpressionHandler handler;
 
-  @Option(description = "variables, which will not be saved in statistics")
-  private Set<String> skippedvariables = null;
-
   @Option(description = "functions, which we don't analize")
   private Set<String> skippedfunctions = null;
 
@@ -104,6 +101,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
   private final CallstackTransferRelation callstackTransfer;
   private final LockStatisticsTransferRelation lockstatTransfer;
+  private final VariableSkipper varSkipper;
 
   private Map<String, BinderFunctionInfo> binderFunctionInfo;
   private final LogManager logger;
@@ -127,6 +125,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     }
     handler = new ExpressionHandler();
     logger = pLogger;
+    varSkipper = new VariableSkipper(config);
   }
 
   @Override
@@ -177,16 +176,12 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     if (checkFunciton(pCfaEdge, skippedfunctions)) {
       callstackTransfer.setFlag();
       needToReset = true;
-      //Find right summary edge
-      //CFANode node = AbstractStates.extractLocation(oldState);
-      for (int k = 0; k < node.getNumLeavingEdges(); k++) {
-        currentEdge = node.getLeavingEdge(k);
-        if (currentEdge instanceof CFunctionSummaryStatementEdge) {
-          break;
-        }
+      if (node.getLeavingSummaryEdge() != null) {
+        currentEdge = node.getLeavingSummaryEdge();
+        logger.log(Level.FINEST, ((CFunctionSummaryEdge)currentEdge).getFunctionEntry().getFunctionName() + " is skipped");
+      } else {
+        throw new CPATransferException("Cannot find summary edge for " + pCfaEdge + " as skipped function");
       }
-      assert (currentEdge instanceof CFunctionSummaryStatementEdge);
-      logger.log(Level.FINEST, ((CFunctionSummaryStatementEdge)currentEdge).getFunctionName() + " is skipped due to configuration");
     }
 
     AbstractState oldWrappedState = oldState.getWrappedState();
@@ -300,11 +295,6 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     }
     CVariableDeclaration decl = (CVariableDeclaration)declEdge.getDeclaration();
 
-    if (!decl.toASTString().equals(declEdge.getRawStatement())) {
-      //CPA replace "int t;" into "int t = 0;", so here there isn't assignment
-      //It is right, but creates false unsafes.
-      return;
-    }
     if (decl.isGlobal()) {
       return;
     }
@@ -318,8 +308,14 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
     if (init instanceof CInitializerExpression) {
       CExpression initExpression = ((CInitializerExpression)init).getExpression();
-      visitStatement(pNewState, pPrecision, initExpression, Access.READ, EdgeType.DECLARATION);
+      //Use EdgeType assignement for initializer expression to avoid mistakes related to expressions "int CPACHECKER_TMP_0 = global;"
+      visitStatement(pNewState, pPrecision, initExpression, Access.READ, EdgeType.ASSIGNMENT);
 
+      if (!decl.toASTString().equals(declEdge.getRawStatement())) {
+        //CPA replace "int t;" into "int t = 0;", so here there isn't assignment
+        //It is right, but creates false unsafes.
+        return;
+      }
       String funcName = AbstractStates.extractStateByType(pNewState, CallstackState.class).getCurrentFunction();
 
       AbstractIdentifier id = IdentifierCreator.createIdentifier(decl, funcName, 0);
@@ -483,16 +479,8 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       singleId = (SingleIdentifier) state.getLinks(id);
     }
 
-    if (skippedvariables != null && skippedvariables.contains(singleId.getName())) {
+    if (varSkipper.shouldBeSkipped(singleId)) {
       return;
-    } else if (skippedvariables != null && singleId instanceof StructureIdentifier) {
-      AbstractIdentifier owner = singleId;
-      while (owner instanceof StructureIdentifier) {
-        owner = ((StructureIdentifier)owner).getOwner();
-        if (owner instanceof SingleIdentifier && skippedvariables.contains(((SingleIdentifier)owner).getName())) {
-          return;
-        }
-      }
     }
 
     if (singleId instanceof LocalVariableIdentifier && singleId.getDereference() <= 0) {
