@@ -25,6 +25,7 @@ package org.sosy_lab.cpachecker.cpa.local;
 
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
@@ -82,7 +83,7 @@ public class LocalReducer implements Reducer {
 
   @Override
   public AbstractState rebuildStateAfterFunctionCall(AbstractState pRootState, AbstractState pEntryState,
-      AbstractState pExpandedState, CFANode pExitLocation) {
+      AbstractState pExpandedState, FunctionExitNode pExitLocation) {
     return pExpandedState;
   }
 

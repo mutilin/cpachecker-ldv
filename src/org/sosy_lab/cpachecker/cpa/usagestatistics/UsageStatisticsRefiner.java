@@ -24,8 +24,6 @@
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 import static com.google.common.collect.FluentIterable.from;
 
-import static com.google.common.collect.FluentIterable.from;
-
 import java.io.PrintStream;
 import java.util.Collection;
 import java.util.HashSet;
@@ -140,7 +138,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     pStat.UnsafeCheck.start();
 top:while ((target = computer.getNextRefineableUsage()) != null) {
       pStat.UnsafeCheck.stopIfRunning();
-      pathStateToReachedState.clear();
+      subgraphStatesToReachedState.clear();
       pStat.ComputePath.start();
       ARGPath pPath = computePath((ARGState)target.getKeyState());
       pStat.ComputePath.stopIfRunning();
@@ -157,8 +155,8 @@ top:while ((target = computer.getNextRefineableUsage()) != null) {
         @Override
         @Nullable
         public ARGState apply(@Nullable ARGState pInput) {
-          assert pathStateToReachedState.containsKey(pInput);
-          return pathStateToReachedState.get(pInput);
+          assert subgraphStatesToReachedState.containsKey(pInput);
+          return subgraphStatesToReachedState.get(pInput);
         }
       }).toList();
       for (List<ARGState> previousTrace : refinedStates) {
@@ -174,7 +172,7 @@ top:while ((target = computer.getNextRefineableUsage()) != null) {
       try {
         pStat.Refinement.start();
         CounterexampleInfo counterexample = super.performRefinement0(
-            new BAMReachedSet(transfer, new ARGReachedSet(pReached), pPath, pathStateToReachedState), pPath);
+            new BAMReachedSet(transfer, new ARGReachedSet(pReached), pPath, subgraphStatesToReachedState, (ARGState)pReached.getFirstState()), pPath);
         refinementFinish |= counterexample.isSpurious();
         if (counterexample.isSpurious()) {
           Iterator<Pair<Object, PathTemplate>> pairIterator = counterexample.getAllFurtherInformation().iterator();
@@ -185,8 +183,8 @@ top:while ((target = computer.getNextRefineableUsage()) != null) {
             @Override
             @Nullable
             public ARGState apply(@Nullable ARGState pInput) {
-              assert pathStateToReachedState.containsKey(pInput);
-              return pathStateToReachedState.get(pInput);
+              assert subgraphStatesToReachedState.containsKey(pInput);
+              return subgraphStatesToReachedState.get(pInput);
             }
           }).toList();
           refinedStates.add(interpolants);
@@ -248,7 +246,7 @@ top:while ((target = computer.getNextRefineableUsage()) != null) {
   protected ARGPath computePath(ARGState pLastElement) throws InterruptedException, CPATransferException {
     assert (pLastElement != null && !pLastElement.isDestroyed());
       //we delete this state from other unsafe
-    ARGState subgraph = transfer.findPath(pLastElement, pathStateToReachedState);
+    ARGState subgraph = transfer.findPath(pLastElement, subgraphStatesToReachedState);
     assert (subgraph != null);
     return ARGUtils.getRandomPath(subgraph);
   }

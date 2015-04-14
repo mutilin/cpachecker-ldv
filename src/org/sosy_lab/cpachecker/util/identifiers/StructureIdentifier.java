@@ -56,7 +56,7 @@ public class StructureIdentifier extends SingleIdentifier{
     @Override
     public CType visit(CCompositeType pCompositeType) throws HandleCodeException {
       //This is need to avoid all members of structure in report
-      return new CElaboratedType(pCompositeType.isConst(), pCompositeType.isVolatile(), pCompositeType.getKind(), pCompositeType.getQualifiedName(), pCompositeType);
+      return new CElaboratedType(pCompositeType.isConst(), pCompositeType.isVolatile(), pCompositeType.getKind(), pCompositeType.getQualifiedName(), "tmp_name", pCompositeType);
     }
 
     @Override
