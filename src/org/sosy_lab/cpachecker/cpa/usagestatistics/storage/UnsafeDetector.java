@@ -38,6 +38,8 @@ import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
 
+import com.google.common.collect.Sets;
+
 @Options(prefix="cpa.usagestatistics.unsafedetector")
 public class UnsafeDetector {
   @Option(name="ignoreEmptyLockset", description="ignore unsafes only with empty callstacks")
@@ -130,10 +132,29 @@ public class UnsafeDetector {
       }
       if (point.access == Access.WRITE) {
         Set<LockIdentifier> lockSet = new HashSet<>(point.locks);
-        while (iterator.hasNext() && !lockSet.isEmpty()) {
-          lockSet.retainAll(iterator.next().locks);
+        while (point.access == Access.WRITE) {
+          lockSet.retainAll(point.locks);
+          if (iterator.hasNext()) {
+            point = iterator.next();
+          } else {
+            break;
+          }
         }
-        return lockSet.isEmpty();
+
+        if (lockSet.isEmpty()) {
+          return true;
+        }
+
+        /* There can be a situation
+         * (l1, l2, write), (l1, read), (l2, read)
+         * Thus, we should process writes and reads differentely
+         */
+        while (iterator.hasNext()) {
+          if (Sets.intersection(lockSet, iterator.next().locks).isEmpty()) {
+            return true;
+          }
+        }
+        return false;
       }
     }
     return false;
