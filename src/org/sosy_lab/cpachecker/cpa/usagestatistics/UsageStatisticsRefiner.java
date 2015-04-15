@@ -24,8 +24,6 @@
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 import static com.google.common.collect.FluentIterable.from;
 
-import static com.google.common.collect.FluentIterable.from;
-
 import java.io.PrintStream;
 import java.util.Collection;
 import java.util.HashSet;
@@ -210,12 +208,12 @@ top:while ((target = computer.getNextRefineableUsage()) != null) {
           refinedStates.add(interpolants);
           pStat.CacheInterpolantsTime.stop();
           pStat.CacheTime.start();
-          if (iCache.contains(target, formulas)) {
+          if (iCache.contains(target, formulas, interpolants)) {
           	computer.setResultOfRefinement(target, true, pPath.getInnerEdges());
-		logger.log(Level.WARNING, "Interpolants are repeated, consider " + target + " as true");
+		        logger.log(Level.WARNING, "Interpolants are repeated, consider " + target + " as true");
             target.failureFlag = true;
           } else {
-            iCache.add(target, formulas);
+            iCache.add(target, formulas, interpolants);
           	computer.setResultOfRefinement(target, false, pPath.getInnerEdges());
           }
           pStat.CacheTime.stop();

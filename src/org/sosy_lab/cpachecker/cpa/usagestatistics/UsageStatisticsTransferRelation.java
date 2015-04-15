@@ -99,7 +99,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
   private Set<String> abortfunctions;
 
   private final CallstackTransferRelation callstackTransfer;
-  private final LockStatisticsTransferRelation lockstatTransfer;
+  //private final LockStatisticsTransferRelation lockstatTransfer = null;
   private final VariableSkipper varSkipper;
 
   private Map<String, BinderFunctionInfo> binderFunctionInfo;

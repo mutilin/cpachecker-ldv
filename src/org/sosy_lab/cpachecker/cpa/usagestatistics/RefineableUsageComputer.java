@@ -29,8 +29,6 @@ import java.util.logging.Level;
 
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.caches.UsageCache;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.caches.UsageEmptyCache;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.AbstractUsageInfoSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UnrefinedUsagePointSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UnsafeDetector;
@@ -42,7 +40,6 @@ public class RefineableUsageComputer {
 
   private final UsageContainer container;
   private final UnsafeDetector detector;
-  private final UsageCache cache;
   private final Iterator<UnrefinedUsagePointSet> unrefinedUsagePointSetIterator;
   private Iterator<UsageInfo>  usageIterator;
   private Iterator<UsagePoint>  usagePointIterator;
@@ -55,7 +52,6 @@ public class RefineableUsageComputer {
   RefineableUsageComputer(UsageContainer c, LogManager l) {
     container = c;
     detector = c.getUnsafeDetector();
-    cache = new UsageCallstackCache();
     unrefinedUsagePointSetIterator = container.getUnrefinedUnsafes().iterator();
     logger = l;
     waitRefinementResult = false;
@@ -67,7 +63,6 @@ public class RefineableUsageComputer {
 
     if (!result) {
       logger.log(Level.INFO, "Usage " + uinfo + " is not reachable, remove it from container");
-      cache.add(uinfo);
       if (!usageIterator.hasNext()) {
         //There are no usages in the point
         currentRefineableUsageList.remove(currentUsagePoint);
@@ -95,38 +90,24 @@ public class RefineableUsageComputer {
 
     assert (!waitRefinementResult);
 
-    do {
-      while (usageIterator == null || !usageIterator.hasNext()) {
-        AbstractUsageInfoSet refineableUsageInfoSet;
-        do {
-          while (usagePointIterator == null || !usagePointIterator.hasNext()) {
-            if (unrefinedUsagePointSetIterator.hasNext()) {
-              currentRefineableUsageList = unrefinedUsagePointSetIterator.next();
-              assert (detector.isUnsafe(currentRefineableUsageList));
-              usagePointIterator = currentRefineableUsageList.clone().getPointIterator();
-            } else {
-              return null;
-            }
+    while (usageIterator == null || !usageIterator.hasNext()) {
+      AbstractUsageInfoSet refineableUsageInfoSet;
+      do {
+        while (usagePointIterator == null || !usagePointIterator.hasNext()) {
+          if (unrefinedUsagePointSetIterator.hasNext()) {
+            currentRefineableUsageList = unrefinedUsagePointSetIterator.next();
+            assert (detector.isUnsafe(currentRefineableUsageList));
+            usagePointIterator = currentRefineableUsageList.clone().getPointIterator();
+          } else {
+            return null;
           }
-          currentUsagePoint = usagePointIterator.next();
-          refineableUsageInfoSet = currentRefineableUsageList.getUsageInfo(currentUsagePoint);
-        } while (refineableUsageInfoSet.isTrue());
-        usageIterator = refineableUsageInfoSet.getUsages().iterator();
-      }
-      resultUsage = usageIterator.next();
-
-      if (cache.contains(resultUsage)) {
-        /* It is important to remove usage from the container,
-         * because we determine unsafes with the suggestion,
-         * that all unsafes are ordered correctly
-         */
-        waitRefinementResult = true;
-        logger.log(Level.INFO, "Usage " + resultUsage + " is contained in cache, skip it");
-        setResultOfRefinement(resultUsage, false);
-      } else {
-        break;
-      }
-    } while (true);
+        }
+        currentUsagePoint = usagePointIterator.next();
+        refineableUsageInfoSet = currentRefineableUsageList.getUsageInfo(currentUsagePoint);
+      } while (refineableUsageInfoSet.isTrue());
+      usageIterator = refineableUsageInfoSet.getUsages().iterator();
+    }
+    resultUsage = usageIterator.next();
     waitRefinementResult = true;
     return resultUsage;
   }

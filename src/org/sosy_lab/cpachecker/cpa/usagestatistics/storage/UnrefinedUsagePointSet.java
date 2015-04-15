@@ -24,6 +24,7 @@
 package org.sosy_lab.cpachecker.cpa.usagestatistics.storage;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -31,12 +32,10 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
-import org.sosy_lab.common.Pair;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsState;
 
 public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
@@ -100,7 +99,7 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
       Iterator<UsagePoint> iterator = points.iterator();
       UsagePoint point = iterator.next();
       Set<LockIdentifier> lockSet = null;
-      if (point.isTrue() && point.access == Access.READ) {
+      if (refinedInformation.containsKey(point) && point.access == Access.READ) {
         //The first one may be read access if it is refined
         lockSet = new HashSet<>(point.locks);
         if (iterator.hasNext()) {
@@ -131,62 +130,6 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     } else {
       return unrefinedInformation.get(point);
     }
-  }
-
-  @Override
-  public Pair<UsageInfo, UsageInfo> getUnsafePair() {
-    assert isUnsafe();
-
-    Iterator<UsagePoint> iterator = topUsages.iterator();
-    AbstractUsageInfoSet firstSet = getUsageInfo(iterator.next());
-    AbstractUsageInfoSet secondSet;
-    if (iterator.hasNext()) {
-      UsagePoint point = iterator.next();
-      secondSet = getUsageInfo(point);
-    } else {
-      //One write usage is also unsafe, as we consider the function to be able to run in parallel with itself
-      secondSet = firstSet;
-    }
-    return Pair.of(firstSet.getOneExample(), secondSet.getOneExample());
-  }
-
-  public boolean checkTrueUnsafe() {
-    if (!isUnsafe()) {
-      return false;
-    }
-
-    boolean result = checkRefinedUsages();
-    if (result) {
-      if (refinedInformation.size() > 1 || topUsages.size() == 1) {
-        return true;
-      } else {
-        //Try to refine the second usage, if it is possible
-        return false;
-      }
-    } else {
-      return false;
-    }
-  }
-
-  private boolean checkRefinedUsages() {
-    Iterator<UsagePoint> iterator = topUsages.iterator();
-    Set<UsagePoint> refinedPoints = new TreeSet<>();
-    UsagePoint tmpPoint = iterator.next();
-    while (tmpPoint.isTrue()) {
-      refinedPoints.add(tmpPoint);
-      if (iterator.hasNext()) {
-        tmpPoint = iterator.next();
-      } else {
-        break;
-      }
-    }
-    return isUnsafe(refinedPoints);
-  }
-
-  @Override
-  public boolean isTrueUnsafe() {
-    //Is called at the end, so return true even if we have only one refined usage
-    return checkRefinedUsages();
   }
 
   @Override
