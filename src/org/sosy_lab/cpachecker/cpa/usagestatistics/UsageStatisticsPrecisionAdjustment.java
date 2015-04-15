@@ -87,6 +87,6 @@ class UsageStatisticsPrecisionAdjustment implements PrecisionAdjustment {
 
     UsageStatisticsState resultElement = element.clone(newElement);
 
-    return Optional.of(PrecisionAdjustmentResult.create(resultElement, new UsageStatisticsPrecision(newPrecision), action));
+    return Optional.of(PrecisionAdjustmentResult.create(resultElement, ((UsageStatisticsPrecision)oldPrecision).clone(newPrecision), action));
   }
 }

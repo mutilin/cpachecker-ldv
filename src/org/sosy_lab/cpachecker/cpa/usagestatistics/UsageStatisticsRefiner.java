@@ -39,7 +39,10 @@ import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.io.PathTemplate;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.CounterexampleInfo;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
@@ -66,6 +69,7 @@ import org.sosy_lab.cpachecker.util.Precisions;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 
 import com.google.common.base.Function;
+import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 
 
@@ -105,8 +109,8 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     @Override
     @Nullable
     public ARGState apply(@Nullable ARGState pInput) {
-      assert pathStateToReachedState.containsKey(pInput);
-      return pathStateToReachedState.get(pInput);
+      assert subgraphStatesToReachedState.containsKey(pInput);
+      return subgraphStatesToReachedState.get(pInput);
     }
   };
 
