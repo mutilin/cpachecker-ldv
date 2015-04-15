@@ -33,6 +33,7 @@ import org.sosy_lab.cpachecker.cpa.usagestatistics.caches.UsageCache;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.caches.UsageEmptyCache;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.AbstractUsageInfoSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UnrefinedUsagePointSet;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UnsafeDetector;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsageContainer;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsagePoint;
 
@@ -40,6 +41,7 @@ import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsagePoint;
 public class RefineableUsageComputer {
 
   private final UsageContainer container;
+  private final UnsafeDetector detector;
   private final UsageCache cache;
   private final Iterator<UnrefinedUsagePointSet> unrefinedUsagePointSetIterator;
   private Iterator<UsageInfo>  usageIterator;
@@ -52,7 +54,8 @@ public class RefineableUsageComputer {
 
   RefineableUsageComputer(UsageContainer c, LogManager l) {
     container = c;
-    cache = new UsageEmptyCache();
+    detector = c.getUnsafeDetector();
+    cache = new UsageCallstackCache();
     unrefinedUsagePointSetIterator = container.getUnrefinedUnsafes().iterator();
     logger = l;
     waitRefinementResult = false;
@@ -68,7 +71,7 @@ public class RefineableUsageComputer {
       if (!usageIterator.hasNext()) {
         //There are no usages in the point
         currentRefineableUsageList.remove(currentUsagePoint);
-        if (!currentRefineableUsageList.isUnsafe()) {
+        if (!detector.isUnsafe(currentRefineableUsageList)) {
           //May be we remove all 'write' accesses, so move to other id
           usagePointIterator = null;
         } else {
@@ -77,8 +80,8 @@ public class RefineableUsageComputer {
       }
     } else {
       logger.log(Level.INFO, "Usage " + uinfo + " is reachable, mark it as true");
-      currentRefineableUsageList.markAsTrue(uinfo, path);
-      if (currentRefineableUsageList.checkTrueUnsafe()) {
+      currentRefineableUsageList.markAsReachableUsage(uinfo, path);
+      if (detector.isTrueUnsafe(currentRefineableUsageList)) {
         container.setAsRefined(currentRefineableUsageList);
         usagePointIterator = null;
       }
@@ -94,24 +97,36 @@ public class RefineableUsageComputer {
 
     do {
       while (usageIterator == null || !usageIterator.hasNext()) {
+        AbstractUsageInfoSet refineableUsageInfoSet;
         do {
           while (usagePointIterator == null || !usagePointIterator.hasNext()) {
             if (unrefinedUsagePointSetIterator.hasNext()) {
               currentRefineableUsageList = unrefinedUsagePointSetIterator.next();
-              assert (currentRefineableUsageList.isUnsafe());
+              assert (detector.isUnsafe(currentRefineableUsageList));
               usagePointIterator = currentRefineableUsageList.clone().getPointIterator();
             } else {
               return null;
             }
           }
           currentUsagePoint = usagePointIterator.next();
-        } while (currentUsagePoint.isTrue());
-        AbstractUsageInfoSet refineableUsageInfoSet = currentRefineableUsageList.getUsageInfo(currentUsagePoint);
-        assert (!refineableUsageInfoSet.isTrue());
+          refineableUsageInfoSet = currentRefineableUsageList.getUsageInfo(currentUsagePoint);
+        } while (refineableUsageInfoSet.isTrue());
         usageIterator = refineableUsageInfoSet.getUsages().iterator();
       }
       resultUsage = usageIterator.next();
-    } while (cache.contains(resultUsage));
+
+      if (cache.contains(resultUsage)) {
+        /* It is important to remove usage from the container,
+         * because we determine unsafes with the suggestion,
+         * that all unsafes are ordered correctly
+         */
+        waitRefinementResult = true;
+        logger.log(Level.INFO, "Usage " + resultUsage + " is contained in cache, skip it");
+        setResultOfRefinement(resultUsage, false);
+      } else {
+        break;
+      }
+    } while (true);
     waitRefinementResult = true;
     return resultUsage;
   }

@@ -25,6 +25,7 @@ package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
@@ -38,19 +39,19 @@ public class UsageStatisticsReducer implements Reducer {
 
   @Override
   public AbstractState getVariableReducedState(AbstractState pExpandedElement,
-                                          Block pContext, CFANode pLocation) {
+                                          Block pContext, Block outerContext, CFANode pLocation) {
     UsageStatisticsState funElement = (UsageStatisticsState)pExpandedElement;
-    AbstractState red = wrappedReducer.getVariableReducedState(funElement.getWrappedState(), pContext, pLocation);
+    AbstractState red = wrappedReducer.getVariableReducedState(funElement.getWrappedState(), pContext, outerContext, pLocation);
     return funElement.clone(red);
 
   }
 
   @Override
   public AbstractState getVariableExpandedState(AbstractState pRootElement,
-                        Block pReducedContext, AbstractState pReducedElement) {
+                        Block pReducedContext, Block outerSubtree, AbstractState pReducedElement) {
     UsageStatisticsState funRootState = (UsageStatisticsState)pRootElement;
     UsageStatisticsState funReducedState = (UsageStatisticsState)pReducedElement;
-    AbstractState exp = wrappedReducer.getVariableExpandedState(funRootState.getWrappedState(), pReducedContext, funReducedState.getWrappedState());
+    AbstractState exp = wrappedReducer.getVariableExpandedState(funRootState.getWrappedState(), pReducedContext, outerSubtree, funReducedState.getWrappedState());
     return funReducedState.expand(funRootState, exp);
   }
 
@@ -88,18 +89,18 @@ public class UsageStatisticsReducer implements Reducer {
   @Override
   public AbstractState getVariableReducedStateForProofChecking(AbstractState pExpandedState, Block pContext,
       CFANode pCallNode) {
-    return getVariableReducedState(pExpandedState, pContext, pCallNode);
+    return getVariableReducedState(pExpandedState, pContext, null, pCallNode);
   }
 
   @Override
   public AbstractState getVariableExpandedStateForProofChecking(AbstractState pRootState, Block pReducedContext,
       AbstractState pReducedState) {
-    return getVariableExpandedState(pRootState, pReducedContext, pReducedState);
+    return getVariableExpandedState(pRootState, pReducedContext, null, pReducedState);
   }
 
   @Override
   public AbstractState rebuildStateAfterFunctionCall(AbstractState pRootState, AbstractState pEntryState,
-      AbstractState pExpandedState, CFANode pExitLocation) {
+      AbstractState pExpandedState, FunctionExitNode pExitLocation) {
     return pExpandedState;
   }
 

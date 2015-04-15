@@ -22,6 +22,7 @@
  *    http://cpachecker.sosy-lab.org
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
+import static com.google.common.collect.FluentIterable.from;
 
 import static com.google.common.collect.FluentIterable.from;
 
@@ -40,7 +41,10 @@ import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.io.PathTemplate;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.CounterexampleInfo;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
@@ -67,6 +71,7 @@ import org.sosy_lab.cpachecker.util.Precisions;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 
 import com.google.common.base.Function;
+import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 
 
@@ -101,6 +106,15 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
   private final LogManager logger;
   private final int NUMBER_FOR_RESET_PRECISION;
   private InterpolantCache iCache = new InterpolantCache();
+
+  private Function<ARGState, ARGState> TRANSLATE_TO_ORIGIN_STATES = new Function<ARGState, ARGState>() {
+    @Override
+    @Nullable
+    public ARGState apply(@Nullable ARGState pInput) {
+      assert subgraphStatesToReachedState.containsKey(pInput);
+      return subgraphStatesToReachedState.get(pInput);
+    }
+  };
 
   public UsageStatisticsRefiner(ConfigurableProgramAnalysis pCpa) throws CPAException, InvalidConfigurationException {
     super(pCpa);
@@ -139,7 +153,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     pStat.UnsafeCheck.start();
 top:while ((target = computer.getNextRefineableUsage()) != null) {
       pStat.UnsafeCheck.stopIfRunning();
-      pathStateToReachedState.clear();
+      subgraphStatesToReachedState.clear();
       pStat.ComputePath.start();
       ARGPath pPath = computePath((ARGState)target.getKeyState());
       pStat.ComputePath.stopIfRunning();
@@ -152,14 +166,7 @@ top:while ((target = computer.getNextRefineableUsage()) != null) {
         public boolean apply(@Nullable ARGState pInput) {
           return AbstractStates.extractStateByType(pInput, PredicateAbstractState.class).isAbstractionState();
         }
-      }).*/transform(new Function<ARGState, ARGState>() {
-        @Override
-        @Nullable
-        public ARGState apply(@Nullable ARGState pInput) {
-          assert pathStateToReachedState.containsKey(pInput);
-          return pathStateToReachedState.get(pInput);
-        }
-      }).toList();
+      }).*/transform(TRANSLATE_TO_ORIGIN_STATES).toList();
       for (List<ARGState> previousTrace : refinedStates) {
         if (abstractTrace.containsAll(previousTrace)) {
           //logger.log(Level.INFO, "Hey! I found repeated trace " + target + ". I don't want to refine it");
@@ -173,26 +180,39 @@ top:while ((target = computer.getNextRefineableUsage()) != null) {
       try {
         pStat.Refinement.start();
         CounterexampleInfo counterexample = super.performRefinement0(
-            new BAMReachedSet(transfer, new ARGReachedSet(pReached), pPath, pathStateToReachedState), pPath);
+            new BAMReachedSet(transfer, new ARGReachedSet(pReached), pPath, subgraphStatesToReachedState, (ARGState)pReached.getFirstState()), pPath);
         refinementFinish |= counterexample.isSpurious();
         if (counterexample.isSpurious()) {
+
+          List<CFAEdge> edges = pPath.getInnerEdges();
+          edges = from(edges).filter(new Predicate<CFAEdge>() {
+            @Override
+            public boolean apply(@Nullable CFAEdge pInput) {
+              if (pInput instanceof CDeclarationEdge) {
+                if (((CDeclarationEdge)pInput).getDeclaration().isGlobal() ||
+                    pInput.getSuccessor().getFunctionName().equals("ldv_main")) {
+                }
+                return false;
+              } else if (pInput.getSuccessor().getFunctionName().equals("ldv_main")
+                  && pInput instanceof CAssumeEdge) {
+                //Remove infinite switch, it's too long
+                return false;
+              } else {
+                return true;
+              }
+            }
+          }).toList();
           Iterator<Pair<Object, PathTemplate>> pairIterator = counterexample.getAllFurtherInformation().iterator();
           List<BooleanFormula> formulas = (List<BooleanFormula>) pairIterator.next().getFirst();
           List<ARGState> interpolants = (List<ARGState>) pairIterator.next().getFirst();
           pStat.CacheInterpolantsTime.start();
-          interpolants = from(interpolants).transform(new Function<ARGState, ARGState>() {
-            @Override
-            @Nullable
-            public ARGState apply(@Nullable ARGState pInput) {
-              assert pathStateToReachedState.containsKey(pInput);
-              return pathStateToReachedState.get(pInput);
-            }
-          }).toList();
+          interpolants = from(interpolants).transform(TRANSLATE_TO_ORIGIN_STATES).toList();
           refinedStates.add(interpolants);
           pStat.CacheInterpolantsTime.stop();
           pStat.CacheTime.start();
           if (iCache.contains(target, formulas)) {
           	computer.setResultOfRefinement(target, true, pPath.getInnerEdges());
+		logger.log(Level.WARNING, "Interpolants are repeated, consider " + target + " as true");
             target.failureFlag = true;
           } else {
             iCache.add(target, formulas);
@@ -226,13 +246,13 @@ top:while ((target = computer.getNextRefineableUsage()) != null) {
       pReached.updatePrecision(pReached.getFirstState(),
           Precisions.replaceByType(p, PredicatePrecision.empty(), Predicates.instanceOf(PredicatePrecision.class)));
       iCache.reset();
-      bamcpa.clearAllCaches();
       lastFalseUnsafeSize = originUnsafeSize;
       lastTrueUnsafes = newTrueUnsafeSize;
     }
     if (refinementFinish) {
       iCache.removeUnusedCacheEntries();
       transfer.clearCaches();
+      bamcpa.clearAllCaches();
       ARGState firstState = (ARGState) pReached.getFirstState();
       CFANode firstNode = AbstractStates.extractLocation(firstState);
       ARGState.clearIdGenerator();
@@ -247,7 +267,7 @@ top:while ((target = computer.getNextRefineableUsage()) != null) {
   ARGPath computePath(ARGState pLastElement) throws InterruptedException, CPATransferException {
     assert (pLastElement != null && !pLastElement.isDestroyed());
       //we delete this state from other unsafe
-    ARGState subgraph = transfer.findPath(pLastElement, pathStateToReachedState);
+    ARGState subgraph = transfer.findPath(pLastElement, subgraphStatesToReachedState);
     assert (subgraph != null);
     return ARGUtils.getRandomPath(subgraph);
   }

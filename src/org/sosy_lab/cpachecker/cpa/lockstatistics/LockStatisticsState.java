@@ -29,6 +29,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
+import java.util.SortedSet;
 
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
@@ -211,7 +212,7 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
     return locks;
   }
 
-  public Set<LockIdentifier> getLockIdentifiers() {
+  public SortedSet<LockIdentifier> getLockIdentifiers() {
     return Sets.newTreeSet(locks.keySet());
   }
 

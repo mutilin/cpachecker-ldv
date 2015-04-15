@@ -25,6 +25,7 @@ package org.sosy_lab.cpachecker.cpa.callstack;
 
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
@@ -34,7 +35,7 @@ public class CallstackReducer implements Reducer {
 
   @Override
   public AbstractState getVariableReducedState(
-      AbstractState pExpandedState, Block pContext, CFANode callNode) {
+      AbstractState pExpandedState, Block pContext, Block outerContext, CFANode callNode) {
 
     CallstackState element = (CallstackState) pExpandedState;
 
@@ -48,13 +49,15 @@ public class CallstackReducer implements Reducer {
     } else {
       assert element.getPreviousState() != null;
       CallstackState recursiveResult = copyCallstackUpToCallNode(element.getPreviousState(), callNode);
-      return new CallstackState(recursiveResult, element.getCurrentFunction(), element.getCallNode());
+      return new CallstackState(recursiveResult,
+          element.getCurrentFunction(),
+          element.getCallNode());
     }
   }
 
   @Override
   public AbstractState getVariableExpandedState(
-      AbstractState pRootState, Block pReducedContext,
+      AbstractState pRootState, Block pReducedContext, Block outerSubtree,
       AbstractState pReducedState) {
 
     CallstackState rootState = (CallstackState) pRootState;
@@ -74,7 +77,11 @@ public class CallstackReducer implements Reducer {
       return target;
     } else {
       CallstackState recursiveResult = copyCallstackExceptLast(target, source.getPreviousState());
-      return new CallstackState(recursiveResult, source.getCurrentFunction(), source.getCallNode());
+
+      return new CallstackState(
+          recursiveResult,
+          source.getCurrentFunction(),
+          source.getCallNode());
     }
   }
 
@@ -137,17 +144,18 @@ public class CallstackReducer implements Reducer {
   @Override
   public AbstractState getVariableReducedStateForProofChecking(AbstractState pExpandedState, Block pContext,
       CFANode pCallNode) {
-    return getVariableReducedState(pExpandedState, pContext, pCallNode);
+    return getVariableReducedState(pExpandedState, pContext, null, pCallNode);
   }
 
   @Override
   public AbstractState getVariableExpandedStateForProofChecking(AbstractState pRootState, Block pReducedContext,
       AbstractState pReducedState) {
-    return getVariableExpandedState(pRootState, pReducedContext, pReducedState);
+    return getVariableExpandedState(pRootState, pReducedContext, null, pReducedState);
   }
 
   @Override
-  public AbstractState rebuildStateAfterFunctionCall(AbstractState rootState, AbstractState entryState, AbstractState expandedState, CFANode exitLocation) {
+  public AbstractState rebuildStateAfterFunctionCall(AbstractState rootState, AbstractState entryState,
+      AbstractState expandedState, FunctionExitNode exitLocation) {
     return expandedState;
   }
 }

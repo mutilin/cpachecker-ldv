@@ -114,7 +114,7 @@ public final class Z3NativeApi {
    * @return status as {@link Z3NativeApiConstants.Z3_LBOOL}:
    *   false, undefined or true.
    */
-  public static native int optimize_check(long context, long optimize);
+  public static native int optimize_check(long context, long optimize) throws Z3SolverException;
 
   /**
    * \brief Retrieve the model for the last #Z3_optimize_check
@@ -238,6 +238,13 @@ public final class Z3NativeApi {
   public static native void dec_ref(long context, long ast);
   public static native void update_param_value(long context, String param_id, String param_value);
   public static native boolean get_param_value(long context, String param_id, PointerToString param_value);
+
+  /**
+   * Interrupt the execution of a Z3 procedure.
+   * This procedure can be used to interrupt: solvers, simplifiers and tactics.
+   *
+   * @param context Z3_context
+   */
   public static native void interrupt(long context);
 
 
@@ -339,6 +346,12 @@ public final class Z3NativeApi {
   public static native long mk_power(long context, long a1, long a2);
 
   public static native long mk_lt(long context, long a1, long a2);
+
+  /**
+   * Create less than or equal to.
+   * The nodes {@code t1} and {@code t2} must have the same sort, and must be
+   * int or real.
+   */
   public static native long mk_le(long context, long a1, long a2);
   public static native long mk_gt(long context, long a1, long a2);
   public static native long mk_ge(long context, long a1, long a2);
@@ -503,6 +516,11 @@ public final class Z3NativeApi {
   public static native long app_to_ast(long context, long a1);
   public static native long get_app_decl(long context, long a1);
   public static native int get_app_num_args(long context, long a1);
+
+  /**
+   * Precondition: {@code i < get_num_args(c, a)}
+   * @return Z3_ast the i-th argument of the given application.
+   */
   public static native long get_app_arg(long context, long a1, int index);
   public static native boolean is_eq_ast(long context, long a1, long a2);
   public static native int get_ast_id(long context, long a1);
@@ -851,7 +869,7 @@ public final class Z3NativeApi {
   public static native void solver_assert(long context, long solver, long ast);
   public static native void solver_assert_and_track(long context, long solver, long ast, long p);
   public static native long solver_get_assertions(long context, long solver);
-  public static native int solver_check(long context, long solver);
+  public static native int solver_check(long context, long solver) throws Z3SolverException;
   public static native int solver_check_assumptions(long context, long solver, int len, long[] assumptions);
   public static native long solver_get_model(long context, long solver);
   public static native long solver_get_proof(long context, long solver);
@@ -934,7 +952,8 @@ public final class Z3NativeApi {
    *
    * The return value is a vector of formulas representing sigma. The
    * vector contains sigma(phi) for each marked subformula of pat, in
-   * pre-order traversal. This means that subformulas of phi occur before phi
+   * pre-order traversal. // TODO documentation wrong? it is POST-ORDER traversal!
+   * This means that subformulas of phi occur before phi
    * in the vector. Also, subformulas that occur multiply in pat will
    * occur multiply in the result vector.
    *

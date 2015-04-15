@@ -25,13 +25,14 @@ package org.sosy_lab.cpachecker.core.interfaces;
 
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
 
 
 public interface Reducer {
 
-  AbstractState getVariableReducedState(AbstractState expandedState, Block context, CFANode callNode);
+  AbstractState getVariableReducedState(AbstractState expandedState, Block context, Block outerContext, CFANode callNode);
 
-  AbstractState getVariableExpandedState(AbstractState rootState, Block reducedContext, AbstractState reducedState);
+  AbstractState getVariableExpandedState(AbstractState rootState, Block reducedContext, Block outerContext, AbstractState reducedState);
 
   Precision getVariableReducedPrecision(Precision precision, Block context);
 
@@ -79,5 +80,5 @@ public interface Reducer {
    * returnState <------------  rebuildState
    */
   AbstractState rebuildStateAfterFunctionCall(AbstractState rootState, AbstractState entryState,
-                                              AbstractState expandedState, CFANode exitLocation);
+      AbstractState expandedState, FunctionExitNode exitLocation);
   }

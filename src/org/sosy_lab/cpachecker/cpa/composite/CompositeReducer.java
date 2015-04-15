@@ -29,6 +29,7 @@ import java.util.List;
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
@@ -44,20 +45,20 @@ public class CompositeReducer implements Reducer {
 
   @Override
   public AbstractState getVariableReducedState(
-      AbstractState pExpandedState, Block pContext,
+      AbstractState pExpandedState, Block pContext, Block outerContext,
       CFANode pLocation) {
 
     List<AbstractState> result = new ArrayList<>();
     int i = 0;
     for (AbstractState expandedState : ((CompositeState)pExpandedState).getWrappedStates()) {
-      result.add(wrappedReducers.get(i++).getVariableReducedState(expandedState, pContext, pLocation));
+      result.add(wrappedReducers.get(i++).getVariableReducedState(expandedState, pContext, outerContext, pLocation));
     }
     return new CompositeState(result);
   }
 
   @Override
   public AbstractState getVariableExpandedState(
-      AbstractState pRootState, Block pReducedContext,
+      AbstractState pRootState, Block pReducedContext, Block outerSubtree,
       AbstractState pReducedState) {
 
     List<AbstractState> rootStates = ((CompositeState)pRootState).getWrappedStates();
@@ -66,7 +67,7 @@ public class CompositeReducer implements Reducer {
     List<AbstractState> result = new ArrayList<>();
     int i = 0;
     for (Pair<AbstractState, AbstractState> p : Pair.zipList(rootStates, reducedStates)) {
-      result.add(wrappedReducers.get(i++).getVariableExpandedState(p.getFirst(), pReducedContext, p.getSecond()));
+      result.add(wrappedReducers.get(i++).getVariableExpandedState(p.getFirst(), pReducedContext, outerSubtree, p.getSecond()));
     }
     return new CompositeState(result);
   }
@@ -156,7 +157,7 @@ public class CompositeReducer implements Reducer {
 
   @Override
   public AbstractState rebuildStateAfterFunctionCall(AbstractState pRootState, AbstractState pEntryState,
-                                                     AbstractState pExpandedState, CFANode exitLocation) {
+      AbstractState pExpandedState, FunctionExitNode exitLocation) {
     List<AbstractState> rootStates = ((CompositeState)pRootState).getWrappedStates();
     List<AbstractState> entryStates = ((CompositeState)pEntryState).getWrappedStates();
     List<AbstractState> expandedStates = ((CompositeState)pExpandedState).getWrappedStates();

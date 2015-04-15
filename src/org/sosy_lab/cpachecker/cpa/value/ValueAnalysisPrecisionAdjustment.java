@@ -33,6 +33,7 @@ import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.CFA;
+import org.sosy_lab.cpachecker.cfa.model.BlankEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdgeType;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
@@ -41,20 +42,23 @@ import org.sosy_lab.cpachecker.core.defaults.VariableTrackingPrecision;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustment;
+import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustmentResult;
+import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustmentResult.Action;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
 import org.sosy_lab.cpachecker.cpa.conditions.path.AssignmentsInPathCondition.UniqueAssignmentsInPathConditionState;
 import org.sosy_lab.cpachecker.cpa.location.LocationState;
-import org.sosy_lab.cpachecker.cpa.value.ValueAnalysisState.MemoryLocation;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.LiveVariables;
+import org.sosy_lab.cpachecker.util.states.MemoryLocation;
 import org.sosy_lab.cpachecker.util.statistics.StatCounter;
 import org.sosy_lab.cpachecker.util.statistics.StatTimer;
 import org.sosy_lab.cpachecker.util.statistics.StatisticsWriter;
 
+import com.google.common.base.Function;
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableSet;
 
@@ -72,6 +76,12 @@ public class ValueAnalysisPrecisionAdjustment implements PrecisionAdjustment, St
 
   @Option(secure=true, description="restrict abstractions to join points")
   private boolean alwaysAtJoins = false;
+
+  @Option(secure=true, description="toggle liveness abstraction")
+  private boolean doLivenessAbstraction = false;
+
+  @Option(secure=true, description="restrict liveness abstractions to nodes with more than one entering and/or leaving edge")
+  private boolean onlyAtNonLinearCFA = false;
 
   private final ImmutableSet<CFANode> loopHeads;
 
@@ -122,7 +132,9 @@ public class ValueAnalysisPrecisionAdjustment implements PrecisionAdjustment, St
   }
 
   @Override
-  public PrecisionAdjustmentResult prec(AbstractState pState, Precision pPrecision, UnmodifiableReachedSet pStates, AbstractState fullState)
+  public Optional<PrecisionAdjustmentResult> prec(AbstractState pState, Precision pPrecision, UnmodifiableReachedSet pStates,
+      Function<AbstractState, AbstractState> projection,
+      AbstractState fullState)
       throws CPAException, InterruptedException {
 
     return prec((ValueAnalysisState)pState,
@@ -131,13 +143,13 @@ public class ValueAnalysisPrecisionAdjustment implements PrecisionAdjustment, St
         AbstractStates.extractStateByType(fullState, UniqueAssignmentsInPathConditionState.class));
   }
 
-  private PrecisionAdjustmentResult prec(ValueAnalysisState pState,
+  private Optional<PrecisionAdjustmentResult> prec(ValueAnalysisState pState,
       VariableTrackingPrecision pPrecision,
       LocationState location,
       UniqueAssignmentsInPathConditionState assignments) {
     ValueAnalysisState resultState = ValueAnalysisState.copyOf(pState);
 
-    if(liveVariables.isPresent()) {
+    if(doLivenessAbstraction && liveVariables.isPresent()) {
       totalLiveness.start();
       enforceLiveness(pState, location, resultState);
       totalLiveness.stop();
@@ -158,13 +170,29 @@ public class ValueAnalysisPrecisionAdjustment implements PrecisionAdjustment, St
       totalEnforcePath.stop();
     }
 
-    return PrecisionAdjustmentResult.create(resultState, pPrecision, Action.CONTINUE);
+    return Optional.of(PrecisionAdjustmentResult.create(resultState, pPrecision, Action.CONTINUE));
   }
 
   private void enforceLiveness(ValueAnalysisState pState, LocationState location, ValueAnalysisState resultState) {
-    for (MemoryLocation variable : pState.getTrackedMemoryLocations()) {
-      if (!liveVariables.get().isVariableLive(variable.getAsSimpleString(), location.getLocationNode())) {
-        resultState.forget(variable);
+    CFANode actNode = location.getLocationNode();
+
+    boolean hasMoreThanOneEnteringLeavingEdge = actNode.getNumEnteringEdges() > 1 || actNode.getNumLeavingEdges() > 1;
+
+    if (!onlyAtNonLinearCFA || hasMoreThanOneEnteringLeavingEdge) {
+      boolean onlyBlankEdgesEntering = true;
+      for (int i = 0; i < actNode.getNumEnteringEdges() && onlyBlankEdgesEntering; i++) {
+        onlyBlankEdgesEntering = location.getLocationNode().getEnteringEdge(i) instanceof BlankEdge;
+      }
+
+      // when there are only blank edges that lead to this state, then we can
+      // skip the abstraction, after a blank edge there cannot be a variable
+      // less live
+      if (!onlyBlankEdgesEntering) {
+        for (MemoryLocation variable : pState.getTrackedMemoryLocations()) {
+          if (!liveVariables.get().isVariableLive(variable.getAsSimpleString(), location.getLocationNode())) {
+            resultState.forget(variable);
+          }
+        }
       }
     }
   }

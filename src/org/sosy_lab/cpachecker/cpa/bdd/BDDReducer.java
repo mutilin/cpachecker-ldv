@@ -30,6 +30,7 @@ import org.sosy_lab.common.Pair;
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.blocks.ReferencedVariable;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
@@ -55,7 +56,7 @@ public class BDDReducer implements Reducer {
   }
 
   @Override
-  public AbstractState getVariableReducedState(AbstractState pExpandedState, Block pBlock, CFANode pCallNode) {
+  public AbstractState getVariableReducedState(AbstractState pExpandedState, Block pBlock, Block outerContext, CFANode pCallNode) {
     BDDState state = (BDDState)pExpandedState;
 
     final Set<String> trackedVars = predmgr.getTrackedVars().keySet();
@@ -72,7 +73,7 @@ public class BDDReducer implements Reducer {
   }
 
   @Override
-  public AbstractState getVariableExpandedState(AbstractState pRootState, Block reducedContext, AbstractState pReducedState) {
+  public AbstractState getVariableExpandedState(AbstractState pRootState, Block reducedContext, Block outerSubtree, AbstractState pReducedState) {
     BDDState state = (BDDState)pRootState;
     BDDState reducedState = (BDDState)pReducedState;
 
@@ -111,17 +112,18 @@ public class BDDReducer implements Reducer {
   @Override
   public AbstractState getVariableReducedStateForProofChecking(AbstractState pExpandedState, Block pContext, CFANode pCallNode) {
     // TODO what to do?
-    return getVariableReducedState(pExpandedState, pContext, pCallNode);
+    return getVariableReducedState(pExpandedState, pContext, null, pCallNode);
   }
 
   @Override
   public AbstractState getVariableExpandedStateForProofChecking(AbstractState pRootState, Block pReducedContext, AbstractState pReducedState) {
     // TODO what to do?
-    return getVariableExpandedState(pRootState, pReducedContext, pReducedState);
+    return getVariableExpandedState(pRootState, pReducedContext, null, pReducedState);
   }
 
   @Override
-  public AbstractState rebuildStateAfterFunctionCall(AbstractState rootState, AbstractState entryState, AbstractState expandedState, CFANode exitLocation) {
+  public AbstractState rebuildStateAfterFunctionCall(AbstractState rootState, AbstractState entryState,
+      AbstractState expandedState, FunctionExitNode exitLocation) {
     throw new UnsupportedOperationException("not implemented");
   }
 }

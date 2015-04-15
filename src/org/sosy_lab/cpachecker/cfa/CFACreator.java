@@ -180,6 +180,12 @@ public class CFACreator {
           + "checked if it is 0")
   private boolean checkNullPointers = false;
 
+  @Option(secure=true, name="cfa.skippedFunctionCalls",
+      description="function calls, which were deleted from cfa."
+          + "This option is useful to avoid unimportant recursion in final functions "
+          + "like exit() or abort()")
+  private Set<String> skippedFunctionCalls = new HashSet<>();
+
   @Option(secure=true, name="cfa.expandFunctionPointerArrayAssignments",
       description="When a function pointer array element is written with a variable as index, "
           + "create a series of if-else edges with explicit indizes instead.")
@@ -503,7 +509,7 @@ private boolean classifyNodes = false;
   /** This method parses the program from the String and builds a CFA for each function.
    * The ParseResult is only a Wrapper for the CFAs of the functions and global declarations. */
   private ParseResult parseToCFAs(final String program)
-      throws InvalidConfigurationException, IOException, ParserException, InterruptedException {
+      throws InvalidConfigurationException, ParserException {
     final ParseResult parseResult;
 
     final CSourceOriginMapping sourceOriginMapping = new CSourceOriginMapping();
@@ -653,6 +659,12 @@ private boolean classifyNodes = false;
 
     if (useMultiEdges) {
       MultiEdgeCreator.createMultiEdges(cfa);
+    }
+
+    if (!skippedFunctionCalls.isEmpty()) {
+      for (String functionName : skippedFunctionCalls) {
+        cfa.removeFunction(functionName);
+      }
     }
 
     return cfa;

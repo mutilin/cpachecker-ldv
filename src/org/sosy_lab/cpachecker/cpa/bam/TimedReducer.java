@@ -26,6 +26,7 @@ package org.sosy_lab.cpachecker.cpa.bam;
 import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
@@ -46,12 +47,12 @@ class TimedReducer implements Reducer {
 
   @Override
   public AbstractState getVariableReducedState(
-      AbstractState pExpandedState, Block pContext,
+      AbstractState pExpandedState, Block pContext, Block outerContext,
       CFANode pCallNode) {
 
     reduceTime.start();
     try {
-      return wrappedReducer.getVariableReducedState(pExpandedState, pContext, pCallNode);
+      return wrappedReducer.getVariableReducedState(pExpandedState, pContext, outerContext, pCallNode);
     } finally {
       reduceTime.stop();
     }
@@ -59,12 +60,12 @@ class TimedReducer implements Reducer {
 
   @Override
   public AbstractState getVariableExpandedState(
-      AbstractState pRootState, Block pReducedContext,
+      AbstractState pRootState, Block pReducedContext, Block outerSubtree,
       AbstractState pReducedState) {
 
     expandTime.start();
     try {
-      return wrappedReducer.getVariableExpandedState(pRootState, pReducedContext, pReducedState);
+      return wrappedReducer.getVariableExpandedState(pRootState, pReducedContext, outerSubtree, pReducedState);
     } finally {
       expandTime.stop();
     }
@@ -116,7 +117,8 @@ class TimedReducer implements Reducer {
   }
 
   @Override
-  public AbstractState rebuildStateAfterFunctionCall(AbstractState rootState, AbstractState entryState, AbstractState expandedState, CFANode exitLocation) {
+  public AbstractState rebuildStateAfterFunctionCall(AbstractState rootState, AbstractState entryState,
+      AbstractState expandedState, FunctionExitNode exitLocation) {
     return wrappedReducer.rebuildStateAfterFunctionCall(rootState, entryState, expandedState, exitLocation);
   }
 }

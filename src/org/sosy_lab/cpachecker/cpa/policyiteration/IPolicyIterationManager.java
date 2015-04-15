@@ -8,8 +8,14 @@ import javax.annotation.Nullable;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
+import org.sosy_lab.cpachecker.core.interfaces.Precision;
+import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustmentResult;
+import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
+import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
+
+import com.google.common.base.Optional;
 
 /**
  * Interface for the processing functions for policy iteration.
@@ -21,7 +27,8 @@ public interface IPolicyIterationManager {
   ) throws CPAException, InterruptedException;
 
   Collection<PolicyState> getAbstractSuccessors(
-      PolicyState state, CFAEdge edge
+      PolicyState state,
+      CFAEdge edge
   ) throws CPATransferException, InterruptedException;
 
   Collection<PolicyState> strengthen(
@@ -31,4 +38,10 @@ public interface IPolicyIterationManager {
   ) throws CPATransferException, InterruptedException;
 
   PolicyState getInitialState(CFANode node);
+
+  Optional<PrecisionAdjustmentResult> prec(
+      PolicyState state,
+      Precision precision,
+      UnmodifiableReachedSet states,
+      ARGState pArgState) throws CPAException, InterruptedException;
 }

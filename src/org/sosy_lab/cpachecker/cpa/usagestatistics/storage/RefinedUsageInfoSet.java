@@ -22,7 +22,8 @@ public class RefinedUsageInfoSet implements AbstractUsageInfoSet {
   }
 
   @Override
-  public void remove(UsageStatisticsState pUstate) {
+  public boolean remove(UsageStatisticsState pUstate) {
+    return false;
   }
 
   @Override

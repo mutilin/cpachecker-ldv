@@ -25,6 +25,7 @@ package org.sosy_lab.cpachecker.cpa.local;
 
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
@@ -33,14 +34,14 @@ import org.sosy_lab.cpachecker.core.interfaces.Reducer;
 public class LocalReducer implements Reducer {
 
   @Override
-  public AbstractState getVariableReducedState(AbstractState pExpandedState, Block pContext, CFANode pCallNode) {
+  public AbstractState getVariableReducedState(AbstractState pExpandedState, Block pContext, Block outerContext, CFANode pCallNode) {
     LocalState localState = (LocalState) pExpandedState;
     LocalState reducedState = localState.reduce();
     return reducedState;
   }
 
   @Override
-  public AbstractState getVariableExpandedState(AbstractState pRootState, Block pReducedContext,
+  public AbstractState getVariableExpandedState(AbstractState pRootState, Block pReducedContext, Block outerSubtree,
       AbstractState pReducedState) {
     LocalState newState = (LocalState)pReducedState;
     return newState.expand((LocalState)pRootState);
@@ -71,18 +72,18 @@ public class LocalReducer implements Reducer {
   @Override
   public AbstractState getVariableReducedStateForProofChecking(AbstractState pExpandedState, Block pContext,
       CFANode pCallNode) {
-    return getVariableReducedState(pExpandedState, pContext, pCallNode);
+    return getVariableReducedState(pExpandedState, pContext, null, pCallNode);
   }
 
   @Override
   public AbstractState getVariableExpandedStateForProofChecking(AbstractState pRootState, Block pReducedContext,
       AbstractState pReducedState) {
-    return getVariableExpandedState(pRootState, pReducedContext, pReducedState);
+    return getVariableExpandedState(pRootState, pReducedContext, null, pReducedState);
   }
 
   @Override
   public AbstractState rebuildStateAfterFunctionCall(AbstractState pRootState, AbstractState pEntryState,
-      AbstractState pExpandedState, CFANode pExitLocation) {
+      AbstractState pExpandedState, FunctionExitNode pExitLocation) {
     return pExpandedState;
   }
 

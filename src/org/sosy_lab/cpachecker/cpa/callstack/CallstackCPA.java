@@ -55,7 +55,7 @@ import com.google.common.collect.Iterables;
 
 public class CallstackCPA extends AbstractCPA implements ConfigurableProgramAnalysisWithBAM, ProofChecker {
 
-  private final Reducer reducer = new CallstackReducer();
+  private final Reducer reducer;
 
   private final CFA cfa;
 
@@ -64,8 +64,12 @@ public class CallstackCPA extends AbstractCPA implements ConfigurableProgramAnal
   }
 
   public CallstackCPA(Configuration config, LogManager pLogger, CFA pCFA) throws InvalidConfigurationException {
-    super("sep", "sep", new DomainInitializer(config).initializeDomain() , new CallstackTransferRelation(config, pLogger));
+    super("sep", "sep",
+        new DomainInitializer(config).initializeDomain(),
+        new CallstackTransferRelation(config, pLogger)
+    );
     this.cfa = pCFA;
+    reducer = new CallstackReducer();
   }
 
   @Override
@@ -83,8 +87,11 @@ public class CallstackCPA extends AbstractCPA implements ConfigurableProgramAnal
       if (!artificialLoops.isEmpty()) {
         Loop singleLoop = Iterables.getOnlyElement(artificialLoops);
         if (singleLoop.getLoopNodes().contains(pNode)) {
-          return new CallstackState(null,
-              CFASingleLoopTransformation.ARTIFICIAL_PROGRAM_COUNTER_FUNCTION_NAME, pNode);
+          return new CallstackState(
+              null,
+              CFASingleLoopTransformation.ARTIFICIAL_PROGRAM_COUNTER_FUNCTION_NAME,
+              pNode
+          );
         }
       }
     }

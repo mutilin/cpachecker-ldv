@@ -24,11 +24,11 @@
 package org.sosy_lab.cpachecker.cpa.usagestatistics.storage;
 
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedSet;
 import java.util.TreeSet;
 
 import org.sosy_lab.common.Pair;
@@ -36,6 +36,7 @@ import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsState;
 
 public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
@@ -80,9 +81,13 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
         UsagePoint point = iterator.next();
         if (newPoint.isHigher(point)) {
           iterator.remove();
-          newPoint.addCoveredUsage(point);
+          if (!refinedInformation.containsKey(newPoint)) {
+            newPoint.addCoveredUsage(point);
+          }
         } else if (point.isHigher(newPoint)) {
-          point.addCoveredUsage(newPoint);
+          if (!refinedInformation.containsKey(point)) {
+            point.addCoveredUsage(newPoint);
+          }
           return;
         }
       }
@@ -121,7 +126,7 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
 
   @Override
   public AbstractUsageInfoSet getUsageInfo(UsagePoint point) {
-    if (point.isTrue()) {
+    if (refinedInformation.containsKey(point)) {
       return refinedInformation.get(point);
     } else {
       return unrefinedInformation.get(point);
@@ -202,7 +207,7 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     Iterator<UsagePoint> iterator = topUsages.iterator();
     while (iterator.hasNext()) {
       UsagePoint point = iterator.next();
-      if (!point.isTrue()) {
+      if (!refinedInformation.containsKey(point)) {
         iterator.remove();
       }
     }
@@ -211,8 +216,17 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
 
   @Override
   public void remove(UsageStatisticsState pUstate) {
-    for (UsagePoint point : unrefinedInformation.keySet()) {
-      unrefinedInformation.get(point).remove(pUstate);
+    //Attention! Use carefully. May not work
+    for (UsagePoint point : new TreeSet<>(unrefinedInformation.keySet())) {
+      UnrefinedUsageInfoSet uset = unrefinedInformation.get(point);
+      boolean b = uset.remove(pUstate);
+      if (b) {
+        if (uset.getUsages().isEmpty()) {
+          unrefinedInformation.remove(point);
+        }
+        //May be two usages related to the same state. This is abstractState !
+        //return;
+      }
     }
   }
 
@@ -225,7 +239,7 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     return topUsages.size();
   }
 
-  public void markAsTrue(UsageInfo uinfo, List<CFAEdge> path) {
+  public void markAsReachableUsage(UsageInfo uinfo,  List<CFAEdge> path) {
 
     UsagePoint p = uinfo.getUsagePoint();
     assert topUsages.contains(p);
@@ -233,6 +247,7 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     topUsages.remove(p);
     p.markAsTrue(path);
     topUsages.add(p);
+    unrefinedInformation.remove(p);
     refinedInformation.put(p, new RefinedUsageInfoSet(uinfo, path));
   }
 
@@ -249,21 +264,11 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     }
   }
 
-  public RefinedUsagePointSet asTrueUnsafe() {
-    //TODO Wrong! First two refined usages may not create an unsafe pair
-    Iterator<UsagePoint> iterator = topUsages.iterator();
-    UsagePoint first = iterator.next();
-    if (iterator.hasNext()) {
-      UsagePoint second = iterator.next();
-      if (second.isTrue()) {
-        return RefinedUsagePointSet.create(refinedInformation.get(first), refinedInformation.get(second));
-      }
-    }
-    return RefinedUsagePointSet.create(refinedInformation.get(first));
+  SortedSet<UsagePoint> getTopUsages() {
+    return topUsages;
   }
 
-  @Override
-  public boolean isUnsafe() {
-    return isUnsafe(topUsages);
+  Set<UsagePoint> getRefinedInformation() {
+    return refinedInformation.keySet();
   }
 }

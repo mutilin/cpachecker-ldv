@@ -26,6 +26,7 @@ package org.sosy_lab.cpachecker.cpa.functionpointer;
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
@@ -34,7 +35,7 @@ import org.sosy_lab.cpachecker.core.interfaces.Reducer;
 public class FunctionPointerReducer implements Reducer {
 
   @Override
-  public AbstractState getVariableReducedState(AbstractState pExpandedState, Block pContext, CFANode pCallNode) {
+  public AbstractState getVariableReducedState(AbstractState pExpandedState, Block pContext, Block outerContext, CFANode pCallNode) {
     FunctionPointerState state = (FunctionPointerState) pExpandedState;
     FunctionPointerState.Builder builder = state.createBuilder();
     builder.clearVariablesExceptPrefix(pCallNode.getFunctionName());
@@ -42,7 +43,7 @@ public class FunctionPointerReducer implements Reducer {
   }
 
   @Override
-  public AbstractState getVariableExpandedState(AbstractState pRootState, Block pReducedContext,
+  public AbstractState getVariableExpandedState(AbstractState pRootState, Block pReducedContext, Block outerSubtree,
       AbstractState pReducedState) {
     FunctionPointerState state = (FunctionPointerState) pRootState;
     FunctionPointerState.Builder builder = state.createBuilder();
@@ -86,7 +87,7 @@ public class FunctionPointerReducer implements Reducer {
 
   @Override
   public AbstractState rebuildStateAfterFunctionCall(AbstractState pRootState, AbstractState pEntryState,
-      AbstractState pExpandedState, CFANode pExitLocation) {
+      AbstractState pExpandedState, FunctionExitNode pExitLocation) {
     return pExpandedState;
   }
 

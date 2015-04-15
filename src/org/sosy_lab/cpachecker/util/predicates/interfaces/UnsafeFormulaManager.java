@@ -27,6 +27,8 @@ package org.sosy_lab.cpachecker.util.predicates.interfaces;
 import java.util.List;
 import java.util.Map;
 
+import org.sosy_lab.common.Pair;
+
 /**
  * This interface represents some formula traverse methods which should not be used on higher levels.
  * These Methods are hidden behind the View, but used in the view for methods like "extractAtoms".
@@ -62,13 +64,6 @@ public interface UnsafeFormulaManager {
    * @return
    */
   boolean isAtom(Formula f);
-
-  /**
-   * Checks if the given Formula is a literal (atom or the negation of an atom).
-   * @param f
-   * @return
-   */
-  boolean isLiteral(Formula pF);
 
   /**
    * Checks if the given Formula is a variable.
@@ -166,6 +161,17 @@ public interface UnsafeFormulaManager {
    * @return
    */
   <T extends Formula> T replaceName(T f, String newName);
+
+  /**
+   * If the given formula is a numeral (i.e., non-boolean) equality "x = y",
+   * return a list {@code x<=y, x>=y}.
+   *
+   * Otherwise, return the unchanged formula.
+   * Note:
+   *  1) Returned list always has one or two elements.
+   *  2) Conjunction over the returned list is equivalent to the input formula.
+   */
+  <T extends Formula> List<T> splitNumeralEqualityIfPossible(T f);
 
   /**
    * Substitute every occurrence of any item from {@code changeFrom}

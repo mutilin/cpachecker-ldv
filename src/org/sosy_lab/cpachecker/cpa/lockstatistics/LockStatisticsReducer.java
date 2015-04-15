@@ -36,6 +36,7 @@ import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
@@ -71,7 +72,7 @@ public class LockStatisticsReducer implements Reducer {
   }
 
   @Override
-  public AbstractState getVariableReducedState(AbstractState pExpandedElement, Block pContext, CFANode pCallNode) {
+  public AbstractState getVariableReducedState(AbstractState pExpandedElement, Block pContext, Block outerContext, CFANode pCallNode) {
     LockStatisticsState lockState = (LockStatisticsState) pExpandedElement;
     LockStatisticsStateBuilder builder = lockState.builder();
     builder.reduce();
@@ -82,7 +83,7 @@ public class LockStatisticsReducer implements Reducer {
   }
 
   @Override
-  public AbstractState getVariableExpandedState(AbstractState pRootElement, Block pReducedContext,
+  public AbstractState getVariableExpandedState(AbstractState pRootElement, Block pReducedContext, Block outerSubtree,
       AbstractState pReducedElement) {
 
     LockStatisticsState reducedState = (LockStatisticsState)pReducedElement;
@@ -121,18 +122,18 @@ public class LockStatisticsReducer implements Reducer {
   @Override
   public AbstractState getVariableReducedStateForProofChecking(AbstractState pExpandedState, Block pContext,
       CFANode pCallNode) {
-    return getVariableReducedState(pExpandedState, pContext, pCallNode);
+    return getVariableReducedState(pExpandedState, pContext, null, pCallNode);
   }
 
   @Override
   public AbstractState getVariableExpandedStateForProofChecking(AbstractState pRootState, Block pReducedContext,
       AbstractState pReducedState) {
-    return getVariableExpandedState(pRootState, pReducedContext, pReducedState);
+    return getVariableExpandedState(pRootState, pReducedContext, null, pReducedState);
   }
 
   @Override
   public AbstractState rebuildStateAfterFunctionCall(AbstractState pRootState, AbstractState pEntryState,
-      AbstractState pExpandedState, CFANode pExitLocation) {
+      AbstractState pExpandedState, FunctionExitNode pExitLocation) {
     return pExpandedState;
   }
 }

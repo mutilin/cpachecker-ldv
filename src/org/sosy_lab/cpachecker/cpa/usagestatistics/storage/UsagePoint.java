@@ -2,7 +2,9 @@ package org.sosy_lab.cpachecker.cpa.usagestatistics.storage;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Iterator;
 import java.util.Set;
+import java.util.SortedSet;
 import java.util.TreeSet;
 
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
@@ -10,40 +12,37 @@ import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
 
-import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableSortedSet;
 
 public class UsagePoint implements Comparable<UsagePoint> {
-  public final ImmutableSet<LockIdentifier> locks;
+  public final ImmutableSortedSet<LockIdentifier> locks;
   public final Access access;
   //This usage is used to distinct usage points with empty lock sets with write access from each other
   public final UsageInfo keyUsage;
   private final Set<UsagePoint> coveredUsages;
   private boolean isTrue;
 
-  private UsagePoint(Set<LockIdentifier> pLocks, Access pAccess, UsageInfo pInfo) {
-    locks = ImmutableSet.copyOf(pLocks);
+  private UsagePoint(SortedSet<LockIdentifier> pLocks, Access pAccess, UsageInfo pInfo) {
+    locks = ImmutableSortedSet.copyOf(pLocks);
     access = pAccess;
     coveredUsages = new HashSet<>();
     isTrue = false;
     keyUsage = pInfo;
   }
 
-  public UsagePoint(Set<LockIdentifier> pLocks, Access pAccess) {
+  public UsagePoint(SortedSet<LockIdentifier> pLocks, Access pAccess) {
     this(pLocks, pAccess, null);
   }
 
-  public UsagePoint(Access pAccess, UsageInfo pInfo) {
-    this(new TreeSet<LockIdentifier>(), pAccess, pInfo);
+  public UsagePoint(UsageInfo pInfo) {
+    this(new TreeSet<LockIdentifier>(), Access.WRITE, pInfo);
   }
 
   public boolean addCoveredUsage(UsagePoint newChild) {
-    if (isTrue()) {
-      //The covered usages by true point won't be refined
-      return false;
-    }
+    assert (!isTrue);
     if (!coveredUsages.contains(newChild)) {
       for (UsagePoint usage : coveredUsages) {
-        if (usage.isHigher(newChild)) {
+        if (usage.isHigher(newChild) && !usage.isTrue) {
           assert !usage.equals(newChild);
           return usage.addCoveredUsage(newChild);
         }
@@ -116,30 +115,29 @@ public class UsagePoint implements Comparable<UsagePoint> {
     if (result != 0) {
       return result;
     }
-    result = locks.toString().compareTo(o.locks.toString());
-    if (result != 0 || keyUsage == null) {
+    Iterator<LockIdentifier> lockIterator = locks.iterator();
+    Iterator<LockIdentifier> lockIterator2 = o.locks.iterator();
+    while (lockIterator.hasNext()) {
+      result = lockIterator.next().compareTo(lockIterator2.next());
+      if (result != 0) {
+        return result;
+      }
+    }
+    if (keyUsage == null) {
       return result;
     } else {
       return keyUsage.compareTo(o.keyUsage);
     }
   }
 
+  //TODO CompareTo? with enums
   public boolean isHigher(UsagePoint o) {
     // access 'write' is higher than 'read', but only for nonempty locksets
-    if (o.locks.containsAll(locks) && access.ordinal() <= o.access.ordinal()) {
-      if (locks.size() > 0/* || access == Access.READ*/) {
-        return true;
-      } else {
-        if (keyUsage != null && o.keyUsage != null) {
-          if (access.ordinal() < o.access.ordinal()) {
-            //write accesses are always higher than read ones (if we merge read accesses)
-            return true;
-          }
-          //This ordering is very important, do not remove
-          return (keyUsage.compareTo(o.keyUsage) <= 0);
-        }
-        return false;
-      }
+    if (o.locks.containsAll(locks) && access.compareTo(o.access) <= 0 && keyUsage == null) {
+      /* Key usage is important, if it is present, it is write access without locks,
+       * and we should handle all of them without inserting into covered elements of the tree structure
+       */
+      return true;
     }
     return false;
   }
@@ -158,9 +156,6 @@ public class UsagePoint implements Comparable<UsagePoint> {
     if (keyUsage != null) {
       keyUsage.resetKeyState(path);
     }
-  }
-
-  public boolean isTrue() {
-    return isTrue;
+    coveredUsages.clear();
   }
 }

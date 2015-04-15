@@ -27,10 +27,12 @@ import org.sosy_lab.common.Pair;
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.blocks.ReferencedVariable;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
 import org.sosy_lab.cpachecker.core.defaults.VariableTrackingPrecision;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
+import org.sosy_lab.cpachecker.util.states.MemoryLocation;
 
 
 public class ValueAnalysisReducer implements Reducer {
@@ -46,11 +48,11 @@ public class ValueAnalysisReducer implements Reducer {
   }
 
   @Override
-  public AbstractState getVariableReducedState(AbstractState pExpandedState, Block pContext, CFANode pCallNode) {
+  public AbstractState getVariableReducedState(AbstractState pExpandedState, Block pContext, Block outerContext, CFANode pCallNode) {
     ValueAnalysisState expandedState = (ValueAnalysisState)pExpandedState;
 
     ValueAnalysisState clonedElement = ValueAnalysisState.copyOf(expandedState);
-    for (ValueAnalysisState.MemoryLocation trackedVar : expandedState.getTrackedMemoryLocations()) {
+    for (MemoryLocation trackedVar : expandedState.getTrackedMemoryLocations()) {
       // ignore offset (like "3" from "array[3]") to match assignments in loops ("array[i]=12;")
       final String simpleName = trackedVar.getAsSimpleString();
       if (!occursInBlock(pContext, simpleName)) {
@@ -62,7 +64,7 @@ public class ValueAnalysisReducer implements Reducer {
   }
 
   @Override
-  public AbstractState getVariableExpandedState(AbstractState pRootState, Block pReducedContext,
+  public AbstractState getVariableExpandedState(AbstractState pRootState, Block pReducedContext, Block outerSubtree,
       AbstractState pReducedState) {
     ValueAnalysisState rootState = (ValueAnalysisState)pRootState;
     ValueAnalysisState reducedState = (ValueAnalysisState)pReducedState;
@@ -73,7 +75,7 @@ public class ValueAnalysisReducer implements Reducer {
     // - not the variables of rootState used in the block -> just ignore those values
     ValueAnalysisState diffElement = ValueAnalysisState.copyOf(reducedState);
 
-    for (ValueAnalysisState.MemoryLocation trackedVar : rootState.getTrackedMemoryLocations()) {
+    for (MemoryLocation trackedVar : rootState.getTrackedMemoryLocations()) {
       // ignore offset ("3" from "array[3]") to match assignments in loops ("array[i]=12;")
       final String simpleName = trackedVar.getAsSimpleString();
       if (!occursInBlock(pReducedContext, simpleName)) {
@@ -124,21 +126,22 @@ public class ValueAnalysisReducer implements Reducer {
   @Override
   public AbstractState getVariableReducedStateForProofChecking(AbstractState pExpandedState, Block pContext,
       CFANode pCallNode) {
-    return getVariableReducedState(pExpandedState, pContext, pCallNode);
+    return getVariableReducedState(pExpandedState, pContext, null, pCallNode);
   }
 
   @Override
   public AbstractState getVariableExpandedStateForProofChecking(AbstractState pRootState, Block pReducedContext,
       AbstractState pReducedState) {
-    return getVariableExpandedState(pRootState, pReducedContext, pReducedState);
+    return getVariableExpandedState(pRootState, pReducedContext, null, pReducedState);
   }
 
   @Override
-  public AbstractState rebuildStateAfterFunctionCall(AbstractState pRootState, AbstractState entryState, AbstractState pExpandedState, CFANode exitLocation) {
+  public AbstractState rebuildStateAfterFunctionCall(AbstractState pRootState, AbstractState entryState,
+      AbstractState pExpandedState, FunctionExitNode exitLocation) {
 
     ValueAnalysisState rootState = (ValueAnalysisState)pRootState;
     ValueAnalysisState expandedState = (ValueAnalysisState)pExpandedState;
 
-    return expandedState.rebuildStateAfterFunctionCall(rootState);
+    return expandedState.rebuildStateAfterFunctionCall(rootState, exitLocation);
   }
 }

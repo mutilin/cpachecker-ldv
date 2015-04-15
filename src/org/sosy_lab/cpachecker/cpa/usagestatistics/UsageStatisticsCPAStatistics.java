@@ -63,8 +63,10 @@ import org.sosy_lab.cpachecker.cpa.bam.BAMTransferRelation;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.AbstractUsageInfoSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.AbstractUsagePointSet;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.RefinedUsageInfoSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.RefinedUsagePointSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UnrefinedUsagePointSet;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UnsafeDetector;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsageContainer;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsagePoint;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
@@ -103,6 +105,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
   private UsageContainer container;
   private BAMTransferRelation transfer;
+  private UnsafeDetector detector;
 
   public final Timer transferRelationTimer = new Timer();
   public final Timer printStatisticsTimer = new Timer();
@@ -177,10 +180,10 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       UsagePoint point = pointIterator.next();
       totalNumberOfUsagePoints++;
       AbstractUsageInfoSet uset = l.getUsageInfo(point);
-      if (point.isTrue()) {
+      if (uset instanceof RefinedUsageInfoSet) {
         //Refined and contains only one usage, which realizes this point
         trueUsagesInAllUnsafes++;
-        if (l.isTrueUnsafe()) {
+        if (detector.isTrueUnsafe(l)) {
           trueUsagesInTrueUnsafe++;
         }
         if (uset.getOneExample().failureFlag) {
@@ -197,7 +200,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   }
 
   private void countUsageStatistics(RefinedUsagePointSet l) {
-    Pair<UsageInfo, UsageInfo> unsafe = l.getUnsafePair();
+    Pair<UsageInfo, UsageInfo> unsafe = detector.getUnsafePair(l);
     UsageInfo first = unsafe.getFirst();
     UsageInfo second = unsafe.getSecond();
     if (first.failureFlag) {
@@ -254,14 +257,14 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
     writer.append(id.getDereference() + "\n");
     writer.append(id.getType().toASTString(id.getName()) + "\n");
-    if (uinfo.isTrueUnsafe()) {
+    if (detector.isTrueUnsafe(uinfo)) {
     	trueUnsafes++;
       writer.append("Line 0:     N0 -{/*Is true unsafe:*/}-> N0" + "\n");
     }
     writer.append("Line 0:     N0 -{/*Number of usage points:" + uinfo.getNumberOfTopUsagePoints() + "*/}-> N0" + "\n");
     writer.append("Line 0:     N0 -{/*Number of usages      :" + uinfo.size() + "*/}-> N0" + "\n");
     writer.append("Line 0:     N0 -{/*Two examples:*/}-> N0" + "\n");
-    Pair<UsageInfo, UsageInfo> tmpPair = uinfo.getUnsafePair();
+    Pair<UsageInfo, UsageInfo> tmpPair = detector.getUnsafePair(uinfo);
     createVisualization(id, tmpPair.getFirst(), writer);
     createVisualization(id, tmpPair.getSecond(), writer);
     if (tmpPair.getFirst().failureFlag && tmpPair.getSecond().failureFlag) {
@@ -287,6 +290,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 		printStatisticsTimer.start();
 		container = AbstractStates.extractStateByType(reached.getFirstState(), UsageStatisticsState.class)
 		    .getContainer();
+		detector = container.getUnsafeDetector();
 		final int unsafeSize = container.getUnsafeSize();
 
     try {

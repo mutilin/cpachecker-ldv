@@ -128,12 +128,13 @@ public class PredicateCPA implements ConfigurableProgramAnalysis, StatisticsProv
   private final PredicateAbstractState topState;
   private final PredicatePrecisionBootstrapper precisionBootstraper;
   private final PredicateStaticRefiner staticRefiner;
-  private final MachineModel machineModel;
+  private final CFA cfa;
   private final PredicateAssumeStore assumesStore;
   private final AbstractionManager abstractionManager;
+  private final InvariantGenerator invariantGenerator;
 
   protected PredicateCPA(Configuration config, LogManager logger,
-      BlockOperator blk, CFA cfa, ReachedSetFactory reachedSetFactory,
+      BlockOperator blk, CFA pCfa, ReachedSetFactory reachedSetFactory,
       ShutdownNotifier pShutdownNotifier)
           throws InvalidConfigurationException, CPAException {
     config.inject(this, PredicateCPA.class);
@@ -141,6 +142,8 @@ public class PredicateCPA implements ConfigurableProgramAnalysis, StatisticsProv
     this.config = config;
     this.logger = logger;
     this.shutdownNotifier = pShutdownNotifier;
+
+    cfa = pCfa;
 
     if (enableBlockreducer) {
       BlockComputer blockComputer = new BlockedCFAReducer(config, logger);
@@ -159,7 +162,8 @@ public class PredicateCPA implements ConfigurableProgramAnalysis, StatisticsProv
     pathFormulaManager = pfMgr;
 
     RegionManager regionManager;
-    if (abstractionType.equals("FORMULA")) {
+    if (abstractionType.equals("FORMULA") || blk.alwaysReturnsFalse()) {
+      // No need to load BDD library if we never abstract (might use lots of memory)
       regionManager = new SymbolicRegionManager(formulaManager, solver);
     } else {
       assert abstractionType.equals("BDD");
@@ -168,7 +172,7 @@ public class PredicateCPA implements ConfigurableProgramAnalysis, StatisticsProv
     }
     logger.log(Level.INFO, "Using predicate analysis with", libraries + ".");
 
-    abstractionManager = new AbstractionManager(regionManager, formulaManager, config, logger);
+    abstractionManager = new AbstractionManager(regionManager, formulaManager, config, logger, solver);
 
     assumesStore = new PredicateAssumeStore(formulaManager);
 
@@ -179,7 +183,6 @@ public class PredicateCPA implements ConfigurableProgramAnalysis, StatisticsProv
     transfer = new PredicateTransferRelation(this, blk, config, direction);
 
     topState = PredicateAbstractState.mkAbstractionState(
-        formulaManager.getBooleanFormulaManager(),
         pathFormulaManager.makeEmptyPathFormula(),
         predicateManager.makeTrueAbstractionFormula(null),
         PathCopyingPersistentTreeMap.<CFANode, Integer>of());
@@ -193,11 +196,10 @@ public class PredicateCPA implements ConfigurableProgramAnalysis, StatisticsProv
       throw new InternalError("Update list of allowed merge operators");
     }
 
-    InvariantGenerator invariantGenerator;
     if (useInvariantsForAbstraction) {
-      invariantGenerator = new CPAInvariantGenerator(config, logger, reachedSetFactory, pShutdownNotifier, cfa);
+      invariantGenerator = CPAInvariantGenerator.create(config, logger, pShutdownNotifier, cfa);
     } else {
-      invariantGenerator = new DoNothingInvariantGenerator(reachedSetFactory);
+      invariantGenerator = new DoNothingInvariantGenerator();
     }
 
     if (performInitialStaticRefinement) {
@@ -212,12 +214,10 @@ public class PredicateCPA implements ConfigurableProgramAnalysis, StatisticsProv
     logger.log(Level.FINEST, "Initial precision is", initialPrecision);
 
     stats = new PredicateCPAStatistics(this, blk, regionManager, abstractionManager,
-        cfa, invariantGenerator.getTimeOfExecution(), config);
+        cfa, config);
 
-    GlobalInfo.getInstance().storeFormulaManager(formulaManager);
+    GlobalInfo.getInstance().storeFormulaManagerView(formulaManager);
     GlobalInfo.getInstance().storeAbstractionManager(abstractionManager);
-
-    machineModel = cfa.getMachineModel();
 
     prec = new PredicatePrecisionAdjustment(this, invariantGenerator);
 
@@ -303,6 +303,9 @@ public class PredicateCPA implements ConfigurableProgramAnalysis, StatisticsProv
   public void collectStatistics(Collection<Statistics> pStatsCollection) {
     pStatsCollection.add(stats);
     precisionBootstraper.collectStatistics(pStatsCollection);
+    if (invariantGenerator instanceof StatisticsProvider) {
+      ((StatisticsProvider)invariantGenerator).collectStatistics(pStatsCollection);
+    }
   }
 
   @Override
@@ -333,8 +336,12 @@ public class PredicateCPA implements ConfigurableProgramAnalysis, StatisticsProv
     }
   }
 
+  public CFA getCfa() {
+    return cfa;
+  }
+
   public MachineModel getMachineModel() {
-    return machineModel;
+    return cfa.getMachineModel();
   }
 
   public AbstractionManager getAbstractionManager() {

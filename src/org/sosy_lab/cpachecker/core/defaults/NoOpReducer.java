@@ -25,6 +25,7 @@ package org.sosy_lab.cpachecker.core.defaults;
 
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
@@ -38,12 +39,12 @@ public class NoOpReducer implements Reducer {
   }
 
   @Override
-  public AbstractState getVariableReducedState(AbstractState pExpandedState, Block pContext, CFANode pCallNode) {
+  public AbstractState getVariableReducedState(AbstractState pExpandedState, Block pContext, Block outerContext, CFANode pCallNode) {
     return pExpandedState;
   }
 
   @Override
-  public AbstractState getVariableExpandedState(AbstractState pRootState, Block pReducedContext, AbstractState pReducedState) {
+  public AbstractState getVariableExpandedState(AbstractState pRootState, Block pReducedContext, Block outerSubtree, AbstractState pReducedState) {
     return pReducedState;
   }
 
@@ -80,7 +81,8 @@ public class NoOpReducer implements Reducer {
   }
 
   @Override
-  public AbstractState rebuildStateAfterFunctionCall(AbstractState rootState, AbstractState entryState, AbstractState expandedState, CFANode exitLocation) {
+  public AbstractState rebuildStateAfterFunctionCall(AbstractState rootState, AbstractState entryState,
+      AbstractState expandedState, FunctionExitNode exitLocation) {
     return expandedState;
   }
 }

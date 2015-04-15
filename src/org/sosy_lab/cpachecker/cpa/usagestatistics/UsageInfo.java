@@ -77,8 +77,6 @@ public class UsageInfo implements Comparable<UsageInfo> {
   private final Access accessType;
   public boolean failureFlag;
 
-  private static final boolean mergeUsagesWithEqualCallstacks = false;
-
   public UsageInfo(@Nonnull Access atype, @Nonnull LineInfo l,
   								 @Nonnull EdgeType t, @Nonnull LockStatisticsState lock) {
     line = l;
@@ -135,10 +133,10 @@ public class UsageInfo implements Comparable<UsageInfo> {
   }
 
   public UsagePoint getUsagePoint() {
-    if (this.locks.getSize() > 0 || !mergeUsagesWithEqualCallstacks && this.accessType == Access.READ) {
+    if (this.locks.getSize() > 0 || this.accessType == Access.READ) {
       return new UsagePoint(locks.getLockIdentifiers(), accessType);
     } else {
-      return new UsagePoint(accessType, this);
+      return new UsagePoint(this);
     }
   }
 

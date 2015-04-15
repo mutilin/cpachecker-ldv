@@ -34,6 +34,7 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.logging.Level;
 
+import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.log.LogManager;
@@ -46,6 +47,8 @@ public class UsageContainer {
   private final Map<SingleIdentifier, UnrefinedUsagePointSet> unrefinedStat;
   private final Map<UnrefinedUsagePointSet, SingleIdentifier> toId;
   private final Map<SingleIdentifier, RefinedUsagePointSet> refinedStat;
+
+  private final UnsafeDetector detector;
 
   private final Set<SingleIdentifier> falseUnsafes;
 
@@ -62,6 +65,7 @@ public class UsageContainer {
     refinedStat = new TreeMap<>();
     falseUnsafes = new TreeSet<>();
     logger = l;
+    detector = new UnsafeDetector(config);
   }
 
   public void add(final SingleIdentifier id, final UsageInfo usage) {
@@ -89,7 +93,7 @@ public class UsageContainer {
       Set<SingleIdentifier> toDelete = new HashSet<>();
       for (SingleIdentifier id : unrefinedStat.keySet()) {
         UnrefinedUsagePointSet tmpList = unrefinedStat.get(id);
-        if (tmpList.isUnsafe()) {
+        if (detector.isUnsafe(tmpList)) {
           unsafeUsages += tmpList.size();
         } else {
           toDelete.add(id);
@@ -97,13 +101,20 @@ public class UsageContainer {
         }
       }
       for (SingleIdentifier id : toDelete) {
-        unrefinedStat.remove(id);
+        removeIdFromCaches(id);
       }
       for (SingleIdentifier id : refinedStat.keySet()) {
         RefinedUsagePointSet tmpList = refinedStat.get(id);
         unsafeUsages += tmpList.size();
       }
     }
+  }
+
+  private void removeIdFromCaches(SingleIdentifier id) {
+    //It is important to remove it from both of the caches
+    UnrefinedUsagePointSet uset = unrefinedStat.get(id);
+    unrefinedStat.remove(id);
+    toId.remove(uset);
   }
 
   public Iterator<SingleIdentifier> getUnsafeIterator() {
@@ -134,6 +145,10 @@ public class UsageContainer {
 
   public int getFalseUnsafeSize() {
     return falseUnsafes.size();
+  }
+
+  public UnsafeDetector getUnsafeDetector() {
+    return detector;
   }
 
   public void resetUnrefinedUnsafes() {
@@ -174,9 +189,9 @@ public class UsageContainer {
   public void setAsRefined(UnrefinedUsagePointSet set) {
     assert toId.containsKey(set);
     SingleIdentifier id = toId.get(set);
-    refinedStat.put(id, set.asTrueUnsafe());
-    unrefinedStat.remove(id);
-    toId.remove(set);
+    Pair<RefinedUsageInfoSet, RefinedUsageInfoSet> unsafePair = detector.getTrueUnsafePair(set);
+    refinedStat.put(id, RefinedUsagePointSet.create(unsafePair.getFirst(), unsafePair.getSecond()));
+    removeIdFromCaches(id);
   }
 
   public void printUsagesStatistics(final PrintStream out) {
