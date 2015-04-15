@@ -62,6 +62,9 @@ public class BAMPredicateCPA extends PredicateCPA implements ConfigurableProgram
   private final BAMPredicateCPAStatistics stats;
   private final RelevantPredicatesComputer relevantPredicatesComputer;
 
+  @Option (description="whether to reduce predicates, related to a function, when we leave it")
+  private boolean aggressiveReduce = false;
+
   @Option(secure=true, description="whether to use auxiliary predidates for reduction")
   private boolean auxiliaryPredicateComputer = true;
 
@@ -84,7 +87,7 @@ public class BAMPredicateCPA extends PredicateCPA implements ConfigurableProgram
     relevantPredicatesComputer = new CachingRelevantPredicatesComputer(relevantPredicatesComputer);
     this.relevantPredicatesComputer = relevantPredicatesComputer;
 
-    reducer = new BAMPredicateReducer(fmgr.getBooleanFormulaManager(), this, relevantPredicatesComputer);
+    reducer = new BAMPredicateReducer(fmgr.getBooleanFormulaManager(), this, relevantPredicatesComputer, aggressiveReduce);
     blk = pBlk;
     stats = new BAMPredicateCPAStatistics(reducer);
   }

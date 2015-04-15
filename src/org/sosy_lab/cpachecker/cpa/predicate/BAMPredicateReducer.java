@@ -23,9 +23,8 @@
  */
 package org.sosy_lab.cpachecker.cpa.predicate;
 
-import static org.sosy_lab.cpachecker.util.predicates.pathformula.ctoformula.CtoFormulaConverter.PARAM_VARIABLE_NAME;
 import static com.google.common.collect.FluentIterable.from;
-import static org.sosy_lab.cpachecker.util.predicates.pathformula.ctoformula.CtoFormulaConverter.*;
+import static org.sosy_lab.cpachecker.util.predicates.pathformula.ctoformula.CtoFormulaConverter.PARAM_VARIABLE_NAME;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -42,7 +41,6 @@ import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
-import org.sosy_lab.cpachecker.cfa.model.c.CFunctionEntryNode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
@@ -67,8 +65,6 @@ import com.google.common.collect.ImmutableSetMultimap;
 
 public class BAMPredicateReducer implements Reducer {
 
-  private final static boolean tmp_option_for_aggressive_reduce = true;
-
   final Timer reduceTimer = new Timer();
   final Timer expandTimer = new Timer();
   final Timer extractTimer = new Timer();
@@ -79,12 +75,16 @@ public class BAMPredicateReducer implements Reducer {
   private final LogManager logger;
   private final BooleanFormulaManager bfmgr;
 
-  public BAMPredicateReducer(BooleanFormulaManager bfmgr, BAMPredicateCPA cpa, RelevantPredicatesComputer pRelevantPredicatesComputer) {
+  private final boolean aggressiveReduce;
+
+  public BAMPredicateReducer(BooleanFormulaManager bfmgr, BAMPredicateCPA cpa, RelevantPredicatesComputer pRelevantPredicatesComputer
+      , boolean is_aggressive_reduce) {
     this.pmgr = cpa.getPathFormulaManager();
     this.pamgr = cpa.getPredicateManager();
     this.bfmgr = bfmgr;
     this.logger = cpa.getLogger();
     this.relevantComputer = pRelevantPredicatesComputer;
+    this.aggressiveReduce = is_aggressive_reduce;
   }
 
   @Override
@@ -105,7 +105,7 @@ public class BAMPredicateReducer implements Reducer {
       Collection<AbstractionPredicate> predicates = extractPredicates(oldRegion);
       Collection<AbstractionPredicate> removePredicates =
           relevantComputer.getIrrelevantPredicates(pContext, predicates);
-      if (outerContext != null && tmp_option_for_aggressive_reduce) {
+      if (outerContext != null && aggressiveReduce) {
         removePredicates = new HashSet<>(removePredicates);
 
         assert pLocation instanceof FunctionEntryNode;
@@ -156,7 +156,7 @@ public class BAMPredicateReducer implements Reducer {
       Collection<AbstractionPredicate> rootPredicates = extractPredicates(rootAbstraction.asRegion());
       Collection<AbstractionPredicate> relevantRootPredicates =
           relevantComputer.getRelevantPredicates(pReducedContext, rootPredicates);
-      if (outerContext != null && tmp_option_for_aggressive_reduce) {
+      if (outerContext != null && aggressiveReduce) {
         final String outerFunctionName = "|" + outerContext.getCallNode().getFunctionName() + "::";
 
         relevantRootPredicates = from(relevantRootPredicates).filter(new Predicate<AbstractionPredicate>() {
@@ -234,6 +234,8 @@ public class BAMPredicateReducer implements Reducer {
       Block pContext) {
     PredicatePrecision precision = (PredicatePrecision) pPrecision;
     Pair<Integer, Block> key = Pair.of(precision.getId(), pContext);
+
+    //We may enter the block from different outer blocks
     Precision result = reduceCache.get(key);
     if (result != null) { return result; }
 
@@ -292,8 +294,27 @@ public class BAMPredicateReducer implements Reducer {
       if (context.getNodes().contains(node)) {
         // TODO handle location-instance-specific predicates
         // Without support for them, we can just pass 0 as locInstance parameter
-        localPredicatesBuilder.putAll(node, relevantComputer.getRelevantPredicates(
-            context, expandedPredicatePrecision.getPredicates(node, 0)));
+       /* localPredicatesBuilder.putAll(node, relevantComputer.getRelevantPredicates(
+            context, expandedPredicatePrecision.getPredicates(node, 0)));*/
+
+        Collection<AbstractionPredicate> set = //rootPredicatePrecision.getPredicates(node, 0);
+            relevantComputer.getRelevantPredicates(context, expandedPredicatePrecision.getPredicates(node, 0));
+
+        //aggressive reduce, temporary feature. reduce predicates, if we leave function
+        /*if (previousFunction != null && tmp_option_for_aggressive_reduce) {
+          //Keep the __ADDRESS_OF_ predicates
+          final String outerFunctionName = "|" + previousFunction + "::";
+          set = from(set).filter(new Predicate<AbstractionPredicate>() {
+                @Override
+                public boolean apply(@Nullable AbstractionPredicate pInput) {
+                  return !pInput.toString().contains(outerFunctionName);
+                }
+
+             }).toSet();
+
+        }*/
+
+        localPredicatesBuilder.putAll(node, set);
 /*
 
     private void computeView() {
