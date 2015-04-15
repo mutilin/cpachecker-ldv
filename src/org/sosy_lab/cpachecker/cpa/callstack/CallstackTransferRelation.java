@@ -64,7 +64,7 @@ public class CallstackTransferRelation extends SingleEdgeTransferRelation {
   // set of functions that may not appear in the source code
   // the value of the map entry is the explanation for the user
   static final Map<String, String> UNSUPPORTED_FUNCTIONS
-      = ImmutableMap.of("pthread_create", "threads");
+      = ImmutableMap.of();
 
   @Option(secure=true, name="depth",
       description = "depth of recursion bound")
