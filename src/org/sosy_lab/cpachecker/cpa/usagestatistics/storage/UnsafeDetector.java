@@ -132,29 +132,26 @@ public class UnsafeDetector {
       }
       if (point.access == Access.WRITE) {
         Set<LockIdentifier> lockSet = new HashSet<>(point.locks);
-        while (point.access == Access.WRITE) {
-          lockSet.retainAll(point.locks);
-          if (iterator.hasNext()) {
-            point = iterator.next();
-          } else {
-            break;
-          }
-        }
-
         if (lockSet.isEmpty()) {
           return true;
         }
-
-        /* There can be a situation
-         * (l1, l2, write), (l1, read), (l2, read)
-         * Thus, we should process writes and reads differentely
-         */
         while (iterator.hasNext()) {
-          if (Sets.intersection(lockSet, iterator.next().locks).isEmpty()) {
-            return true;
+          point = iterator.next();
+          if (point.access == Access.WRITE) {
+            lockSet.retainAll(point.locks);
+            if (lockSet.isEmpty()) {
+              return true;
+            }
+          } else {
+            /* There can be a situation
+             * (l1, l2, write), (l1, read), (l2, read)
+             * Thus, we should process writes and reads differently
+             */
+            if (Sets.intersection(lockSet, point.locks).isEmpty()) {
+              return true;
+            }
           }
         }
-        return false;
       }
     }
     return false;
