@@ -379,7 +379,7 @@ class CReferencedFunctionsCollector {
           return;
         }
 
-        saveInfoIntoMap(targetMap, lastFunction, ((StructureIdentifier) id).getName());
+        saveInfoIntoMap(targetMap, lastFunction, ((SingleIdentifier) id).getName());
       } catch (HandleCodeException e) {
         e.printStackTrace();
       }
