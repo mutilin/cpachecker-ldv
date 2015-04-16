@@ -72,7 +72,7 @@ public abstract class AbstractBAMBasedRefiner extends AbstractARGBasedRefiner {
   protected final BAMTransferRelation transfer;
   private final BAMCPA bamCpa;
   protected final Map<ARGState, ARGState> subgraphStatesToReachedState = new HashMap<>();
-  private ARGState rootOfSubgraph = null;
+  protected ARGState rootOfSubgraph = null;
 
   final static BackwardARGState DUMMY_STATE_FOR_MISSING_BLOCK = new BackwardARGState(new ARGState(null, null));
 
