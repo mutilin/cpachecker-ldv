@@ -177,8 +177,7 @@ top:while ((target = computer.getNextRefineableUsage()) != null) {
       pStat.CacheInterpolantsTime.stop();
       try {
         pStat.Refinement.start();
-        CounterexampleInfo counterexample = super.performRefinement0(
-            new BAMReachedSet(transfer, new ARGReachedSet(pReached), pPath, subgraphStatesToReachedState, (ARGState)pReached.getFirstState()), pPath);
+        CounterexampleInfo counterexample = performRefinement(new ARGReachedSet(pReached), pPath);
         refinementFinish |= counterexample.isSpurious();
         if (counterexample.isSpurious()) {
 
@@ -265,9 +264,9 @@ top:while ((target = computer.getNextRefineableUsage()) != null) {
   ARGPath computePath(ARGState pLastElement) throws InterruptedException, CPATransferException {
     assert (pLastElement != null && !pLastElement.isDestroyed());
       //we delete this state from other unsafe
-    ARGState subgraph = transfer.findPath(pLastElement, subgraphStatesToReachedState);
-    assert (subgraph != null);
-    return ARGUtils.getRandomPath(subgraph);
+    rootOfSubgraph = transfer.findPath(pLastElement, subgraphStatesToReachedState);
+    assert (rootOfSubgraph != null);
+    return ARGUtils.getRandomPath(rootOfSubgraph);
   }
 
   @Override
