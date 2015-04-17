@@ -48,6 +48,7 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CLeftHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.FunctionCallEdge;
 import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
@@ -409,5 +410,99 @@ public class LockStatisticsTransferRelation implements TransferRelation
         + " expects to be called with a CFA edge supplied"
         + " and does not support configuration where it needs to"
         + " return abstract states for any CFA edge.");
+  }
+
+  /**
+   * Used in UsageStatisticsCPAStatistics
+   * In true case the current line should be highlighted in the final report
+   * @param pEdge edge to check
+   * @return the verdict
+   */
+  public String changeTheState(CFAEdge pEdge) {
+    switch (pEdge.getEdgeType()) {
+
+      case FunctionCallEdge:
+        String functionName = ((FunctionCallEdge)pEdge).getSuccessor().getFunctionName();
+        Set<LockInfo> locks = findLockByFunction(functionName);
+        if (locks != null) {
+          return formatCaption(locks);
+        }
+        break;
+
+      /*case FunctionReturnEdge:
+        String fName = ((FunctionReturnEdge)pEdge).getSummaryEdge().getExpression().
+        getFunctionCallExpression().getFunctionNameExpression().toASTString();
+        if (annotatedfunctions.containsKey(fName)) {
+          return "Return from annotated function" + fName;
+        }
+        break;*/
+
+      case StatementEdge:
+        CStatement statement = ((CStatementEdge)pEdge).getStatement();
+
+        Set<LockInfo> changedLocks = null;
+        if (statement instanceof CAssignment) {
+          /*
+           * level = intLock();
+           */
+          CRightHandSide op2 = ((CAssignment)statement).getRightHandSide();
+
+          if (op2 instanceof CFunctionCallExpression) {
+            CFunctionCallExpression function = (CFunctionCallExpression) op2;
+            functionName = function.getFunctionNameExpression().toASTString();
+            changedLocks = findLockByFunction(functionName);
+          } else {
+            /*
+             * threadDispatchLevel = 1;
+             */
+            CLeftHandSide leftSide = ((CAssignment) statement).getLeftHandSide();
+            LockInfo lock = findLockByVariable(leftSide.toASTString());
+            changedLocks = lock == null ? null : Collections.singleton(lock);
+          }
+
+        } else if (statement instanceof CFunctionCallStatement) {
+          /*
+           * queLock(que);
+           */
+          CFunctionCallStatement funcStatement = (CFunctionCallStatement) statement;
+          functionName = funcStatement.getFunctionCallExpression().getFunctionNameExpression().toASTString();
+          changedLocks = findLockByFunction(functionName);
+        }
+        if (changedLocks != null) {
+          return formatCaption(changedLocks);
+        }
+        break;
+
+      case AssumeEdge:
+        CExpression assumption = ((CAssumeEdge)pEdge).getExpression();
+
+        if (assumption instanceof CBinaryExpression) {
+          if (((CBinaryExpression) assumption).getOperand1() instanceof CIdExpression) {
+            LockInfo lockInfo = findLockByVariable(((CIdExpression)((CBinaryExpression) assumption).getOperand1()).getName());
+            if (lockInfo != null) {
+              return formatCaption(Collections.singleton(lockInfo));
+            }
+          }
+        }
+        break;
+
+      default:
+        break;
+    }
+    return null;
+  }
+
+  private String formatCaption(Set<LockInfo> set) {
+
+    if (set.isEmpty()) {
+      return null;
+    }
+    StringBuilder sb = new StringBuilder();
+    sb.append("Change states for locks ");
+    for (LockInfo lInfo : set) {
+      sb.append(lInfo.lockName + ", ");
+    }
+    sb.delete(sb.length() - 2, sb.length());
+    return sb.toString();
   }
 }

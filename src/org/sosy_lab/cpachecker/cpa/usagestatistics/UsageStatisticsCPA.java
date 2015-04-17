@@ -51,6 +51,8 @@ import org.sosy_lab.cpachecker.core.interfaces.StopOperator;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackCPA;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackTransferRelation;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsCPA;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsTransferRelation;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsageContainer;
 import org.sosy_lab.cpachecker.util.CPAs;
 @Options(prefix="cpa.usagestatistics")
@@ -86,7 +88,8 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
     this.mergeOperator = initializeMergeOperator();
     this.stopOperator = initializeStopOperator();
 
-    this.statistics = new UsageStatisticsCPAStatistics(pConfig, pLogger);
+    this.statistics = new UsageStatisticsCPAStatistics(pConfig, pLogger,
+        (LockStatisticsTransferRelation) (CPAs.retrieveCPA(this, LockStatisticsCPA.class)).getTransferRelation());
     this.container = new UsageContainer(pConfig, pLogger);
     this.precisionAdjustment = new UsageStatisticsPrecisionAdjustment(pCpa.getPrecisionAdjustment());
     if (pCpa instanceof ConfigurableProgramAnalysisWithBAM) {

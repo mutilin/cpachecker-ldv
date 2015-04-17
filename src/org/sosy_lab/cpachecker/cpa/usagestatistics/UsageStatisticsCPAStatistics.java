@@ -61,6 +61,7 @@ import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.arg.ARGUtils;
 import org.sosy_lab.cpachecker.cpa.bam.BAMTransferRelation;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsTransferRelation;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.AbstractUsageInfoSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.AbstractUsagePointSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.RefinedUsageInfoSet;
@@ -106,13 +107,15 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   private UsageContainer container;
   private BAMTransferRelation transfer;
   private UnsafeDetector detector;
+  private final LockStatisticsTransferRelation lockTransfer;
 
   public final Timer transferRelationTimer = new Timer();
   public final Timer printStatisticsTimer = new Timer();
 
-  public UsageStatisticsCPAStatistics(Configuration config, LogManager pLogger) throws InvalidConfigurationException{
+  public UsageStatisticsCPAStatistics(Configuration config, LogManager pLogger, LockStatisticsTransferRelation lTransfer) throws InvalidConfigurationException{
     config.inject(this);
     logger = pLogger;
+    lockTransfer = lTransfer;
   }
 
   /*
@@ -163,7 +166,11 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         assert callstackDepth > 0;
         callstackDepth--;
       }
-      if (edge.getLineNumber() == usage.getLine().getLine()) {
+      String caption = shouldBeHighlighted(edge);
+      if (caption != null) {
+        writer.write("Line 0:     N0 -{/*" + caption + "*/}-> N0\n");
+        writer.write("Line 0:     N0 -{highlight}-> N0\n");
+      } else if (edge.getLineNumber() == usage.getLine().getLine() && edge.toString().contains(id.getName())) {
         writer.write("Line 0:     N0 -{highlight}-> N0\n");
       }
       writer.write(edge.toString() + "\n");
@@ -172,6 +179,10 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       writer.append("Line 0:     N0 -{return;}-> N0\n");
     }
     writer.write("\n");
+  }
+
+  private String shouldBeHighlighted(CFAEdge pEdge) {
+    return lockTransfer.changeTheState(pEdge);
   }
 
   private void countUsageStatistics(UnrefinedUsagePointSet l) {
