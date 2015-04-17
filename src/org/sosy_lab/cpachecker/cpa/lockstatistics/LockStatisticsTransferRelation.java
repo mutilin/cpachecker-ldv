@@ -430,6 +430,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
         break;
 
       /*case FunctionReturnEdge:
+       * This case can not be processed by ETV
         String fName = ((FunctionReturnEdge)pEdge).getSummaryEdge().getExpression().
         getFunctionCallExpression().getFunctionNameExpression().toASTString();
         if (annotatedfunctions.containsKey(fName)) {

@@ -129,7 +129,6 @@ public class BAMTransferRelation implements TransferRelation {
   private final Reducer wrappedReducer;
   private final BAMCPA bamCPA;
   private final ProofChecker wrappedProofChecker;
-  private final String entryFunction;
   private final CallstackTransferRelation callstackTransfer;
 
   private Map<AbstractState, Precision> forwardPrecisionToExpandedPrecision;
@@ -167,8 +166,6 @@ public class BAMTransferRelation implements TransferRelation {
     argCache = cache;
 
     assert wrappedReducer != null;
-
-    entryFunction = pConfig.getProperty("analysis.entryFunction");
   }
 
 
@@ -619,7 +616,6 @@ public class BAMTransferRelation implements TransferRelation {
     final Collection<AbstractState> statesForFurtherAnalysis;
 
     // try to get previously computed element from cache
-    //cleanLockStatisticsPrecision(reducedInitialPrecision);
     final Pair<ReachedSet, Collection<AbstractState>> pair =
             argCache.get(reducedInitialState, reducedInitialPrecision, currentBlock);
     ReachedSet reached = pair.getFirst();
@@ -648,9 +644,7 @@ public class BAMTransferRelation implements TransferRelation {
         // we have not even cached a partly computed reach-set,
         // so we must compute the subgraph specification from scratch
         reached = createInitialReachedSet(reducedInitialState, reducedInitialPrecision);
-        //cleanLockStatisticsPrecision(reducedInitialPrecision);
         argCache.put(reducedInitialState, reducedInitialPrecision, currentBlock, reached);
-        //setLockStatisticsPrecision(initialState, reducedInitialPrecision);
         logger.log(Level.FINEST, "Cache miss: starting recursive CPAAlgorithm with new initial reached-set.");
       } else {
         logger.log(Level.FINEST, "Partial cache hit: starting recursive CPAAlgorithm with partial reached-set.");
