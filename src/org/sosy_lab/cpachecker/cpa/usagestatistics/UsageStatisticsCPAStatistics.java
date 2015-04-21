@@ -23,6 +23,8 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
+import static com.google.common.collect.FluentIterable.from;
+
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.PrintStream;
