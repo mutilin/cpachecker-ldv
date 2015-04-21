@@ -23,8 +23,6 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
-import static com.google.common.collect.FluentIterable.from;
-
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.PrintStream;
@@ -47,12 +45,12 @@ import org.sosy_lab.common.io.Path;
 import org.sosy_lab.common.io.Paths;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
-import org.sosy_lab.cpachecker.cfa.model.BlankEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionReturnEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CReturnStatementEdge;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
@@ -162,7 +160,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       } else if (edge instanceof CFunctionReturnEdge) {
         assert callstackDepth > 0;
         callstackDepth--;
-      } else if (edge instanceof BlankEdge && edge.getDescription().equals("default return") && edges.get(edges.size() - 1) == edge) {
+      } else if (edge instanceof CReturnStatementEdge && edges.get(edges.size() - 1) == edge) {
         assert callstackDepth > 0;
         callstackDepth--;
       }
