@@ -207,12 +207,12 @@ top:while ((target = computer.getNextRefineableUsage()) != null) {
           refinedStates.add(interpolants);
           pStat.CacheInterpolantsTime.stop();
           pStat.CacheTime.start();
-          if (iCache.contains(target, formulas, interpolants)) {
+          if (iCache.contains(target, formulas, abstractTrace)) {
           	computer.setResultOfRefinement(target, true, pPath.getInnerEdges());
 		        logger.log(Level.WARNING, "Interpolants are repeated, consider " + target + " as true");
             target.failureFlag = true;
           } else {
-            iCache.add(target, formulas, interpolants);
+            iCache.add(target, formulas, abstractTrace);
           	computer.setResultOfRefinement(target, false, pPath.getInnerEdges());
           }
           pStat.CacheTime.stop();
