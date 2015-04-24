@@ -204,7 +204,12 @@ class CReferencedFunctionsCollector {
     IdentifierCreator creator = new IdentifierCreator();
     try {
       AbstractIdentifier id = init.getExpression().accept(creator);
-      CType type = init.getExpression().getExpressionType().getCanonicalType();
+      CExpression initExpression = init.getExpression();
+      if (initExpression instanceof CCastExpression) {
+        // (void*) (&f)
+        initExpression = ((CCastExpression)initExpression).getOperand();
+      }
+      CType type = initExpression.getExpressionType().getCanonicalType();
       if (type instanceof CPointerType) {
         type = ((CPointerType) type).getType();
         if (type instanceof CFunctionType) {
