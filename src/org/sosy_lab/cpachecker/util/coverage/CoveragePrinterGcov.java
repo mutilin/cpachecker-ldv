@@ -26,8 +26,9 @@ package org.sosy_lab.cpachecker.util.coverage;
 import static com.google.common.base.Preconditions.checkArgument;
 
 import java.io.IOException;
-import java.util.BitSet;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 import org.sosy_lab.common.io.Paths;
@@ -50,7 +51,7 @@ class CoveragePrinterGcov implements CoveragePrinter {
     }
   }
 
-  private final BitSet visitedLines = new BitSet();
+  private final Map<Integer, Integer> visitedLines = new HashMap<>();
   private final Set<Integer> allLines = new HashSet<>();
   private final Set<String> visitedFunctions = new HashSet<>();
   private final Set<FunctionInfo> allFunctions = new HashSet<>();
@@ -75,7 +76,13 @@ class CoveragePrinterGcov implements CoveragePrinter {
   @Override
   public void addVisitedLine(int pLine) {
     checkArgument(pLine > 0);
-    visitedLines.set(pLine);
+    if (visitedLines.containsKey(pLine)) {
+      Integer previous = visitedLines.get(pLine);
+      previous++;
+      visitedLines.put(pLine, previous);
+    } else {
+      visitedLines.put(pLine, 1);
+    }
   }
 
   @Override
@@ -104,7 +111,13 @@ class CoveragePrinterGcov implements CoveragePrinter {
     /* Now save information about lines
      */
     for (Integer line : allLines) {
-      out.append(LINEDATA + line + "," + (visitedLines.get(line) ? 1 : 0) + "\n");
+      Integer number;
+      if (visitedLines.containsKey(line)) {
+        number = visitedLines.get(line);
+      } else {
+        number = 0;
+      }
+      out.append(LINEDATA + line + "," + number + "\n");
     }
     out.append("end_of_record\n");
   }
