@@ -119,7 +119,7 @@ class CReferencedFunctionsCollector {
           int num = collector.collectedFunctions.size();
           init.accept(collector);
           if (num < collector.collectedFunctions.size()) {
-            saveDeclaration(declaration.getType(), init);
+            saveDeclaration(declaration.getType(), init, null);
           }
         }
 
@@ -152,75 +152,68 @@ class CReferencedFunctionsCollector {
       int num = collector.collectedFunctions.size();
       decl.getInitializer().accept(collector);
       if (num < collector.collectedFunctions.size()) {
-        AbstractIdentifier id;
-        try {
-          id = IdentifierCreator.createIdentifier(decl, "", 0);
-          CInitializer init = decl.getInitializer();
-          if (id instanceof GlobalVariableIdentifier && init instanceof CInitializerExpression) {
-            AbstractIdentifier initId = ((CInitializerExpression)init).getExpression().accept(collector.idCreator);
-            if (initId instanceof SingleIdentifier) {
-              saveInfoIntoMap(collector.funcToGlobal, ((SingleIdentifier) initId).getName(), ((GlobalVariableIdentifier)id).getName());
-            }
-          } else {
-            saveDeclaration(decl.getType(), decl.getInitializer());
-          }
-        } catch (HandleCodeException e) {
-          e.printStackTrace();
-        }
+        saveDeclaration(decl.getType(), decl.getInitializer(), decl.isGlobal() ? decl.getName() : null);
       }
     }
     collectedFunctions.addAll(collector.collectedFunctions);
     collector.collectedFunctions.clear();
   }
 
-  private void saveDeclaration(CType type, CInitializer init) {
+  private void saveDeclaration(CType type, CInitializer init, String name) {
     if (init instanceof CInitializerList) {
       //Only structures
       if (type instanceof CArrayType) {
-        List<CInitializer> initList = ((CInitializerList)init).getInitializers();
-        for (CInitializer cInit : initList) {
-          saveDeclaration(((CArrayType)type).getType(), cInit);
+        for (CInitializer cInit : ((CInitializerList)init).getInitializers()) {
+          saveDeclaration(((CArrayType)type).getType(), cInit, name);
         }
       } else if (type instanceof CElaboratedType) {
-        saveDeclaration(type.getCanonicalType(), init);
+        saveDeclaration(type.getCanonicalType(), init, name);
       } else if (type instanceof CCompositeType) {
+        //Structure
         List<CCompositeTypeMemberDeclaration> list = ((CCompositeType) type).getMembers();
         List<CInitializer> initList = ((CInitializerList)init).getInitializers();
         for (int i = 0; i < list.size(); i++) {
           CCompositeTypeMemberDeclaration decl = list.get(i);
           CInitializer cInit = initList.get(i);
-          if (!(cInit instanceof CInitializerExpression)) {
-            continue;
-          }
-          saveInitializerExpression((CInitializerExpression)cInit, decl.getName());
+          saveInitializerExpression(collector.funcToField, cInit, decl.getName());
         }
       } else if (type instanceof CTypedefType) {
-        saveDeclaration(((CTypedefType) type).getRealType(), init);
+        saveDeclaration(((CTypedefType) type).getRealType(), init, name);
       }
+    } else {
+      //Assignement to global id
+      saveInitializerExpression(collector.funcToGlobal, init, name);
     }
   }
 
-  private void saveInitializerExpression(CInitializerExpression init, String fieldName) {
-    IdentifierCreator creator = new IdentifierCreator();
-    try {
-      AbstractIdentifier id = init.getExpression().accept(creator);
+  private void saveInitializerExpression(Map<String, Set<String>> map, CInitializer cInit, String fieldName) {
+
+    if (cInit instanceof CInitializerExpression) {
+      CInitializerExpression init = (CInitializerExpression) cInit;
       CExpression initExpression = init.getExpression();
       if (initExpression instanceof CCastExpression) {
         // (void*) (&f)
         initExpression = ((CCastExpression)initExpression).getOperand();
       }
+
       CType type = initExpression.getExpressionType().getCanonicalType();
       if (type instanceof CPointerType) {
         type = ((CPointerType) type).getType();
+
         if (type instanceof CFunctionType) {
-          if (id instanceof SingleIdentifier) {
-            String lastFunction = ((SingleIdentifier) id).getName();
-            saveInfoIntoMap(collector.funcToField, lastFunction, fieldName);
+          IdentifierCreator creator = new IdentifierCreator();
+          try {
+            AbstractIdentifier id = initExpression.accept(creator);
+
+            if (id instanceof SingleIdentifier) {
+              String lastFunction = ((SingleIdentifier) id).getName();
+              saveInfoIntoMap(map, lastFunction, fieldName);
+            }
+          } catch (HandleCodeException e) {
+            e.printStackTrace();
           }
         }
       }
-    } catch (HandleCodeException e) {
-      e.printStackTrace();
     }
   }
 
