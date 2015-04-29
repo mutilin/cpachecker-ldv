@@ -133,7 +133,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
   }
 
   public UsagePoint getUsagePoint() {
-    if (this.locks.getSize() > 0 || this.accessType == Access.READ) {
+    if (this.locks != null && (this.locks.getSize() > 0 || this.accessType == Access.READ)) {
       return new UsagePoint(locks.getLockIdentifiers(), accessType);
     } else {
       return new UsagePoint(this);
@@ -240,15 +240,17 @@ public class UsageInfo implements Comparable<UsageInfo> {
 
   @Override
   public int compareTo(UsageInfo pO) {
+    int result;
 
     if (this == pO) {
       return 0;
     }
-
-    int result = this.locks.compareTo(pO.locks);
-    if (result != 0) {
-      //Usages without locks are more convenient to analyze
-      return -result;
+    if (this.locks != null) {
+      result = this.locks.compareTo(pO.locks);
+      if (result != 0) {
+        //Usages without locks are more convenient to analyze
+        return -result;
+      }
     }
     result = this.line.getLine() - pO.line.getLine();
     if (result != 0) {

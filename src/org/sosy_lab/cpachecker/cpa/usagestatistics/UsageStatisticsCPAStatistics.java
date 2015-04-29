@@ -126,7 +126,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     LockStatisticsState Locks = usage.getLockState();
 
     writer.append("Line 0:     N0 -{/*_____________________*/}-> N0\n");
-    writer.append("Line 0:     N0 -{/*" + Locks.toString() + "*/}-> N0\n");
+    if (Locks != null) {
+      writer.append("Line 0:     N0 -{/*" + Locks.toString() + "*/}-> N0\n");
+    }
     if (usage.failureFlag) {
       writer.append("Line 0:     N0 -{/*Failure in refinement*/}-> N0\n");
     }
@@ -182,7 +184,11 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   }
 
   private String shouldBeHighlighted(CFAEdge pEdge) {
-    return lockTransfer.changeTheState(pEdge);
+    if (lockTransfer != null) {
+      return lockTransfer.changeTheState(pEdge);
+    } else {
+      return null;
+    }
   }
 
   private void countUsageStatistics(UnrefinedUsagePointSet l) {

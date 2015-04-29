@@ -88,8 +88,9 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
     this.mergeOperator = initializeMergeOperator();
     this.stopOperator = initializeStopOperator();
 
+    LockStatisticsCPA LockCPA = (CPAs.retrieveCPA(this, LockStatisticsCPA.class));
     this.statistics = new UsageStatisticsCPAStatistics(pConfig, pLogger,
-        (LockStatisticsTransferRelation) (CPAs.retrieveCPA(this, LockStatisticsCPA.class)).getTransferRelation());
+        LockCPA != null ? (LockStatisticsTransferRelation) LockCPA.getTransferRelation() : null);
     this.container = new UsageContainer(pConfig, pLogger);
     this.precisionAdjustment = new UsageStatisticsPrecisionAdjustment(pCpa.getPrecisionAdjustment());
     if (pCpa instanceof ConfigurableProgramAnalysisWithBAM) {

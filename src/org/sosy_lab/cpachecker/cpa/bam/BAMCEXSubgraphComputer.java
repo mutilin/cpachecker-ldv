@@ -251,7 +251,9 @@ public class BAMCEXSubgraphComputer {
 
     //Find path to nearest abstraction state
     PredicateAbstractState pState = AbstractStates.extractStateByType(currentState, PredicateAbstractState.class);
-    assert (pState.isAbstractionState());
+    if (pState != null) {
+      assert (pState.isAbstractionState());
+    }
 
     openElements.push(target);
     while (!openElements.empty()) {
