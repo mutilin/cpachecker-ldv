@@ -177,6 +177,15 @@ public class LockStatisticsTransferRelation implements TransferRelation
     return toProcess;
   }
 
+  private LockInfo findLockByName(String name) {
+    for (LockInfo lock : lockDescription) {
+      if (lock.lockName.equals(name)) {
+        return lock;
+      }
+    }
+    return null;
+  }
+
   private LockStatisticsState handleOperations(List<Pair<LockIdentifier, Effect>> toProcess, LockStatisticsState oldState) {
     LockStatisticsStateBuilder builder = oldState.builder();
 
@@ -190,7 +199,11 @@ public class LockStatisticsTransferRelation implements TransferRelation
       } else {
         assert (id != null);
         if (e == CAPTURE) {
-          builder.add(id);
+          LockInfo lock = findLockByName(id.getName());
+          int currentLevel = oldState.getCounter(id);
+          if (lock.maxLock > currentLevel) {
+            builder.add(id);
+          }
         } else if (e == RELEASE) {
           builder.free(id);
         } else if (e == RESET) {
@@ -198,7 +211,13 @@ public class LockStatisticsTransferRelation implements TransferRelation
         } else if (e == RESTORE) {
           builder.restore(id);
         } else if (e.getClass() == SETEffect.class) {
-          builder.set(id, ((SETEffect)e).p);
+          LockInfo lock = findLockByName(id.getName());
+          int currentLevel = ((SETEffect)e).p;
+          if (lock.maxLock >= currentLevel) {
+            builder.set(id, currentLevel);
+          } else {
+            builder.set(id, lock.maxLock);
+          }
         } else if (e.getClass() == CHECKEffect.class) {
           CHECKEffect check = (CHECKEffect)e;
           boolean result;
