@@ -31,10 +31,8 @@ import java.util.Set;
 import java.util.SortedMap;
 import java.util.SortedSet;
 
-import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier.LockType;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.LineInfo;
 
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
@@ -44,13 +42,15 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
   public class LockStatisticsStateBuilder {
     private SortedMap<LockIdentifier, Integer> mutableLocks;
     private LockStatisticsState mutableToRestore;
+    private boolean isRestored;
 
     public LockStatisticsStateBuilder(LockStatisticsState state) {
       mutableLocks = Maps.newTreeMap(state.locks);
       mutableToRestore = state.toRestore;
+      isRestored = false;
     }
 
-    private void put(LockIdentifier lockId) {
+    public void add(LockIdentifier lockId) {
       Integer a;
       if (mutableLocks.containsKey(lockId)) {
         a = mutableLocks.get(lockId);
@@ -62,7 +62,7 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
       mutableLocks.put(lockId, a);
     }
 
-    private void removeLastAccess(LockIdentifier lockId) {
+    public void free(LockIdentifier lockId) {
       if (mutableLocks.containsKey(lockId)) {
         Integer a = mutableLocks.get(lockId);
         if (a != null) {
@@ -76,24 +76,12 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
       }
     }
 
-    public void add(String lockName, LineInfo line, String variable, LogManager logger) {
-      LockIdentifier lockId = LockIdentifier.of(lockName, variable, LockType.GLOBAL_LOCK);
-      put(lockId);
-    }
-
-    public void free(String lockName, String variable, LogManager logger) {
-      LockIdentifier lockId = LockIdentifier.of(lockName, variable, LockType.GLOBAL_LOCK);
-      removeLastAccess(lockId);
-    }
-
-    public void reset(String lockName, String var, LogManager logger) {
-      LockIdentifier lockId = LockIdentifier.of(lockName, var, LockType.GLOBAL_LOCK);
+    public void reset(LockIdentifier lockId) {
       mutableLocks.remove(lockId);
     }
 
-    public void set(String lockName, int num, LineInfo line, String variable) {
+    public void set(LockIdentifier lockId, int num) {
       //num can be equal 0, this means, that in origin file it is 0 and we should delete locks
-      LockIdentifier lockId = LockIdentifier.of(lockName, variable, LockType.GLOBAL_LOCK);
 
       Integer size = mutableLocks.get(lockId);
 
@@ -102,38 +90,31 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
       }
       if (num > size) {
         for (int i = 0; i < num - size; i++) {
-          put(lockId);
+          add(lockId);
         }
       } else if (num < size) {
         for (int i = 0; i < size - num; i++) {
-          removeLastAccess(lockId);
+          free(lockId);
         }
       }
     }
 
-    public void restore(Map<String, String> lockNames, LogManager logger) {
+    public void restore(LockIdentifier lockId) {
       if (mutableToRestore == null) {
         return;
       }
-      if (lockNames.size() == 0) {
-        //we didn't specify, which locks we would like to restore, so, restore all;
-        mutableLocks = Maps.newTreeMap(mutableToRestore.locks);
-      } else if (locks.equals(mutableToRestore.locks)) {
-
-      } else {
-        for (String lockName : lockNames.keySet()) {
-          LockIdentifier lockId = LockIdentifier.of(lockName, lockNames.get(lockName), LockType.GLOBAL_LOCK);
-          Integer size = mutableToRestore.locks.get(lockId);
-          mutableLocks.remove(lockId);
-          if (size != null) {
-            mutableLocks.put(lockId, size);
-          }
-        }
+      Integer size = mutableToRestore.locks.get(lockId);
+      mutableLocks.remove(lockId);
+      if (size != null) {
+        mutableLocks.put(lockId, size);
       }
-      mutableToRestore = mutableToRestore.toRestore;
+      isRestored = true;
     }
 
     LockStatisticsState build() {
+      if (isRestored) {
+        mutableToRestore = mutableToRestore.toRestore;
+      }
       if (locks.equals(mutableLocks) && mutableToRestore == toRestore) {
         return getParentLink();
       } else {
@@ -152,7 +133,7 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
     public void reduceLocks(Set<String> exceptLocks) {
       for (LockIdentifier lock : new HashSet<>(mutableLocks.keySet())) {
         mutableLocks.remove(lock);
-        put(lock);
+        add(lock);
       }
     }
 
@@ -233,6 +214,10 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
 
   public int getCounter(String lockName, String varName) {
     LockIdentifier lock = LockIdentifier.of(lockName, varName, LockType.GLOBAL_LOCK);
+    return getCounter(lock);
+  }
+
+  public int getCounter(LockIdentifier lock) {
     Integer size = locks.get(lock);
     return (size == null ? 0 : size);
   }

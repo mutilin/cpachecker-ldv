@@ -51,6 +51,14 @@ public class LockIdentifier implements Comparable<LockIdentifier> {
     variable = pVariable;
   }
 
+  public static LockIdentifier of(String name) {
+    return LockIdentifier.of(name, "");
+  }
+
+  public static LockIdentifier of(String name, String var) {
+    return LockIdentifier.of(name, var, LockType.GLOBAL_LOCK);
+  }
+
   public static LockIdentifier of(String name, String var, LockType type) {
     if (createdIds == null) {
       createdIds = new HashSet<>();

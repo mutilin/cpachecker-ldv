@@ -23,14 +23,20 @@
  */
 package org.sosy_lab.cpachecker.cpa.lockstatistics;
 
+import static com.google.common.collect.FluentIterable.from;
+
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
 
+import javax.annotation.Nullable;
+
+import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
@@ -39,7 +45,6 @@ import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.ast.c.CAssignment;
 import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCall;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
@@ -48,7 +53,6 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CLeftHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
-import org.sosy_lab.cpachecker.cfa.model.FunctionCallEdge;
 import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
@@ -57,23 +61,70 @@ import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier.LockType;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState.LockStatisticsStateBuilder;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.LineInfo;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCCodeException;
 
-import com.google.common.collect.ImmutableMap;
+import com.google.common.base.Function;
+import com.google.common.base.Predicate;
 
 @Options(prefix="cpa.lockStatistics")
 public class LockStatisticsTransferRelation implements TransferRelation
 {
+
+  private static class Effect {
+    /*Method change;
+
+    Effect(Method c) {
+      change = c;
+    }
+
+    public void execute(LockStatisticsStateBuilder builder, LockIdentifier id) {
+      change.invoke(builder, id);
+    }*/
+  }
+  private static class SETEffect extends Effect {
+    final int p;
+
+    public SETEffect(int t) {
+     // super(LockStatisticsStateBuilder.class.getDeclaredMethod("set", {LockIdentifier.class, Integer.class}));
+      p = t;
+    }
+
+   /* @Override
+    public void execute(LockStatisticsStateBuilder builder, LockIdentifier id) {
+      change.invoke(builder, id, p);
+    }*/
+  }
+
+  private static class CHECKEffect extends SETEffect {
+    final boolean isTruth;
+
+    public CHECKEffect(int t, boolean truth) {
+      super(t);
+      isTruth = truth;
+    }
+  }
+
+  //There ones have no parameters
+  private final static Effect CAPTURE = new Effect();
+  private final static Effect RELEASE = new Effect();
+  private final static Effect RESET = new Effect();
+  private final static Effect SAVESTATE = new Effect();
+  private final static Effect RESTORE = new Effect();
+  private final static Effect RESTOREALL = new Effect();
+
+  //This one is without parameter and will be replaced by ParameterEffect after processing
+  private final static Effect SET = new Effect();
+
   @Option(name="lockreset",
       description="function to reset state")
   private String lockreset;
 
   final Map<String, AnnotationInfo> annotatedfunctions;
 
-  final Set<LockInfo> locks;
+  final Set<LockInfo> lockDescription;
   private LogManager logger;
 
   int i = 0;
@@ -83,63 +134,100 @@ public class LockStatisticsTransferRelation implements TransferRelation
 
     ConfigurationParser parser = new ConfigurationParser(config);
 
-    locks = parser.parseLockInfo();
+    lockDescription = parser.parseLockInfo();
     annotatedfunctions = parser.parseAnnotatedFunctions();
   }
 
   @Override
   public Collection<LockStatisticsState> getAbstractSuccessorsForEdge(AbstractState element, Precision pPrecision
-      , CFAEdge cfaEdge) {
-
-    return Collections.singleton((LockStatisticsState)element);
-  }
-
-  public Collection<LockStatisticsState> getAbstractSuccessors0(AbstractState element, CFAEdge cfaEdge) throws UnrecognizedCCodeException {
+      , CFAEdge cfaEdge) throws UnrecognizedCCodeException {
 
     LockStatisticsState lockStatisticsElement     = (LockStatisticsState)element;
-    LockStatisticsState successor;
-    LockStatisticsStateBuilder builder = lockStatisticsElement.builder();
+
+    if (cfaEdge.getPredecessor().getFunctionName().equals("cpuclockStop")) {
+      System.out.println("This");
+    }
+    //Firstly, determine operations with locks
+    List<Pair<LockIdentifier, Effect>> toProcess = determineOperations(cfaEdge);
+
+    LockStatisticsState successor = handleOperations(toProcess, lockStatisticsElement);
+
+    if (successor != null) {
+      return Collections.singleton(successor);
+    } else {
+      return Collections.emptySet();
+    }
+  }
+
+  private List<Pair<LockIdentifier, Effect>> determineOperations(CFAEdge cfaEdge) throws UnrecognizedCCodeException {
+    List<Pair<LockIdentifier, Effect>> toProcess;
     switch (cfaEdge.getEdgeType()) {
 
       case FunctionCallEdge:
-        handleFunctionCall(lockStatisticsElement, builder,(CFunctionCallEdge)cfaEdge);
+        toProcess = handleFunctionCall((CFunctionCallEdge)cfaEdge);
         break;
 
       case FunctionReturnEdge:
-        handleFunctionReturnEdge(lockStatisticsElement, builder, (CFunctionReturnEdge)cfaEdge);
+        toProcess = handleFunctionReturnEdge((CFunctionReturnEdge)cfaEdge);
         break;
 
       default:
-        boolean result = handleSimpleEdge(lockStatisticsElement, builder, cfaEdge);
-        if (!result) {
-          //False assumption edge
-          return Collections.emptySet();
-        }
+        toProcess = handleSimpleEdge(cfaEdge);
     }
-
-    successor = builder.build();
-
-    if (!successor.equals(lockStatisticsElement)) {
-      return Collections.singleton(successor);
-    } else {
-      return null;
-    }
+    return toProcess;
   }
 
-  private boolean handleSimpleEdge(LockStatisticsState oldElement, LockStatisticsStateBuilder builder, CFAEdge cfaEdge) throws UnrecognizedCCodeException {
+  private LockStatisticsState handleOperations(List<Pair<LockIdentifier, Effect>> toProcess, LockStatisticsState oldState) {
+    LockStatisticsStateBuilder builder = oldState.builder();
+
+    for (Pair<LockIdentifier, Effect> pair : toProcess) {
+      LockIdentifier id = pair.getFirst();
+      Effect e = pair.getSecond();
+      if (e == RESTOREALL) {
+        builder.resetAll();
+      } else if (e == SAVESTATE) {
+        builder.setRestoreState(oldState);
+      } else {
+        assert (id != null);
+        if (e == CAPTURE) {
+          builder.add(id);
+        } else if (e == RELEASE) {
+          builder.free(id);
+        } else if (e == RESET) {
+          builder.reset(id);
+        } else if (e == RESTORE) {
+          builder.restore(id);
+        } else if (e.getClass() == SETEffect.class) {
+          builder.set(id, ((SETEffect)e).p);
+        } else if (e.getClass() == CHECKEffect.class) {
+          CHECKEffect check = (CHECKEffect)e;
+          boolean result;
+          int previousP = oldState.getCounter(id);
+          result = ((previousP == check.p) == check.isTruth);
+          if (!result) {
+            return null;
+          }
+        }
+      }
+    }
+    return builder.build();
+  }
+
+  private List<Pair<LockIdentifier, Effect>> handleSimpleEdge(CFAEdge cfaEdge) throws UnrecognizedCCodeException {
+
+    List<Pair<LockIdentifier, Effect>> result;
 
     switch(cfaEdge.getEdgeType()) {
       case StatementEdge:
         CStatement statement = ((CStatementEdge)cfaEdge).getStatement();
-        if (statement instanceof CFunctionCallStatement && lockreset != null &&
+        /*if (statement instanceof CFunctionCallStatement && lockreset != null &&
           ((CFunctionCallStatement)statement).getFunctionCallExpression().getFunctionNameExpression().toASTString().equals(lockreset)) {
           builder.resetAll();
-        } else {
-          handleStatement(oldElement, builder, statement, new LineInfo(cfaEdge), cfaEdge.getPredecessor().getFunctionName());
-        }
-        break;
+        } else {*/
+          return handleStatement(statement);
+        //}
       case AssumeEdge:
-        return handleAssumption(oldElement, (CAssumeEdge)cfaEdge);
+        return handleAssumption((CAssumeEdge)cfaEdge);
 
       case BlankEdge:
       case ReturnStatementEdge:
@@ -148,110 +236,125 @@ public class LockStatisticsTransferRelation implements TransferRelation
         break;
 
       case MultiEdge:
-        LockStatisticsState tmpElement = oldElement;
-
+        result = new LinkedList<>();
         for (CFAEdge edge : (MultiEdge)cfaEdge) {
-          boolean result = handleSimpleEdge(tmpElement, builder, edge);
-          if (!result) {
-            return result;
-          }
-          tmpElement = builder.build();
+          result.addAll(handleSimpleEdge(edge));
         }
-        break;
+        return result;
       default:
         throw new UnrecognizedCCodeException("Unknown edge type", cfaEdge);
     }
-    return true;
+    return Collections.emptyList();
   }
 
-  private boolean handleAssumption(LockStatisticsState oldElement, CAssumeEdge cfaEdge) {
+  private List<Pair<LockIdentifier, Effect>> handleAssumption(CAssumeEdge cfaEdge) {
     CExpression assumption = cfaEdge.getExpression();
 
     if (assumption instanceof CBinaryExpression) {
       if (((CBinaryExpression) assumption).getOperand1() instanceof CIdExpression) {
         LockInfo lockInfo = findLockByVariable(((CIdExpression)((CBinaryExpression) assumption).getOperand1()).getName());
         if (lockInfo != null) {
-          int currentLevel = oldElement.getCounter(lockInfo.lockName, "");
+          LockIdentifier id = LockIdentifier.of(lockInfo.lockName);
           if (!(((CBinaryExpression) assumption).getOperand2() instanceof CIntegerLiteralExpression)) {
-            return true;
+            return Collections.emptyList();
           }
           int level = ((CIntegerLiteralExpression)(((CBinaryExpression) assumption).getOperand2())).getValue().intValue();
-          if (currentLevel == level) {
-            if (cfaEdge.getTruthAssumption()) {
-              return true;
-            } else {
-              return false;
-            }
-          } else {
-            return false;
-          }
+          Effect e = new CHECKEffect(level, cfaEdge.getTruthAssumption());
+          return Collections.singletonList(Pair.of(id, e));
         }
       }
     }
-    return true;
+    return Collections.emptyList();
   }
 
-  private void handleFunctionReturnEdge(LockStatisticsState oldState, LockStatisticsStateBuilder builder, CFunctionReturnEdge cfaEdge) {
+  private List<Pair<LockIdentifier, Effect>> convertAnnotationToEffect(Map<String, String> map, Effect e) {
+    List<Pair<LockIdentifier, Effect>> result = new LinkedList<>();
+
+    for (String lockName : map.keySet()) {
+      result.add(Pair.of(LockIdentifier.of(lockName, map.get(lockName), LockType.GLOBAL_LOCK), e));
+    }
+    return result;
+  }
+
+  private List<Pair<LockIdentifier, Effect>> handleFunctionReturnEdge(CFunctionReturnEdge cfaEdge) {
     //CFANode tmpNode = cfaEdge.getSummaryEdge().getPredecessor();
     String fName = cfaEdge.getSummaryEdge().getExpression().getFunctionCallExpression().getFunctionNameExpression().toASTString();
-
     if (annotatedfunctions != null && annotatedfunctions.containsKey(fName)) {
+      List<Pair<LockIdentifier, Effect>> result = new LinkedList<>();
+
       AnnotationInfo currentAnnotation = annotatedfunctions.get(fName);
-      if (currentAnnotation.restoreLocks.size() > 0) {
-        builder.restore(annotatedfunctions.get(fName).restoreLocks, logger);
+      if (currentAnnotation.restoreLocks.size() == 0
+          && currentAnnotation.freeLocks.size() == 0
+          && currentAnnotation.resetLocks.size() == 0
+          && currentAnnotation.captureLocks.size() == 0) {
+        //Not specified annotations are considered to be totally restoring
+        return Collections.singletonList(Pair.of((LockIdentifier)null, RESTOREALL));
+      } else {
+        if (currentAnnotation.restoreLocks.size() > 0) {
+          result.addAll(convertAnnotationToEffect(currentAnnotation.restoreLocks, RESTORE));
+          logger.log(Level.FINER, "Restore " + currentAnnotation.restoreLocks
+              + ", \n\tline=" + cfaEdge.getLineNumber());
 
-        logger.log(Level.FINER, "Restore " + annotatedfunctions.get(fName).restoreLocks
-            + ", \n\tline=" + cfaEdge.getLineNumber());
-
-      }
-      if (currentAnnotation.freeLocks.size() > 0) {
-        //Free in state at first restores saved state
-        logger.log(Level.FINER, "Free " + annotatedfunctions.get(fName).freeLocks.keySet() + " in " + oldState
-                    + ", \n\t line = " + cfaEdge.getLineNumber());
-        ImmutableMap<String, String> freeLocks = annotatedfunctions.get(fName).freeLocks;
-        builder.restore(freeLocks, logger);
-        String variable;
-
-        for (String lockName : freeLocks.keySet()) {
-          variable = freeLocks.get(lockName);
-          builder.free(lockName, variable, logger);
         }
-      }
-      if (currentAnnotation.resetLocks.size() > 0) {
-        //Reset in state at first restores saved state
-        logger.log(Level.FINER, "Reset " + annotatedfunctions.get(fName).resetLocks.keySet() + " in " + oldState
-            + ", \n\t line = " + cfaEdge.getLineNumber());
-        ImmutableMap<String, String> resetLocks = annotatedfunctions.get(fName).resetLocks;
-        builder.restore(resetLocks, logger);
-        String variable;
-
-        for (String lockName : resetLocks.keySet()) {
-          variable = resetLocks.get(lockName);
-          builder.reset(lockName, variable, logger);
+        if (currentAnnotation.freeLocks.size() > 0) {
+          //Free in state at first restores saved state
+          result.addAll(convertAnnotationToEffect(currentAnnotation.freeLocks, RELEASE));
         }
-      }
-      if (currentAnnotation.captureLocks.size() > 0) {
-        Map<String, String> locks = annotatedfunctions.get(fName).captureLocks;
-        logger.log(Level.FINER, "Force lock of " + annotatedfunctions.get(fName).captureLocks.keySet() + " in " + oldState
-            + ", \n\t line = " + cfaEdge.getLineNumber());
-        builder.restore(locks, logger);
-        for (String name : locks.keySet()) {
-          processLock(builder.build(), builder, new LineInfo(cfaEdge), findLockByName(name), locks.get(name));
+        if (currentAnnotation.resetLocks.size() > 0) {
+          //Reset in state at first restores saved state
+          result.addAll(convertAnnotationToEffect(currentAnnotation.resetLocks, RESET));
         }
+        if (currentAnnotation.captureLocks.size() > 0) {
+          result.addAll(convertAnnotationToEffect(currentAnnotation.captureLocks, CAPTURE));
+        }
+        return result;
       }
     }
+    return Collections.emptyList();
   }
 
-  @Override
-  public Collection<? extends AbstractState> strengthen(AbstractState element, List<AbstractState> elements, CFAEdge cfaEdge, Precision precision)
-    throws UnrecognizedCCodeException {
 
-    logger.log(Level.FINEST, "Strengthen LockStatistics result");
-    return getAbstractSuccessors0(element, cfaEdge);
+  private List<Pair<LockIdentifier, Effect>> handleFunctionCallExpression(CFunctionCallExpression function) {
+    String functionName = function.getFunctionNameExpression().toASTString();
+    Pair<Set<LockInfo>, Effect> locksWithEffect = findLockByFunction(functionName);
+    Set<LockInfo> changedLocks = locksWithEffect.getFirst();
+    Effect e = locksWithEffect.getSecond();
+
+    List<Pair<LockIdentifier, Effect>> result = new LinkedList<>();
+    int p;
+    for (LockInfo lock : changedLocks) {
+      if (e == CAPTURE) {
+        p = lock.LockFunctions.get(functionName);
+      } else if (e == RELEASE) {
+        p = lock.UnlockFunctions.get(functionName);
+      } else if (e == RESET) {
+        p = lock.ResetFunctions.get(functionName);
+      } else {
+        //Other ones can be only global
+        p = 0;
+        assert (e == SET);
+        CExpression expression = function.getParameterExpressions().get(0);
+        //Replace it by parametrical one
+        if (expression instanceof CIntegerLiteralExpression) {
+          e = new SETEffect(((CIntegerLiteralExpression)expression).getValue().intValue());
+        } else {
+          //We can not process not integers
+          return Collections.emptyList();
+        }
+      }
+      LockIdentifier id;
+      if (p != 0) {
+        CExpression expression = function.getParameterExpressions().get(p - 1);
+        id = LockIdentifier.of(lock.lockName, expression.toASTString());
+      } else {
+        id = LockIdentifier.of(lock.lockName);
+      }
+      result.add(Pair.of(id, e));
+    }
+    return result;
   }
 
-  private void handleStatement(LockStatisticsState oldState, LockStatisticsStateBuilder builder,
-      CStatement statement, LineInfo line, String currentFunction) {
+  private List<Pair<LockIdentifier, Effect>> handleStatement(CStatement statement) {
 
     if (statement instanceof CAssignment) {
       /*
@@ -261,12 +364,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
 
       if (op2 instanceof CFunctionCallExpression) {
         CFunctionCallExpression function = (CFunctionCallExpression) op2;
-        String functionName = function.getFunctionNameExpression().toASTString();
-        Set<LockInfo> changedLocks = findLockByFunction(functionName);
-        for (LockInfo lock : changedLocks) {
-          changeState(oldState, builder, lock, functionName, line,
-              currentFunction, function.getParameterExpressions());
-        }
+        return handleFunctionCallExpression(function);
       } else {
         /*
          * threadDispatchLevel = 1;
@@ -277,10 +375,12 @@ public class LockStatisticsTransferRelation implements TransferRelation
         if (lock != null) {
           if (rightSide instanceof CIntegerLiteralExpression) {
             int level = ((CIntegerLiteralExpression)rightSide).getValue().intValue();
-            processSetLevel(builder, line, level, lock);
+            Effect e = new SETEffect(level);
+            return Collections.singletonList(Pair.of(LockIdentifier.of(lock.lockName, "", LockType.GLOBAL_LOCK), e));
           } else {
             logger.log(Level.WARNING, "Lock level isn't numeric constant: " + statement.toASTString()
                 + "(line " + statement.getFileLocation().getStartingLineNumber() + ")");
+            return Collections.emptyList();
           }
         }
       }
@@ -290,50 +390,48 @@ public class LockStatisticsTransferRelation implements TransferRelation
        * queLock(que);
        */
       CFunctionCallStatement funcStatement = (CFunctionCallStatement) statement;
-      String functionName = funcStatement.getFunctionCallExpression().getFunctionNameExpression().toASTString();
-      Set<LockInfo> changedLocks = findLockByFunction(functionName);
-      for (LockInfo lock : changedLocks) {
-        changeState(oldState, builder, lock, functionName, line, currentFunction,
-            funcStatement.getFunctionCallExpression().getParameterExpressions());
-      }
+      return handleFunctionCallExpression(funcStatement.getFunctionCallExpression());
     }
+    //No lock-relating operations
+    return Collections.emptyList();
   }
 
-  private void handleFunctionCall(LockStatisticsState oldState, LockStatisticsStateBuilder builder, CFunctionCallEdge callEdge) {
-    Set<CFunctionCall> expressions = callEdge.getRawAST().asSet();
-    if (expressions.size() > 0) {
-      for (CStatement statement : expressions) {
-        handleStatement(oldState, builder, statement, new LineInfo(callEdge), callEdge.getPredecessor().getFunctionName());
-      }
-    } else {
-      String functionName = callEdge.getSuccessor().getFunctionName();
-      Set<LockInfo> changedLocks = findLockByFunction(functionName);
-      for (LockInfo lock : changedLocks) {
-        changeState(oldState, builder, lock, functionName, new LineInfo(callEdge),
-            callEdge.getPredecessor().getFunctionName(), callEdge.getArguments());
-      }
-    }
+  private List<Pair<LockIdentifier, Effect>> handleFunctionCall(CFunctionCallEdge callEdge) {
+    List<Pair<LockIdentifier, Effect>> result = new LinkedList<>();
     if (annotatedfunctions != null && annotatedfunctions.containsKey(callEdge.getSuccessor().getFunctionName())) {
-      builder.setRestoreState(oldState);
+      result.add(Pair.of((LockIdentifier)null, SAVESTATE));
     }
+    result.addAll(handleFunctionCallExpression(callEdge.getSummaryEdge().getExpression().getFunctionCallExpression()));
+    return result;
   }
 
-  private Set<LockInfo> findLockByFunction(String functionName) {
+  private Pair<Set<LockInfo>, Effect> findLockByFunction(String functionName) {
+    /* Now it is supposed that one function has the same effects on different locks
+     */
     Set<LockInfo> changedLocks = new HashSet<>();
-    for (LockInfo lock : locks) {
-      if (lock.LockFunctions.containsKey(functionName)
-          || lock.UnlockFunctions.containsKey(functionName)
-          || (lock.ResetFunctions != null && lock.ResetFunctions.containsKey(functionName))
-          || (lock.setLevel != null && lock.setLevel.equals(functionName))
-          ) {
+    Effect e = null;
+    for (LockInfo lock : lockDescription) {
+      Effect tmp = null;
+      if (lock.LockFunctions.containsKey(functionName)) {
+        tmp = CAPTURE;
+      } else if (lock.UnlockFunctions.containsKey(functionName)) {
+        tmp = RELEASE;
+      } else if (lock.ResetFunctions != null && lock.ResetFunctions.containsKey(functionName)) {
+        tmp = RESET;
+      } else if (lock.setLevel != null && lock.setLevel.equals(functionName)) {
+        tmp = SET;
+      }
+      if (tmp != null){
+        assert (e == null || e == tmp);
+        e = tmp;
         changedLocks.add(lock);
       }
     }
-    return changedLocks;
+    return Pair.of(changedLocks, e);
   }
 
   private LockInfo findLockByVariable(String varName) {
-    for (LockInfo lock : locks) {
+    for (LockInfo lock : lockDescription) {
       for (String variable : lock.Variables) {
         if (variable.equals(varName)) {
           return lock;
@@ -341,65 +439,6 @@ public class LockStatisticsTransferRelation implements TransferRelation
       }
     }
     return null;
-  }
-
-  private LockInfo findLockByName(String name) {
-    for (LockInfo lock : locks) {
-      if (lock.lockName.equals(name)) {
-        return lock;
-      }
-    }
-    return null;
-  }
-
-  private void changeState(LockStatisticsState oldElement, LockStatisticsStateBuilder builder, LockInfo lock, String functionName, LineInfo line
-      , String currentFunction, List<CExpression> params) {
-    if (lock.LockFunctions.containsKey(functionName)) {
-      int p = lock.LockFunctions.get(functionName);
-      String variable = (p == 0 ? "" : params.get(p - 1).toASTString());
-      processLock(oldElement, builder, line, lock, variable);
-
-    } else if (lock.UnlockFunctions.containsKey(functionName)) {
-      logger.log(Level.FINER, "Unlock at line " + line + "int function " + currentFunction);
-      int p = lock.UnlockFunctions.get(functionName);
-      String variable = (p == 0 ? "" : params.get(p - 1).toASTString());
-      builder.free(lock.lockName, variable, logger);
-
-    } else if (lock.ResetFunctions != null && lock.ResetFunctions.containsKey(functionName)) {
-      logger.log(Level.FINER, "Reset at line " + line + "int function " + currentFunction);
-      int p = lock.ResetFunctions.get(functionName);
-      String variable = (p == 0 ? "" : params.get(p - 1).toASTString());
-      builder.reset(lock.lockName, variable, logger);
-
-    } else if (lock.setLevel != null && lock.setLevel.equals(functionName)) {
-      int p = Integer.parseInt(params.get(0).toASTString()); //new level
-      processSetLevel(builder, line, p, lock);//they count from 1
-    }
-  }
-
-  private void processLock(LockStatisticsState oldElement, LockStatisticsStateBuilder builder,
-      LineInfo line, LockInfo lock, String variable) {
-    logger.log(Level.FINER, "Lock at line " + line);
-    int d = oldElement.getCounter(lock.lockName, variable);
-
-    if (d < lock.maxLock) {
-      builder.add(lock.lockName, line, variable, logger);
-    } else {
-      /*UnmodifiableIterator<AccessPoint> accessPointIterator =
-          oldElement.getAccessPointIterator(lock.lockName, variable);
-      StringBuilder message = new StringBuilder();
-      message.append("Try to lock " + lock.lockName + " more, than " + lock.maxLock + " in " + line + " line. Previous were in ");
-      while (accessPointIterator.hasNext()) {
-        message.append(accessPointIterator.next().getLineInfo().getLine() + ", ");
-      }
-      message.delete(message.length() - 2, message.length());
-      logger.log(Level.WARNING, message.toString());*/
-    }
-  }
-
-  private void processSetLevel(LockStatisticsStateBuilder builder, LineInfo line, int level, LockInfo lock) {
-    logger.log(Level.FINER, "Set a lock level " + level + " at line " + line);
-    builder.set(lock.lockName, level, line, "");
   }
 
   @Override
@@ -419,91 +458,45 @@ public class LockStatisticsTransferRelation implements TransferRelation
    * @return the verdict
    */
   public String changeTheState(CFAEdge pEdge) {
-    switch (pEdge.getEdgeType()) {
-
-      case FunctionCallEdge:
-        String functionName = ((FunctionCallEdge)pEdge).getSuccessor().getFunctionName();
-        Set<LockInfo> locks = findLockByFunction(functionName);
-        if (locks != null) {
-          return formatCaption(locks);
-        }
-        break;
-
-      /*case FunctionReturnEdge:
-       * This case can not be processed by ETV
-        String fName = ((FunctionReturnEdge)pEdge).getSummaryEdge().getExpression().
-        getFunctionCallExpression().getFunctionNameExpression().toASTString();
-        if (annotatedfunctions.containsKey(fName)) {
-          return "Return from annotated function" + fName;
-        }
-        break;*/
-
-      case StatementEdge:
-        CStatement statement = ((CStatementEdge)pEdge).getStatement();
-
-        Set<LockInfo> changedLocks = null;
-        if (statement instanceof CAssignment) {
-          /*
-           * level = intLock();
-           */
-          CRightHandSide op2 = ((CAssignment)statement).getRightHandSide();
-
-          if (op2 instanceof CFunctionCallExpression) {
-            CFunctionCallExpression function = (CFunctionCallExpression) op2;
-            functionName = function.getFunctionNameExpression().toASTString();
-            changedLocks = findLockByFunction(functionName);
-          } else {
-            /*
-             * threadDispatchLevel = 1;
-             */
-            CLeftHandSide leftSide = ((CAssignment) statement).getLeftHandSide();
-            LockInfo lock = findLockByVariable(leftSide.toASTString());
-            changedLocks = lock == null ? null : Collections.singleton(lock);
-          }
-
-        } else if (statement instanceof CFunctionCallStatement) {
-          /*
-           * queLock(que);
-           */
-          CFunctionCallStatement funcStatement = (CFunctionCallStatement) statement;
-          functionName = funcStatement.getFunctionCallExpression().getFunctionNameExpression().toASTString();
-          changedLocks = findLockByFunction(functionName);
-        }
-        if (changedLocks != null) {
-          return formatCaption(changedLocks);
-        }
-        break;
-
-      case AssumeEdge:
-        CExpression assumption = ((CAssumeEdge)pEdge).getExpression();
-
-        if (assumption instanceof CBinaryExpression) {
-          if (((CBinaryExpression) assumption).getOperand1() instanceof CIdExpression) {
-            LockInfo lockInfo = findLockByVariable(((CIdExpression)((CBinaryExpression) assumption).getOperand1()).getName());
-            if (lockInfo != null) {
-              return formatCaption(Collections.singleton(lockInfo));
+    try {
+      Set<LockIdentifier> locks = from(determineOperations(pEdge))
+          .filter(new Predicate<Pair<LockIdentifier, Effect>>() {
+            @Override
+            public boolean apply(@Nullable Pair<LockIdentifier, Effect> pInput) {
+              return pInput.getFirst() != null;
             }
-          }
-        }
-        break;
-
-      default:
-        break;
+          })
+          .transform(new Function<Pair<LockIdentifier, Effect>, LockIdentifier>() {
+            @Override
+            @Nullable
+            public LockIdentifier apply(@Nullable Pair<LockIdentifier, Effect> pInput) {
+              return pInput.getFirst();
+            }
+          }).toSet();
+      return formatCaption(locks);
+    } catch (UnrecognizedCCodeException e) {
+      e.printStackTrace();
+      return null;
     }
-    return null;
   }
 
-  private String formatCaption(Set<LockInfo> set) {
+  private String formatCaption(Set<LockIdentifier> set) {
 
     if (set.isEmpty()) {
       return null;
     }
     StringBuilder sb = new StringBuilder();
     sb.append("Change states for locks ");
-    for (LockInfo lInfo : set) {
-      sb.append(lInfo.lockName + ", ");
+    for (LockIdentifier lInfo : set) {
+      sb.append(lInfo + ", ");
     }
     sb.delete(sb.length() - 2, sb.length());
     return sb.toString();
+  }
+
+  @Override
+  public Collection<? extends AbstractState> strengthen(AbstractState pState, List<AbstractState> pOtherStates,
+      @Nullable CFAEdge pCfaEdge, Precision pPrecision) throws CPATransferException, InterruptedException {
+    return null;
   }
 }
