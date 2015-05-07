@@ -27,6 +27,7 @@ import java.util.Collections;
 import java.util.Set;
 
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier;
 
 import com.google.common.collect.ImmutableSet;
 
@@ -39,18 +40,24 @@ public class Block {
   private final ImmutableSet<CFANode> callNodes;
   private final ImmutableSet<CFANode> returnNodes;
   private final ImmutableSet<CFANode> nodes;
+  private final ImmutableSet<LockIdentifier> capturedLocks;
 
   public Block(ImmutableSet<ReferencedVariable> pReferencedVariables,
-      Set<CFANode> pCallNodes, Set<CFANode> pReturnNodes, ImmutableSet<CFANode> allNodes) {
+      Set<CFANode> pCallNodes, Set<CFANode> pReturnNodes, ImmutableSet<CFANode> allNodes, ImmutableSet<LockIdentifier> locks) {
 
     referencedVariables = pReferencedVariables;
     callNodes = ImmutableSet.copyOf(pCallNodes);
     returnNodes = ImmutableSet.copyOf(pReturnNodes);
     nodes = allNodes;
+    capturedLocks = locks;
   }
 
   public Set<CFANode> getCallNodes() {
     return Collections.unmodifiableSet(callNodes);
+  }
+
+  public Set<LockIdentifier> getCapturedLocks() {
+    return Collections.unmodifiableSet(capturedLocks);
   }
 
   public CFANode getCallNode() {

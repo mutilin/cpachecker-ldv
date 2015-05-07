@@ -25,6 +25,7 @@ package org.sosy_lab.cpachecker.cfa.blocks.builder;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -40,6 +41,8 @@ import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsTransferRelation;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
@@ -51,12 +54,17 @@ import com.google.common.collect.Sets;
 public class BlockPartitioningBuilder {
 
   protected final Map<CFANode, Set<ReferencedVariable>> referencedVariablesMap = new HashMap<>();
+  protected final Map<CFANode, Set<LockIdentifier>> capturedLocksMap = new HashMap<>();
   protected final Map<CFANode, Set<CFANode>> callNodesMap = new HashMap<>();
   protected final Map<CFANode, Set<CFANode>> returnNodesMap = new HashMap<>();
   protected final Map<CFANode, Set<FunctionEntryNode>> innerFunctionCallsMap = new HashMap<>();
   protected final Map<CFANode, Set<CFANode>> blockNodesMap = new HashMap<>();
 
-  public BlockPartitioningBuilder() {}
+  private final LockStatisticsTransferRelation ltransfer;
+
+  public BlockPartitioningBuilder(LockStatisticsTransferRelation t) {
+    ltransfer = t;
+  }
 
   public BlockPartitioning build(CFANode mainFunction) {
     Map<CFANode, Set<FunctionEntryNode>> workCopyOfInnerFunctionCalls = new HashMap<>();
@@ -149,6 +157,7 @@ public class BlockPartitioningBuilder {
     //Try to optimize the memory
     Map<CFANode, ImmutableSet<ReferencedVariable>> immutableVariablesMap = new HashMap<>();
     Map<CFANode, ImmutableSet<CFANode>> immutableNodesMap = new HashMap<>();
+    Map<CFANode, ImmutableSet<LockIdentifier>> immutableLocksMap = new HashMap<>();
     //Resolve loop mapping
     for (CFANode node : loopMapping.keySet()) {
       CFANode mappedNode = loopMapping.get(node);
@@ -160,6 +169,7 @@ public class BlockPartitioningBuilder {
        */
       ImmutableSet<ReferencedVariable> resultVars;
       ImmutableSet<CFANode> resultNodes;
+      ImmutableSet<LockIdentifier> resultLocks;
       if (!immutableVariablesMap.containsKey(mappedNode)) {
         resultVars = ImmutableSet.copyOf(referencedVariablesMap.get(mappedNode));
         immutableVariablesMap.put(mappedNode, resultVars);
@@ -174,6 +184,13 @@ public class BlockPartitioningBuilder {
         resultNodes = immutableNodesMap.get(mappedNode);
       }
       immutableNodesMap.put(node, resultNodes);
+      if (!immutableLocksMap.containsKey(mappedNode)) {
+        resultLocks = ImmutableSet.copyOf(capturedLocksMap.get(mappedNode));
+        immutableLocksMap.put(mappedNode, resultLocks);
+      } else {
+        resultLocks = immutableLocksMap.get(mappedNode);
+      }
+      immutableLocksMap.put(node, resultLocks);
     }
 
     //now we can create the Blocks for the BlockPartitioning
@@ -181,10 +198,10 @@ public class BlockPartitioningBuilder {
     for (CFANode key : returnNodesMap.keySet()) {
       if (immutableVariablesMap.containsKey(key)) {
         assert immutableNodesMap.containsKey(key);
-        blocks.add(new Block(immutableVariablesMap.get(key), callNodesMap.get(key), returnNodesMap.get(key), immutableNodesMap.get(key)));
+        blocks.add(new Block(immutableVariablesMap.get(key), callNodesMap.get(key), returnNodesMap.get(key), immutableNodesMap.get(key), immutableLocksMap.get(key)));
       } else {
         blocks.add(new Block(ImmutableSet.copyOf(referencedVariablesMap.get(key)), callNodesMap.get(key),
-            returnNodesMap.get(key), ImmutableSet.copyOf(blockNodesMap.get(key))));
+            returnNodesMap.get(key), ImmutableSet.copyOf(blockNodesMap.get(key)), ImmutableSet.copyOf(capturedLocksMap.get(key))));
       }
     }
     return new BlockPartitioning(blocks, mainFunction);
@@ -193,8 +210,10 @@ public class BlockPartitioningBuilder {
   private void joinFunctionPartitioning(CFANode node, CFANode caller) {
     Set<ReferencedVariable> functionVars = referencedVariablesMap.get(caller);
     Set<CFANode> functionBody = blockNodesMap.get(caller);
+    Set<LockIdentifier> locks = capturedLocksMap.get(caller);
     referencedVariablesMap.get(node).addAll(functionVars);
     blockNodesMap.get(node).addAll(functionBody);
+    capturedLocksMap.get(node).addAll(locks);
   }
 
   /**
@@ -206,6 +225,7 @@ public class BlockPartitioningBuilder {
     Set<CFANode> callNodes = collectCallNodes(nodes, mainFunction);
     Set<CFANode> returnNodes = collectReturnNodes(nodes, mainFunction);
     Set<FunctionEntryNode> innerFunctionCalls = collectInnerFunctionCalls(nodes);
+    Set<LockIdentifier> innerLocks = collectLocks(nodes);
 
     CFANode registerNode = null;
     for (CFANode node : callNodes) {
@@ -223,6 +243,21 @@ public class BlockPartitioningBuilder {
     returnNodesMap.put(registerNode, returnNodes);
     innerFunctionCallsMap.put(registerNode, innerFunctionCalls);
     blockNodesMap.put(registerNode, nodes);
+    capturedLocksMap.put(registerNode, innerLocks);
+  }
+
+  private Set<LockIdentifier> collectLocks(Set<CFANode> pNodes) {
+    Set<LockIdentifier> result = new HashSet<>();
+    if (ltransfer == null) {
+      return Collections.emptySet();
+    }
+    for (CFANode node : pNodes) {
+      for (int i = 0; i < node.getNumLeavingEdges(); i++) {
+        CFAEdge e = node.getLeavingEdge(i);
+        result.addAll(ltransfer.getAffectedLocks(e));
+      }
+    }
+    return result;
   }
 
   private Set<FunctionEntryNode> collectInnerFunctionCalls(Set<CFANode> pNodes) {

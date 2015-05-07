@@ -32,6 +32,7 @@ import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.blocks.BlockPartitioning;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsTransferRelation;
 
 
 /**
@@ -55,8 +56,8 @@ public abstract class PartitioningHeuristic {
    * @return BlockPartitioning
    * @see org.sosy_lab.cpachecker.cfa.blocks.BlockPartitioning
    */
-  public final BlockPartitioning buildPartitioning(CFANode mainFunction) {
-    BlockPartitioningBuilder builder = new BlockPartitioningBuilder();
+  public final BlockPartitioning buildPartitioning(CFANode mainFunction, LockStatisticsTransferRelation l) {
+    BlockPartitioningBuilder builder = new BlockPartitioningBuilder(l);
 
     //traverse CFG
     Set<CFANode> seen = new HashSet<>();

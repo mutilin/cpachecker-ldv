@@ -29,6 +29,7 @@ import java.util.Collection;
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.blocks.BlockPartitioning;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsTransferRelation;
 
 import com.google.common.collect.ImmutableSet;
 
@@ -36,8 +37,8 @@ import com.google.common.collect.ImmutableSet;
 
 public class UnrecursiveBlockPartitioningBuilder extends BlockPartitioningBuilder {
 
-  public UnrecursiveBlockPartitioningBuilder() {
-    super();
+  public UnrecursiveBlockPartitioningBuilder(LockStatisticsTransferRelation l) {
+    super(l);
   }
 
   @Override
@@ -46,7 +47,7 @@ public class UnrecursiveBlockPartitioningBuilder extends BlockPartitioningBuilde
     Collection<Block> blocks = new ArrayList<>(returnNodesMap.keySet().size());
     for (CFANode key : returnNodesMap.keySet()) {
       blocks.add(new Block(ImmutableSet.copyOf(referencedVariablesMap.get(key)), callNodesMap.get(key),
-          returnNodesMap.get(key), ImmutableSet.copyOf(blockNodesMap.get(key))));
+          returnNodesMap.get(key), ImmutableSet.copyOf(blockNodesMap.get(key)), ImmutableSet.copyOf(capturedLocksMap.get(key))));
     }
     return new BlockPartitioning(blocks, mainFunction);
   }
