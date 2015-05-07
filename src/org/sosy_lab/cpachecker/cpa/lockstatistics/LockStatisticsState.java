@@ -43,11 +43,13 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
     private SortedMap<LockIdentifier, Integer> mutableLocks;
     private LockStatisticsState mutableToRestore;
     private boolean isRestored;
+    private boolean isFalseState;
 
     public LockStatisticsStateBuilder(LockStatisticsState state) {
       mutableLocks = Maps.newTreeMap(state.locks);
       mutableToRestore = state.toRestore;
       isRestored = false;
+      isFalseState = false;
     }
 
     public void add(LockIdentifier lockId) {
@@ -111,7 +113,14 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
       isRestored = true;
     }
 
+    public void restoreAll() {
+      mutableLocks = mutableToRestore.locks;
+    }
+
     LockStatisticsState build() {
+      if (isFalseState) {
+        return null;
+      }
       if (isRestored) {
         mutableToRestore = mutableToRestore.toRestore;
       }
@@ -122,12 +131,24 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
       }
     }
 
+    public LockStatisticsState getOldState() {
+      return getParentLink();
+    }
+
     public void resetAll() {
       mutableLocks.clear();
     }
 
     public void reduce() {
       mutableToRestore = null;
+    }
+
+    public void reduce(Set<LockIdentifier> usedLocks) {
+      for (LockIdentifier id : new HashSet<>(mutableLocks.keySet())) {
+        if (!usedLocks.contains(id)) {
+          mutableLocks.remove(id);
+        }
+      }
     }
 
     public void reduceLocks(Set<String> exceptLocks) {
@@ -139,6 +160,14 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
 
     public void expand(LockStatisticsState rootState) {
       mutableToRestore = rootState.toRestore;
+    }
+
+    public void expand(LockStatisticsState rootState, Set<LockIdentifier> usedLocks) {
+      for (LockIdentifier lock : rootState.locks.keySet()) {
+        if (!usedLocks.contains(lock)) {
+          mutableLocks.put(lock, rootState.locks.get(lock));
+        }
+      }
     }
 
     public void expandLocks(LockStatisticsState pRootState, Set<String> pRestrictedLocks) {
@@ -163,8 +192,12 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
       }
     }
 
-    public void setRestoreState(LockStatisticsState pOldState) {
-      mutableToRestore = pOldState;
+    public void setRestoreState() {
+      mutableToRestore = getParentLink();
+    }
+
+    public void setAsFalseState() {
+      isFalseState = true;
     }
   }
 

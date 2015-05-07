@@ -32,7 +32,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.logging.Level;
 
 import javax.annotation.Nullable;
 
@@ -61,7 +60,6 @@ import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier.LockType;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState.LockStatisticsStateBuilder;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCCodeException;
@@ -73,50 +71,108 @@ import com.google.common.base.Predicate;
 public class LockStatisticsTransferRelation implements TransferRelation
 {
 
-  private static class Effect {
-    /*Method change;
-
-    Effect(Method c) {
-      change = c;
-    }
-
-    public void execute(LockStatisticsStateBuilder builder, LockIdentifier id) {
-      change.invoke(builder, id);
-    }*/
+  private abstract class Effect {
+    public abstract void effect(LockStatisticsStateBuilder builder, LockIdentifier id);
   }
-  private static class SETEffect extends Effect {
+
+  private class AcquireEffect extends Effect {
+    @Override
+    public void effect(LockStatisticsStateBuilder pBuilder, LockIdentifier pId) {
+      LockInfo lock = findLockByName(pId.getName());
+      int previousP = pBuilder.getOldState().getCounter(pId);
+      if (lock.maxLock > previousP) {
+        pBuilder.add(pId);
+      }
+    }
+  }
+
+  private class ReleaseEffect extends Effect {
+    @Override
+    public void effect(LockStatisticsStateBuilder pBuilder, LockIdentifier pId) {
+      pBuilder.free(pId);
+    }
+  }
+
+  private class ResetEffect extends Effect {
+    @Override
+    public void effect(LockStatisticsStateBuilder pBuilder, LockIdentifier pId) {
+      pBuilder.reset(pId);
+    }
+  }
+
+  private class RestoreEffect extends Effect {
+    @Override
+    public void effect(LockStatisticsStateBuilder pBuilder, LockIdentifier pId) {
+      pBuilder.restore(pId);
+    }
+  }
+
+  private class RestoreAllEffect extends Effect {
+    @Override
+    public void effect(LockStatisticsStateBuilder pBuilder, LockIdentifier pId) {
+      pBuilder.restoreAll();
+    }
+  }
+
+  private class SaveStateEffect extends Effect {
+    @Override
+    public void effect(LockStatisticsStateBuilder pBuilder, LockIdentifier pId) {
+      pBuilder.setRestoreState();
+    }
+  }
+
+  private class DummyEffect extends Effect {
+    @Override
+    public void effect(LockStatisticsStateBuilder pBuilder, LockIdentifier pId) {}
+  }
+
+  private class SETEffect extends Effect {
     final int p;
 
     public SETEffect(int t) {
-     // super(LockStatisticsStateBuilder.class.getDeclaredMethod("set", {LockIdentifier.class, Integer.class}));
       p = t;
     }
 
-   /* @Override
-    public void execute(LockStatisticsStateBuilder builder, LockIdentifier id) {
-      change.invoke(builder, id, p);
-    }*/
+    @Override
+    public void effect(LockStatisticsStateBuilder pBuilder, LockIdentifier pId) {
+      LockInfo lock = findLockByName(pId.getName());
+      if (lock.maxLock >= p) {
+        pBuilder.set(pId, p);
+      } else {
+        pBuilder.set(pId, lock.maxLock);
+      }
+    }
   }
 
-  private static class CHECKEffect extends SETEffect {
+  private class CHECKEffect extends Effect {
     final boolean isTruth;
+    final int p;
 
     public CHECKEffect(int t, boolean truth) {
-      super(t);
+      p = t;
       isTruth = truth;
+    }
+
+    @Override
+    public void effect(LockStatisticsStateBuilder pBuilder, LockIdentifier pId) {
+      int previousP = pBuilder.getOldState().getCounter(pId);
+      boolean result = ((previousP == p) == isTruth);
+      if (!result) {
+        pBuilder.setAsFalseState();
+      }
     }
   }
 
   //There ones have no parameters
-  private final static Effect CAPTURE = new Effect();
-  private final static Effect RELEASE = new Effect();
-  private final static Effect RESET = new Effect();
-  private final static Effect SAVESTATE = new Effect();
-  private final static Effect RESTORE = new Effect();
-  private final static Effect RESTOREALL = new Effect();
+  private final Effect ACQUIRE = new AcquireEffect();
+  private final Effect RELEASE = new ReleaseEffect();
+  private final Effect RESET = new ResetEffect();
+  private final Effect SAVESTATE = new SaveStateEffect();
+  private final Effect RESTORE = new RestoreEffect();
+  private final Effect RESTOREALL = new RestoreAllEffect();
 
   //This one is without parameter and will be replaced by ParameterEffect after processing
-  private final static Effect SET = new Effect();
+  private final Effect SET = new DummyEffect();
 
   @Option(name="lockreset",
       description="function to reset state")
@@ -125,7 +181,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
   final Map<String, AnnotationInfo> annotatedfunctions;
 
   final Set<LockInfo> lockDescription;
-  private LogManager logger;
+  private final LogManager logger;
 
   int i = 0;
   public LockStatisticsTransferRelation(Configuration config, LogManager logger) throws InvalidConfigurationException {
@@ -144,17 +200,42 @@ public class LockStatisticsTransferRelation implements TransferRelation
 
     LockStatisticsState lockStatisticsElement     = (LockStatisticsState)element;
 
-    if (cfaEdge.getPredecessor().getFunctionName().equals("cpuclockStop")) {
-      System.out.println("This");
-    }
     //Firstly, determine operations with locks
     List<Pair<LockIdentifier, Effect>> toProcess = determineOperations(cfaEdge);
 
-    LockStatisticsState successor = handleOperations(toProcess, lockStatisticsElement);
+    final LockStatisticsStateBuilder builder = lockStatisticsElement.builder();
+
+    for (Pair<LockIdentifier, Effect> pair : toProcess) {
+      pair.getSecond().effect(builder, pair.getFirst());
+    }
+
+    LockStatisticsState successor = builder.build();
 
     if (successor != null) {
       return Collections.singleton(successor);
     } else {
+      return Collections.emptySet();
+    }
+  }
+
+  public Set<LockIdentifier> getAffectedLocks(CFAEdge cfaEdge) {
+    try {
+      return from(determineOperations(cfaEdge))
+      .filter(new Predicate<Pair<LockIdentifier, Effect>>() {
+        @Override
+        public boolean apply(@Nullable Pair<LockIdentifier, Effect> pInput) {
+          return pInput.getFirst() != null;
+        }
+      })
+      .transform(new Function<Pair<LockIdentifier, Effect>, LockIdentifier>() {
+        @Override
+        @Nullable
+        public LockIdentifier apply(@Nullable Pair<LockIdentifier, Effect> pInput) {
+          return pInput.getFirst();
+        }
+      }).toSet();
+    } catch (UnrecognizedCCodeException e) {
+      e.printStackTrace();
       return Collections.emptySet();
     }
   }
@@ -184,52 +265,6 @@ public class LockStatisticsTransferRelation implements TransferRelation
       }
     }
     return null;
-  }
-
-  private LockStatisticsState handleOperations(List<Pair<LockIdentifier, Effect>> toProcess, LockStatisticsState oldState) {
-    LockStatisticsStateBuilder builder = oldState.builder();
-
-    for (Pair<LockIdentifier, Effect> pair : toProcess) {
-      LockIdentifier id = pair.getFirst();
-      Effect e = pair.getSecond();
-      if (e == RESTOREALL) {
-        builder.resetAll();
-      } else if (e == SAVESTATE) {
-        builder.setRestoreState(oldState);
-      } else {
-        assert (id != null);
-        if (e == CAPTURE) {
-          LockInfo lock = findLockByName(id.getName());
-          int currentLevel = oldState.getCounter(id);
-          if (lock.maxLock > currentLevel) {
-            builder.add(id);
-          }
-        } else if (e == RELEASE) {
-          builder.free(id);
-        } else if (e == RESET) {
-          builder.reset(id);
-        } else if (e == RESTORE) {
-          builder.restore(id);
-        } else if (e.getClass() == SETEffect.class) {
-          LockInfo lock = findLockByName(id.getName());
-          int currentLevel = ((SETEffect)e).p;
-          if (lock.maxLock >= currentLevel) {
-            builder.set(id, currentLevel);
-          } else {
-            builder.set(id, lock.maxLock);
-          }
-        } else if (e.getClass() == CHECKEffect.class) {
-          CHECKEffect check = (CHECKEffect)e;
-          boolean result;
-          int previousP = oldState.getCounter(id);
-          result = ((previousP == check.p) == check.isTruth);
-          if (!result) {
-            return null;
-          }
-        }
-      }
-    }
-    return builder.build();
   }
 
   private List<Pair<LockIdentifier, Effect>> handleSimpleEdge(CFAEdge cfaEdge) throws UnrecognizedCCodeException {
@@ -274,12 +309,11 @@ public class LockStatisticsTransferRelation implements TransferRelation
         LockInfo lockInfo = findLockByVariable(((CIdExpression)((CBinaryExpression) assumption).getOperand1()).getName());
         if (lockInfo != null) {
           LockIdentifier id = LockIdentifier.of(lockInfo.lockName);
-          if (!(((CBinaryExpression) assumption).getOperand2() instanceof CIntegerLiteralExpression)) {
-            return Collections.emptyList();
+          if ((((CBinaryExpression) assumption).getOperand2() instanceof CIntegerLiteralExpression)) {
+            int level = ((CIntegerLiteralExpression)(((CBinaryExpression) assumption).getOperand2())).getValue().intValue();
+            Effect e = new CHECKEffect(level, cfaEdge.getTruthAssumption());
+            return Collections.singletonList(Pair.of(id, e));
           }
-          int level = ((CIntegerLiteralExpression)(((CBinaryExpression) assumption).getOperand2())).getValue().intValue();
-          Effect e = new CHECKEffect(level, cfaEdge.getTruthAssumption());
-          return Collections.singletonList(Pair.of(id, e));
         }
       }
     }
@@ -290,7 +324,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
     List<Pair<LockIdentifier, Effect>> result = new LinkedList<>();
 
     for (String lockName : map.keySet()) {
-      result.add(Pair.of(LockIdentifier.of(lockName, map.get(lockName), LockType.GLOBAL_LOCK), e));
+      result.add(Pair.of(LockIdentifier.of(lockName, map.get(lockName)), e));
     }
     return result;
   }
@@ -311,20 +345,15 @@ public class LockStatisticsTransferRelation implements TransferRelation
       } else {
         if (currentAnnotation.restoreLocks.size() > 0) {
           result.addAll(convertAnnotationToEffect(currentAnnotation.restoreLocks, RESTORE));
-          logger.log(Level.FINER, "Restore " + currentAnnotation.restoreLocks
-              + ", \n\tline=" + cfaEdge.getLineNumber());
-
         }
         if (currentAnnotation.freeLocks.size() > 0) {
-          //Free in state at first restores saved state
           result.addAll(convertAnnotationToEffect(currentAnnotation.freeLocks, RELEASE));
         }
         if (currentAnnotation.resetLocks.size() > 0) {
-          //Reset in state at first restores saved state
           result.addAll(convertAnnotationToEffect(currentAnnotation.resetLocks, RESET));
         }
         if (currentAnnotation.captureLocks.size() > 0) {
-          result.addAll(convertAnnotationToEffect(currentAnnotation.captureLocks, CAPTURE));
+          result.addAll(convertAnnotationToEffect(currentAnnotation.captureLocks, ACQUIRE));
         }
         return result;
       }
@@ -342,7 +371,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
     List<Pair<LockIdentifier, Effect>> result = new LinkedList<>();
     int p;
     for (LockInfo lock : changedLocks) {
-      if (e == CAPTURE) {
+      if (e == ACQUIRE) {
         p = lock.LockFunctions.get(functionName);
       } else if (e == RELEASE) {
         p = lock.UnlockFunctions.get(functionName);
@@ -395,10 +424,8 @@ public class LockStatisticsTransferRelation implements TransferRelation
           if (rightSide instanceof CIntegerLiteralExpression) {
             int level = ((CIntegerLiteralExpression)rightSide).getValue().intValue();
             Effect e = new SETEffect(level);
-            return Collections.singletonList(Pair.of(LockIdentifier.of(lock.lockName, "", LockType.GLOBAL_LOCK), e));
+            return Collections.singletonList(Pair.of(LockIdentifier.of(lock.lockName), e));
           } else {
-            logger.log(Level.WARNING, "Lock level isn't numeric constant: " + statement.toASTString()
-                + "(line " + statement.getFileLocation().getStartingLineNumber() + ")");
             return Collections.emptyList();
           }
         }
@@ -432,7 +459,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
     for (LockInfo lock : lockDescription) {
       Effect tmp = null;
       if (lock.LockFunctions.containsKey(functionName)) {
-        tmp = CAPTURE;
+        tmp = ACQUIRE;
       } else if (lock.UnlockFunctions.containsKey(functionName)) {
         tmp = RELEASE;
       } else if (lock.ResetFunctions != null && lock.ResetFunctions.containsKey(functionName)) {
@@ -476,27 +503,8 @@ public class LockStatisticsTransferRelation implements TransferRelation
    * @param pEdge edge to check
    * @return the verdict
    */
-  public String changeTheState(CFAEdge pEdge) {
-    try {
-      Set<LockIdentifier> locks = from(determineOperations(pEdge))
-          .filter(new Predicate<Pair<LockIdentifier, Effect>>() {
-            @Override
-            public boolean apply(@Nullable Pair<LockIdentifier, Effect> pInput) {
-              return pInput.getFirst() != null;
-            }
-          })
-          .transform(new Function<Pair<LockIdentifier, Effect>, LockIdentifier>() {
-            @Override
-            @Nullable
-            public LockIdentifier apply(@Nullable Pair<LockIdentifier, Effect> pInput) {
-              return pInput.getFirst();
-            }
-          }).toSet();
-      return formatCaption(locks);
-    } catch (UnrecognizedCCodeException e) {
-      e.printStackTrace();
-      return null;
-    }
+  public String doesChangeTheState(CFAEdge pEdge) {
+    return formatCaption(getAffectedLocks(pEdge));
   }
 
   private String formatCaption(Set<LockIdentifier> set) {

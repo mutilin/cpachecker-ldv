@@ -53,6 +53,9 @@ public class LockStatisticsReducer implements Reducer {
   @Option(description="reduce recursive locks to a single access")
   private boolean aggressiveReduction = false;
 
+  @Option(description="reduce unused locks")
+  private boolean reduceUselessLocks = false;
+
   public LockStatisticsReducer(Configuration config, Map<String, AnnotationInfo> annotations, Set<LockInfo> locks) throws InvalidConfigurationException {
     config.inject(this);
     restrictedFunctions = annotations.keySet();
@@ -76,6 +79,9 @@ public class LockStatisticsReducer implements Reducer {
     LockStatisticsState lockState = (LockStatisticsState) pExpandedElement;
     LockStatisticsStateBuilder builder = lockState.builder();
     builder.reduce();
+    if (reduceUselessLocks) {
+      builder.reduce(pContext.getCapturedLocks());
+    }
     if (aggressiveReduction && !restrictedFunctions.contains(pCallNode.getFunctionName())) {
       builder.reduceLocks(restrictedLocks);
     }
@@ -90,6 +96,9 @@ public class LockStatisticsReducer implements Reducer {
     LockStatisticsState rootState = (LockStatisticsState) pRootElement;
     LockStatisticsStateBuilder builder = reducedState.builder();
     builder.expand(rootState);
+    if (reduceUselessLocks) {
+      builder.expand(rootState, pReducedContext.getCapturedLocks());
+    }
     if (aggressiveReduction && !restrictedFunctions.contains(pReducedContext.getCallNode().getFunctionName())) {
       builder.expandLocks(rootState, restrictedLocks);
     }
