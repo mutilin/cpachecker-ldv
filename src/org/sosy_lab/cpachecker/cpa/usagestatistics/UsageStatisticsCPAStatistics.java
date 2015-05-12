@@ -185,7 +185,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
   private String shouldBeHighlighted(CFAEdge pEdge) {
     if (lockTransfer != null) {
-      return lockTransfer.changeTheState(pEdge);
+      return lockTransfer.doesChangeTheState(pEdge);
     } else {
       return null;
     }
