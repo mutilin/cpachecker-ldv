@@ -153,8 +153,10 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
 
     public void reduceLocks(Set<String> exceptLocks) {
       for (LockIdentifier lock : new HashSet<>(mutableLocks.keySet())) {
-        mutableLocks.remove(lock);
-        add(lock);
+        if (!exceptLocks.contains(lock.getName())) {
+          mutableLocks.remove(lock);
+          add(lock);
+        }
       }
     }
 

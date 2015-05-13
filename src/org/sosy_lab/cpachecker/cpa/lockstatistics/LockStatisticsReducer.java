@@ -43,12 +43,9 @@ import org.sosy_lab.cpachecker.core.interfaces.Reducer;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState.LockStatisticsStateBuilder;
 
 import com.google.common.base.Function;
-import com.google.common.base.Predicate;
 
 @Options(prefix="cpa.lockstatistics")
 public class LockStatisticsReducer implements Reducer {
-  private final Set<String> restrictedFunctions;
-  private final Set<String> restrictedLocks;
 
   @Option(description="reduce recursive locks to a single access")
   private boolean aggressiveReduction = false;
@@ -56,22 +53,17 @@ public class LockStatisticsReducer implements Reducer {
   @Option(description="reduce unused locks")
   private boolean reduceUselessLocks = false;
 
+  private final Function<LockIdentifier, String> GETNAME =
+      new Function<LockIdentifier, String>() {
+      @Override
+      @Nullable
+      public String apply(@Nullable LockIdentifier pInput) {
+          return pInput.getName();
+      }
+    };
+
   public LockStatisticsReducer(Configuration config, Map<String, AnnotationInfo> annotations, Set<LockInfo> locks) throws InvalidConfigurationException {
     config.inject(this);
-    restrictedFunctions = annotations.keySet();
-    //Make a set of locks with nonempty reset functions
-    restrictedLocks = from(locks).filter(new Predicate<LockInfo>() {
-        @Override
-        public boolean apply(@Nullable LockInfo pInput) {
-          return !(pInput.ResetFunctions.isEmpty() && pInput.Variables.isEmpty());
-        }
-      }).transform(new Function<LockInfo, String>() {
-        @Override
-        @Nullable
-        public String apply(@Nullable LockInfo pInput) {
-            return pInput.lockName;
-        }
-      }).toSet();
   }
 
   @Override
@@ -82,8 +74,8 @@ public class LockStatisticsReducer implements Reducer {
     if (reduceUselessLocks) {
       builder.reduce(pContext.getCapturedLocks());
     }
-    if (aggressiveReduction && !restrictedFunctions.contains(pCallNode.getFunctionName())) {
-      builder.reduceLocks(restrictedLocks);
+    if (aggressiveReduction) {
+      builder.reduceLocks(from(pContext.getCapturedLocks()).transform(GETNAME).toSet());
     }
     return builder.build();
   }
@@ -99,8 +91,8 @@ public class LockStatisticsReducer implements Reducer {
     if (reduceUselessLocks) {
       builder.expand(rootState, pReducedContext.getCapturedLocks());
     }
-    if (aggressiveReduction && !restrictedFunctions.contains(pReducedContext.getCallNode().getFunctionName())) {
-      builder.expandLocks(rootState, restrictedLocks);
+    if (aggressiveReduction) {
+      builder.expandLocks(rootState, (from(pReducedContext.getCapturedLocks()).transform(GETNAME).toSet()));
     }
     return builder.build();
   }
