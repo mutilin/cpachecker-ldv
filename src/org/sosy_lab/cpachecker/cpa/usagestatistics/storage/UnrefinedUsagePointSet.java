@@ -24,7 +24,6 @@
 package org.sosy_lab.cpachecker.cpa.usagestatistics.storage;
 
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -33,9 +32,7 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsState;
 
 public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
@@ -47,13 +44,6 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     topUsages = new TreeSet<>();
     unrefinedInformation = new HashMap<>();
     refinedInformation = new HashMap<>();
-  }
-
-  private UnrefinedUsagePointSet(TreeSet<UsagePoint> top, Map<UsagePoint, UnrefinedUsageInfoSet> detail,
-      Map<UsagePoint, RefinedUsageInfoSet> trueUsages) {
-    topUsages = top;
-    unrefinedInformation = detail;
-    refinedInformation = trueUsages;
   }
 
   public void add(UsageInfo newInfo) {
@@ -92,35 +82,6 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
       }
       topUsages.add(newPoint);
     }
-  }
-
-  private boolean isUnsafe(Set<UsagePoint> points) {
-    if (points.size() >= 1) {
-      Iterator<UsagePoint> iterator = points.iterator();
-      UsagePoint point = iterator.next();
-      Set<LockIdentifier> lockSet = null;
-      if (refinedInformation.containsKey(point) && point.access == Access.READ) {
-        //The first one may be read access if it is refined
-        lockSet = new HashSet<>(point.locks);
-        if (iterator.hasNext()) {
-          point = iterator.next();
-        } else {
-          return false;
-        }
-      }
-      if (point.access == Access.WRITE) {
-        if (lockSet == null) {
-          lockSet = new HashSet<>(point.locks);
-        } else {
-          lockSet.retainAll(point.locks);
-        }
-        while (iterator.hasNext() && !lockSet.isEmpty()) {
-          lockSet.retainAll(iterator.next().locks);
-        }
-        return lockSet.isEmpty();
-      }
-    }
-    return false;
   }
 
   @Override
@@ -174,7 +135,7 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
   }
 
   public Iterator<UsagePoint> getPointIterator() {
-    return topUsages.iterator();
+    return new TreeSet<>(topUsages).iterator();
   }
 
   @Override
@@ -192,11 +153,6 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     topUsages.add(p);
     unrefinedInformation.remove(p);
     refinedInformation.put(p, new RefinedUsageInfoSet(uinfo, path));
-  }
-
-  @Override
-  public UnrefinedUsagePointSet clone() {
-    return new UnrefinedUsagePointSet(new TreeSet<>(topUsages), new HashMap<>(unrefinedInformation), new HashMap<>(refinedInformation));
   }
 
   public void remove(UsagePoint currentUsagePoint) {

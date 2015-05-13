@@ -1,8 +1,8 @@
 package org.sosy_lab.cpachecker.cpa.usagestatistics.storage;
 
 import java.util.HashSet;
-import java.util.List;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -20,13 +20,11 @@ public class UsagePoint implements Comparable<UsagePoint> {
   //This usage is used to distinct usage points with empty lock sets with write access from each other
   public final UsageInfo keyUsage;
   private final Set<UsagePoint> coveredUsages;
-  private boolean isTrue;
 
   private UsagePoint(SortedSet<LockIdentifier> pLocks, Access pAccess, UsageInfo pInfo) {
     locks = ImmutableSortedSet.copyOf(pLocks);
     access = pAccess;
     coveredUsages = new HashSet<>();
-    isTrue = false;
     keyUsage = pInfo;
   }
 
@@ -39,10 +37,9 @@ public class UsagePoint implements Comparable<UsagePoint> {
   }
 
   public boolean addCoveredUsage(UsagePoint newChild) {
-    assert (!isTrue);
     if (!coveredUsages.contains(newChild)) {
       for (UsagePoint usage : coveredUsages) {
-        if (usage.isHigher(newChild) && !usage.isTrue) {
+        if (usage.isHigher(newChild)) {
           assert !usage.equals(newChild);
           return usage.addCoveredUsage(newChild);
         }
@@ -102,12 +99,8 @@ public class UsagePoint implements Comparable<UsagePoint> {
 
   @Override
   public int compareTo(UsagePoint o) {
-    int result = (isTrue == o.isTrue) ? 0 : (isTrue ? -1 : 1);
-    if (result != 0) {
-      return result;
-    }
     //It is very important to compare at first the accesses, because an algorithm base on this suggestion
-    result = access.compareTo(o.access);
+    int result = access.compareTo(o.access);
     if (result != 0) {
       return result;
     }
@@ -152,7 +145,6 @@ public class UsagePoint implements Comparable<UsagePoint> {
   }
 
   public void markAsTrue(List<CFAEdge> path) {
-    isTrue = true;
     if (keyUsage != null) {
       keyUsage.resetKeyState(path);
     }

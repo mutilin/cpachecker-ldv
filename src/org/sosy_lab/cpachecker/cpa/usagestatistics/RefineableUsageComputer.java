@@ -70,7 +70,7 @@ public class RefineableUsageComputer {
           //May be we remove all 'write' accesses, so move to other id
           usagePointIterator = null;
         } else {
-          usagePointIterator = currentRefineableUsageList.clone().getPointIterator();
+          usagePointIterator = currentRefineableUsageList.getPointIterator();
         }
       }
     } else {
@@ -97,7 +97,7 @@ public class RefineableUsageComputer {
           if (unrefinedUsagePointSetIterator.hasNext()) {
             currentRefineableUsageList = unrefinedUsagePointSetIterator.next();
             assert (detector.isUnsafe(currentRefineableUsageList));
-            usagePointIterator = currentRefineableUsageList.clone().getPointIterator();
+            usagePointIterator = currentRefineableUsageList.getPointIterator();
           } else {
             return null;
           }
