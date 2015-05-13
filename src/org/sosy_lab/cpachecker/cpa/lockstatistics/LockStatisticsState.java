@@ -346,11 +346,7 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
   }
 
   public boolean intersects(LockStatisticsState pLocks) {
-    if (Sets.intersection(locks.keySet(), pLocks.locks.keySet()).isEmpty()) {
-      return false;
-    } else {
-      return true;
-    }
+    return !Sets.intersection(locks.keySet(), pLocks.locks.keySet()).isEmpty();
   }
 
   LockStatisticsStateBuilder builder() {

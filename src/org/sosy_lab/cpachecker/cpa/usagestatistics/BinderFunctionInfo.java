@@ -80,9 +80,9 @@ public class BinderFunctionInfo {
       for (String option : options) {
         pOption = option.split(":");
         if (pOption.length == 1) {
-          tmpInfo.add(new ParameterInfo(Access.getValue(pOption[0]), 0));
+          tmpInfo.add(new ParameterInfo(Access.valueOf(pOption[0]), 0));
         } else {
-          tmpInfo.add(new ParameterInfo(Access.getValue(pOption[0]), Integer.parseInt(pOption[1])));
+          tmpInfo.add(new ParameterInfo(Access.valueOf(pOption[0]), Integer.parseInt(pOption[1])));
         }
       }
       line = pConfig.getProperty(name + ".linkInfo");
