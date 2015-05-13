@@ -27,13 +27,11 @@ import java.util.List;
 
 import javax.annotation.Nonnull;
 
-import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsagePoint;
 import org.sosy_lab.cpachecker.util.AbstractStates;
-import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 
 public class UsageInfo implements Comparable<UsageInfo> {
@@ -41,55 +39,25 @@ public class UsageInfo implements Comparable<UsageInfo> {
   public static enum Access {
     WRITE,
     READ;
-
-    public String toASTString() {
-      return name().toLowerCase();
-    }
-
-    public static Access getValue(String o) throws InvalidConfigurationException {
-      if (o.equalsIgnoreCase("READ")) {
-        return Access.READ;
-      } else if (o.equalsIgnoreCase("WRITE")) {
-        return Access.WRITE;
-      } else {
-        throw new InvalidConfigurationException("Access can't be " + o);
-      }
-    }
-  }
-
-  public static enum EdgeType {
-    ASSIGNMENT,
-    DECLARATION,
-    ASSUMPTION,
-    STATEMENT,
-    FUNCTION_CALL;
-
-    public String toASTString() {
-      return name().toLowerCase();
-    }
   }
 
   private final LineInfo line;
-  private final EdgeType info;
   private final LockStatisticsState locks;
+  private final Access accessType;
   private AbstractState keyState;
   private List<CFAEdge> path;
-  private final Access accessType;
   public boolean failureFlag;
 
-  public UsageInfo(@Nonnull Access atype, @Nonnull LineInfo l,
-  								 @Nonnull EdgeType t, @Nonnull LockStatisticsState lock) {
+  public UsageInfo(@Nonnull Access atype, @Nonnull LineInfo l, @Nonnull LockStatisticsState lock) {
     line = l;
-    info = t;
     locks = lock;
     accessType = atype;
     keyState = null;
     failureFlag = false;
   }
 
-  public UsageInfo(@Nonnull Access atype,  int l,
-                   @Nonnull EdgeType t, @Nonnull UsageStatisticsState state) {
-    this(atype, new LineInfo(l, AbstractStates.extractLocation(state)), t, AbstractStates.extractStateByType(state, LockStatisticsState.class));
+  public UsageInfo(@Nonnull Access atype,  int l, @Nonnull UsageStatisticsState state) {
+    this(atype, new LineInfo(l, AbstractStates.extractLocation(state)), AbstractStates.extractStateByType(state, LockStatisticsState.class));
   }
 
   public @Nonnull LockStatisticsState getLockState() {
@@ -102,34 +70,6 @@ public class UsageInfo implements Comparable<UsageInfo> {
 
   public @Nonnull LineInfo getLine() {
     return line;
-  }
-
-  public @Nonnull EdgeType getEdgeInfo() {
-    return info;
-  }
-
-  public boolean intersect(UsageInfo other) {
-    if (other == null) {
-      return false;
-    }
-    if (other.locks == null || this.locks == null) {
-      return false;
-    }
-    if (this.accessType == Access.READ && other.accessType == Access.READ) {
-      return true;
-    }
-    if (this == other) {
-      return false;
-    }
-
-    boolean result = this.locks.intersects(other.locks);
-    if (result) {
-      return result;
-    }
-    if (locks.getSize() == 0 && other.locks.getSize() == 0 ){
-      return true; //this is equal states, like for a++;
-    }
-    return false;
   }
 
   public UsagePoint getUsagePoint() {
@@ -147,7 +87,6 @@ public class UsageInfo implements Comparable<UsageInfo> {
     result = prime * result + ((accessType == null) ? 0 : accessType.hashCode());
     result = prime * result + ((line == null) ? 0 : line.hashCode());
     result = prime * result + ((locks == null) ? 0 : locks.hashCode());
-    result = prime * result + ((info == null) ? 0 : info.hashCode());
     return result;
   }
 
@@ -180,13 +119,6 @@ public class UsageInfo implements Comparable<UsageInfo> {
     } else if (!locks.equals(other.locks)) {
       return false;
     }
-    if (info == null) {
-      if (other.info != null) {
-        return false;
-      }
-    } else if (!info.equals(other.info)) {
-      return false;
-    }
     return true;
   }
 
@@ -196,28 +128,10 @@ public class UsageInfo implements Comparable<UsageInfo> {
 
     sb.append("Line ");
     sb.append(line.toString());
-    sb.append(" (" + info.toString() + ", " + accessType.toASTString() + ")");
+    sb.append(" (" + accessType + ")");
     sb.append(", " + locks);
 
     return sb.toString();
-  }
-
-  public String createUsageView(SingleIdentifier id) {
-    String name = id.toString();
-    if (info == EdgeType.ASSIGNMENT) {
-      if (accessType == Access.READ) {
-        name = "... = " + name + ";";
-      } else if (accessType == Access.WRITE) {
-        name += " = ...;";
-      }
-    } else if (info == EdgeType.ASSUMPTION) {
-      name = "if ("  + name + ") {}";
-    } else if (info == EdgeType.FUNCTION_CALL) {
-      name = "f("  + name + ");";
-    } else if (info == EdgeType.DECLARATION) {
-      name = id.getType().toASTString(name);
-    }
-    return name;
   }
 
   public void setKeyState(AbstractState state) {
