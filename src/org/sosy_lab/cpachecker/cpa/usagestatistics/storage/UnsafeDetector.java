@@ -23,11 +23,11 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics.storage;
 
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
 import java.util.SortedSet;
-import java.util.TreeSet;
 
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.Configuration;
@@ -38,6 +38,7 @@ import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
 
+import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Sets;
 
 @Options(prefix="cpa.usagestatistics.unsafedetector")
@@ -62,9 +63,9 @@ public class UnsafeDetector {
       return false;
     }
 
-    Set<UsagePoint> refinedInformation = set.getRefinedInformation();
+    ImmutableSortedSet<UsagePoint> refinedInformation = set.getRefinedInformation();
 
-    boolean result = isUnsafe(new TreeSet<>(refinedInformation));
+    boolean result = isUnsafe(refinedInformation);
 
     if (result) {
       if (refinedInformation.size() > 1 || set.getTopUsages().size() == 1) {
@@ -95,8 +96,6 @@ public class UnsafeDetector {
     if (set instanceof RefinedUsagePointSet) {
       return ((RefinedUsagePointSet)set).getUnsafePair();
     } else {
-      assert set instanceof UnrefinedUsagePointSet;
-
       UnrefinedUsagePointSet unrefinedSet = (UnrefinedUsagePointSet) set;
       Pair<UsagePoint, UsagePoint> result = getUnsafePair(unrefinedSet.getTopUsages());
 
@@ -158,9 +157,7 @@ public class UnsafeDetector {
   }
 
   public Pair<RefinedUsageInfoSet, RefinedUsageInfoSet> getTrueUnsafePair(UnrefinedUsagePointSet pSet) {
-    Set<UsagePoint> refinedInformation = pSet.getRefinedInformation();
-
-    Pair<UsagePoint, UsagePoint> result = getUnsafePair(new TreeSet<>(refinedInformation));
+    Pair<UsagePoint, UsagePoint> result = getUnsafePair(pSet.getRefinedInformation());
     //We must obtain refined sets
     RefinedUsageInfoSet set1 = (RefinedUsageInfoSet) pSet.getUsageInfo(result.getFirst());
     RefinedUsageInfoSet set2 = (RefinedUsageInfoSet) pSet.getUsageInfo(result.getSecond());
@@ -177,9 +174,8 @@ public class UnsafeDetector {
            */
           continue;
         }
-        TreeSet<UsagePoint> unsafePair = new TreeSet<>();
-        unsafePair.add(point1);
-        unsafePair.add(point2);
+        UsagePoint[] pair = {point1, point2};
+        ImmutableSortedSet<UsagePoint> unsafePair = ImmutableSortedSet.copyOf(pair);
         if (isUnsafe(unsafePair)) {
           return Pair.of(point1, point2);
         }
@@ -188,8 +184,7 @@ public class UnsafeDetector {
     //Now we find an unsafe only from one usage
     if (!ignoreEmptyLockset) {
       for (UsagePoint point1 : set) {
-        TreeSet<UsagePoint> unsafePair = new TreeSet<>();
-        unsafePair.add(point1);
+        ImmutableSortedSet<UsagePoint> unsafePair = ImmutableSortedSet.copyOf(Collections.singleton(point1));
         if (isUnsafe(unsafePair)) {
           return Pair.of(point1, point1);
         }

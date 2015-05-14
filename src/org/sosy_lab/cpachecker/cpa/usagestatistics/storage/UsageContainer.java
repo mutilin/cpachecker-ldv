@@ -130,10 +130,6 @@ public class UsageContainer {
     return result.iterator();
   }
 
-  public Iterator<SingleIdentifier> getGeneralIterator() {
-    return getUnsafeIterator();
-  }
-
   public int getUnsafeSize() {
     getUnsafesIfNecessary();
     return unrefinedStat.size() + refinedStat.size();

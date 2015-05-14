@@ -85,6 +85,8 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     public final Timer UnsafeCheck = new Timer();
     public final Timer CacheTime = new Timer();
     public final Timer CacheInterpolantsTime = new Timer();
+    public int totalUsagesToRefine = 0;
+    public int skippedUsages = 0;
 
     @Override
     public void printStatistics(PrintStream pOut, Result pResult, ReachedSet pReached) {
@@ -93,6 +95,9 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       pOut.println("Time for refinement                 " + Refinement);
       pOut.println("Time for formula cache              " + CacheTime);
       pOut.println("Time for interpolant cache          " + CacheInterpolantsTime);
+      pOut.println("");
+      pOut.println("Total number of refinable usages:               " + totalUsagesToRefine);
+      pOut.println("Number of skipped usages due to repeated trace: " + skippedUsages);
     }
 
     @Override
@@ -108,12 +113,12 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
   private final int NUMBER_FOR_RESET_PRECISION;
   private InterpolantCache iCache = new InterpolantCache();
 
-  private Function<ARGState, ARGState> TRANSLATE_TO_ORIGIN_STATES = new Function<ARGState, ARGState>() {
+  private final Function<ARGState, Integer> GET_ORIGIN_STATE_NUMBERS = new Function<ARGState, Integer>() {
     @Override
     @Nullable
-    public ARGState apply(@Nullable ARGState pInput) {
+    public Integer apply(@Nullable ARGState pInput) {
       assert subgraphStatesToReachedState.containsKey(pInput);
-      return subgraphStatesToReachedState.get(pInput);
+      return subgraphStatesToReachedState.get(pInput).getStateId();
     }
   };
 
@@ -141,7 +146,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     final RefineableUsageComputer computer = new RefineableUsageComputer(container, logger);
     BAMPredicateCPA bamcpa = CPAs.retrieveCPA(cpa, BAMPredicateCPA.class);
     assert bamcpa != null;
-    Set<List<ARGState>> refinedStates = new HashSet<>();
+    Set<List<Integer>> refinedStates = new HashSet<>();
 
     logger.log(Level.INFO, ("Perform US refinement: " + i++));
     int originUnsafeSize = container.getUnsafeSize();
@@ -163,31 +168,31 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     UsageInfo target = null;
     pStat.UnsafeCheck.start();
 top:while ((target = computer.getNextRefineableUsage()) != null) {
+      pStat.totalUsagesToRefine++;
       pStat.UnsafeCheck.stopIfRunning();
       subgraphStatesToReachedState.clear();
+
       pStat.ComputePath.start();
       ARGPath pPath = computePath((ARGState)target.getKeyState());
       pStat.ComputePath.stopIfRunning();
+
       assert (pPath != null);
 
       pStat.CacheInterpolantsTime.start();
       List<ARGState> abstractTrace = pPath.asStatesList();
-      abstractTrace = from(abstractTrace)./*filter(new Predicate<ARGState>() {
-        @Override
-        public boolean apply(@Nullable ARGState pInput) {
-          return AbstractStates.extractStateByType(pInput, PredicateAbstractState.class).isAbstractionState();
-        }
-      }).*/transform(TRANSLATE_TO_ORIGIN_STATES).toList();
-      for (List<ARGState> previousTrace : refinedStates) {
-        if (abstractTrace.containsAll(previousTrace)) {
-          //logger.log(Level.INFO, "Hey! I found repeated trace " + target + ". I don't want to refine it");
+      List<Integer> stateNumbers = from(abstractTrace).transform(GET_ORIGIN_STATE_NUMBERS).toList();
+      for (List<Integer> previousTrace : refinedStates) {
+        if (stateNumbers.containsAll(previousTrace)) {
+          logger.log(Level.INFO, "Skip " + target + " due to repeated chunk of the abstract state trace");
           computer.setResultOfRefinement(target, false, pPath.getInnerEdges());
+          pStat.skippedUsages++;
           pStat.CacheInterpolantsTime.stop();
           pStat.UnsafeCheck.start();
           continue top;
         }
       }
       pStat.CacheInterpolantsTime.stop();
+
       try {
         pStat.Refinement.start();
         CounterexampleInfo counterexample = performRefinement(new ARGReachedSet(pReached), pPath);
@@ -215,10 +220,13 @@ top:while ((target = computer.getNextRefineableUsage()) != null) {
           Iterator<Pair<Object, PathTemplate>> pairIterator = counterexample.getAllFurtherInformation().iterator();
           List<BooleanFormula> formulas = (List<BooleanFormula>) pairIterator.next().getFirst();
           List<ARGState> interpolants = (List<ARGState>) pairIterator.next().getFirst();
+          pStat.Refinement.stop();
+
           pStat.CacheInterpolantsTime.start();
-          interpolants = from(interpolants).transform(TRANSLATE_TO_ORIGIN_STATES).toList();
-          refinedStates.add(interpolants);
+          List<Integer> changedStateNumbers = from(interpolants).transform(GET_ORIGIN_STATE_NUMBERS).toList();
+          refinedStates.add(changedStateNumbers);
           pStat.CacheInterpolantsTime.stop();
+
           pStat.CacheTime.start();
           if (iCache.contains(target, formulas, abstractTrace)) {
           	computer.setResultOfRefinement(target, true, pPath.getInnerEdges());
@@ -231,6 +239,7 @@ top:while ((target = computer.getNextRefineableUsage()) != null) {
           pStat.CacheTime.stop();
         } else {
           computer.setResultOfRefinement(target, !counterexample.isSpurious(), pPath.getInnerEdges());
+          pStat.Refinement.stop();
         }
       } catch (IllegalStateException e) {
         //msat_solver return -1 <=> unknown
@@ -238,8 +247,7 @@ top:while ((target = computer.getNextRefineableUsage()) != null) {
         logger.log(Level.WARNING, "Solver exception, consider " + target + " as true");
         computer.setResultOfRefinement(target, true, pPath.getInnerEdges());
         target.failureFlag = true;
-      } finally {
-        pStat.Refinement.stopIfRunning();
+        pStat.Refinement.stop();
       }
       pStat.UnsafeCheck.start();
     }

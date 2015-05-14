@@ -27,13 +27,14 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsState;
+
+import com.google.common.collect.ImmutableSortedSet;
 
 public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
   private final TreeSet<UsagePoint> topUsages;
@@ -167,7 +168,7 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     return topUsages;
   }
 
-  Set<UsagePoint> getRefinedInformation() {
-    return refinedInformation.keySet();
+  ImmutableSortedSet<UsagePoint> getRefinedInformation() {
+    return ImmutableSortedSet.copyOf(refinedInformation.keySet());
   }
 }
