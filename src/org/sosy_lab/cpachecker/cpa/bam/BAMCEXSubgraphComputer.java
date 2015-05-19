@@ -29,6 +29,7 @@ import static org.sosy_lab.cpachecker.util.AbstractStates.extractLocation;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.NavigableSet;
+import java.util.Set;
 import java.util.Stack;
 import java.util.TreeSet;
 import java.util.logging.Level;
@@ -238,7 +239,7 @@ public class BAMCEXSubgraphComputer {
   }
 
   public ARGState findPath(ARGState target,
-      Map<ARGState, ARGState> pPathElementToReachedState) throws InterruptedException, RecursiveAnalysisFailedException {
+      Map<ARGState, ARGState> pPathElementToReachedState, Set<Integer> pProcessedStates) throws InterruptedException, RecursiveAnalysisFailedException {
 
     Map<ARGState, BackwardARGState> elementsMap = new HashMap<>();
     Stack<ARGState> openElements = new Stack<>();
@@ -258,6 +259,9 @@ public class BAMCEXSubgraphComputer {
     openElements.push(target);
     while (!openElements.empty()) {
       ARGState currentElement = openElements.pop();
+      if (pProcessedStates.contains(currentElement.getStateId())) {
+        return DUMMY_STATE_FOR_REPEATED_STATE;
+      }
       BackwardARGState newCurrentElement = elementsMap.get(currentElement);
 
       for (ARGState parent : currentElement.getParents()) {
@@ -314,6 +318,11 @@ public class BAMCEXSubgraphComputer {
     return root;
   }
 
+  /** This states is used for UsageStatisticsRefinement:
+   *  If after some refinement iterations the path goes through already processed states,
+   *  this marked state is returned.
+   */
+  public final static BackwardARGState DUMMY_STATE_FOR_REPEATED_STATE = new BackwardARGState(new ARGState(null, null));
   /**
    * This is a ARGState, that counts backwards, used to build the Pseudo-ARG for CEX-retrieval.
    * As the Pseudo-ARG is build backwards starting at its end-state, we count the ID backwards.

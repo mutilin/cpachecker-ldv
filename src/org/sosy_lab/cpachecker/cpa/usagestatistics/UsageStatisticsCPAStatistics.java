@@ -29,9 +29,11 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.Writer;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 import java.util.logging.Level;
 
 import javax.annotation.Nullable;
@@ -134,7 +136,8 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
     List<CFAEdge> edges;
     if (usage.getKeyState() != null) {
-      ARGState root = transfer.findPath((ARGState)usage.getKeyState(), new HashMap<ARGState, ARGState>());
+      Set<Integer> emptySet = Collections.emptySet();
+      ARGState root = transfer.findPath((ARGState)usage.getKeyState(), new HashMap<ARGState, ARGState>(), emptySet);
       ARGPath path = ARGUtils.getRandomPath(root);
       edges = path.getInnerEdges();
     } else {

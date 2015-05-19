@@ -881,7 +881,7 @@ public class BAMTransferRelation implements TransferRelation {
   }
 
   public ARGState findPath(ARGState target,
-      Map<ARGState, ARGState> pPathElementToReachedState) throws InterruptedException, RecursiveAnalysisFailedException {
+      Map<ARGState, ARGState> pPathElementToReachedState, Set<Integer> pProcessedStates) throws InterruptedException, RecursiveAnalysisFailedException {
 
     if (reducedToExpand.isEmpty()) {
       for (AbstractState expandedState : abstractStateToReachedSet.keySet()) {
@@ -897,7 +897,7 @@ public class BAMTransferRelation implements TransferRelation {
         partitioning, wrappedReducer, argCache, pPathElementToReachedState,
         abstractStateToReachedSet, expandedToReducedCache, reducedToExpand, logger);
 
-        return cexSubgraphComputer.findPath(target, pPathElementToReachedState);
+        return cexSubgraphComputer.findPath(target, pPathElementToReachedState, pProcessedStates);
   }
 
   //returns root of a subtree leading from the root element of the given reachedSet to the target state
