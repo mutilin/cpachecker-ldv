@@ -194,9 +194,8 @@ top:while ((target = computer.getNextRefineableUsage()) != null) {
                   && pInput instanceof CAssumeEdge) {
                 //Remove infinite switch, it's too long
                 return false;
-              } else {
-                return true;
               }
+              return true;
             }
           }).toList();
           Iterator<Pair<Object, PathTemplate>> pairIterator = counterexample.getAllFurtherInformation().iterator();
