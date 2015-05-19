@@ -203,9 +203,9 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
         pStat.UnsafeCheck.start();
         continue;
       }
-      pStat.CacheInterpolantsTime.start();
       refinementFinish |= counterexample.isSpurious();
       if (counterexample.isSpurious()) {
+        pStat.CacheInterpolantsTime.start();
 
         List<CFAEdge> edges = pPath.getInnerEdges();
         edges = from(edges).filter(new Predicate<CFAEdge>() {
