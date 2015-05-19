@@ -138,21 +138,23 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     } else {
       edges = usage.getPath();
     }
+    if (id.getName().equals("state")) {
+      System.out.println("state");
+    }
     edges = from(edges).filter(new Predicate<CFAEdge>() {
       @Override
       public boolean apply(@Nullable CFAEdge pInput) {
         if (pInput instanceof CDeclarationEdge) {
           if (((CDeclarationEdge)pInput).getDeclaration().isGlobal() ||
               pInput.getSuccessor().getFunctionName().equals("ldv_main")) {
+            return false;
           }
-          return false;
         } else if (pInput.getSuccessor().getFunctionName().equals("ldv_main")
             && pInput instanceof CAssumeEdge) {
           //Remove infinite switch, it's too long
           return false;
-        } else {
-          return true;
         }
+        return true;
       }
     }).toList();
     int callstackDepth = 1;
