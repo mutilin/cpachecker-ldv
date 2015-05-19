@@ -187,63 +187,66 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
 
       List<ARGState> abstractTrace = pPath.asStatesList();
 
+      CounterexampleInfo counterexample = null;
       try {
         pStat.Refinement.start();
-        CounterexampleInfo counterexample = performRefinement(new ARGReachedSet(pReached), pPath);
+        counterexample = performRefinement(new ARGReachedSet(pReached), pPath);
         pStat.Refinement.stop();
-        pStat.CacheInterpolantsTime.start();
-        refinementFinish |= counterexample.isSpurious();
-        if (counterexample.isSpurious()) {
-
-          List<CFAEdge> edges = pPath.getInnerEdges();
-          edges = from(edges).filter(new Predicate<CFAEdge>() {
-            @Override
-            public boolean apply(@Nullable CFAEdge pInput) {
-              if (pInput instanceof CDeclarationEdge) {
-                if (((CDeclarationEdge)pInput).getDeclaration().isGlobal() ||
-                    pInput.getSuccessor().getFunctionName().equals("ldv_main")) {
-                }
-                return false;
-              } else if (pInput.getSuccessor().getFunctionName().equals("ldv_main")
-                  && pInput instanceof CAssumeEdge) {
-                //Remove infinite switch, it's too long
-                return false;
-              } else {
-                return true;
-              }
-            }
-          }).toList();
-          Iterator<Pair<Object, PathTemplate>> pairIterator = counterexample.getAllFurtherInformation().iterator();
-          List<BooleanFormula> formulas = (List<BooleanFormula>) pairIterator.next().getFirst();
-          List<ARGState> interpolants = (List<ARGState>) pairIterator.next().getFirst();
-
-          int firstPredicateState = abstractTrace.indexOf(interpolants.get(0));
-          List<ARGState> reachedStates = abstractTrace.subList(firstPredicateState, abstractTrace.size() - 1);
-          List<Integer> changedStateNumbers = from(reachedStates).transform(GET_ORIGIN_STATE_NUMBERS).toList();
-          processedStates.addAll(changedStateNumbers);
-          pStat.CacheInterpolantsTime.stop();
-
-          pStat.CacheTime.start();
-          if (iCache.contains(target, formulas, abstractTrace)) {
-          	computer.setResultOfRefinement(target, true, pPath.getInnerEdges());
-		        logger.log(Level.WARNING, "Interpolants are repeated, consider " + target + " as true");
-            target.failureFlag = true;
-          } else {
-            iCache.add(target, formulas, abstractTrace);
-          	computer.setResultOfRefinement(target, false, pPath.getInnerEdges());
-          }
-          pStat.CacheTime.stop();
-        } else {
-          computer.setResultOfRefinement(target, !counterexample.isSpurious(), pPath.getInnerEdges());
-          pStat.Refinement.stop();
-        }
       } catch (IllegalStateException e) {
         //msat_solver return -1 <=> unknown
         //consider its as true;
-        logger.log(Level.WARNING, "Solver exception, consider " + target + " as true");
+        logger.log(Level.WARNING, "Solver exception: " + e.getMessage());
+        logger.log(Level.WARNING, "Consider " + target + " as true");
         computer.setResultOfRefinement(target, true, pPath.getInnerEdges());
         target.failureFlag = true;
         pStat.Refinement.stop();
+        pStat.UnsafeCheck.start();
+        continue;
+      }
+      pStat.CacheInterpolantsTime.start();
+      refinementFinish |= counterexample.isSpurious();
+      if (counterexample.isSpurious()) {
+
+        List<CFAEdge> edges = pPath.getInnerEdges();
+        edges = from(edges).filter(new Predicate<CFAEdge>() {
+          @Override
+          public boolean apply(@Nullable CFAEdge pInput) {
+            if (pInput instanceof CDeclarationEdge) {
+              if (((CDeclarationEdge)pInput).getDeclaration().isGlobal() ||
+                  pInput.getSuccessor().getFunctionName().equals("ldv_main")) {
+              }
+              return false;
+            } else if (pInput.getSuccessor().getFunctionName().equals("ldv_main")
+                && pInput instanceof CAssumeEdge) {
+              //Remove infinite switch, it's too long
+              return false;
+            } else {
+              return true;
+            }
+          }
+        }).toList();
+        Iterator<Pair<Object, PathTemplate>> pairIterator = counterexample.getAllFurtherInformation().iterator();
+        List<BooleanFormula> formulas = (List<BooleanFormula>) pairIterator.next().getFirst();
+        List<ARGState> interpolants = (List<ARGState>) pairIterator.next().getFirst();
+
+        int firstPredicateState = abstractTrace.indexOf(interpolants.get(0));
+        List<ARGState> reachedStates = abstractTrace.subList(firstPredicateState, abstractTrace.size() - 1);
+        List<Integer> changedStateNumbers = from(reachedStates).transform(GET_ORIGIN_STATE_NUMBERS).toList();
+        processedStates.addAll(changedStateNumbers);
+        pStat.CacheInterpolantsTime.stop();
+
+        pStat.CacheTime.start();
+        if (iCache.contains(target, formulas, abstractTrace)) {
+        	computer.setResultOfRefinement(target, true, pPath.getInnerEdges());
+	        logger.log(Level.WARNING, "Interpolants are repeated, consider " + target + " as true");
+          target.failureFlag = true;
+        } else {
+          iCache.add(target, formulas, abstractTrace);
+        	computer.setResultOfRefinement(target, false, pPath.getInnerEdges());
+        }
+        pStat.CacheTime.stop();
+      } else {
+        computer.setResultOfRefinement(target, !counterexample.isSpurious(), pPath.getInnerEdges());
       }
       pStat.UnsafeCheck.start();
     }
