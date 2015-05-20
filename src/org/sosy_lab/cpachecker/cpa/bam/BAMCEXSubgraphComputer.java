@@ -86,6 +86,7 @@ public class BAMCEXSubgraphComputer {
    * @param target a state from the reachedSet, is used as the last state of the returned subgraph.
    * @param reachedSet contains the target-state.
    * @param newTreeTarget a copy of the target, should contain the same information as target.
+   * @param pProcessedStates
    *
    * @return root of a subgraph, that contains all states on all paths to newTreeTarget.
    *         The subgraph contains only copies of the real ARG states,
@@ -93,7 +94,7 @@ public class BAMCEXSubgraphComputer {
    *         The map "pathStateToReachedState" should be used to search the correct real state.
    */
   BackwardARGState computeCounterexampleSubgraph(final ARGState target,
-      final ARGReachedSet reachedSet, final BackwardARGState newTreeTarget) {
+      final ARGReachedSet reachedSet, final BackwardARGState newTreeTarget, Set<Integer> pProcessedStates) {
     assert reachedSet.asReachedSet().contains(target);
 
     //start by creating ARGElements for each node needed in the tree
@@ -106,6 +107,9 @@ public class BAMCEXSubgraphComputer {
     waitlist.addAll(target.getParents()); // add parent for further processing
     while (!waitlist.isEmpty()) {
       final ARGState currentState = waitlist.pollLast(); // get state with biggest ID
+      if (pProcessedStates.contains(currentState.getStateId())) {
+        return DUMMY_STATE_FOR_REPEATED_STATE;
+      }
       assert reachedSet.asReachedSet().contains(currentState);
 
       if (finishedStates.containsKey(currentState)) {
@@ -135,12 +139,14 @@ public class BAMCEXSubgraphComputer {
           // The returned 'innerTree' is the rootNode of the subtree, created from the cached reachedSet.
           // The current subtree (successors of child) is appended beyond the innerTree, to get a complete subgraph.
           final ARGState reducedTarget = (ARGState) expandedToReducedCache.get(child);
-          BackwardARGState innerTree = computeCounterexampleSubgraphForBlock(currentState, currentState.getParents().iterator().next(), reducedTarget, newChild);
+          BackwardARGState innerTree = computeCounterexampleSubgraphForBlock(currentState, currentState.getParents().iterator().next(), reducedTarget, newChild, pProcessedStates);
           if (innerTree == DUMMY_STATE_FOR_MISSING_BLOCK) {
             ARGSubtreeRemover.removeSubtree(reachedSet, currentState);
             return DUMMY_STATE_FOR_MISSING_BLOCK;
           }
-
+          if (innerTree == DUMMY_STATE_FOR_REPEATED_STATE) {
+            return DUMMY_STATE_FOR_REPEATED_STATE;
+          }
           // reconnect ARG: replace the state 'innerTree' with the current state.
           for (ARGState innerChild : innerTree.getChildren()) {
             innerChild.addParent(newCurrentState);
@@ -196,6 +202,7 @@ public class BAMCEXSubgraphComputer {
    * @param newTreeTarget copy of the exit-state of the reachedSet of current block.
    *                     newTreeTarget has only children, that are all part of the Pseudo-ARG
    *                     (these children are copies of states from reachedSets of other blocks)
+   * @param pProcessedStates
    *
    * @return the default return value is the rootState of the Pseudo-ARG.
    *         We return NULL, if reachedSet is invalid, i.e. there is a 'hole' in it,
@@ -203,7 +210,7 @@ public class BAMCEXSubgraphComputer {
    *         In that case we also perform some cleanup-operations.
    */
   private BackwardARGState computeCounterexampleSubgraphForBlock(
-          final ARGState expandedRoot, ARGState outerState, final ARGState reducedTarget, final BackwardARGState newTreeTarget) {
+          final ARGState expandedRoot, ARGState outerState, final ARGState reducedTarget, final BackwardARGState newTreeTarget, Set<Integer> pProcessedStates) {
 
     // first check, if the cached state is valid.
     if (reducedTarget.isDestroyed()) {
@@ -221,7 +228,7 @@ public class BAMCEXSubgraphComputer {
     assert reachedSet.contains(reducedTarget);
 
     // we found the target; now construct a subtree in the ARG starting with targetARGElement
-    final BackwardARGState result = computeCounterexampleSubgraph(reducedTarget, new ARGReachedSet(reachedSet), newTreeTarget);
+    final BackwardARGState result = computeCounterexampleSubgraph(reducedTarget, new ARGReachedSet(reachedSet), newTreeTarget, pProcessedStates);
     if (result == DUMMY_STATE_FOR_MISSING_BLOCK) {
       //enforce recomputation to update cached subtree
       logger.log(Level.FINE,
@@ -234,6 +241,9 @@ public class BAMCEXSubgraphComputer {
       Block outerBlock = partitioning.getBlockForCallNode(outerNode);
       final AbstractState reducedRootState = reducer.getVariableReducedState(expandedRoot, rootBlock, outerBlock, rootNode);
       bamCache.removeReturnEntry(reducedRootState, reachedSet.getPrecision(reachedSet.getFirstState()), rootBlock);
+    }
+    if (result == DUMMY_STATE_FOR_REPEATED_STATE) {
+      return DUMMY_STATE_FOR_REPEATED_STATE;
     }
     return result;
   }
@@ -277,9 +287,12 @@ public class BAMCEXSubgraphComputer {
           //(we have to use the cached ones)
           ARGState targetARGState = (ARGState) expandedToReducedCache.get(currentElement);
           ARGState innerTree =
-              computeCounterexampleSubgraphForBlock(parent, parent.getParents().iterator().next(), targetARGState, newCurrentElement);
+              computeCounterexampleSubgraphForBlock(parent, parent.getParents().iterator().next(), targetARGState, newCurrentElement, pProcessedStates);
           if (innerTree == null) {
             return null;
+          }
+          if (innerTree == DUMMY_STATE_FOR_REPEATED_STATE) {
+            return DUMMY_STATE_FOR_REPEATED_STATE;
           }
           for (ARGState child : innerTree.getChildren()) {
             child.addParent(newParent);

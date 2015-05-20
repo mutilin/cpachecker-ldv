@@ -920,8 +920,9 @@ public class BAMTransferRelation implements TransferRelation {
     final BAMCEXSubgraphComputer cexSubgraphComputer = new BAMCEXSubgraphComputer(
             partitioning, wrappedReducer, argCache, pPathElementToReachedState,
             abstractStateToReachedSet, expandedToReducedCache, reducedToExpand, logger);
+    Set<Integer> states = Collections.emptySet();
     return cexSubgraphComputer.computeCounterexampleSubgraph(
-        target, reachedSet, new BAMCEXSubgraphComputer.BackwardARGState(target));
+        target, reachedSet, new BAMCEXSubgraphComputer.BackwardARGState(target), states);
   }
 
   /** searches through all available reachedSet for a matching state and returns its precision */
