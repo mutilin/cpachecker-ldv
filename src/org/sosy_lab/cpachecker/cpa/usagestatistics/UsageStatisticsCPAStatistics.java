@@ -158,13 +158,18 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       }
     }).toList();
     int callstackDepth = 1;
-    for (CFAEdge edge : edges) {
+    /*
+     * We must use iterator to be sure, when is the end of the list.
+     * I tried to check the edge, it is the last, but it can be repeated during the sequence
+     */
+    Iterator<CFAEdge> iterator = edges.iterator();
+    while (iterator.hasNext()) {
+      CFAEdge edge = iterator.next();
       if (edge instanceof CFunctionCallEdge && edges.get(edges.size() - 1) != edge) {
         callstackDepth++;
       } else if (edge instanceof CFunctionReturnEdge) {
-        assert callstackDepth > 0;
         callstackDepth--;
-      } else if (edge instanceof CReturnStatementEdge && edges.get(edges.size() - 1) == edge) {
+      } else if (edge instanceof CReturnStatementEdge && !iterator.hasNext()) {
         assert callstackDepth > 0;
         callstackDepth--;
       }
