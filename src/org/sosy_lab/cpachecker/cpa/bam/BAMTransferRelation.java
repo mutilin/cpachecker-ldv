@@ -881,7 +881,7 @@ public class BAMTransferRelation implements TransferRelation {
   }
 
   public ARGState findPath(ARGState target,
-      Map<ARGState, ARGState> pPathElementToReachedState, Set<Integer> pProcessedStates) throws InterruptedException, RecursiveAnalysisFailedException {
+      Map<ARGState, ARGState> pPathElementToReachedState, Set<List<Integer>> pProcessedStates) throws InterruptedException, RecursiveAnalysisFailedException {
 
     if (reducedToExpand.isEmpty()) {
       for (AbstractState expandedState : abstractStateToReachedSet.keySet()) {
@@ -920,9 +920,8 @@ public class BAMTransferRelation implements TransferRelation {
     final BAMCEXSubgraphComputer cexSubgraphComputer = new BAMCEXSubgraphComputer(
             partitioning, wrappedReducer, argCache, pPathElementToReachedState,
             abstractStateToReachedSet, expandedToReducedCache, reducedToExpand, logger);
-    Set<Integer> states = Collections.emptySet();
     return cexSubgraphComputer.computeCounterexampleSubgraph(
-        target, reachedSet, new BAMCEXSubgraphComputer.BackwardARGState(target), states);
+        target, reachedSet, new BAMCEXSubgraphComputer.BackwardARGState(target));
   }
 
   /** searches through all available reachedSet for a matching state and returns its precision */

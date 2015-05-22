@@ -147,7 +147,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     final RefineableUsageComputer computer = new RefineableUsageComputer(container, logger);
     BAMPredicateCPA bamcpa = CPAs.retrieveCPA(cpa, BAMPredicateCPA.class);
     assert bamcpa != null;
-    Set<Integer> processedStates = new HashSet<>();
+    Set<List<Integer>> refinedStates = new HashSet<>();
 
     logger.log(Level.INFO, ("Perform US refinement: " + i++));
     int originUnsafeSize = container.getUnsafeSize();
@@ -174,7 +174,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       subgraphStatesToReachedState.clear();
 
       pStat.ComputePath.start();
-      ARGPath pPath = computePath((ARGState)target.getKeyState(), processedStates);
+      ARGPath pPath = computePath((ARGState)target.getKeyState(), refinedStates);
       pStat.ComputePath.stopIfRunning();
 
       if (pPath == null) {
@@ -228,11 +228,8 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
         Iterator<Pair<Object, PathTemplate>> pairIterator = counterexample.getAllFurtherInformation().iterator();
         List<BooleanFormula> formulas = (List<BooleanFormula>) pairIterator.next().getFirst();
         List<ARGState> interpolants = (List<ARGState>) pairIterator.next().getFirst();
-
-        int firstPredicateState = abstractTrace.indexOf(interpolants.get(0));
-        List<ARGState> reachedStates = abstractTrace.subList(firstPredicateState, abstractTrace.size() - 1);
-        List<Integer> changedStateNumbers = from(reachedStates).transform(GET_ORIGIN_STATE_NUMBERS).toList();
-        processedStates.addAll(changedStateNumbers);
+        List<Integer>changedStateNumbers = from(interpolants).transform(GET_ORIGIN_STATE_NUMBERS).toList();
+        refinedStates.add(changedStateNumbers);
         pStat.CacheInterpolantsTime.stop();
 
         pStat.CacheTime.start();
@@ -281,7 +278,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     return refinementFinish;
   }
 
-  ARGPath computePath(ARGState pLastElement, Set<Integer> processedStates) throws InterruptedException, CPATransferException {
+  ARGPath computePath(ARGState pLastElement, Set<List<Integer>> processedStates) throws InterruptedException, CPATransferException {
     assert (pLastElement != null && !pLastElement.isDestroyed());
       //we delete this state from other unsafe
     rootOfSubgraph = transfer.findPath(pLastElement, subgraphStatesToReachedState, processedStates);

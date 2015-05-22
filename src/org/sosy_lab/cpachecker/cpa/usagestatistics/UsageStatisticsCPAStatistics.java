@@ -136,7 +136,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
     List<CFAEdge> edges;
     if (usage.getKeyState() != null) {
-      Set<Integer> emptySet = Collections.emptySet();
+      Set<List<Integer>> emptySet = Collections.emptySet();
       ARGState root = transfer.findPath((ARGState)usage.getKeyState(), new HashMap<ARGState, ARGState>(), emptySet);
       ARGPath path = ARGUtils.getRandomPath(root);
       edges = path.getInnerEdges();
