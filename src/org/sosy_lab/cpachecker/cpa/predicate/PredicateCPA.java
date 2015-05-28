@@ -266,11 +266,11 @@ public class PredicateCPA implements ConfigurableProgramAnalysis, StatisticsProv
     return solver;
   }
 
-  Configuration getConfiguration() {
+  public Configuration getConfiguration() {
     return config;
   }
 
-  LogManager getLogger() {
+  public LogManager getLogger() {
     return logger;
   }
 

@@ -34,6 +34,7 @@ import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UnrefinedUsagePointSe
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UnsafeDetector;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsageContainer;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsagePoint;
+import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 
 public class RefineableUsageComputer {
@@ -45,6 +46,7 @@ public class RefineableUsageComputer {
   private Iterator<UsagePoint>  usagePointIterator;
   private UnrefinedUsagePointSet currentRefineableUsageList;
   private UsagePoint currentUsagePoint;
+  private UsageInfo currentUsageInfo;
   private final LogManager logger;
   //Self-checking
   private boolean waitRefinementResult;
@@ -86,7 +88,7 @@ public class RefineableUsageComputer {
   }
 
   public UsageInfo getNextRefineableUsage() {
-    UsageInfo resultUsage = null;
+    currentUsageInfo = null;
 
     assert (!waitRefinementResult);
 
@@ -107,8 +109,16 @@ public class RefineableUsageComputer {
       } while (refineableUsageInfoSet.isTrue());
       usageIterator = refineableUsageInfoSet.getUsages().iterator();
     }
-    resultUsage = usageIterator.next();
+    currentUsageInfo = usageIterator.next();
     waitRefinementResult = true;
-    return resultUsage;
+    return currentUsageInfo;
+  }
+
+  public SingleIdentifier getCurrentRefiningId() {
+    return container.getIdentifier(currentRefineableUsageList);
+  }
+
+  public UsageInfo getCurrentRefiningInfo() {
+    return currentUsageInfo;
   }
 }

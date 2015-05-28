@@ -104,16 +104,49 @@ import com.google.common.collect.Sets;
  */
 public class BAMPredicateRefiner extends AbstractBAMBasedRefiner implements StatisticsProvider {
 
-  private final ExtendedPredicateRefiner refiner;
+  private ExtendedPredicateRefiner refiner;
 
 
   public static Refiner create(ConfigurableProgramAnalysis pCpa) throws CPAException, InvalidConfigurationException {
     return new BAMPredicateRefiner(pCpa);
   }
 
+  public BAMPredicateRefiner(final ConfigurableProgramAnalysis pCpa, BAMPredicateAbstractionRefinementStrategy strategy)
+      throws CPAException, InvalidConfigurationException {
+
+    super(pCpa);
+
+    initRefiner(pCpa, strategy);
+  }
+
   public BAMPredicateRefiner(final ConfigurableProgramAnalysis pCpa) throws CPAException, InvalidConfigurationException {
 
     super(pCpa);
+
+    if (!(pCpa instanceof WrapperCPA)) {
+      throw new InvalidConfigurationException(BAMPredicateRefiner.class.getSimpleName() + " could not find the PredicateCPA");
+    }
+
+    BAMPredicateCPA predicateCpa = ((WrapperCPA)pCpa).retrieveWrappedCpa(BAMPredicateCPA.class);
+    if (predicateCpa == null) {
+      throw new InvalidConfigurationException(BAMPredicateRefiner.class.getSimpleName() + " needs an BAMPredicateCPA");
+    }
+
+    LogManager logger = predicateCpa.getLogger();
+
+    BAMPredicateAbstractionRefinementStrategy strategy = new BAMPredicateAbstractionRefinementStrategy(
+                                          predicateCpa.getConfiguration(),
+                                          logger,
+                                          predicateCpa,
+                                          predicateCpa.getSolver(),
+                                          predicateCpa.getPredicateManager(),
+                                          predicateCpa.getStaticRefiner());
+    initRefiner(pCpa, strategy);
+  }
+
+  private void initRefiner(ConfigurableProgramAnalysis pCpa, BAMPredicateAbstractionRefinementStrategy strategy)
+      throws CPAException, InvalidConfigurationException {
+
 
     if (!(pCpa instanceof WrapperCPA)) {
       throw new InvalidConfigurationException(BAMPredicateRefiner.class.getSimpleName() + " could not find the PredicateCPA");
@@ -140,14 +173,6 @@ public class BAMPredicateRefiner extends AbstractBAMBasedRefiner implements Stat
                                           predicateCpa.getPathFormulaManager(),
                                           predicateCpa.getSolver(),
                                           predicateCpa.getMachineModel());
-
-    RefinementStrategy strategy = new BAMPredicateAbstractionRefinementStrategy(
-                                          predicateCpa.getConfiguration(),
-                                          logger,
-                                          predicateCpa,
-                                          predicateCpa.getSolver(),
-                                          predicateCpa.getPredicateManager(),
-                                          predicateCpa.getStaticRefiner());
 
     this.refiner = new ExtendedPredicateRefiner(
                                           predicateCpa.getConfiguration(),
@@ -361,7 +386,7 @@ public class BAMPredicateRefiner extends AbstractBAMBasedRefiner implements Stat
     private List<Region> lastAbstractions = null;
     private boolean refinedLastRelevantPredicatesComputer = false;
 
-    private BAMPredicateAbstractionRefinementStrategy(final Configuration config, final LogManager logger,
+    protected BAMPredicateAbstractionRefinementStrategy(final Configuration config, final LogManager logger,
         final BAMPredicateCPA predicateCpa,
         final Solver pSolver,
         final PredicateAbstractionManager pPredAbsMgr,

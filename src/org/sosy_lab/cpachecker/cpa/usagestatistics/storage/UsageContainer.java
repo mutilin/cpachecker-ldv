@@ -52,6 +52,8 @@ public class UsageContainer {
 
   private final Set<SingleIdentifier> falseUnsafes;
 
+  private final Set<SingleIdentifier> processedUnsafes = new HashSet<>();
+
   private final LogManager logger;
 
   public Timer resetTimer = new Timer();
@@ -89,6 +91,7 @@ public class UsageContainer {
 
   private void getUnsafesIfNecessary() {
     if (unsafeUsages == -1) {
+      processedUnsafes.clear();
       unsafeUsages = 0;
       Set<SingleIdentifier> toDelete = new HashSet<>();
       for (SingleIdentifier id : unrefinedStat.keySet()) {
@@ -115,6 +118,7 @@ public class UsageContainer {
     UnrefinedUsagePointSet uset = unrefinedStat.get(id);
     unrefinedStat.remove(id);
     toId.remove(uset);
+    processedUnsafes.add(id);
   }
 
   public Iterator<SingleIdentifier> getUnsafeIterator() {
@@ -210,5 +214,15 @@ public class UsageContainer {
     out.println("Total amount of refined variables:                " + generalRefinedSize);
     out.println("Total amount of refined usages:                   " + allUsages + "(avg. " +
         (generalRefinedSize == 0 ? "0" : (allUsages/generalRefinedSize)) + ")");
+  }
+
+  public SingleIdentifier getIdentifier(UnrefinedUsagePointSet set) {
+    assert toId.containsKey(set);
+
+    return toId.get(set);
+  }
+
+  public Set<SingleIdentifier> getProcessedUnsafes() {
+    return processedUnsafes;
   }
 }

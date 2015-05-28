@@ -249,7 +249,7 @@ public class PredicateAbstractionRefinementStrategy extends RefinementStrategy {
   }
 
   private ListMultimap<Pair<CFANode, Integer>, AbstractionPredicate> newPredicates;
-
+  protected PredicatePrecision newPrecisionFromPredicates;
 
   @Override
   public boolean needsInterpolants() {
@@ -443,23 +443,25 @@ public class PredicateAbstractionRefinementStrategy extends RefinementStrategy {
     logger.log(Level.ALL, "Old predicate map is", basePrecision);
     logger.log(Level.ALL, "New predicates are", newPredicates);
 
-    PredicatePrecision newPrecision;
+    newPrecisionFromPredicates = PredicatePrecision.empty();
     switch (predicateSharing) {
     case GLOBAL:
-      newPrecision = basePrecision.addGlobalPredicates(newPredicates.values());
+      newPrecisionFromPredicates = newPrecisionFromPredicates.addGlobalPredicates(newPredicates.values());
       break;
     case FUNCTION:
-      newPrecision = basePrecision.addFunctionPredicates(mergePredicatesPerFunction(newPredicates));
+      newPrecisionFromPredicates = newPrecisionFromPredicates.addFunctionPredicates(mergePredicatesPerFunction(newPredicates));
       break;
     case LOCATION:
-      newPrecision = basePrecision.addLocalPredicates(mergePredicatesPerLocation(newPredicates));
+      newPrecisionFromPredicates = newPrecisionFromPredicates.addLocalPredicates(mergePredicatesPerLocation(newPredicates));
       break;
     case LOCATION_INSTANCE:
-      newPrecision = basePrecision.addLocationInstancePredicates(newPredicates);
+      newPrecisionFromPredicates = newPrecisionFromPredicates.addLocationInstancePredicates(newPredicates);
       break;
     default:
       throw new AssertionError();
     }
+
+    PredicatePrecision newPrecision = basePrecision.mergeWith(newPrecisionFromPredicates);
 
     logger.log(Level.ALL, "Predicate map now is", newPrecision);
 
