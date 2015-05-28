@@ -40,6 +40,7 @@ import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.RefinementFailedException;
 import org.sosy_lab.cpachecker.exceptions.SolverException;
+import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Precisions;
 import org.sosy_lab.cpachecker.util.predicates.Solver;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
@@ -195,6 +196,8 @@ public abstract class RefinementStrategy {
           differentNontrivialItps++;
         }
       }
+      System.out.println("State: " + AbstractStates.extractLocation(w) + /*"(" +
+          +          AbstractStates.extractLocation(w).getLineNumber() + ")" + */" <-> " + itp);
       lastItp = itp;
 
       nonTrivialStates++;
@@ -257,7 +260,7 @@ public abstract class RefinementStrategy {
    * @throws CPAException
    * @throws InterruptedException
    */
-  @ForOverride
+
   protected abstract void finishRefinementOfPath(
       final ARGState unreachableState,
       List<ARGState> affectedStates,
