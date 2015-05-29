@@ -897,7 +897,7 @@ public class BAMTransferRelation implements TransferRelation {
         partitioning, wrappedReducer, argCache, pPathElementToReachedState,
         abstractStateToReachedSet, expandedToReducedCache, reducedToExpand, logger);
 
-        return cexSubgraphComputer.findPath(target, pPathElementToReachedState, pProcessedStates);
+        return cexSubgraphComputer.findPath(target, pProcessedStates);
   }
 
   //returns root of a subtree leading from the root element of the given reachedSet to the target state

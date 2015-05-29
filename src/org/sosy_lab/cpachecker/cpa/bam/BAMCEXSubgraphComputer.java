@@ -26,10 +26,8 @@ package org.sosy_lab.cpachecker.cpa.bam;
 import static org.sosy_lab.cpachecker.cpa.bam.AbstractBAMBasedRefiner.DUMMY_STATE_FOR_MISSING_BLOCK;
 import static org.sosy_lab.cpachecker.util.AbstractStates.extractLocation;
 
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableSet;
@@ -61,8 +59,7 @@ public class BAMCEXSubgraphComputer {
   private final Map<AbstractState, ReachedSet> abstractStateToReachedSet;
   private final Map<AbstractState, AbstractState> reducedToExpanded;
   private final Map<AbstractState, AbstractState> expandedToReducedCache;
-  private Set<LinkedList<Integer>> remainingStates = new HashSet<>();
-  private List<Integer> tailOfTheTrace = new LinkedList<>();
+  private Set<Set<Integer>> remainingStates = new HashSet<>();
   private final LogManager logger;
 
   BAMCEXSubgraphComputer(BlockPartitioning partitioning, Reducer reducer, BAMCache bamCache,
@@ -119,6 +116,9 @@ public class BAMCEXSubgraphComputer {
         continue; // state already done
       }
 
+      if (checkRepeatitionOfState(currentState)) {
+        return DUMMY_STATE_FOR_REPEATED_STATE;
+      }
       final BackwardARGState newCurrentState = new BackwardARGState(currentState);
       finishedStates.put(currentState, newCurrentState);
       pathStateToReachedState.put(newCurrentState, currentState);
@@ -141,10 +141,17 @@ public class BAMCEXSubgraphComputer {
           // The returned 'innerTree' is the rootNode of the subtree, created from the cached reachedSet.
           // The current subtree (successors of child) is appended beyond the innerTree, to get a complete subgraph.
           final ARGState reducedTarget = (ARGState) expandedToReducedCache.get(child);
+
+          if (checkRepeatitionOfState(reducedTarget)) {
+            return DUMMY_STATE_FOR_REPEATED_STATE;
+          }
           BackwardARGState innerTree = computeCounterexampleSubgraphForBlock(currentState, currentState.getParents().iterator().next(), reducedTarget, newChild);
           if (innerTree == DUMMY_STATE_FOR_MISSING_BLOCK) {
             ARGSubtreeRemover.removeSubtree(reachedSet, currentState);
             return DUMMY_STATE_FOR_MISSING_BLOCK;
+          }
+          if (innerTree == DUMMY_STATE_FOR_REPEATED_STATE) {
+            return DUMMY_STATE_FOR_REPEATED_STATE;
           }
           // reconnect ARG: replace the state 'innerTree' with the current state.
           for (ARGState innerChild : innerTree.getChildren()) {
@@ -241,14 +248,10 @@ public class BAMCEXSubgraphComputer {
       final AbstractState reducedRootState = reducer.getVariableReducedState(expandedRoot, rootBlock, outerBlock, rootNode);
       bamCache.removeReturnEntry(reducedRootState, reachedSet.getPrecision(reachedSet.getFirstState()), rootBlock);
     }
-    if (result == DUMMY_STATE_FOR_REPEATED_STATE) {
-      return DUMMY_STATE_FOR_REPEATED_STATE;
-    }
     return result;
   }
 
-  public ARGState findPath(ARGState target,
-      Map<ARGState, ARGState> pPathElementToReachedState, Set<List<Integer>> pProcessedStates) throws InterruptedException, RecursiveAnalysisFailedException {
+  public ARGState findPath(ARGState target, Set<List<Integer>> pProcessedStates) throws InterruptedException, RecursiveAnalysisFailedException {
 
     Map<ARGState, BackwardARGState> elementsMap = new HashMap<>();
     Stack<ARGState> openElements = new Stack<>();
@@ -256,11 +259,11 @@ public class BAMCEXSubgraphComputer {
 
     //Deep clone to be patient about modification
     for (List<Integer> newList : pProcessedStates) {
-      remainingStates.add(new LinkedList<>(newList));
+      remainingStates.add(new HashSet<>(newList));
     }
 
     BackwardARGState newTreeTarget = new BackwardARGState(target);
-    pPathElementToReachedState.put(newTreeTarget, target);
+    pathStateToReachedState.put(newTreeTarget, target);
     elementsMap.put(target, newTreeTarget);
     ARGState currentState = target;
 
@@ -275,6 +278,9 @@ public class BAMCEXSubgraphComputer {
       ARGState currentElement = openElements.pop();
       BackwardARGState newCurrentElement = elementsMap.get(currentElement);
 
+      if (checkRepeatitionOfState(currentElement)) {
+        return DUMMY_STATE_FOR_REPEATED_STATE;
+      }
       if (currentElement.getParents().isEmpty()) {
         //Find correct expanded state
         ARGState expandedState = (ARGState) reducedToExpanded.get(currentElement);
@@ -286,7 +292,7 @@ public class BAMCEXSubgraphComputer {
         }
         //Try to find path.
         BackwardARGState newExpandedState = new BackwardARGState(expandedState);
-        pPathElementToReachedState.put(newExpandedState, expandedState);
+        pathStateToReachedState.put(newExpandedState, expandedState);
         elementsMap.put(expandedState, newExpandedState);
         for (ARGState child : newCurrentElement.getChildren()) {
           child.addParent(newExpandedState);
@@ -298,7 +304,7 @@ public class BAMCEXSubgraphComputer {
           //create node for parent in the new subtree
           BackwardARGState newParent = new BackwardARGState(parent);
           elementsMap.put(parent, newParent);
-          pPathElementToReachedState.put(newParent, parent);
+          pathStateToReachedState.put(newParent, parent);
           //and remember to explore the parent later
           openElements.push(parent);
           if (expandedToReducedCache.containsKey(currentElement)) {
@@ -306,20 +312,16 @@ public class BAMCEXSubgraphComputer {
             //we have the transfer function to handle this case, as our reachSet is wrong
             //(we have to use the cached ones)
             ARGState targetARGState = (ARGState) expandedToReducedCache.get(currentElement);
+            if (checkRepeatitionOfState(targetARGState)) {
+              return DUMMY_STATE_FOR_REPEATED_STATE;
+            }
             ARGState innerTree =
                 computeCounterexampleSubgraphForBlock(parent, parent.getParents().iterator().next(), targetARGState, newCurrentElement);
             if (innerTree == null) {
               return null;
             }
-            ARGState tmpState = newCurrentElement, nextState;
-            while (tmpState != innerTree) {
-              Collection<ARGState> parents = tmpState.getParents();
-              assert parents.size() == 1;
-              nextState = parents.iterator().next();
-              if (checkRepeatitionOfState(pPathElementToReachedState.get(tmpState))) {
-                return DUMMY_STATE_FOR_REPEATED_STATE;
-              }
-              tmpState = nextState;
+            if (innerTree == DUMMY_STATE_FOR_REPEATED_STATE) {
+              return DUMMY_STATE_FOR_REPEATED_STATE;
             }
             for (ARGState child : innerTree.getChildren()) {
               child.addParent(newParent);
@@ -330,9 +332,6 @@ public class BAMCEXSubgraphComputer {
             //normal edge
             //create an edge from parent to current
             newCurrentElement.addParent(newParent);
-            if (checkRepeatitionOfState(currentElement)) {
-              return DUMMY_STATE_FOR_REPEATED_STATE;
-            }
           }
         }
       }
@@ -345,10 +344,9 @@ public class BAMCEXSubgraphComputer {
   }
 
   private boolean checkRepeatitionOfState(ARGState currentElement) {
-    int currentId = currentElement.getStateId();
-    for (LinkedList<Integer> rest : remainingStates) {
-      if (rest.getLast() == currentId) {
-        rest.removeLast();
+    Integer currentId = currentElement.getStateId();
+    for (Set<Integer> rest : remainingStates) {
+      if (rest.remove(currentId)) {
         if (rest.isEmpty()) {
           return true;
         }
