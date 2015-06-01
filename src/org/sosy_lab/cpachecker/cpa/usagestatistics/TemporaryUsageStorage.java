@@ -36,17 +36,22 @@ public class TemporaryUsageStorage extends HashMap<SingleIdentifier, LinkedList<
   public TemporaryUsageStorage(TemporaryUsageStorage previous) {
     previousStorage = previous;
 
-    for (SingleIdentifier id : previous.keySet()) {
-      this.put(id, new LinkedList<>(previous.get(id)));
+    if (previous != null) {
+      for (SingleIdentifier id : previous.keySet()) {
+        this.put(id, new LinkedList<>(previous.get(id)));
+      }
     }
   }
 
-  @Override
-  public void clear() {
+  public void cleanUsages() {
     super.clear();
-    if (previousStorage != null) {
-      previousStorage.clear();
+    //We can't use recursion due to stack overflow
+    TemporaryUsageStorage previous = previousStorage, tmpStorage;
+    while (previous != null) {
+      previous.clear();
+      tmpStorage = previous.previousStorage;
+      previous.previousStorage = null;
+      previous = tmpStorage;
     }
-    previousStorage = null;
   }
 }

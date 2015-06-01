@@ -198,13 +198,6 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
 
   }
 
-  public void clearUsagesIfNeed() {
-    final PredicateAbstractState state = AbstractStates.extractStateByType(this, PredicateAbstractState.class);
-    if (state == null || !state.getAbstractionFormula().isFalse() && state.isAbstractionState()) {
-      recentUsages.clear();
-    }
-  }
-
   public UsageStatisticsState expand(final UsageStatisticsState root, final AbstractState wrappedState) {
     final UsageStatisticsState result = root.clone(wrappedState);
 
@@ -236,7 +229,7 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
           }
         }
       }
-      clearUsagesIfNeed();
+      recentUsages.cleanUsages();
     }
   }
 }
