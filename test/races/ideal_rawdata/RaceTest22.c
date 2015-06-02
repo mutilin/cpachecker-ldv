@@ -14,13 +14,19 @@ Line 0:     N0 -{/*Number of usages      :1*/}-> N0
 Line 0:     N0 -{/*Two examples:*/}-> N0
 Line 0:     N0 -{/*_____________________*/}-> N0
 Line 0:     N0 -{/*Without locks*/}-> N0
-Line 0:     N0 -{ldv_main()}-> N0
-Line 0:     N0 -{Function start dummy edge}-> N0
-Line 15:     N0 -{unsafe = ...;}-> N0
+none:	N11 -{INIT GLOBAL VARS}-> N15
+none:	N18 -{Function start dummy edge}-> N12
+Line 0:     N0 -{highlight}-> N0
+line 15:	N12 -{unsafe = 0;}-> N13
+line 16:	N13 -{f(1)}-> N1
 Line 0:     N0 -{return;}-> N0
+
 Line 0:     N0 -{/*_____________________*/}-> N0
 Line 0:     N0 -{/*Without locks*/}-> N0
-Line 0:     N0 -{ldv_main()}-> N0
-Line 0:     N0 -{Function start dummy edge}-> N0
-Line 15:     N0 -{unsafe = ...;}-> N0
+none:	N11 -{INIT GLOBAL VARS}-> N15
+none:	N18 -{Function start dummy edge}-> N12
+Line 0:     N0 -{highlight}-> N0
+line 15:	N12 -{unsafe = 0;}-> N13
+line 16:	N13 -{f(1)}-> N1
 Line 0:     N0 -{return;}-> N0
+
