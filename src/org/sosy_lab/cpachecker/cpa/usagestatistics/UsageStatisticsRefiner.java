@@ -243,15 +243,14 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
             if (pInput instanceof CDeclarationEdge) {
               if (((CDeclarationEdge)pInput).getDeclaration().isGlobal() ||
                   pInput.getSuccessor().getFunctionName().equals("ldv_main")) {
+                return false;
               }
-              return false;
             } else if (pInput.getSuccessor().getFunctionName().equals("ldv_main")
                 && pInput instanceof CAssumeEdge) {
               //Remove infinite switch, it's too long
               return false;
-            } else {
-              return true;
             }
+            return true;
           }
         }).toList();
         Iterator<Pair<Object, PathTemplate>> pairIterator = counterexample.getAllFurtherInformation().iterator();

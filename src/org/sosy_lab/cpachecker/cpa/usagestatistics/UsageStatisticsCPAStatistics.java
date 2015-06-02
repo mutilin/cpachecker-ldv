@@ -149,25 +149,26 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         if (pInput instanceof CDeclarationEdge) {
           if (((CDeclarationEdge)pInput).getDeclaration().isGlobal() ||
               pInput.getSuccessor().getFunctionName().equals("ldv_main")) {
+            return false;
           }
-          return false;
         } else if (pInput.getSuccessor().getFunctionName().equals("ldv_main")
             && pInput instanceof CAssumeEdge) {
           //Remove infinite switch, it's too long
           return false;
-        } else {
-          return true;
         }
+        return true;
       }
     }).toList();
     int callstackDepth = 1;
-    for (CFAEdge edge : edges) {
+    Iterator<CFAEdge> edgeIterator = edges.iterator();
+    while (edgeIterator.hasNext()) {
+      CFAEdge edge = edgeIterator.next();
       if (edge instanceof CFunctionCallEdge && edges.get(edges.size() - 1) != edge) {
         callstackDepth++;
       } else if (edge instanceof CFunctionReturnEdge) {
         assert callstackDepth > 0;
         callstackDepth--;
-      } else if (edge instanceof CReturnStatementEdge && edges.get(edges.size() - 1) == edge) {
+      } else if (edge instanceof CReturnStatementEdge && !edgeIterator.hasNext()) {
         assert callstackDepth > 0;
         callstackDepth--;
       }
