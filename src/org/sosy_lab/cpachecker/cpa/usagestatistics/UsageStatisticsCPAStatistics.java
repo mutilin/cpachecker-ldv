@@ -23,8 +23,6 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
-import static com.google.common.collect.FluentIterable.from;
-
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.PrintStream;
@@ -35,8 +33,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Level;
-
-import javax.annotation.Nullable;
 
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.Configuration;
@@ -50,8 +46,6 @@ import org.sosy_lab.common.io.Paths;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
-import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
-import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionReturnEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CReturnStatementEdge;
@@ -78,8 +72,6 @@ import org.sosy_lab.cpachecker.util.identifiers.GlobalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.LocalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.StructureFieldIdentifier;
-
-import com.google.common.base.Predicate;
 
 @Options(prefix="cpa.usagestatistics")
 public class UsageStatisticsCPAStatistics implements Statistics {
@@ -134,36 +126,18 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     if (usage.failureFlag) {
       writer.append("Line 0:     N0 -{/*Failure in refinement*/}-> N0\n");
     }
-    List<CFAEdge> edges;
     if (usage.getKeyState() != null) {
       Set<List<Integer>> emptySet = Collections.emptySet();
       ARGState root = transfer.findPath((ARGState)usage.getKeyState(), new HashMap<ARGState, ARGState>(), emptySet);
       ARGPath path = ARGUtils.getRandomPath(root);
-      edges = path.getInnerEdges();
-    } else {
-      edges = usage.getPath();
+      //path is transformed internally
+      usage.resetKeyState(path.getInnerEdges());
     }
-    edges = from(edges).filter(new Predicate<CFAEdge>() {
-      @Override
-      public boolean apply(@Nullable CFAEdge pInput) {
-        if (pInput instanceof CDeclarationEdge) {
-          if (((CDeclarationEdge)pInput).getDeclaration().isGlobal() ||
-              pInput.getSuccessor().getFunctionName().equals("ldv_main")) {
-            return false;
-          }
-        } else if (pInput.getSuccessor().getFunctionName().equals("ldv_main")
-            && pInput instanceof CAssumeEdge) {
-          //Remove infinite switch, it's too long
-          return false;
-        }
-        return true;
-      }
-    }).toList();
     int callstackDepth = 1;
-    Iterator<CFAEdge> edgeIterator = edges.iterator();
+    Iterator<CFAEdge> edgeIterator = usage.getPath().iterator();
     while (edgeIterator.hasNext()) {
       CFAEdge edge = edgeIterator.next();
-      if (edge instanceof CFunctionCallEdge && edges.get(edges.size() - 1) != edge) {
+      if (edge instanceof CFunctionCallEdge && edgeIterator.hasNext()) {
         callstackDepth++;
       } else if (edge instanceof CFunctionReturnEdge) {
         assert callstackDepth > 0;
