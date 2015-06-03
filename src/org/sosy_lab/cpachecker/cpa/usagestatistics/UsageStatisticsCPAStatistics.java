@@ -82,6 +82,14 @@ import com.google.common.base.Predicate;
 @Options(prefix="cpa.usagestatistics")
 public class UsageStatisticsCPAStatistics implements Statistics {
 
+  public static enum OutputFileType {
+    SINGLE_FILE,
+    MULTIPLE_FILES
+  }
+
+  @Option(name="outputType", description="all variables should be printed to the one file or to the different")
+  private OutputFileType outputFileType = OutputFileType.SINGLE_FILE;
+
   @Option(name="output", description="path to write results")
   @FileOption(FileOption.Type.OUTPUT_FILE)
   private Path outputStatFileName = Paths.get("unsafe_rawdata");
@@ -112,10 +120,14 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   public final Timer transferRelationTimer = new Timer();
   public final Timer printStatisticsTimer = new Timer();
 
+  private final String outputSuffix;
+
   public UsageStatisticsCPAStatistics(Configuration config, LogManager pLogger, LockStatisticsTransferRelation lTransfer) throws InvalidConfigurationException{
     config.inject(this);
     logger = pLogger;
     lockTransfer = lTransfer;
+    //I don't know any normal way to know the output directory
+    outputSuffix = outputStatFileName.getAbsolutePath().replace(outputStatFileName.getName(), "");
   }
 
   /*
@@ -137,9 +149,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       edges = path.getInnerEdges();
     } else {
       edges = usage.getPath();
-    }
-    if (id.getName().equals("state")) {
-      System.out.println("state");
     }
     edges = from(edges).filter(new Predicate<CFAEdge>() {
       @Override
@@ -254,8 +263,10 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
   }
 
-  private void createVisualization(final SingleIdentifier id, final Writer writer) throws IOException, CPATransferException, InterruptedException {
+  private void createVisualization(final SingleIdentifier id, final Writer pWriter) throws IOException, CPATransferException, InterruptedException {
+    Writer writer = pWriter;
     final AbstractUsagePointSet uinfo = container.getUsages(id);
+
     if (uinfo == null || uinfo.size() == 0) {
       return;
     }
@@ -264,17 +275,23 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     if (uinfo.size() > maxNumberOfUsages) {
       maxNumberOfUsages = uinfo.size();
     }
-    if (id instanceof StructureFieldIdentifier) {
-      writer.append("###\n");
-    } else if (id instanceof GlobalVariableIdentifier) {
-      writer.append("#\n");
-    } else if (id instanceof LocalVariableIdentifier) {
-      writer.append("##" + ((LocalVariableIdentifier)id).getFunction() + "\n");
+    if (writer != null) {
+      if (id instanceof StructureFieldIdentifier) {
+        writer.append("###\n");
+      } else if (id instanceof GlobalVariableIdentifier) {
+        writer.append("#\n");
+      } else if (id instanceof LocalVariableIdentifier) {
+        writer.append("##" + ((LocalVariableIdentifier)id).getFunction() + "\n");
+      } else {
+        logger.log(Level.WARNING, "What is it? " + id.toString());
+      }
+      writer.append(id.getDereference() + "\n");
+      writer.append(id.getType().toASTString(id.getName()) + "\n");
     } else {
-      logger.log(Level.WARNING, "What is it? " + id.toString());
+      assert outputFileType == OutputFileType.MULTIPLE_FILES;
+      Path currentPath = Paths.get(outputSuffix + createUniqueName(id));
+      writer = Files.openOutputFile(currentPath);
     }
-    writer.append(id.getDereference() + "\n");
-    writer.append(id.getType().toASTString(id.getName()) + "\n");
     if (detector.isTrueUnsafe(uinfo)) {
     	trueUnsafes++;
       writer.append("Line 0:     N0 -{/*Is true unsafe:*/}-> N0" + "\n");
@@ -289,6 +306,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       totalFailureUnsafes++;
     } else if (tmpPair.getFirst().failureFlag || tmpPair.getSecond().failureFlag) {
       totalUnsafesWithFailureUsageInPair++;
+    }
+    if (pWriter == null) {
+      writer.close();
     }
     /*if (printAllUnsafeUsages) {
       writer.append("Line 0:     N0 -{_____________________}-> N0" + "\n");
@@ -310,17 +330,21 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 		    .getContainer();
 		detector = container.getUnsafeDetector();
 		final int unsafeSize = container.getUnsafeSize();
-
+		Writer writer = null;
     try {
-      final Writer writer = Files.openOutputFile(outputStatFileName);
-      logger.log(Level.FINE, "Print statistics about unsafe cases");
-      printCountStatistics(writer, container.getUnsafeIterator());
+      if (outputFileType == OutputFileType.SINGLE_FILE) {
+        writer = Files.openOutputFile(outputStatFileName);
+        logger.log(Level.FINE, "Print statistics about unsafe cases");
+        printCountStatistics(writer, container.getUnsafeIterator());
+      }
       logger.log(Level.FINEST, "Processing unsafe identifiers");
       Iterator<SingleIdentifier> unsafeIterator = container.getUnsafeIterator();
       while (unsafeIterator.hasNext()) {
         createVisualization(unsafeIterator.next(), writer);
       }
-      writer.close();
+      if (writer != null) {
+        writer.close();
+      }
     } catch(FileNotFoundException e) {
       logger.log(Level.SEVERE, "File " + outputStatFileName + " not found");
       return;
@@ -405,5 +429,11 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
   public void setBAMTransfer(BAMTransferRelation t) {
     transfer = t;
+  }
+
+  private String createUniqueName(SingleIdentifier id) {
+    String name = id.getType().toASTString(id.getName());
+    name = name.replace(" ", "_");
+    return name;
   }
 }
