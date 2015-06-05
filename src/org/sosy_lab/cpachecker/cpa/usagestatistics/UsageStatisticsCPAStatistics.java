@@ -289,7 +289,8 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       writer.append(id.getType().toASTString(id.getName()) + "\n");
     } else {
       assert outputFileType == OutputFileType.MULTIPLE_FILES;
-      Path currentPath = Paths.get(outputSuffix + createUniqueName(id));
+      //Special format for Multi error traces in LDV
+      Path currentPath = Paths.get(outputSuffix + "ErrorPath." + createUniqueName(id) + ".txt");
       writer = Files.openOutputFile(currentPath);
     }
     if (detector.isTrueUnsafe(uinfo)) {
