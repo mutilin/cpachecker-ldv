@@ -865,7 +865,7 @@ public class BAMTransferRelation implements TransferRelation {
     return reached;
   }
 
-  void removeSubtree(ARGReachedSet mainReachedSet, ARGPath pPath,
+  public void removeSubtree(ARGReachedSet mainReachedSet, ARGPath pPath,
       ARGState element, List<Precision> pNewPrecisions,
       List<Predicate<? super Precision>> pNewPrecisionTypes,
       Map<ARGState, ARGState> pPathElementToReachedState) {

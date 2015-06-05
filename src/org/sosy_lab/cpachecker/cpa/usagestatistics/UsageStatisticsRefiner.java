@@ -29,6 +29,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -77,6 +78,7 @@ import org.sosy_lab.cpachecker.util.predicates.Solver;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 
 import com.google.common.base.Function;
+import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 
 
@@ -170,6 +172,8 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     BAMPredicateCPA bamcpa = CPAs.retrieveCPA(cpa, BAMPredicateCPA.class);
     assert bamcpa != null;
     refinedStates.clear();
+    ARGReachedSet argReached = new ARGReachedSet(pReached);
+    Set<BAMReachedSet> toRemove = new HashSet<>();
 
     logger.log(Level.INFO, ("Perform US refinement: " + i++));
     int originUnsafeSize = container.getUnsafeSize();
@@ -210,9 +214,10 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       List<ARGState> abstractTrace = pPath.asStatesList();
 
       CounterexampleInfo counterexample = null;
+      BAMReachedSet targetSet = new BAMReachedSet(transfer, argReached, pPath, subgraphStatesToReachedState, rootOfSubgraph);
       try {
         pStat.Refinement.start();
-        counterexample = performRefinement(new ARGReachedSet(pReached), pPath);
+        counterexample = performRefinement0(targetSet, pPath);
         pStat.Refinement.stop();
       } catch (IllegalStateException e) {
         //msat_solver return -1 <=> unknown
@@ -230,7 +235,6 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
         pStat.CacheInterpolantsTime.start();
         Iterator<Pair<Object, PathTemplate>> pairIterator = counterexample.getAllFurtherInformation().iterator();
         List<BooleanFormula> formulas = (List<BooleanFormula>) pairIterator.next().getFirst();
-
         pStat.CacheInterpolantsTime.stop();
 
         pStat.CacheTime.start();
@@ -241,6 +245,8 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
         } else {
           iCache.add(target, formulas, abstractTrace);
         	computer.setResultOfRefinement(target, false, pPath.getInnerEdges());
+
+        	toRemove.add(targetSet);
         }
         pStat.CacheTime.stop();
       } else {
@@ -265,6 +271,11 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       lastTrueUnsafes = newTrueUnsafeSize;
     }
     if (refinementFinish) {
+      /*for (BAMReachedSet reached : toRemove) {
+        System.out.println("Want to remove from the subgraph: ");
+        System.out.println(reached.);
+      }*/
+
       iCache.removeUnusedCacheEntries();
       transfer.clearCaches();
       bamcpa.clearAllCaches();
@@ -282,6 +293,10 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
         strategy.precisionMap.remove(id);
       }
       pReached.add(cpa.getInitialState(firstNode, StateSpacePartition.getDefaultPartition()), precision);
+
+      List<Predicate<? super Precision>> pNewPrecisionTypes = new LinkedList<>();
+      pNewPrecisionTypes.add(Predicates.instanceOf(PredicatePrecision.class));
+
     }
     pStat.UnsafeCheck.stopIfRunning();
     return refinementFinish;
