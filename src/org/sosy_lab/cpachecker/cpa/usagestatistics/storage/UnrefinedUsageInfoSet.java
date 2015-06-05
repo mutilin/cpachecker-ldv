@@ -43,6 +43,10 @@ public class UnrefinedUsageInfoSet implements AbstractUsageInfoSet {
     return changed;
   }
 
+  public boolean remove(UsageInfo uinfo) {
+    return unrefinedUsages.remove(uinfo);
+  }
+
   @Override
   public UsageInfo getOneExample() {
     return unrefinedUsages.iterator().next();

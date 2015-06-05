@@ -30,6 +30,7 @@ import java.util.logging.Level;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.AbstractUsageInfoSet;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UnrefinedUsageInfoSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UnrefinedUsagePointSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UnsafeDetector;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsageContainer;
@@ -42,9 +43,9 @@ public class RefineableUsageComputer {
   private final UsageContainer container;
   private final UnsafeDetector detector;
   private final Iterator<UnrefinedUsagePointSet> unrefinedUsagePointSetIterator;
-  private Iterator<UsageInfo>  usageIterator;
   private Iterator<UsagePoint>  usagePointIterator;
   private UnrefinedUsagePointSet currentRefineableUsageList;
+  private UnrefinedUsageInfoSet currentRefineableUsageInfoSet;
   private UsagePoint currentUsagePoint;
   private UsageInfo currentUsageInfo;
   private final LogManager logger;
@@ -65,7 +66,8 @@ public class RefineableUsageComputer {
 
     if (!result) {
       logger.log(Level.INFO, "Usage " + uinfo + " is not reachable, remove it from container");
-      if (!usageIterator.hasNext()) {
+      currentRefineableUsageInfoSet.remove(uinfo);
+      if (currentRefineableUsageInfoSet.size() == 0) {
         //There are no usages in the point
         currentRefineableUsageList.remove(currentUsagePoint);
         if (!detector.isUnsafe(currentRefineableUsageList)) {
@@ -82,18 +84,16 @@ public class RefineableUsageComputer {
         container.setAsRefined(currentRefineableUsageList);
         usagePointIterator = null;
       }
-      usageIterator = null;
+      currentRefineableUsageInfoSet = null;
     }
     waitRefinementResult = false;
   }
 
   public UsageInfo getNextRefineableUsage() {
-    currentUsageInfo = null;
-
     assert (!waitRefinementResult);
 
-    while (usageIterator == null || !usageIterator.hasNext()) {
-      AbstractUsageInfoSet refineableUsageInfoSet;
+    AbstractUsageInfoSet refineableUsageInfoSet;
+    if (currentRefineableUsageInfoSet == null || currentRefineableUsageInfoSet.size() == 0) {
       do {
         while (usagePointIterator == null || !usagePointIterator.hasNext()) {
           if (unrefinedUsagePointSetIterator.hasNext()) {
@@ -107,9 +107,9 @@ public class RefineableUsageComputer {
         currentUsagePoint = usagePointIterator.next();
         refineableUsageInfoSet = currentRefineableUsageList.getUsageInfo(currentUsagePoint);
       } while (refineableUsageInfoSet.isTrue());
-      usageIterator = refineableUsageInfoSet.getUsages().iterator();
+      currentRefineableUsageInfoSet = (UnrefinedUsageInfoSet)refineableUsageInfoSet;
     }
-    currentUsageInfo = usageIterator.next();
+    currentUsageInfo = currentRefineableUsageInfoSet.getOneExample();
     waitRefinementResult = true;
     return currentUsageInfo;
   }
@@ -120,5 +120,11 @@ public class RefineableUsageComputer {
 
   public UsageInfo getCurrentRefiningInfo() {
     return currentUsageInfo;
+  }
+
+  private boolean updateUsagePoint() {
+    AbstractUsageInfoSet refineableUsageInfoSet;
+
+    return true;
   }
 }
