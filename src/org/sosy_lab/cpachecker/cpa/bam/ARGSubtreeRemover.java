@@ -60,13 +60,13 @@ import com.google.common.collect.Iterables;
 
 public class ARGSubtreeRemover {
 
-  private final BlockPartitioning partitioning;
-  private final Reducer wrappedReducer;
-  private final BAMCache bamCache;
-  private final ReachedSetFactory reachedSetFactory;
-  private final Map<AbstractState, ReachedSet> abstractStateToReachedSet;
-  private final Timer removeCachedSubtreeTimer;
-  private final LogManager logger;
+  protected final BlockPartitioning partitioning;
+  protected final Reducer wrappedReducer;
+  protected final BAMCache bamCache;
+  protected final ReachedSetFactory reachedSetFactory;
+  protected final Map<AbstractState, ReachedSet> abstractStateToReachedSet;
+  protected final Timer removeCachedSubtreeTimer;
+  protected final LogManager logger;
 
   public ARGSubtreeRemover(BlockPartitioning partitioning, Reducer reducer,
                            BAMCache bamCache, ReachedSetFactory reachedSetFactory,
@@ -86,6 +86,8 @@ public class ARGSubtreeRemover {
                      ARGState element, List<Precision> pNewPrecisions,
                      List<Predicate<? super Precision>> pNewPrecisionTypes,
                      Map<ARGState, ARGState> pPathElementToReachedState) {
+
+    handleEndOfThePath(pPath, element, pPathElementToReachedState);
 
     List<ARGState> path = trimPath(pPath, element);
     assert path.get(path.size() - 1).equals(element);
@@ -168,7 +170,7 @@ public class ARGSubtreeRemover {
     }
   }
 
-  private void removeCachedSubtree(ARGState rootState, ARGState removeElement,
+  protected void removeCachedSubtree(ARGState rootState, ARGState removeElement,
                                    List<Precision> pNewPrecisions,
                                    List<Predicate<? super Precision>> pPrecisionTypes) {
     removeCachedSubtreeTimer.start();
@@ -408,5 +410,11 @@ public class ARGSubtreeRemover {
       if (state.equals(pState)) { return result; }
     }
     throw new IllegalArgumentException("State " + pState + " could not be found in path " + pPath + ".");
+  }
+
+
+  protected void handleEndOfThePath(ARGPath pPath, ARGState affectedState,
+      Map<ARGState, ARGState> pSubgraphStatesToReachedState) {
+    //Dummy method, it is implemented in the MultiARGSubtreeRemover
   }
 }

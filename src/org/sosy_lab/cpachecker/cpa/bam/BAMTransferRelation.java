@@ -75,6 +75,7 @@ import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.CFAUtils;
 import org.sosy_lab.cpachecker.util.CPAs;
 
+import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Iterables;
@@ -109,6 +110,10 @@ public class BAMTransferRelation implements TransferRelation {
       description = "BAM allows to analyse recursive procedures depending on the underlying CPA.")
   private boolean handleRecursiveProcedures = false;
 
+  @Option(name = "cleanARGAfterAllRefinements", secure = true,
+      description = "allow to clean caches and ARG after all refinements")
+  private boolean cleanARGAfterAllRefinements = false;
+
   private final BAMCache argCache;
 
   final Map<AbstractState, ReachedSet> abstractStateToReachedSet = new HashMap<>();
@@ -130,9 +135,12 @@ public class BAMTransferRelation implements TransferRelation {
   private final BAMCPA bamCPA;
   private final ProofChecker wrappedProofChecker;
   private final CallstackTransferRelation callstackTransfer;
+  private MultipleARGSubtreeRemover multipleARGRemover;
 
   private Map<AbstractState, Precision> forwardPrecisionToExpandedPrecision;
   private Map<Pair<ARGState, Block>, Collection<ARGState>> correctARGsForBlocks = null;
+
+  private final Multimap<String, AbstractState> functinoNameToRootState = HashMultimap.create();
 
   //Stats
   int maxRecursiveDepth = 0;
@@ -165,6 +173,8 @@ public class BAMTransferRelation implements TransferRelation {
     wrappedProofChecker = wrappedChecker;
     argCache = cache;
 
+
+
     assert wrappedReducer != null;
   }
 
@@ -176,6 +186,13 @@ public class BAMTransferRelation implements TransferRelation {
 
   void setBlockPartitioning(BlockPartitioning pManager) {
     partitioning = pManager;
+    if (cleanARGAfterAllRefinements) {
+      multipleARGRemover = new MultipleARGSubtreeRemover(partitioning,
+          wrappedReducer, argCache, reachedSetFactory, abstractStateToReachedSet,
+          removeCachedSubtreeTimer, logger, functinoNameToRootState, this);
+    } else {
+      multipleARGRemover = null;
+    }
   }
 
   public BlockPartitioning getBlockPartitioning() {
@@ -411,6 +428,9 @@ public class BAMTransferRelation implements TransferRelation {
     Block previousSubtree = stack.isEmpty() ? null : stack.get(stack.size() - 1).getThird();
     final AbstractState reducedInitialState = wrappedReducer.getVariableReducedState(initialState, currentBlock, previousSubtree, node);
     final Precision reducedInitialPrecision = wrappedReducer.getVariableReducedPrecision(pPrecision, currentBlock);
+
+    String innerFunctionName = AbstractStates.extractLocation(reducedInitialState).getFunctionName();
+    functinoNameToRootState.put(innerFunctionName, initialState);
 
     final Triple<AbstractState, Precision, Block> currentLevel = Triple.of(reducedInitialState, reducedInitialPrecision, currentBlock);
     stack.add(currentLevel);
@@ -650,6 +670,9 @@ public class BAMTransferRelation implements TransferRelation {
         logger.log(Level.FINEST, "Partial cache hit: starting recursive CPAAlgorithm with partial reached-set.");
       }
 
+      //Who should add to this cache in case of partial hit?
+      reducedToExpand.put(reducedInitialState, initialState);
+
       reducedResult = performCompositeAnalysisWithCPAAlgorithm(reached);
 
       assert reducedResult != null;
@@ -871,9 +894,14 @@ public class BAMTransferRelation implements TransferRelation {
       Map<ARGState, ARGState> pPathElementToReachedState) {
     removeSubtreeTimer.start();
 
-    final ARGSubtreeRemover argSubtreeRemover = new ARGSubtreeRemover(
+    final ARGSubtreeRemover argSubtreeRemover;
+    if (cleanARGAfterAllRefinements) {
+      argSubtreeRemover = multipleARGRemover;
+    } else {
+      argSubtreeRemover = new ARGSubtreeRemover(
             partitioning, wrappedReducer, argCache, reachedSetFactory, abstractStateToReachedSet,
             removeCachedSubtreeTimer, logger);
+    }
     argSubtreeRemover.removeSubtree(mainReachedSet, pPath, element,
             pNewPrecisions, pNewPrecisionTypes, pPathElementToReachedState);
 
@@ -882,16 +910,6 @@ public class BAMTransferRelation implements TransferRelation {
 
   public ARGState findPath(ARGState target,
       Map<ARGState, ARGState> pPathElementToReachedState, Set<List<Integer>> pProcessedStates) throws InterruptedException, RecursiveAnalysisFailedException {
-
-    if (reducedToExpand.isEmpty()) {
-      for (AbstractState expandedState : abstractStateToReachedSet.keySet()) {
-        ARGState firstState = (ARGState) abstractStateToReachedSet.get(expandedState).getFirstState();
-        if (firstState.getStateId() == ((ARGState)expandedState).getStateId() + 1) {
-          //first time
-          reducedToExpand.put(firstState, expandedState);
-        }
-      }
-    }
 
     final BAMCEXSubgraphComputer cexSubgraphComputer = new BAMCEXSubgraphComputer(
         partitioning, wrappedReducer, argCache, pPathElementToReachedState,
@@ -907,15 +925,6 @@ public class BAMTransferRelation implements TransferRelation {
                                                  Map<ARGState, ARGState> pPathElementToReachedState) {
     assert reachedSet.asReachedSet().contains(target);
     assert pPathElementToReachedState.isEmpty() : "new path should be started with empty set of states.";
-    if (reducedToExpand.isEmpty()) {
-      for (AbstractState expandedState : abstractStateToReachedSet.keySet()) {
-        ARGState firstState = (ARGState) abstractStateToReachedSet.get(expandedState).getFirstState();
-        if (firstState.getStateId() == ((ARGState)expandedState).getStateId() + 1) {
-          //first time
-          reducedToExpand.put(firstState, expandedState);
-        }
-      }
-    }
 
     final BAMCEXSubgraphComputer cexSubgraphComputer = new BAMCEXSubgraphComputer(
             partitioning, wrappedReducer, argCache, pPathElementToReachedState,
@@ -947,6 +956,15 @@ public class BAMTransferRelation implements TransferRelation {
     if (correctARGsForBlocks != null) {
       correctARGsForBlocks.clear();
     }
+  }
+
+  public void removeStateFromCaches(AbstractState state) {
+    abstractStateToReachedSet.remove(state);
+    AbstractState reduced = expandedToReducedCache.get(state);
+    expandedToReducedCache.remove(state);
+    reducedToExpand.remove(reduced);
+    expandedToBlockCache.remove(state);
+
   }
 
   Pair<Block, ReachedSet> getCachedReachedSet(ARGState root, Precision rootPrecision) {
@@ -1174,5 +1192,12 @@ public class BAMTransferRelation implements TransferRelation {
     throw new UnsupportedOperationException(
         "BAMCPA needs to be used as the outer-most CPA,"
         + " thus it does not support returning successors for a single edge.");
+  }
+
+
+  public MultipleARGSubtreeRemover getMultipleARGSubtreeRemover() {
+    Preconditions.checkNotNull(multipleARGRemover);
+
+    return multipleARGRemover;
   }
 }

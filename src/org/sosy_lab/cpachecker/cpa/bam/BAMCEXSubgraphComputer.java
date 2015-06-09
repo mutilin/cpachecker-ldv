@@ -62,7 +62,6 @@ public class BAMCEXSubgraphComputer {
   private final Map<AbstractState, AbstractState> reducedToExpanded;
   private final Map<AbstractState, AbstractState> expandedToReducedCache;
   private Set<LinkedList<Integer>> remainingStates = new HashSet<>();
-  private List<Integer> tailOfTheTrace = new LinkedList<>();
   private final LogManager logger;
 
   BAMCEXSubgraphComputer(BlockPartitioning partitioning, Reducer reducer, BAMCache bamCache,
@@ -240,9 +239,6 @@ public class BAMCEXSubgraphComputer {
       Block outerBlock = partitioning.getBlockForCallNode(outerNode);
       final AbstractState reducedRootState = reducer.getVariableReducedState(expandedRoot, rootBlock, outerBlock, rootNode);
       bamCache.removeReturnEntry(reducedRootState, reachedSet.getPrecision(reachedSet.getFirstState()), rootBlock);
-    }
-    if (result == DUMMY_STATE_FOR_REPEATED_STATE) {
-      return DUMMY_STATE_FOR_REPEATED_STATE;
     }
     return result;
   }

@@ -60,6 +60,7 @@ import org.sosy_lab.cpachecker.cpa.arg.ARGReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.arg.ARGUtils;
 import org.sosy_lab.cpachecker.cpa.bam.BAMCEXSubgraphComputer;
+import org.sosy_lab.cpachecker.cpa.bam.MultipleARGSubtreeRemover;
 import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateCPA;
 import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateRefiner;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractionManager;
@@ -168,12 +169,12 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
 
     iCache.initKeySet();
     final RefineableUsageComputer computer = new RefineableUsageComputer(container, logger);
+    MultipleARGSubtreeRemover subtreesRemover = transfer.getMultipleARGSubtreeRemover();
     strategy.init(computer, subgraphStatesToReachedState);
     BAMPredicateCPA bamcpa = CPAs.retrieveCPA(cpa, BAMPredicateCPA.class);
     assert bamcpa != null;
     refinedStates.clear();
     ARGReachedSet argReached = new ARGReachedSet(pReached);
-    Set<BAMReachedSet> toRemove = new HashSet<>();
 
     logger.log(Level.INFO, ("Perform US refinement: " + i++));
     int originUnsafeSize = container.getUnsafeSize();
@@ -204,8 +205,10 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       pStat.ComputePath.stopIfRunning();
 
       if (pPath == null) {
-        logger.log(Level.INFO, "Skip " + target + " due to repeated chunk of the abstract state trace");
+        logger.log(Level.FINE, "Skip " + target + " due to repeated chunk of the abstract state trace");
         computer.setResultOfRefinement(target, false, null);
+        //Do not need to add state for predicates, because it has been already added the previous time
+        subtreesRemover.addStateForRemoving((ARGState)target.getKeyState());
         pStat.skippedUsages++;
         pStat.UnsafeCheck.start();
         continue;
@@ -245,8 +248,10 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
         } else {
           iCache.add(target, formulas, abstractTrace);
         	computer.setResultOfRefinement(target, false, pPath.getInnerEdges());
-
-        	toRemove.add(targetSet);
+        	subtreesRemover.addStateForRemoving((ARGState)target.getKeyState());
+        	subtreesRemover.addStateForRemoving(strategy.lastAffectedState);
+        	//subtreesRemover.prepareStatesToRemoving(pPath, strategy.lastAffectedState, subgraphStatesToReachedState);
+        	//toRemove.add(targetSet);
         }
         pStat.CacheTime.stop();
       } else {
@@ -275,9 +280,9 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
         System.out.println("Want to remove from the subgraph: ");
         System.out.println(reached.);
       }*/
-
+      subtreesRemover.cleanCaches();
       iCache.removeUnusedCacheEntries();
-      transfer.clearCaches();
+     // transfer.clearCaches();
       bamcpa.clearAllCaches();
       ARGState firstState = (ARGState) pReached.getFirstState();
       CFANode firstNode = AbstractStates.extractLocation(firstState);
@@ -313,6 +318,10 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     return ARGUtils.getRandomPath(rootOfSubgraph);
   }
 
+  void prepareStatesForRemoving(ARGPath pPath) {
+
+  }
+
   @Override
   public void collectStatistics(Collection<Statistics> pStatsCollection) {
     super.collectStatistics(pStatsCollection);
@@ -325,6 +334,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     protected RefineableUsageComputer computer;
     private final Set<List<Integer>> refinedStates;
     private Map<ARGState, ARGState> subgraphStatesToReachedState;
+    private ARGState lastAffectedState;
 
     private final Function<ARGState, Integer> GET_ORIGIN_STATE_NUMBERS = new Function<ARGState, Integer>() {
       @Override
@@ -365,7 +375,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
 
       List<Integer>changedStateNumbers = from(pAffectedStates).transform(GET_ORIGIN_STATE_NUMBERS).toList();
       refinedStates.add(changedStateNumbers);
-
+      lastAffectedState = subgraphStatesToReachedState.get(pAffectedStates.get(0));
     }
 
     private void init(RefineableUsageComputer pComputer, Map<ARGState, ARGState> map) {

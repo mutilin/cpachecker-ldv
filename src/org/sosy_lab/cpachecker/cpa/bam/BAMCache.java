@@ -117,6 +117,14 @@ public class BAMCache {
     blockARGCache.remove(getHashCode(stateKey, precisionKey, context));
   }
 
+  public void removeFromAllCaches(AbstractState stateKey, Precision precisionKey, Block context) {
+    AbstractStateHash hash = getHashCode(stateKey, precisionKey, context);
+    returnCache.remove(hash);
+    blockARGCache.remove(hash);
+    preciseReachedCache.remove(hash);
+    unpreciseReachedCache.remove(hash);
+  }
+
   /** This function returns a Pair of the reached-set and the returnStates for the given keys.
    * Both members of the returned Pair are NULL, if there is a cache miss.
    * For a partial cache hit we return the partly computed reached-set and NULL as returnStates. */
