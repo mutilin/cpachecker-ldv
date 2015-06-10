@@ -47,6 +47,7 @@ import org.sosy_lab.common.io.Path;
 import org.sosy_lab.common.io.Paths;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
+import org.sosy_lab.cpachecker.cfa.model.BlankEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
@@ -179,6 +180,10 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       } else if (edge instanceof CFunctionReturnEdge) {
         callstackDepth--;
       } else if (edge instanceof CReturnStatementEdge && !iterator.hasNext()) {
+        assert callstackDepth > 0;
+        callstackDepth--;
+      } else if (edge instanceof BlankEdge && edge.getDescription().contains("return") && !iterator.hasNext()) {
+        //Evil hack, but this is how etv works
         assert callstackDepth > 0;
         callstackDepth--;
       }
