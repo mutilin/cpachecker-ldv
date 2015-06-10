@@ -123,6 +123,14 @@ public class BAMCache {
     blockARGCache.remove(hash);
     preciseReachedCache.remove(hash);
     unpreciseReachedCache.remove(hash);
+
+  }
+
+  public void printSizes() {
+    System.out.println("returnCache:           " + returnCache.size());
+    System.out.println("blockARGCache:         " + blockARGCache.size());
+    System.out.println("preciseReachedCache:   " + preciseReachedCache.size());
+    System.out.println("unpreciseReachedCache: " + unpreciseReachedCache.size());
   }
 
   /** This function returns a Pair of the reached-set and the returnStates for the given keys.
@@ -175,7 +183,7 @@ public class BAMCache {
       Pair<ReachedSet, Collection<AbstractState>> pair = lookForSimilarState(stateKey, precisionKey, context);
       if (pair != null) {
         //found similar element, use this
-        unpreciseReachedCache.put(hash, pair.getFirst());
+        //unpreciseReachedCache.put(hash, pair.getFirst());
         setLastAnalyzedBlock(getHashCode(stateKey, pair.getFirst().getPrecision(pair.getFirst().getFirstState()),
                 context));
         return pair;

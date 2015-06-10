@@ -128,30 +128,25 @@ public class MultipleARGSubtreeRemover extends ARGSubtreeRemover {
 
   public void addStateForRemoving(ARGState state) {
     //This not the state to remove. Now we should find all such states using the map
-    LinkedList<AbstractState> toProcess = new LinkedList<>();
+    LinkedList<String> toProcess = new LinkedList<>();
 
     String functionName = AbstractStates.extractLocation(state).getFunctionName();
-    Collection<AbstractState> callers = functionToRootState.get(functionName);
-    if (callers == null) {
-      return;
-    }
-    toProcess.addAll(callers);
-    AbstractState tmpState;
+    Collection<AbstractState> callers;
+    toProcess.add(functionName);
     while (!toProcess.isEmpty()) {
-      tmpState = toProcess.pollFirst();
-      //tmpState is an entrance into current function
-      CallstackState previousState = AbstractStates.extractStateByType(tmpState, CallstackState.class).getPreviousState();
-      if (previousState == null) {
-        //main function
-        continue;
-      }
-      functionName = previousState.getCurrentFunction();
+      functionName = toProcess.pollFirst();
       callers = functionToRootState.get(functionName);
       if (callers != null) {
         for (AbstractState caller : callers) {
           setsForRemoveFromCache.add((ARGState)caller);
           //logger.log(Level.INFO, "Add " + caller + " to removing");
-          toProcess.add(caller);
+          //tmpState is an entrance into current function
+          CallstackState previousState = AbstractStates.extractStateByType(caller, CallstackState.class).getPreviousState();
+          if (previousState == null) {
+            //main function
+            continue;
+          }
+          toProcess.add(previousState.getCurrentFunction());
         }
         functionToRootState.removeAll(functionName);
       }
@@ -175,7 +170,10 @@ public class MultipleARGSubtreeRemover extends ARGSubtreeRemover {
   }
 
   public void cleanCaches() {
+    int num = 0;
     removeCachedSubtreeTimer.start();
+    System.out.println("Before removing");
+    bamCache.printSizes();
     for (ARGState rootState : setsForRemoveFromCache) {
 
       CFANode rootNode = extractLocation(rootState);
@@ -184,12 +182,15 @@ public class MultipleARGSubtreeRemover extends ARGSubtreeRemover {
       AbstractState reducedRootState = wrappedReducer.getVariableReducedState(rootState, rootSubtree, null, rootNode);
       ReachedSet reachedSet = abstractStateToReachedSet.get(rootState);
 
-      //logger.log(Level.INFO, "Remove " + AbstractStates.extractLocation(rootState).getFunctionName());
+      num++;
 
       Precision reducedRootPrecision = reachedSet.getPrecision(reachedSet.getFirstState());
       bamCache.removeFromAllCaches(reducedRootState, reducedRootPrecision, rootSubtree);
       transfer.removeStateFromCaches(rootState);
     }
+    System.out.println("Remove " + num + " targets");
+    System.out.println("After removing");
+    bamCache.printSizes();
     setsForRemoveFromCache.clear();
     removeCachedSubtreeTimer.stop();
   }
