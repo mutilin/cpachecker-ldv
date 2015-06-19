@@ -43,11 +43,14 @@ public class VariableSkipper {
   @Option(description = "variables, which will be filtered by its type")
   private Set<String> byType = null;
 
+  @Option(description = "variables, which will be filtered by function location")
+  private Set<String> byFunction = null;
+
   public VariableSkipper(Configuration pConfig) throws InvalidConfigurationException {
     pConfig.inject(this);
   }
 
-  public boolean shouldBeSkipped(AbstractIdentifier id) {
+  public boolean shouldBeSkipped(AbstractIdentifier id, UsageInfo usage) {
 
     if (id instanceof SingleIdentifier) {
       SingleIdentifier singleId = (SingleIdentifier) id;
@@ -63,6 +66,13 @@ public class VariableSkipper {
         }
       }
     }
+
+    //Check special functions like INIT_LIST_HEAD, in which we should skip all usages
+    String functionName = usage.getLine().getNode().getFunctionName();
+    if (byFunction.contains(functionName)) {
+      return true;
+    }
+
     return false;
   }
 
