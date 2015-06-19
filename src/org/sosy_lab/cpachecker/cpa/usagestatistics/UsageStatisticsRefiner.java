@@ -42,12 +42,14 @@ import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.io.PathTemplate;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.CounterexampleInfo;
 import org.sosy_lab.cpachecker.core.MainCPAStatistics;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Refiner;
+import org.sosy_lab.cpachecker.core.interfaces.StateSpacePartition;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
 import org.sosy_lab.cpachecker.core.interfaces.WrapperCPA;
@@ -248,8 +250,6 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
         	for (ARGState state : strategy.lastAffectedStates) {
         	  subtreesRemover.addStateForRemoving(state);
         	}
-        	//subtreesRemover.prepareStatesToRemoving(pPath, strategy.lastAffectedState, subgraphStatesToReachedState);
-        	//toRemove.add(targetSet);
         }
         pStat.CacheTime.stop();
       } else {
@@ -274,19 +274,15 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       lastTrueUnsafes = newTrueUnsafeSize;
     }
     if (refinementFinish) {
-      /*for (BAMReachedSet reached : toRemove) {
-        System.out.println("Want to remove from the subgraph: ");
-        System.out.println(reached.);
-      }*/
       iCache.removeUnusedCacheEntries();
      // transfer.clearCaches();
       bamcpa.clearAllCaches();
       ARGState firstState = (ARGState) pReached.getFirstState();
-      //CFANode firstNode = AbstractStates.extractLocation(firstState);
-      //ARGState.clearIdGenerator();
+      CFANode firstNode = AbstractStates.extractLocation(firstState);
+      ARGState.clearIdGenerator();
       Precision precision = pReached.getPrecision(firstState);
       subtreesRemover.cleanCaches(precision);
-      //pReached.clear();
+      pReached.clear();
       PredicatePrecision predicates = Precisions.extractPrecisionByType(precision, PredicatePrecision.class);
       for (SingleIdentifier id : container.getProcessedUnsafes()) {
         PredicatePrecision predicatesForId = strategy.precisionMap.get(id);
@@ -295,14 +291,11 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
         }
         strategy.precisionMap.remove(id);
       }
-     // pReached.add(cpa.getInitialState(firstNode, StateSpacePartition.getDefaultPartition()), precision);
+      pReached.add(cpa.getInitialState(firstNode, StateSpacePartition.getDefaultPartition()), precision);
+      PredicatePrecision p = Precisions.extractPrecisionByType(pReached.getPrecision(pReached.getFirstState()),
+          PredicatePrecision.class);
 
-     // List<Predicate<? super Precision>> pNewPrecisionTypes = new LinkedList<>();
-     // pNewPrecisionTypes.add(Predicates.instanceOf(PredicatePrecision.class));
-      container.resetUnrefinedUnsafes();
-      //The first ReachedSet, consisted only from two states - enter and exit - cannot be cleaned automatically
-      argReached.removeSubtree((ARGState)pReached.getLastState());
-
+      System.out.println("Total number of predicates: " + p.getLocalPredicates().size());
     }
     pStat.UnsafeCheck.stopIfRunning();
     return refinementFinish;

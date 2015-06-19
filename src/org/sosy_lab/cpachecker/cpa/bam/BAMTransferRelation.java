@@ -118,6 +118,7 @@ public class BAMTransferRelation implements TransferRelation {
 
   final Map<AbstractState, ReachedSet> abstractStateToReachedSet = new HashMap<>();
   final Map<AbstractState, AbstractState> reducedToExpand = new IdentityHashMap<>();
+  final Multimap<AbstractState, AbstractState> multiReducedToExpand = HashMultimap.create();
   final Map<AbstractState, AbstractState> expandedToReducedCache = new HashMap<>();
   final Map<AbstractState, Block> expandedToBlockCache = new HashMap<>();
 
@@ -141,7 +142,7 @@ public class BAMTransferRelation implements TransferRelation {
   private Map<Pair<ARGState, Block>, Collection<ARGState>> correctARGsForBlocks = null;
 
   //We use map functionName -> State, because we cannot find the first inner state using only usage
-  private final Multimap<String, AbstractState> innerStateToExternStates = HashMultimap.create();
+  private final Multimap<String, ReachedSet> innerStateToExternStates = HashMultimap.create();
   private final Multimap<AbstractState, AbstractState> stateToInnerFunctionCalls = HashMultimap.create();
 
   //Stats
@@ -191,7 +192,7 @@ public class BAMTransferRelation implements TransferRelation {
     if (cleanARGAfterAllRefinements) {
       multipleARGRemover = new MultipleARGSubtreeRemover(partitioning,
           wrappedReducer, argCache, reachedSetFactory, abstractStateToReachedSet,
-          removeCachedSubtreeTimer, logger, innerStateToExternStates, this);
+          removeCachedSubtreeTimer, logger, innerStateToExternStates, multiReducedToExpand, this);
     } else {
       multipleARGRemover = null;
     }
@@ -431,12 +432,9 @@ public class BAMTransferRelation implements TransferRelation {
     final AbstractState reducedInitialState = wrappedReducer.getVariableReducedState(initialState, currentBlock, previousSubtree, node);
     final Precision reducedInitialPrecision = wrappedReducer.getVariableReducedPrecision(pPrecision, currentBlock);
 
-    String functionName = AbstractStates.extractLocation(reducedInitialState).getFunctionName();
-    innerStateToExternStates.put(functionName, initialState);
     if (!stack.isEmpty()) {
       stateToInnerFunctionCalls.put(stack.get(stack.size() - 1).getFirst(), initialState);
     }
-
     final Triple<AbstractState, Precision, Block> currentLevel = Triple.of(reducedInitialState, reducedInitialPrecision, currentBlock);
     stack.add(currentLevel);
     logger.log(Level.FINEST, "current Stack:", stack);
@@ -709,6 +707,13 @@ public class BAMTransferRelation implements TransferRelation {
 
     assert reached != null;
     abstractStateToReachedSet.put(initialState, reached);
+    /* We cannot put reducedInitialState, because it is new.
+     * We should get the first state of reached set - this is one, whish was put there at the first time
+     */
+    multiReducedToExpand.put(reached.getFirstState(), initialState);
+
+    String functionName = AbstractStates.extractLocation(reducedInitialState).getFunctionName();
+    innerStateToExternStates.put(functionName, reached);
 
     ARGState rootOfBlock = null;
     if (PCCInformation.isPCCEnabled()) {
@@ -952,60 +957,36 @@ public class BAMTransferRelation implements TransferRelation {
   }
 
   public void clearCaches() {
-    /* for (ARGState state : statesToRemoveFromOneCache) {
-      String functionName = AbstractStates.extractLocation(state).getFunctionName();
-      //It is normal, if this pair was removed before
-      innerStateToExternStates.remove(functionName, state);
-      abstractStateToReachedSet.remove(state);
-    }*/
     forwardPrecisionToExpandedPrecision.clear();
     reducedToExpand.clear();
     if (correctARGsForBlocks != null) {
       correctARGsForBlocks.clear();
     }
-    Set<AbstractState> toRemove = new HashSet<>();
-    for (AbstractState state : expandedToReducedCache.keySet()) {
-      if (((ARGState)state).isDestroyed()) {
-        toRemove.add(state);
-      }
-    }
-    for (AbstractState state : toRemove) {
-      expandedToReducedCache.remove(state);
-      expandedToBlockCache.remove(state);
-    }
-    toRemove.clear();
-    for (AbstractState state : stateToInnerFunctionCalls.keySet()) {
-      if (((ARGState)state).isDestroyed()) {
-        toRemove.add(state);
-      }
-    }
-    for (AbstractState state : toRemove) {
-      stateToInnerFunctionCalls.removeAll(state);
-    }
   }
 
-  public void removeStateFromCaches(ARGState state) {
-    AbstractState reducedState = abstractStateToReachedSet.get(state).getFirstState();
-    Collection<AbstractState> innerFunctionCalls = stateToInnerFunctionCalls.get(reducedState);
-    if (innerFunctionCalls != null && !innerFunctionCalls.isEmpty()) {
-      for (AbstractState calledFunction : innerFunctionCalls) {
-        for (ARGState child : ((ARGState)calledFunction).getChildren()) {
-          expandedToReducedCache.remove(child);
-          expandedToBlockCache.remove(child);
+  public void removeStateFromCaches(Set<ARGState> statesToRemove) {
+    Set<ARGState> statesToRemoveFromOneCache = new HashSet<>(statesToRemove);
+    for (ARGState state : statesToRemove) {
+      AbstractState reducedState = abstractStateToReachedSet.get(state).getFirstState();
+      Collection<AbstractState> innerFunctionCalls = stateToInnerFunctionCalls.get(reducedState);
+      if (innerFunctionCalls != null && !innerFunctionCalls.isEmpty()) {
+        for (AbstractState calledFunction : innerFunctionCalls) {
+          statesToRemoveFromOneCache.add((ARGState)calledFunction);
         }
       }
+      stateToInnerFunctionCalls.removeAll(reducedState);
     }
-    stateToInnerFunctionCalls.removeAll(reducedState);
-    String functionName = AbstractStates.extractLocation(state).getFunctionName();
-    innerStateToExternStates.remove(functionName, state);
-    abstractStateToReachedSet.remove(state);
 
-    if (!state.isDestroyed()) {
+    for (ARGState state : statesToRemoveFromOneCache) {
+      AbstractState reducedState = abstractStateToReachedSet.get(state).getFirstState();
+      multiReducedToExpand.remove(reducedState, state);
+
       Collection<ARGState> children = state.getChildren();
       for (ARGState child : children) {
         expandedToReducedCache.remove(child);
         expandedToBlockCache.remove(child);
       }
+      abstractStateToReachedSet.remove(state);
     }
   }
 
@@ -1014,10 +995,9 @@ public class BAMTransferRelation implements TransferRelation {
     System.out.println("expandedToReducedCache: " + expandedToReducedCache.size());
     System.out.println("expandedToBlockCache: " + expandedToBlockCache.size());
     System.out.println("stateToInnerFunctionCalls: " + stateToInnerFunctionCalls.size());
-    //System.out.println(stateToInnerFunctionCalls.keySet());
+    System.out.println("multiReducedToExpand: " + multiReducedToExpand.size());
     System.out.println("innerStateToExternStates: " + innerStateToExternStates.size());
-    //System.out.println("reducedToExpand: " + reducedToExpand.size());
-    //System.out.println("forwardPrecisionToExpandedPrecision: " + forwardPrecisionToExpandedPrecision.size());
+    System.out.println("reducedToExpand: " + reducedToExpand.size());
     if (correctARGsForBlocks != null) {
       System.out.println("correctARGsForBlocks: " + correctARGsForBlocks.size());
     }

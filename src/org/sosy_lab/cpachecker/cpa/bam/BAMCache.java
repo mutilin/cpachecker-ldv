@@ -125,16 +125,13 @@ public class BAMCache {
     AbstractStateHash hash = getHashCode(stateKey, precisionKey, context);
     returnCache.remove(hash);
     blockARGCache.remove(hash);
-    //preciseReachedCache.remove(hash);
-    //unpreciseReachedCache.remove(hash);
-
+    preciseReachedCache.remove(hash);
   }
 
   public void printSizes() {
     System.out.println("returnCache:           " + returnCache.size());
     System.out.println("blockARGCache:         " + blockARGCache.size());
     System.out.println("preciseReachedCache:   " + preciseReachedCache.size());
-    //System.out.println("unpreciseReachedCache: " + unpreciseReachedCache.size());
   }
 
   /** This function returns a Pair of the reached-set and the returnStates for the given keys.

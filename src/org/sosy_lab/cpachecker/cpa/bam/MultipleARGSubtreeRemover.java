@@ -49,29 +49,30 @@ import org.sosy_lab.cpachecker.core.reachedset.ReachedSetFactory;
 import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsPrecision;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 
 import com.google.common.base.Predicate;
-import com.google.common.base.Predicates;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
 
 
 public class MultipleARGSubtreeRemover extends ARGSubtreeRemover {
 
-  private Set<ARGState> setsForRemoveFromCache = new HashSet<>();
+  private Set<ARGState> statesForRemoveFromCache = new HashSet<>();
+  private Set<ReachedSet> setsForRemoveFromCache = new HashSet<>();
+  private Multimap<AbstractState, AbstractState> reducedToExpand;
   private Map<ARGState, Set<ARGState>> cachedSubtreesToRemove = new HashMap<>();
-  private Multimap<String, AbstractState> functionToRootState;
+  private Multimap<String, ReachedSet> functionToRootState;
   private BAMTransferRelation transfer;
 
   public MultipleARGSubtreeRemover(BlockPartitioning partitioning, Reducer reducer,
       BAMCache bamCache, ReachedSetFactory reachedSetFactory,
       Map<AbstractState, ReachedSet> abstractStateToReachedSet,
-      Timer removeCachedSubtreeTimer, LogManager logger, Multimap<String, AbstractState> map,
+      Timer removeCachedSubtreeTimer, LogManager logger, Multimap<String, ReachedSet> map,
+      Multimap<AbstractState, AbstractState> map2,
       BAMTransferRelation pTransfer) {
     super(partitioning, reducer, bamCache, reachedSetFactory, abstractStateToReachedSet, removeCachedSubtreeTimer, logger);
     functionToRootState = map;
+    reducedToExpand = map2;
     transfer = pTransfer;
   }
 
@@ -109,7 +110,7 @@ public class MultipleARGSubtreeRemover extends ARGSubtreeRemover {
     List<ARGState> tail = trimPath(pPath, affectedState);
 
     List<ARGState> callNodes = getCallNodes(tail);
-    setsForRemoveFromCache.addAll(callNodes);
+    statesForRemoveFromCache.addAll(callNodes);
   }
 
   /** remove all states before pState from path */
@@ -134,22 +135,33 @@ public class MultipleARGSubtreeRemover extends ARGSubtreeRemover {
     LinkedList<String> toProcess = new LinkedList<>();
 
     String functionName = AbstractStates.extractLocation(state).getFunctionName();
+    Collection<ReachedSet> reachedSets;
     Collection<AbstractState> callers;
     toProcess.add(functionName);
     while (!toProcess.isEmpty()) {
       functionName = toProcess.pollFirst();
-      callers = functionToRootState.get(functionName);
-      if (callers != null) {
-        for (AbstractState caller : callers) {
-          setsForRemoveFromCache.add((ARGState)caller);
+      reachedSets = functionToRootState.get(functionName);
+      if (reachedSets != null) {
+        for (ReachedSet set : reachedSets) {
+          AbstractState reducedState = set.getFirstState();
+          if (reducedToExpand.containsKey(reducedState)) {
+            callers = reducedToExpand.get(reducedState);
+            for (AbstractState caller : callers) {
+              statesForRemoveFromCache.add((ARGState)caller);
+              CallstackState previousState = AbstractStates.extractStateByType(caller, CallstackState.class).getPreviousState();
+              if (previousState == null) {
+                //main function
+                continue;
+              }
+              toProcess.add(previousState.getCurrentFunction());
+            }
+            reducedToExpand.removeAll(reducedState);
+          } else {
+            setsForRemoveFromCache.add(set);
+          }
           //logger.log(Level.INFO, "Add " + caller + " to removing");
           //tmpState is an entrance into current function
-          CallstackState previousState = AbstractStates.extractStateByType(caller, CallstackState.class).getPreviousState();
-          if (previousState == null) {
-            //main function
-            continue;
-          }
-          toProcess.add(previousState.getCurrentFunction());
+
         }
         functionToRootState.removeAll(functionName);
       }
@@ -177,39 +189,28 @@ public class MultipleARGSubtreeRemover extends ARGSubtreeRemover {
     bamCache.printSizes();
     transfer.printCacheStatistics();
 
-    for (ARGState rootState : setsForRemoveFromCache) {
-
-      CFANode rootNode = extractLocation(rootState);
-      Block rootSubtree = partitioning.getBlockForCallNode(rootNode);
-
-      ReachedSet reachedSet = abstractStateToReachedSet.get(rootState);
-
-      AbstractState reducedRootState = reachedSet.getFirstState();
-      Collection<ARGState> children = ((ARGState)reducedRootState).getChildren();
-      if (children.size() == 0) {
-        //This cache was cleaned from another rootState
-        continue;
-      }
-      assert ((ARGState)reducedRootState).getChildren().size() == 1;
-
-      Precision reducedRootPrecision = reachedSet.getPrecision(reducedRootState);
-      bamCache.removeFromAllCaches(reducedRootState, reducedRootPrecision, rootSubtree);
-      transfer.removeStateFromCaches(rootState);
-      List<Precision> precisions = Lists.newLinkedList();
-      precisions.add(precision);
-      List<Predicate<? super Precision>> pPrecisions = Lists.newLinkedList();
-      pPrecisions.add(Predicates.instanceOf(UsageStatisticsPrecision.class));
-
-      ARGState child = children.iterator().next();
-      removeSubtree(reachedSet, child, precisions, pPrecisions);
+    for (ARGState rootState : statesForRemoveFromCache) {
+      cleanReachedSet(abstractStateToReachedSet.get(rootState));
     }
+    for (ReachedSet reachedSet : setsForRemoveFromCache) {
+      cleanReachedSet(reachedSet);
+    }
+    transfer.removeStateFromCaches(statesForRemoveFromCache);
     //We can't remove it in the previous loop, because we may use information after that
     transfer.clearCaches();
     System.out.println("------------------------");
     bamCache.printSizes();
     transfer.printCacheStatistics();
-    setsForRemoveFromCache.clear();
+    statesForRemoveFromCache.clear();
     //functionToRootState.clear();
     removeCachedSubtreeTimer.stop();
+  }
+
+  private void cleanReachedSet(ReachedSet reachedSet) {
+    AbstractState reducedRootState = reachedSet.getFirstState();
+    CFANode rootNode = extractLocation(reducedRootState);
+    Block rootSubtree = partitioning.getBlockForCallNode(rootNode);
+    Precision reducedRootPrecision = reachedSet.getPrecision(reducedRootState);
+    bamCache.removeFromAllCaches(reducedRootState, reducedRootPrecision, rootSubtree);
   }
 }
