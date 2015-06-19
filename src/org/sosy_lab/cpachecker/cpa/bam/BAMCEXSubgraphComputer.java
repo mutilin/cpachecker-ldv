@@ -50,7 +50,7 @@ public class BAMCEXSubgraphComputer {
   private final BlockPartitioning partitioning;
   private final Reducer reducer;
   private final BAMCache bamCache;
-  private final Map<ARGState, ARGState> pathStateToReachedState;
+  protected final Map<ARGState, ARGState> pathStateToReachedState;
   private final Map<AbstractState, ReachedSet> abstractStateToReachedSet;
   protected final Map<AbstractState, AbstractState> expandedToReducedCache;
   private final LogManager logger;
@@ -129,6 +129,7 @@ public class BAMCEXSubgraphComputer {
           // The returned 'innerTree' is the rootNode of the subtree, created from the cached reachedSet.
           // The current subtree (successors of child) is appended beyond the innerTree, to get a complete subgraph.
           final ARGState reducedTarget = (ARGState) expandedToReducedCache.get(child);
+
           BackwardARGState innerTree = computeCounterexampleSubgraphForBlock(currentState, currentState.getParents().iterator().next(), reducedTarget, newChild);
           if (innerTree == DUMMY_STATE_FOR_MISSING_BLOCK) {
             ARGSubtreeRemover.removeSubtree(reachedSet, currentState);

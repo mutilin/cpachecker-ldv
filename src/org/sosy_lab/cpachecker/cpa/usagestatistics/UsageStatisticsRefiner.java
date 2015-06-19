@@ -42,10 +42,7 @@ import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.io.PathTemplate;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
-import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
-import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
-import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.CounterexampleInfo;
 import org.sosy_lab.cpachecker.core.MainCPAStatistics;
@@ -80,7 +77,6 @@ import org.sosy_lab.cpachecker.util.predicates.Solver;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 
 import com.google.common.base.Function;
-import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 
 
@@ -236,7 +232,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       if (counterexample.isSpurious()) {
         pStat.CacheInterpolantsTime.start();
 
-        List<CFAEdge> edges = pPath.getInnerEdges();
+        /*List<CFAEdge> edges = pPath.getInnerEdges();
         edges = from(edges).filter(new Predicate<CFAEdge>() {
           @Override
           public boolean apply(@Nullable CFAEdge pInput) {
@@ -253,7 +249,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
               return true;
             }
           }
-        }).toList();
+        }).toList();*/
         Iterator<Pair<Object, PathTemplate>> pairIterator = counterexample.getAllFurtherInformation().iterator();
         List<BooleanFormula> formulas = (List<BooleanFormula>) pairIterator.next().getFirst();
         List<ARGState> interpolants = (List<ARGState>) pairIterator.next().getFirst();

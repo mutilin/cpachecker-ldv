@@ -57,8 +57,7 @@ public class BAMMultipleCEXSubgraphComputer extends BAMCEXSubgraphComputer{
   }
 
 
-  public ARGState findPath(ARGState target,
-      Map<ARGState, ARGState> pPathElementToReachedState, Set<List<Integer>> pProcessedStates) throws InterruptedException, RecursiveAnalysisFailedException {
+  public ARGState findPath(ARGState target, Set<List<Integer>> pProcessedStates) throws InterruptedException, RecursiveAnalysisFailedException {
 
     Map<ARGState, BackwardARGState> elementsMap = new HashMap<>();
     Stack<ARGState> openElements = new Stack<>();
@@ -70,7 +69,7 @@ public class BAMMultipleCEXSubgraphComputer extends BAMCEXSubgraphComputer{
     }
 
     BackwardARGState newTreeTarget = new BackwardARGState(target);
-    pPathElementToReachedState.put(newTreeTarget, target);
+    pathStateToReachedState.put(newTreeTarget, target);
     elementsMap.put(target, newTreeTarget);
     ARGState currentState = target;
 
@@ -96,7 +95,7 @@ public class BAMMultipleCEXSubgraphComputer extends BAMCEXSubgraphComputer{
         }
         //Try to find path.
         BackwardARGState newExpandedState = new BackwardARGState(expandedState);
-        pPathElementToReachedState.put(newExpandedState, expandedState);
+        pathStateToReachedState.put(newExpandedState, expandedState);
         elementsMap.put(expandedState, newExpandedState);
         for (ARGState child : newCurrentElement.getChildren()) {
           child.addParent(newExpandedState);
@@ -108,7 +107,7 @@ public class BAMMultipleCEXSubgraphComputer extends BAMCEXSubgraphComputer{
           //create node for parent in the new subtree
           BackwardARGState newParent = new BackwardARGState(parent);
           elementsMap.put(parent, newParent);
-          pPathElementToReachedState.put(newParent, parent);
+          pathStateToReachedState.put(newParent, parent);
           //and remember to explore the parent later
           openElements.push(parent);
           if (expandedToReducedCache.containsKey(currentElement)) {
@@ -126,7 +125,7 @@ public class BAMMultipleCEXSubgraphComputer extends BAMCEXSubgraphComputer{
               Collection<ARGState> parents = tmpState.getParents();
               assert parents.size() == 1;
               nextState = parents.iterator().next();
-              if (checkRepeatitionOfState(pPathElementToReachedState.get(tmpState))) {
+              if (checkRepeatitionOfState(pathStateToReachedState.get(tmpState))) {
                 return DUMMY_STATE_FOR_REPEATED_STATE;
               }
               tmpState = nextState;

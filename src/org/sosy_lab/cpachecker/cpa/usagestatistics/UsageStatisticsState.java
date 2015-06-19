@@ -45,7 +45,7 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
 
   private static final long serialVersionUID = -898577877284268426L;
   private final UsageContainer container;
-  private final Map <SingleIdentifier, LinkedList<UsageInfo>> recentUsages;
+  private final TemporaryUsageStorage recentUsages;
 
   private final Map<AbstractIdentifier, AbstractIdentifier> variableBindingRelation;
 
@@ -53,18 +53,14 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
     //Only for getInitialState()
     super(pWrappedElement);
     variableBindingRelation = new HashMap<>();
-    recentUsages = new HashMap<>();
+    recentUsages = new TemporaryUsageStorage(null);
     container = pContainer;
   }
 
   private UsageStatisticsState(final AbstractState pWrappedElement, final UsageStatisticsState state) {
     super(pWrappedElement);
     variableBindingRelation = new HashMap<>(state.variableBindingRelation);
-    recentUsages = new HashMap<>(state.recentUsages);
-
-    for (SingleIdentifier id : state.recentUsages.keySet()) {
-      recentUsages.put(id, new LinkedList<>(state.recentUsages.get(id)));
-    }
+    recentUsages = new TemporaryUsageStorage(state.recentUsages);
     container = state.container;
   }
 
@@ -202,13 +198,6 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
 
   }
 
-  public void clearUsagesIfNeed() {
-    final PredicateAbstractState state = AbstractStates.extractStateByType(this, PredicateAbstractState.class);
-    if (state == null || !state.getAbstractionFormula().isFalse() && state.isAbstractionState()) {
-      recentUsages.clear();
-    }
-  }
-
   public UsageStatisticsState expand(final UsageStatisticsState root, final AbstractState wrappedState) {
     final UsageStatisticsState result = root.clone(wrappedState);
 
@@ -240,7 +229,7 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
           }
         }
       }
-      clearUsagesIfNeed();
+      recentUsages.cleanUsages();
     }
   }
 }
