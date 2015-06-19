@@ -893,7 +893,7 @@ public class BAMTransferRelation implements TransferRelation {
       }
     }
 
-    final BAMCEXSubgraphComputer cexSubgraphComputer = new BAMCEXSubgraphComputer(
+    final BAMMultipleCEXSubgraphComputer cexSubgraphComputer = new BAMMultipleCEXSubgraphComputer(
         partitioning, wrappedReducer, argCache, pPathElementToReachedState,
         abstractStateToReachedSet, expandedToReducedCache, reducedToExpand, logger);
 
@@ -907,19 +907,10 @@ public class BAMTransferRelation implements TransferRelation {
                                                  Map<ARGState, ARGState> pPathElementToReachedState) {
     assert reachedSet.asReachedSet().contains(target);
     assert pPathElementToReachedState.isEmpty() : "new path should be started with empty set of states.";
-    if (reducedToExpand.isEmpty()) {
-      for (AbstractState expandedState : abstractStateToReachedSet.keySet()) {
-        ARGState firstState = (ARGState) abstractStateToReachedSet.get(expandedState).getFirstState();
-        if (firstState.getStateId() == ((ARGState)expandedState).getStateId() + 1) {
-          //first time
-          reducedToExpand.put(firstState, expandedState);
-        }
-      }
-    }
 
     final BAMCEXSubgraphComputer cexSubgraphComputer = new BAMCEXSubgraphComputer(
             partitioning, wrappedReducer, argCache, pPathElementToReachedState,
-            abstractStateToReachedSet, expandedToReducedCache, reducedToExpand, logger);
+            abstractStateToReachedSet, expandedToReducedCache, logger);
     return cexSubgraphComputer.computeCounterexampleSubgraph(
         target, reachedSet, new BAMCEXSubgraphComputer.BackwardARGState(target));
   }

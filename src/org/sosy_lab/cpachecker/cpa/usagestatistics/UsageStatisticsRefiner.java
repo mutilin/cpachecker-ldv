@@ -61,7 +61,7 @@ import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
 import org.sosy_lab.cpachecker.cpa.arg.ARGReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.arg.ARGUtils;
-import org.sosy_lab.cpachecker.cpa.bam.BAMCEXSubgraphComputer;
+import org.sosy_lab.cpachecker.cpa.bam.BAMMultipleCEXSubgraphComputer;
 import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateCPA;
 import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateRefiner;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractionManager;
@@ -320,7 +320,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       //we delete this state from other unsafe
     rootOfSubgraph = transfer.findPath(pLastElement, subgraphStatesToReachedState, processedStates);
     assert (rootOfSubgraph != null);
-    if (rootOfSubgraph == BAMCEXSubgraphComputer.DUMMY_STATE_FOR_REPEATED_STATE) {
+    if (rootOfSubgraph == BAMMultipleCEXSubgraphComputer.DUMMY_STATE_FOR_REPEATED_STATE) {
       return null;
     }
     return ARGUtils.getRandomPath(rootOfSubgraph);
