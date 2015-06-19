@@ -326,8 +326,6 @@ public class PredicateCPARefiner extends AbstractARGBasedRefiner implements Stat
           dumpCounterexampleFile);*/
 
       CounterexampleInfo cex = CounterexampleInfo.feasible(allStatesTrace, counterexample.getModel());
-      cex.addFurtherInformation(formulaManager.dumpCounterexample(counterexample),
-          dumpCounterexampleFile);
 
       totalRefinement.stop();
       return cex;

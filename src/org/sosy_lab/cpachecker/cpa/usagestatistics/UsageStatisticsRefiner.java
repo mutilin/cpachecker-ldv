@@ -115,17 +115,9 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
   private final ConfigurableProgramAnalysis cpa;
   private final LogManager logger;
   private final int NUMBER_FOR_RESET_PRECISION;
-  private InterpolantCache iCache = new InterpolantCache();
   private UsageStatisticsRefinementStrategy strategy;
-
-  private final Function<ARGState, Integer> GET_ORIGIN_STATE_NUMBERS = new Function<ARGState, Integer>() {
-    @Override
-    @Nullable
-    public Integer apply(@Nullable ARGState pInput) {
-      assert subgraphStatesToReachedState.containsKey(pInput);
-      return subgraphStatesToReachedState.get(pInput).getStateId();
-    }
-  };
+  private Set<List<Integer>> refinedStates;
+  private final InterpolantCache iCache = new InterpolantCache();
 
   public UsageStatisticsRefiner(ConfigurableProgramAnalysis pCpa, UsageStatisticsRefinementStrategy pStrategy) throws CPAException, InvalidConfigurationException {
     super(pCpa, pStrategy);
@@ -148,15 +140,20 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
 
     LogManager logger = predicateCpa.getLogger();
 
+    final Set<List<Integer>> refinedStates = new HashSet<>();
+
     UsageStatisticsRefinementStrategy strategy = new UsageStatisticsRefinementStrategy(
                                           predicateCpa.getConfiguration(),
                                           logger,
                                           predicateCpa,
                                           predicateCpa.getSolver(),
                                           predicateCpa.getPredicateManager(),
-                                          predicateCpa.getStaticRefiner());
+                                          predicateCpa.getStaticRefiner(),
+                                          refinedStates);
 
-    return new UsageStatisticsRefiner(pCpa, strategy);
+    UsageStatisticsRefiner result = new UsageStatisticsRefiner(pCpa, strategy);
+    result.refinedStates = refinedStates;
+    return result;
   }
 
   int i = 0;
@@ -169,10 +166,10 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
 
     iCache.initKeySet();
     final RefineableUsageComputer computer = new RefineableUsageComputer(container, logger);
-    strategy.setComputer(computer);
+    strategy.init(computer, subgraphStatesToReachedState);
     BAMPredicateCPA bamcpa = CPAs.retrieveCPA(cpa, BAMPredicateCPA.class);
     assert bamcpa != null;
-    Set<List<Integer>> refinedStates = new HashSet<>();
+    refinedStates.clear();
 
     logger.log(Level.INFO, ("Perform US refinement: " + i++));
     int originUnsafeSize = container.getUnsafeSize();
@@ -231,30 +228,9 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       refinementFinish |= counterexample.isSpurious();
       if (counterexample.isSpurious()) {
         pStat.CacheInterpolantsTime.start();
-
-        /*List<CFAEdge> edges = pPath.getInnerEdges();
-        edges = from(edges).filter(new Predicate<CFAEdge>() {
-          @Override
-          public boolean apply(@Nullable CFAEdge pInput) {
-            if (pInput instanceof CDeclarationEdge) {
-              if (((CDeclarationEdge)pInput).getDeclaration().isGlobal() ||
-                  pInput.getSuccessor().getFunctionName().equals("ldv_main")) {
-              }
-              return false;
-            } else if (pInput.getSuccessor().getFunctionName().equals("ldv_main")
-                && pInput instanceof CAssumeEdge) {
-              //Remove infinite switch, it's too long
-              return false;
-            } else {
-              return true;
-            }
-          }
-        }).toList();*/
         Iterator<Pair<Object, PathTemplate>> pairIterator = counterexample.getAllFurtherInformation().iterator();
         List<BooleanFormula> formulas = (List<BooleanFormula>) pairIterator.next().getFirst();
-        List<ARGState> interpolants = (List<ARGState>) pairIterator.next().getFirst();
-        List<Integer>changedStateNumbers = from(interpolants).transform(GET_ORIGIN_STATE_NUMBERS).toList();
-        refinedStates.add(changedStateNumbers);
+
         pStat.CacheInterpolantsTime.stop();
 
         pStat.CacheTime.start();
@@ -332,14 +308,27 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
 
     protected final Map<SingleIdentifier, PredicatePrecision> precisionMap = new HashMap<>();
     protected RefineableUsageComputer computer;
+    private final Set<List<Integer>> refinedStates;
+    private Map<ARGState, ARGState> subgraphStatesToReachedState;
+
+    private final Function<ARGState, Integer> GET_ORIGIN_STATE_NUMBERS = new Function<ARGState, Integer>() {
+      @Override
+      @Nullable
+      public Integer apply(@Nullable ARGState pInput) {
+        assert subgraphStatesToReachedState.containsKey(pInput);
+        return subgraphStatesToReachedState.get(pInput).getStateId();
+      }
+    };
 
     public UsageStatisticsRefinementStrategy(final Configuration config, final LogManager logger,
         final BAMPredicateCPA predicateCpa,
         final Solver pSolver,
         final PredicateAbstractionManager pPredAbsMgr,
-        final PredicateStaticRefiner pStaticRefiner)
+        final PredicateStaticRefiner pStaticRefiner,
+        final Set<List<Integer>> pRefinedStates)
             throws CPAException, InvalidConfigurationException {
       super(config, logger, predicateCpa, pSolver, pPredAbsMgr, pStaticRefiner);
+      refinedStates = pRefinedStates;
     }
 
     @Override
@@ -358,10 +347,15 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
         updatedPrecision = newPrecisionFromPredicates;
       }
       precisionMap.put(currentId, updatedPrecision);
+
+      List<Integer>changedStateNumbers = from(pAffectedStates).transform(GET_ORIGIN_STATE_NUMBERS).toList();
+      refinedStates.add(changedStateNumbers);
+
     }
 
-    private void setComputer(RefineableUsageComputer pComputer) {
+    private void init(RefineableUsageComputer pComputer, Map<ARGState, ARGState> map) {
       computer = pComputer;
+      subgraphStatesToReachedState = map;
     }
   }
 }
