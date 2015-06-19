@@ -49,9 +49,12 @@ import org.sosy_lab.cpachecker.core.reachedset.ReachedSetFactory;
 import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsPrecision;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 
 import com.google.common.base.Predicate;
+import com.google.common.base.Predicates;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
 
 
@@ -169,29 +172,44 @@ public class MultipleARGSubtreeRemover extends ARGSubtreeRemover {
     return new ArrayList<>(openCallElements);
   }
 
-  public void cleanCaches() {
-    int num = 0;
+  public void cleanCaches(Precision precision) {
     removeCachedSubtreeTimer.start();
-    System.out.println("Before removing");
     bamCache.printSizes();
+    transfer.printCacheStatistics();
+
     for (ARGState rootState : setsForRemoveFromCache) {
 
       CFANode rootNode = extractLocation(rootState);
       Block rootSubtree = partitioning.getBlockForCallNode(rootNode);
 
-      AbstractState reducedRootState = wrappedReducer.getVariableReducedState(rootState, rootSubtree, null, rootNode);
       ReachedSet reachedSet = abstractStateToReachedSet.get(rootState);
 
-      num++;
+      AbstractState reducedRootState = reachedSet.getFirstState();
+      Collection<ARGState> children = ((ARGState)reducedRootState).getChildren();
+      if (children.size() == 0) {
+        //This cache was cleaned from another rootState
+        continue;
+      }
+      assert ((ARGState)reducedRootState).getChildren().size() == 1;
 
-      Precision reducedRootPrecision = reachedSet.getPrecision(reachedSet.getFirstState());
+      Precision reducedRootPrecision = reachedSet.getPrecision(reducedRootState);
       bamCache.removeFromAllCaches(reducedRootState, reducedRootPrecision, rootSubtree);
       transfer.removeStateFromCaches(rootState);
+      List<Precision> precisions = Lists.newLinkedList();
+      precisions.add(precision);
+      List<Predicate<? super Precision>> pPrecisions = Lists.newLinkedList();
+      pPrecisions.add(Predicates.instanceOf(UsageStatisticsPrecision.class));
+
+      ARGState child = children.iterator().next();
+      removeSubtree(reachedSet, child, precisions, pPrecisions);
     }
-    System.out.println("Remove " + num + " targets");
-    System.out.println("After removing");
+    //We can't remove it in the previous loop, because we may use information after that
+    transfer.clearCaches();
+    System.out.println("------------------------");
     bamCache.printSizes();
+    transfer.printCacheStatistics();
     setsForRemoveFromCache.clear();
+    //functionToRootState.clear();
     removeCachedSubtreeTimer.stop();
   }
 }

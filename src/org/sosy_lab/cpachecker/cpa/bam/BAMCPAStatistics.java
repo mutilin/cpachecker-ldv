@@ -123,9 +123,10 @@ class BAMCPAStatistics implements Statistics {
     int sumCalls = cache.cacheMisses + cache.partialCacheHits + cache.fullCacheHits;
 
     int sumARTElemets = 0;
-    for (ReachedSet subreached : BAMARGUtils.gatherReachedSets(cpa, reached).values()) {
+    //Usually we print statistics after removing, so here we can't gather reached sets
+    /*for (ReachedSet subreached : BAMARGUtils.gatherReachedSets(cpa, reached).values()) {
       sumARTElemets += subreached.size();
-    }
+    }*/
 
     out.println("Total size of all ARGs:                                         " + sumARTElemets);
     out.println("Maximum block depth:                                            " + transferRelation.maxRecursiveDepth);

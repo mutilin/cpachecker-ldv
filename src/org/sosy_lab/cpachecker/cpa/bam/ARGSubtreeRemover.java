@@ -145,7 +145,7 @@ public class ARGSubtreeRemover {
   /**
    * @return <code>true</code>, if the precision of the first element of the given reachedSet changed by this operation; <code>false</code>, otherwise.
    */
-  private static boolean removeSubtree(ReachedSet reachedSet, ARGState argElement,
+  protected static boolean removeSubtree(ReachedSet reachedSet, ARGState argElement,
                                        List<Precision> newPrecisions, List<Predicate<? super Precision>> pPrecisionTypes) {
     ARGReachedSet argReachSet = new ARGReachedSet(reachedSet);
     boolean updateCacheNeeded = argElement.getParents().contains(reachedSet.getFirstState());

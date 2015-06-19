@@ -224,6 +224,12 @@ public class ARGReachedSet {
 
     ARGState s = (ARGState) mReached.getFirstState();
     Precision oldPrecision = mReached.getPrecision(s);
+    PredicatePrecision old = Precisions.extractPrecisionByType(oldPrecision, PredicatePrecision.class);
+    if (old != null) {
+      PredicatePrecision newP = Precisions.extractPrecisionByType(pNewPrecision, PredicatePrecision.class);
+      PredicatePrecision merged = newP.mergeWith(old);
+      pNewPrecision = Precisions.replaceByType(pNewPrecision, merged, pPrecisionType);
+    }
     Precision newPrecision = adaptPrecision(oldPrecision, pNewPrecision, pPrecisionType);
     mReached.updatePrecision(s, newPrecision);
   }
@@ -239,12 +245,6 @@ public class ARGReachedSet {
    */
   private Precision adaptPrecision(Precision pOldPrecision, Precision pNewPrecision,
     Predicate<? super Precision> pPrecisionType) {
-    PredicatePrecision old = Precisions.extractPrecisionByType(pOldPrecision, PredicatePrecision.class);
-    if (old != null) {
-      PredicatePrecision newP = Precisions.extractPrecisionByType(pNewPrecision, PredicatePrecision.class);
-      PredicatePrecision merged = newP.mergeWith(old);
-      pNewPrecision = Precisions.replaceByType(pNewPrecision, merged, pPrecisionType);
-    }
     return Precisions.replaceByType(pOldPrecision, pNewPrecision, pPrecisionType);
   }
 

@@ -83,7 +83,11 @@ public class BAMCache {
   }
 
   private AbstractStateHash getHashCode(AbstractState stateKey, Precision precisionKey, Block context) {
-    return new AbstractStateHash(stateKey, precisionKey, context);
+    if (aggressiveCaching) {
+      return new AbstractStateHash(stateKey, context);
+    } else {
+      return new AbstractStateHash(stateKey, precisionKey, context);
+    }
   }
 
   public void put(AbstractState stateKey, Precision precisionKey, Block context, ReachedSet item) {
@@ -121,8 +125,8 @@ public class BAMCache {
     AbstractStateHash hash = getHashCode(stateKey, precisionKey, context);
     returnCache.remove(hash);
     blockARGCache.remove(hash);
-    preciseReachedCache.remove(hash);
-    unpreciseReachedCache.remove(hash);
+    //preciseReachedCache.remove(hash);
+    //unpreciseReachedCache.remove(hash);
 
   }
 
@@ -130,7 +134,7 @@ public class BAMCache {
     System.out.println("returnCache:           " + returnCache.size());
     System.out.println("blockARGCache:         " + blockARGCache.size());
     System.out.println("preciseReachedCache:   " + preciseReachedCache.size());
-    System.out.println("unpreciseReachedCache: " + unpreciseReachedCache.size());
+    //System.out.println("unpreciseReachedCache: " + unpreciseReachedCache.size());
   }
 
   /** This function returns a Pair of the reached-set and the returnStates for the given keys.
@@ -171,7 +175,7 @@ public class BAMCache {
       return Pair.of(result, returnCache.get(hash));
     }
 
-    if (aggressiveCaching) {
+   /* if (aggressiveCaching) {
       result = unpreciseReachedCache.get(hash);
       if (result != null) {
         AbstractStateHash unpreciseHash = getHashCode(stateKey, result.getPrecision(result.getFirstState()), context);
@@ -188,7 +192,7 @@ public class BAMCache {
                 context));
         return pair;
       }
-    }
+    }*/
 
     lastAnalyzedBlock = null;
     return Pair.of(null, null);
@@ -289,6 +293,13 @@ public class BAMCache {
       context = checkNotNull(pContext);
       stateKey = pStateKey;
       precisionKey = pPrecisionKey;
+    }
+
+    public AbstractStateHash(AbstractState pStateKey, Block pContext) {
+      wrappedHash = reducer.getHashCodeForState(pStateKey);
+      context = checkNotNull(pContext);
+      stateKey = pStateKey;
+      precisionKey = null;
     }
 
     @Override
