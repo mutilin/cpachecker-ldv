@@ -119,6 +119,13 @@ public class ValueAnalysisReducer implements Reducer {
   }
 
   @Override
+  public Object getHashCodeForState(AbstractState pElementKey) {
+    ValueAnalysisState elementKey = (ValueAnalysisState)pElementKey;
+
+    return elementKey.getConstantsMap();
+  }
+
+  @Override
   public int measurePrecisionDifference(Precision pPrecision, Precision pOtherPrecision) {
     return 0;
   }

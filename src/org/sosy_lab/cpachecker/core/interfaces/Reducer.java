@@ -81,4 +81,6 @@ public interface Reducer {
    */
   AbstractState rebuildStateAfterFunctionCall(AbstractState rootState, AbstractState entryState,
       AbstractState expandedState, FunctionExitNode exitLocation);
+
+  Object getHashCodeForState(AbstractState pStateKey);
   }

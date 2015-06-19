@@ -60,6 +60,11 @@ public class LocalReducer implements Reducer {
 
   @Override
   public Object getHashCodeForState(AbstractState pStateKey, Precision pPrecisionKey) {
+    return getHashCodeForState(pStateKey);
+  }
+
+  @Override
+  public Object getHashCodeForState(AbstractState pStateKey) {
     LocalState state = (LocalState)pStateKey;
     return state.hashCode();
   }

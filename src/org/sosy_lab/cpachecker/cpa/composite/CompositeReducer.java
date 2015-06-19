@@ -87,6 +87,19 @@ public class CompositeReducer implements Reducer {
   }
 
   @Override
+  public Object getHashCodeForState(AbstractState pElementKey) {
+
+    List<AbstractState> elements = ((CompositeState)pElementKey).getWrappedStates();
+
+    List<Object> result = new ArrayList<>(elements.size());
+    int i = 0;
+    for (AbstractState e : elements) {
+      result.add(wrappedReducers.get(i++).getHashCodeForState(e));
+    }
+    return result;
+  }
+
+  @Override
   public Precision getVariableReducedPrecision(Precision pPrecision,
       Block pContext) {
     List<Precision> precisions = ((CompositePrecision)pPrecision).getPrecisions();

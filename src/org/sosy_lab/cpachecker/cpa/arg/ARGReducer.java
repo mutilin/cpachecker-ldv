@@ -64,6 +64,12 @@ public class ARGReducer implements Reducer {
   }
 
   @Override
+  public Object getHashCodeForState(AbstractState pElementKey) {
+
+    return wrappedReducer.getHashCodeForState(((ARGState) pElementKey).getWrappedState());
+  }
+
+  @Override
   public Precision getVariableReducedPrecision(Precision pPrecision,
       Block pContext) {
     return wrappedReducer.getVariableReducedPrecision(pPrecision, pContext);

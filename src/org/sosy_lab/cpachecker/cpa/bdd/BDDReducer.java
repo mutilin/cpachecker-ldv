@@ -105,6 +105,11 @@ public class BDDReducer implements Reducer {
   }
 
   @Override
+  public Object getHashCodeForState(AbstractState stateKey) {
+    return ((BDDState)stateKey).getRegion();
+  }
+
+  @Override
   public int measurePrecisionDifference(Precision pPrecision, Precision pOtherPrecision) {
     return 0;
   }

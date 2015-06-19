@@ -222,6 +222,14 @@ public class BAMPredicateReducer implements Reducer {
     return Pair.of(element.getAbstractionFormula().asRegion(), precision);
   }
 
+  @Override
+  public Object getHashCodeForState(AbstractState pElementKey) {
+
+    PredicateAbstractState element = (PredicateAbstractState) pElementKey;
+
+    return element.getAbstractionFormula().asRegion();
+  }
+
   private Map<Pair<Integer, Block>, Precision> reduceCache = new HashMap<>();
 
   public void clearCaches() {
