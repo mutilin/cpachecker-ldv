@@ -65,7 +65,7 @@ public class RefineableUsageComputer {
     assert (waitRefinementResult);
 
     if (!result) {
-      logger.log(Level.INFO, "Usage " + uinfo + " is not reachable, remove it from container");
+      logger.log(Level.FINE, "Usage " + uinfo + " is not reachable, remove it from container");
       currentRefineableUsageInfoSet.remove(uinfo);
       if (currentRefineableUsageInfoSet.size() == 0) {
         //There are no usages in the point
@@ -78,7 +78,7 @@ public class RefineableUsageComputer {
         }
       }
     } else {
-      logger.log(Level.INFO, "Usage " + uinfo + " is reachable, mark it as true");
+      logger.log(Level.FINE, "Usage " + uinfo + " is reachable, mark it as true");
       currentRefineableUsageList.markAsReachableUsage(uinfo, path);
       if (detector.isTrueUnsafe(currentRefineableUsageList)) {
         container.setAsRefined(currentRefineableUsageList);

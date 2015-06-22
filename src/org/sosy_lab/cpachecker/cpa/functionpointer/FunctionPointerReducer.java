@@ -69,6 +69,11 @@ public class FunctionPointerReducer implements Reducer {
   }
 
   @Override
+  public Object getHashCodeForState(AbstractState pStateKey) {
+    return pStateKey;
+  }
+
+  @Override
   public int measurePrecisionDifference(Precision pPrecision, Precision pOtherPrecision) {
     return 0;
   }

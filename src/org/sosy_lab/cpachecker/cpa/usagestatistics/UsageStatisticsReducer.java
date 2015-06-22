@@ -63,6 +63,12 @@ public class UsageStatisticsReducer implements Reducer {
   }
 
   @Override
+  public Object getHashCodeForState(AbstractState pElementKey) {
+    UsageStatisticsState funElement = (UsageStatisticsState)pElementKey;
+    return wrappedReducer.getHashCodeForState(funElement.getWrappedState());
+  }
+
+  @Override
   public Precision getVariableReducedPrecision(Precision pPrecision, Block pContext) {
     UsageStatisticsPrecision newPrecision = ((UsageStatisticsPrecision)pPrecision).clone(wrappedReducer.getVariableReducedPrecision(
         ((UsageStatisticsPrecision)pPrecision).getWrappedPrecision(), pContext));

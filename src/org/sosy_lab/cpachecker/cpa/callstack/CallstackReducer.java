@@ -101,6 +101,11 @@ public class CallstackReducer implements Reducer {
 
   @Override
   public Object getHashCodeForState(AbstractState pElementKey, Precision pPrecisionKey) {
+    return getHashCodeForState(pElementKey);
+  }
+
+  @Override
+  public Object getHashCodeForState(AbstractState pElementKey) {
     return new CallstackStateWithEquals((CallstackState) pElementKey);
   }
 

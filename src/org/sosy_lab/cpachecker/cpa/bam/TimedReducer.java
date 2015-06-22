@@ -77,6 +77,11 @@ class TimedReducer implements Reducer {
   }
 
   @Override
+  public Object getHashCodeForState(AbstractState pElementKey) {
+    return wrappedReducer.getHashCodeForState(pElementKey);
+  }
+
+  @Override
   public Precision getVariableReducedPrecision(Precision pPrecision,
       Block pContext) {
     reducePrecisionTime.start();

@@ -49,8 +49,13 @@ public class NoOpReducer implements Reducer {
   }
 
   @Override
-  public Object getHashCodeForState(AbstractState pStateKey, Precision pPrecisionKey) {
+  public Object getHashCodeForState(AbstractState pStateKey) {
     return pStateKey;
+  }
+
+  @Override
+  public Object getHashCodeForState(AbstractState pStateKey, Precision pPrecisionKey) {
+    return getHashCodeForState(pStateKey);
   }
 
   @Override

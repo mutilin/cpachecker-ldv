@@ -110,6 +110,11 @@ public class LockStatisticsReducer implements Reducer {
 
   @Override
   public Object getHashCodeForState(AbstractState pElementKey, Precision pPrecisionKey) {
+    return getHashCodeForState(pElementKey);
+  }
+
+  @Override
+  public Object getHashCodeForState(AbstractState pElementKey) {
     LockStatisticsState elementKey = (LockStatisticsState)pElementKey;
 
     return elementKey.getHashCodeForState();

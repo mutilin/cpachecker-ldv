@@ -222,6 +222,14 @@ public class BAMPredicateReducer implements Reducer {
     return Pair.of(element.getAbstractionFormula().asRegion(), precision);
   }
 
+  @Override
+  public Object getHashCodeForState(AbstractState pElementKey) {
+
+    PredicateAbstractState element = (PredicateAbstractState) pElementKey;
+
+    return element.getAbstractionFormula().asRegion();
+  }
+
   private Map<Pair<Integer, Block>, Precision> reduceCache = new HashMap<>();
 
   public void clearCaches() {
@@ -256,11 +264,15 @@ public class BAMPredicateReducer implements Reducer {
     PredicatePrecision derivedToplevelPrecision =
         ((ReducedPredicatePrecision) pReducedPrecision).getRootPredicatePrecision();
 
-    if (derivedToplevelPrecision == toplevelPrecision) { return pRootPrecision; }
+    // We don't need to merge precisions, we have a global one,
+    // But it spends a lot of time for the calculation
+    // So, return the root precision
+    return pRootPrecision;
+    /*if (derivedToplevelPrecision == toplevelPrecision) { return pRootPrecision; }
 
     PredicatePrecision mergedToplevelPrecision = toplevelPrecision.mergeWith(derivedToplevelPrecision);
 
-    return getVariableReducedPrecision(mergedToplevelPrecision, pRootContext);
+    return getVariableReducedPrecision(mergedToplevelPrecision, pRootContext);*/
   }
 
   private PredicatePrecision reducePrecision(PredicatePrecision expandedPredicatePrecision, Block context) {
