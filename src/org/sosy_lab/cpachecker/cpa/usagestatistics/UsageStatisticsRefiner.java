@@ -215,10 +215,9 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       List<ARGState> abstractTrace = pPath.asStatesList();
 
       CounterexampleInfo counterexample = null;
-      BAMReachedSet targetSet = new BAMReachedSet(transfer, argReached, pPath, subgraphStatesToReachedState, rootOfSubgraph);
       try {
         pStat.Refinement.start();
-        counterexample = performRefinement0(targetSet, pPath);
+        counterexample = performRefinement(argReached, pPath);
         pStat.Refinement.stop();
       } catch (IllegalStateException e) {
         //msat_solver return -1 <=> unknown
