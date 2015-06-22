@@ -29,7 +29,6 @@ Line 0:     N0 -{highlight}-> N0
 line 11:	N5 -{intUnlock();}-> N6
 none:	N6 -{default return}-> N0
 Line 0:     N0 -{return;}-> N0
-Line 0:     N0 -{return;}-> N0
 
 Line 0:     N0 -{/*_____________________*/}-> N0
 Line 0:     N0 -{/*Without locks*/}-> N0
@@ -60,6 +59,5 @@ line 18:	N12 -{intUnlock();}-> N13
 Line 0:     N0 -{highlight}-> N0
 line 19:	N13 -{tmp = unsafe2;}-> N14
 none:	N14 -{default return}-> N7
-Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
 

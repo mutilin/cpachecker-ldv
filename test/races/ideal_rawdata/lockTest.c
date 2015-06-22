@@ -57,7 +57,6 @@ Line 0:     N0 -{highlight}-> N0
 line 51:	N30 -{queUNLOCK(q);}-> N31
 line 52:	N31 -{p = 2;}-> N32
 none:	N32 -{default return}-> N12
-Line 0:     N0 -{return;}-> N0
 
 Line 0:     N0 -{/*_____________________*/}-> N0
 Line 0:     N0 -{/*Without locks*/}-> N0
@@ -104,7 +103,6 @@ Line 0:     N0 -{highlight}-> N0
 line 51:	N30 -{queUNLOCK(q);}-> N31
 line 52:	N31 -{p = 2;}-> N32
 none:	N32 -{default return}-> N12
-Line 0:     N0 -{return;}-> N0
 
 ##f
 1
@@ -210,7 +208,6 @@ Line 0:     N0 -{highlight}-> N0
 line 51:	N30 -{queUNLOCK(q);}-> N31
 line 52:	N31 -{p = 2;}-> N32
 none:	N32 -{default return}-> N12
-Line 0:     N0 -{return;}-> N0
 
 Line 0:     N0 -{/*_____________________*/}-> N0
 Line 0:     N0 -{/*Without locks*/}-> N0
@@ -250,5 +247,4 @@ Line 0:     N0 -{highlight}-> N0
 line 51:	N30 -{queUNLOCK(q);}-> N31
 line 52:	N31 -{p = 2;}-> N32
 none:	N32 -{default return}-> N12
-Line 0:     N0 -{return;}-> N0
 

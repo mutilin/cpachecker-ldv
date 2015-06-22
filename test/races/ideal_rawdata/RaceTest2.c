@@ -25,7 +25,6 @@ line 16:	N17 -{unsafe = unsafe + 1;}-> N18
 line 16:	N18 -{__CPAchecker_TMP_0;}-> N19
 none:	N19 -{default return}-> N14
 Line 0:     N0 -{return;}-> N0
-Line 0:     N0 -{return;}-> N0
 
 Line 0:     N0 -{/*_____________________*/}-> N0
 Line 0:     N0 -{/*Without locks*/}-> N0
@@ -39,6 +38,5 @@ Line 0:     N0 -{highlight}-> N0
 line 16:	N17 -{unsafe = unsafe + 1;}-> N18
 line 16:	N18 -{__CPAchecker_TMP_0;}-> N19
 none:	N19 -{default return}-> N14
-Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
 

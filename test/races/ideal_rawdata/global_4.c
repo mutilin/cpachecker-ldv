@@ -22,7 +22,6 @@ Line 0:     N0 -{highlight}-> N0
 line 11:	N2 -{gvar = 1;}-> N3
 none:	N3 -{default return}-> N0
 Line 0:     N0 -{return;}-> N0
-Line 0:     N0 -{return;}-> N0
 
 Line 0:     N0 -{/*_____________________*/}-> N0
 Line 0:     N0 -{/*kernDispatchDisable[1]*/}-> N0
@@ -47,7 +46,6 @@ Line 0:     N0 -{/*Change states for locks kernDispatchDisable*/}-> N0
 Line 0:     N0 -{highlight}-> N0
 line 22:	N13 -{kernDispatchEnable();}-> N14
 none:	N14 -{default return}-> N8
-Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
 

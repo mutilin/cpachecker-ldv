@@ -64,5 +64,4 @@ line 23:	N4 -{Return edge from kernDispatchThread to ldv_main}-> N13
 Line 0:     N0 -{highlight}-> N0
 line 24:	N13 -{gvar = 1;}-> N14
 none:	N14 -{default return}-> N8
-Line 0:     N0 -{return;}-> N0
 

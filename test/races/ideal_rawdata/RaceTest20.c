@@ -28,7 +28,6 @@ Line 0:     N0 -{highlight}-> N0
 line 17:	N7 -{global = false_unsafe;}-> N8
 none:	N8 -{default return}-> N4
 Line 0:     N0 -{return;}-> N0
-Line 0:     N0 -{return;}-> N0
 
 Line 0:     N0 -{/*_____________________*/}-> N0
 Line 0:     N0 -{/*Without locks*/}-> N0
@@ -45,7 +44,6 @@ Line 0:     N0 -{highlight}-> N0
 line 16:	N6 -{unsafe = global;}-> N7
 line 17:	N7 -{global = false_unsafe;}-> N8
 none:	N8 -{default return}-> N4
-Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
 
 #
@@ -65,7 +63,6 @@ Line 0:     N0 -{highlight}-> N0
 line 12:	N2 -{unsafe = false_unsafe;}-> N3
 none:	N3 -{default return}-> N0
 Line 0:     N0 -{return;}-> N0
-Line 0:     N0 -{return;}-> N0
 
 Line 0:     N0 -{/*_____________________*/}-> N0
 Line 0:     N0 -{/*Without locks*/}-> N0
@@ -82,6 +79,5 @@ Line 0:     N0 -{highlight}-> N0
 line 16:	N6 -{unsafe = global;}-> N7
 line 17:	N7 -{global = false_unsafe;}-> N8
 none:	N8 -{default return}-> N4
-Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
 

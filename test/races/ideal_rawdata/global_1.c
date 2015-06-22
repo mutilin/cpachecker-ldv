@@ -45,5 +45,4 @@ Line 0:     N0 -{highlight}-> N0
 line 17:	N10 -{kernDispatchEnable();}-> N11
 none:	N11 -{default return}-> N5
 Line 0:     N0 -{return;}-> N0
-Line 0:     N0 -{return;}-> N0
 

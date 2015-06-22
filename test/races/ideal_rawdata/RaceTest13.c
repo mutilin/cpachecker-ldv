@@ -30,7 +30,6 @@ line 6:	N2 -{p = &g;}-> N3
 line 7:	N3 -{(*p)();}-> N4
 none:	N4 -{default return}-> N0
 Line 0:     N0 -{return;}-> N0
-Line 0:     N0 -{return;}-> N0
 
 Line 0:     N0 -{/*_____________________*/}-> N0
 Line 0:     N0 -{/*Without locks*/}-> N0
@@ -49,7 +48,6 @@ Line 0:     N0 -{highlight}-> N0
 line 6:	N2 -{p = &g;}-> N3
 line 7:	N3 -{(*p)();}-> N4
 none:	N4 -{default return}-> N0
-Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
 
 #
@@ -72,7 +70,6 @@ line 11:	N8 -{unsafe = unsafe + 1;}-> N9
 line 11:	N9 -{__CPAchecker_TMP_0;}-> N10
 none:	N10 -{default return}-> N5
 Line 0:     N0 -{return;}-> N0
-Line 0:     N0 -{return;}-> N0
 
 Line 0:     N0 -{/*_____________________*/}-> N0
 Line 0:     N0 -{/*Without locks*/}-> N0
@@ -86,6 +83,5 @@ Line 0:     N0 -{highlight}-> N0
 line 11:	N8 -{unsafe = unsafe + 1;}-> N9
 line 11:	N9 -{__CPAchecker_TMP_0;}-> N10
 none:	N10 -{default return}-> N5
-Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
 

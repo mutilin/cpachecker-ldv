@@ -36,5 +36,4 @@ Line 0:     N0 -{highlight}-> N0
 line 5:	N2 -{unsafe = 1;}-> N3
 none:	N3 -{default return}-> N0
 Line 0:     N0 -{return;}-> N0
-Line 0:     N0 -{return;}-> N0
 

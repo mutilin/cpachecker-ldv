@@ -31,7 +31,6 @@ line 13:	N14 -{global = global + 1;}-> N15
 line 13:	N15 -{__CPAchecker_TMP_0;}-> N16
 none:	N16 -{default return}-> N9
 Line 0:     N0 -{return;}-> N0
-Line 0:     N0 -{return;}-> N0
 
 Line 0:     N0 -{/*_____________________*/}-> N0
 Line 0:     N0 -{/*Without locks*/}-> N0
@@ -51,6 +50,5 @@ Line 0:     N0 -{highlight}-> N0
 line 13:	N14 -{global = global + 1;}-> N15
 line 13:	N15 -{__CPAchecker_TMP_0;}-> N16
 none:	N16 -{default return}-> N9
-Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
 

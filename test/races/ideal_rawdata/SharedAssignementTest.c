@@ -29,7 +29,6 @@ line 15:	N8 -{*p = &t;}-> N9
 line 18:	N9 -{*(*p) = 1;}-> N10
 none:	N10 -{default return}-> N0
 Line 0:     N0 -{return;}-> N0
-Line 0:     N0 -{return;}-> N0
 
 Line 0:     N0 -{/*_____________________*/}-> N0
 Line 0:     N0 -{/*Without locks*/}-> N0
@@ -47,6 +46,5 @@ line 12:	N7 -{*(*p) = 1;}-> N8
 line 15:	N8 -{*p = &t;}-> N9
 line 18:	N9 -{*(*p) = 1;}-> N10
 none:	N10 -{default return}-> N0
-Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
 

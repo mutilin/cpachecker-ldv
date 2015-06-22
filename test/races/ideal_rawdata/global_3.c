@@ -45,7 +45,6 @@ Line 0:     N0 -{highlight}-> N0
 line 31:	N20 -{gvar = 10;}-> N21
 none:	N21 -{default return}-> N10
 Line 0:     N0 -{return;}-> N0
-Line 0:     N0 -{return;}-> N0
 
 Line 0:     N0 -{/*_____________________*/}-> N0
 Line 0:     N0 -{/*intLock[1]*/}-> N0

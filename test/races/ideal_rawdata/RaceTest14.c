@@ -25,7 +25,6 @@ line 5:	N3 -{global = global + 1;}-> N4
 line 5:	N4 -{__CPAchecker_TMP_0;}-> N5
 none:	N5 -{default return}-> N0
 Line 0:     N0 -{return;}-> N0
-Line 0:     N0 -{return;}-> N0
 
 Line 0:     N0 -{/*_____________________*/}-> N0
 Line 0:     N0 -{/*intLock[1], kernDispatchDisable[1]*/}-> N0
@@ -58,7 +57,6 @@ Line 0:     N0 -{highlight}-> N0
 line 17:	N19 -{global = global + 1;}-> N20
 line 17:	N20 -{__CPAchecker_TMP_0;}-> N21
 none:	N21 -{default return}-> N16
-Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
 

@@ -29,7 +29,6 @@ line 16:	N11 -{global = 0;}-> N12
 none:	N12 -{default return}-> N7
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
-Line 0:     N0 -{return;}-> N0
 
 Line 0:     N0 -{/*_____________________*/}-> N0
 Line 0:     N0 -{/*Without locks*/}-> N0
@@ -46,7 +45,6 @@ line 14:	N10 -{a();}-> N11
 Line 0:     N0 -{highlight}-> N0
 line 16:	N11 -{global = 0;}-> N12
 none:	N12 -{default return}-> N7
-Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
 

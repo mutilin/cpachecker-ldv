@@ -33,7 +33,6 @@ Line 0:     N0 -{highlight}-> N0
 line 15:	N14 -{unlock();}-> N15
 none:	N15 -{default return}-> N8
 Line 0:     N0 -{return;}-> N0
-Line 0:     N0 -{return;}-> N0
 
 Line 0:     N0 -{/*_____________________*/}-> N0
 Line 0:     N0 -{/*Without locks*/}-> N0

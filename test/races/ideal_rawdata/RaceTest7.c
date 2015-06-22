@@ -46,7 +46,6 @@ Line 0:     N0 -{highlight}-> N0
 line 22:	N17 -{true_unsafe = 0;}-> N18
 none:	N18 -{default return}-> N11
 Line 0:     N0 -{return;}-> N0
-Line 0:     N0 -{return;}-> N0
 
 Line 0:     N0 -{/*_____________________*/}-> N0
 Line 0:     N0 -{/*kernDispatchDisable[1]*/}-> N0

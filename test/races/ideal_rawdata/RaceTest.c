@@ -82,7 +82,6 @@ line 94:	N87 -{global = 1;}-> N88
 none:	N88 -{default return}-> N85
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
-Line 0:     N0 -{return;}-> N0
 
 Line 0:     N0 -{/*_____________________*/}-> N0
 Line 0:     N0 -{/*Without locks*/}-> N0
@@ -152,7 +151,6 @@ none:	N86 -{Function start dummy edge}-> N87
 Line 0:     N0 -{highlight}-> N0
 line 94:	N87 -{global = 1;}-> N88
 none:	N88 -{default return}-> N85
-Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
 
@@ -226,7 +224,6 @@ line 78:	N70 -{unsafe = 1;}-> N73
 Line 0:     N0 -{highlight}-> N0
 line 79:	N73 -{true_unsafe = 0;}-> N74
 none:	N74 -{default return}-> N55
-Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
 
@@ -360,7 +357,6 @@ line 79:	N73 -{true_unsafe = 0;}-> N74
 none:	N74 -{default return}-> N55
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
-Line 0:     N0 -{return;}-> N0
 
 Line 0:     N0 -{/*_____________________*/}-> N0
 Line 0:     N0 -{/*Without locks*/}-> N0
@@ -425,7 +421,6 @@ Line 0:     N0 -{highlight}-> N0
 line 78:	N70 -{unsafe = 1;}-> N73
 line 79:	N73 -{true_unsafe = 0;}-> N74
 none:	N74 -{default return}-> N55
-Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
 Line 0:     N0 -{return;}-> N0
 

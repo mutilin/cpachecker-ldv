@@ -109,7 +109,6 @@ Line 0:     N0 -{highlight}-> N0
 line 42:	N31 -{true_unsafe = 0;}-> N32
 none:	N32 -{default return}-> N25
 Line 0:     N0 -{return;}-> N0
-Line 0:     N0 -{return;}-> N0
 
 Line 0:     N0 -{/*_____________________*/}-> N0
 Line 0:     N0 -{/*intLock[1]*/}-> N0

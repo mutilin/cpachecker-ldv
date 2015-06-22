@@ -110,5 +110,4 @@ line 29:	N28 -{global = global + 1;}-> N29
 line 29:	N29 -{__CPAchecker_TMP_0;}-> N30
 none:	N30 -{default return}-> N24
 Line 0:     N0 -{return;}-> N0
-Line 0:     N0 -{return;}-> N0
 
