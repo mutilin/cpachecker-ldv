@@ -274,11 +274,10 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     }
     if (refinementFinish) {
       iCache.removeUnusedCacheEntries();
-     // transfer.clearCaches();
       bamcpa.clearAllCaches();
+      ARGState.clearIdGenerator();
       ARGState firstState = (ARGState) pReached.getFirstState();
       CFANode firstNode = AbstractStates.extractLocation(firstState);
-      ARGState.clearIdGenerator();
       Precision precision = pReached.getPrecision(firstState);
       subtreesRemover.cleanCaches(precision);
       pReached.clear();
@@ -309,10 +308,6 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       return null;
     }
     return ARGUtils.getRandomPath(rootOfSubgraph);
-  }
-
-  void prepareStatesForRemoving(ARGPath pPath) {
-
   }
 
   @Override

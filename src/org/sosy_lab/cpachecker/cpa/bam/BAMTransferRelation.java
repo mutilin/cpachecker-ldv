@@ -176,8 +176,6 @@ public class BAMTransferRelation implements TransferRelation {
     wrappedProofChecker = wrappedChecker;
     argCache = cache;
 
-
-
     assert wrappedReducer != null;
   }
 
@@ -957,15 +955,7 @@ public class BAMTransferRelation implements TransferRelation {
     throw new AssertionError("No reachedset found for state " + state + ". Where does this state come from?");
   }
 
-  public void clearCaches() {
-    forwardPrecisionToExpandedPrecision.clear();
-    reducedToExpand.clear();
-    if (correctARGsForBlocks != null) {
-      correctARGsForBlocks.clear();
-    }
-  }
-
-  public void removeStateFromCaches(Set<ARGState> statesToRemove) {
+  public void removeStateFromAuxiliaryCaches(Set<ARGState> statesToRemove) {
     Set<ARGState> statesToRemoveFromOneCache = new HashSet<>(statesToRemove);
     for (ARGState state : statesToRemove) {
       AbstractState reducedState = abstractStateToReachedSet.get(state).getFirstState();
@@ -989,20 +979,11 @@ public class BAMTransferRelation implements TransferRelation {
       }
       abstractStateToReachedSet.remove(state);
     }
-  }
-
-  public void printCacheStatistics() {
-    System.out.println("AbstractStatesToReachedSet: " + abstractStateToReachedSet.size());
-    System.out.println("expandedToReducedCache: " + expandedToReducedCache.size());
-    System.out.println("expandedToBlockCache: " + expandedToBlockCache.size());
-    System.out.println("stateToInnerFunctionCalls: " + stateToInnerFunctionCalls.size());
-    System.out.println("multiReducedToExpand: " + multiReducedToExpand.size());
-    System.out.println("innerStateToExternStates: " + innerStateToExternStates.size());
-    System.out.println("reducedToExpand: " + reducedToExpand.size());
+    forwardPrecisionToExpandedPrecision.clear();
+    reducedToExpand.clear();
     if (correctARGsForBlocks != null) {
-      System.out.println("correctARGsForBlocks: " + correctARGsForBlocks.size());
+      correctARGsForBlocks.clear();
     }
-
   }
 
   Pair<Block, ReachedSet> getCachedReachedSet(ARGState root, Precision rootPrecision) {

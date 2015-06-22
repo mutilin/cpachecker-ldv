@@ -263,16 +263,6 @@ public class CFunctionPointerResolver {
     for (final CStatementEdge edge : visitor.functionPointerCalls) {
       replaceFunctionPointerCall((CFunctionCall)edge.getStatement(), edge);
     }
-    System.out.println("Founded function pointers: " + candidateFunctions.size());
-    System.out.println("Founded function pointer calls: " + visitor.functionPointerCalls.size());
-    System.out.println("Size of fileds mapping: " + fieldsMatching.size());
-    System.out.println("Size of global mapping: " + globalsMatching.size());
-    System.out.println("Empty function calls: " + empty + "   (" + emptyStructure + " + " + emptyLocal + " + " + emptyGlobal +")");
-    System.out.println("Total inserted:       " + totalInserted + "   (" + structure + " + " + local + " + " + global +")");
-    System.out.println("Total function calls: " + total + "   (" + structureCalls + " + " + localCalls + " + " + globalCalls +")");
-    System.out.println("Max function calls:              " + structureMax + " + " + localMax + " + " + globalMax);
-    System.out.println("Totally removed: " + totallyRemove);
-    System.out.println("Reducing function calls: " + reduce);
   }
 
   /** This Visitor collects all functioncalls for functionPointers.
@@ -317,24 +307,6 @@ public class CFunctionPointerResolver {
   /**
    * This method replaces a single function pointer call with a function call series.
    */
-  int empty = 0;
-  int reduce = 0;
-  int total = 0;
-  int structure = 0;
-  int local = 0;
-  int global = 0;
-  int totallyRemove = 0;
-  int totalInserted = 0;
-  int emptyStructure = 0;
-  int emptyLocal = 0;
-  int emptyGlobal = 0;
-  int limit = 0;
-  int localCalls = 0;
-  int globalCalls = 0;
-  int structureCalls = 0;
-  int localMax = 0;
-  int globalMax = 0;
-  int structureMax = 0;
   private void replaceFunctionPointerCall(CFunctionCall functionCall, CStatementEdge statement) {
     CFunctionCallExpression fExp = functionCall.getFunctionCallExpression();
     logger.log(Level.FINEST, "Function pointer call", fExp);
@@ -359,24 +331,12 @@ public class CFunctionPointerResolver {
       logger.logf(Level.WARNING, "%s: Function pointer %s with type %s is called,"
           + " but no possible target functions were found.",
           statement.getFileLocation(), nameExp.toASTString(), nameExp.getExpressionType().toASTString("*"));
-      empty++;
-      if (id != null) {
-        if (id instanceof StructureIdentifier) {
-          emptyStructure++;
-        } else if (id instanceof LocalVariableIdentifier) {
-          emptyLocal++;
-        } else if (id instanceof GlobalVariableIdentifier) {
-          emptyGlobal++;
-        }
-      }
       return;
     }
 
     if (id != null) {
       if (id instanceof StructureIdentifier) {
-        structure++;
         final StructureIdentifier finalId = (StructureIdentifier)id;
-        int funcSize = funcs.size();
         funcs = from(funcs).filter( new Predicate<CFunctionEntryNode>() {
           @Override
           public boolean apply(@Nullable CFunctionEntryNode pInput) {
@@ -388,20 +348,7 @@ public class CFunctionPointerResolver {
             }
           }
         }).toList();
-        reduce += (funcSize - funcs.size());
-        structureCalls += funcs.size();
-        if (funcs.size() > structureMax) {
-          structureMax = funcs.size();
-        }
-      } else if (id instanceof LocalVariableIdentifier) {
-        local++;
-        localCalls += funcs.size();
-        if (funcs.size() > localMax) {
-          localMax = funcs.size();
-        }
-        totalInserted++;
       } else if (id instanceof GlobalVariableIdentifier) {
-        global++;
         final GlobalVariableIdentifier finalId = (GlobalVariableIdentifier)id;
         funcs = from(funcs).filter( new Predicate<CFunctionEntryNode>() {
           @Override
@@ -414,19 +361,8 @@ public class CFunctionPointerResolver {
             }
           }
         }).toList();
-        globalCalls += funcs.size();
-        if (funcs.size() > globalMax) {
-          globalMax = funcs.size();
-        }
       }
     }
-    if (funcs.size() == 0) {
-      totallyRemove++;
-      return;
-    }
-    totalInserted++;
-    total += funcs.size();
-
     if (funcs.size() == 0) {
       return;
     }

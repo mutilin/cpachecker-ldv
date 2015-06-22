@@ -57,8 +57,15 @@ import com.google.common.collect.Multimap;
 
 public class MultipleARGSubtreeRemover extends ARGSubtreeRemover {
 
-  private Set<ARGState> statesForRemoveFromCache = new HashSet<>();
-  private Set<ReachedSet> setsForRemoveFromCache = new HashSet<>();
+  /* These states are linked with other sets,
+   * so these states should be removed with breaking these relations
+   */
+  private Set<ARGState> setsTotallyIntegratedInCache = new HashSet<>();
+
+  /* These states are saved only in the main BAM cache,
+   * so these states should be removed only from this one
+   */
+  private Set<ReachedSet> setsOnlyLocatedInCache = new HashSet<>();
   private Multimap<AbstractState, AbstractState> reducedToExpand;
   private Map<ARGState, Set<ARGState>> cachedSubtreesToRemove = new HashMap<>();
   private Multimap<String, ReachedSet> functionToRootState;
@@ -76,6 +83,7 @@ public class MultipleARGSubtreeRemover extends ARGSubtreeRemover {
     transfer = pTransfer;
   }
 
+  //This method is a preparation for cleaning the reached sets without removing
   @Override
   protected void removeCachedSubtree(ARGState rootState, ARGState removeElement,
       List<Precision> pNewPrecisions,
@@ -110,7 +118,7 @@ public class MultipleARGSubtreeRemover extends ARGSubtreeRemover {
     List<ARGState> tail = trimPath(pPath, affectedState);
 
     List<ARGState> callNodes = getCallNodes(tail);
-    statesForRemoveFromCache.addAll(callNodes);
+    setsTotallyIntegratedInCache.addAll(callNodes);
   }
 
   /** remove all states before pState from path */
@@ -147,7 +155,7 @@ public class MultipleARGSubtreeRemover extends ARGSubtreeRemover {
           if (reducedToExpand.containsKey(reducedState)) {
             callers = reducedToExpand.get(reducedState);
             for (AbstractState caller : callers) {
-              statesForRemoveFromCache.add((ARGState)caller);
+              setsTotallyIntegratedInCache.add((ARGState)caller);
               CallstackState previousState = AbstractStates.extractStateByType(caller, CallstackState.class).getPreviousState();
               if (previousState == null) {
                 //main function
@@ -157,11 +165,8 @@ public class MultipleARGSubtreeRemover extends ARGSubtreeRemover {
             }
             reducedToExpand.removeAll(reducedState);
           } else {
-            setsForRemoveFromCache.add(set);
+            setsOnlyLocatedInCache.add(set);
           }
-          //logger.log(Level.INFO, "Add " + caller + " to removing");
-          //tmpState is an entrance into current function
-
         }
         functionToRootState.removeAll(functionName);
       }
@@ -184,25 +189,17 @@ public class MultipleARGSubtreeRemover extends ARGSubtreeRemover {
     return new ArrayList<>(openCallElements);
   }
 
-  public void cleanCaches(Precision precision) {
+  public void cleanCaches() {
     removeCachedSubtreeTimer.start();
-    bamCache.printSizes();
-    transfer.printCacheStatistics();
 
-    for (ARGState rootState : statesForRemoveFromCache) {
+    for (ARGState rootState : setsTotallyIntegratedInCache) {
       cleanReachedSet(abstractStateToReachedSet.get(rootState));
     }
-    for (ReachedSet reachedSet : setsForRemoveFromCache) {
+    for (ReachedSet reachedSet : setsOnlyLocatedInCache) {
       cleanReachedSet(reachedSet);
     }
-    transfer.removeStateFromCaches(statesForRemoveFromCache);
-    //We can't remove it in the previous loop, because we may use information after that
-    transfer.clearCaches();
-    System.out.println("------------------------");
-    bamCache.printSizes();
-    transfer.printCacheStatistics();
-    statesForRemoveFromCache.clear();
-    //functionToRootState.clear();
+    transfer.removeStateFromAuxiliaryCaches(setsTotallyIntegratedInCache);
+    setsTotallyIntegratedInCache.clear();
     removeCachedSubtreeTimer.stop();
   }
 

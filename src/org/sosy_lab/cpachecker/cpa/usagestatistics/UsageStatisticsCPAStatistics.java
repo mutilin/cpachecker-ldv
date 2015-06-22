@@ -206,11 +206,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         }
         continue;
       }
-      /*for (UsageInfo uinfo : uset.getUsages()){
-        if (uinfo.failureFlag) {
-          totalFailureUsages++;
-        }
-      }*/
     }
   }
 

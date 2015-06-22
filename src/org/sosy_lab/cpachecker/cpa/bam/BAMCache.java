@@ -128,12 +128,6 @@ public class BAMCache {
     preciseReachedCache.remove(hash);
   }
 
-  public void printSizes() {
-    System.out.println("returnCache:           " + returnCache.size());
-    System.out.println("blockARGCache:         " + blockARGCache.size());
-    System.out.println("preciseReachedCache:   " + preciseReachedCache.size());
-  }
-
   /** This function returns a Pair of the reached-set and the returnStates for the given keys.
    * Both members of the returned Pair are NULL, if there is a cache miss.
    * For a partial cache hit we return the partly computed reached-set and NULL as returnStates. */
