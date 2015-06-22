@@ -279,7 +279,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       ARGState firstState = (ARGState) pReached.getFirstState();
       CFANode firstNode = AbstractStates.extractLocation(firstState);
       Precision precision = pReached.getPrecision(firstState);
-      subtreesRemover.cleanCaches(precision);
+      subtreesRemover.cleanCaches();
       pReached.clear();
       PredicatePrecision predicates = Precisions.extractPrecisionByType(precision, PredicatePrecision.class);
       for (SingleIdentifier id : container.getProcessedUnsafes()) {
