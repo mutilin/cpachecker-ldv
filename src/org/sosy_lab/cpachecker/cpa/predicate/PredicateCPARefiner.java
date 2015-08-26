@@ -69,7 +69,6 @@ import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.SolverException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
-import org.sosy_lab.cpachecker.util.Precisions;
 import org.sosy_lab.cpachecker.util.PrefixProvider;
 import org.sosy_lab.cpachecker.util.predicates.BlockOperator;
 import org.sosy_lab.cpachecker.util.predicates.PathChecker;
@@ -271,10 +270,6 @@ public class PredicateCPARefiner extends AbstractARGBasedRefiner implements Stat
 
       strategy.performRefinement(pReached, abstractionStatesTrace, counterexample.getInterpolants(), repeatedCounterexample);
 
-      PredicatePrecision p = Precisions.extractPrecisionByType(pReached.asReachedSet().getPrecision(pReached.asReachedSet().getFirstState()),
-          PredicatePrecision.class);
-
-      System.out.println("Total number of predicates: " + p.getLocalPredicates().size());
       BooleanFormulaManager bfmgr = fmgr.getBooleanFormulaManager();
       LinkedList<ARGState> relatedStates = new LinkedList<>();
       for (Pair<BooleanFormula, ARGState> interpolationPoint : Pair.zipList(counterexample.getInterpolants(), abstractionStatesTrace.subList(0, abstractionStatesTrace.size()-1))) {
