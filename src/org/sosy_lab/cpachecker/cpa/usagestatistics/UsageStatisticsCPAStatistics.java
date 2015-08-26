@@ -55,6 +55,7 @@ import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionReturnEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CReturnStatementEdge;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
+import org.sosy_lab.cpachecker.core.ShutdownNotifier;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
@@ -112,6 +113,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   private int trueUsagesInTrueUnsafe = 0;
   private int trueUsagesInAllUnsafes = 0;
   private int maxTrueUsages = 0;
+  private final ShutdownNotifier shutdownNotifier;
 
   private UsageContainer container;
   private BAMTransferRelation transfer;
@@ -123,10 +125,12 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
   private final String outputSuffix;
 
-  public UsageStatisticsCPAStatistics(Configuration config, LogManager pLogger, LockStatisticsTransferRelation lTransfer) throws InvalidConfigurationException{
+  public UsageStatisticsCPAStatistics(Configuration config, LogManager pLogger,
+      LockStatisticsTransferRelation lTransfer, ShutdownNotifier pShutdownNotifier) throws InvalidConfigurationException{
     config.inject(this);
     logger = pLogger;
     lockTransfer = lTransfer;
+    shutdownNotifier = pShutdownNotifier;
     //I don't know any normal way to know the output directory
     outputSuffix = outputStatFileName.getAbsolutePath().replace(outputStatFileName.getName(), "");
   }
@@ -271,7 +275,12 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   private void createVisualization(final SingleIdentifier id, final Writer pWriter) throws IOException, CPATransferException, InterruptedException {
     Writer writer = pWriter;
     final AbstractUsagePointSet uinfo = container.getUsages(id);
+    final boolean isTrueUnsafe = detector.isTrueUnsafe(uinfo);
 
+    if (shutdownNotifier.shouldShutdown() && !isTrueUnsafe) {
+      //False unsafes are lost if shutdown is occured
+      return;
+    }
     if (uinfo == null || uinfo.size() == 0) {
       return;
     }
@@ -298,7 +307,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       Path currentPath = Paths.get(outputSuffix + "ErrorPath." + createUniqueName(id) + ".txt");
       writer = Files.openOutputFile(currentPath);
     }
-    if (detector.isTrueUnsafe(uinfo)) {
+    if (isTrueUnsafe) {
     	trueUnsafes++;
       writer.append("Line 0:     N0 -{/*Is true unsafe:*/}-> N0" + "\n");
     }
