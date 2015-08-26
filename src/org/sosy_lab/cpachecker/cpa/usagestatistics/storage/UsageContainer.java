@@ -30,6 +30,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.logging.Level;
@@ -43,10 +44,13 @@ import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsState;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
+import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
+
 public class UsageContainer {
-  private final Map<SingleIdentifier, UnrefinedUsagePointSet> unrefinedStat;
+  private final SortedMap<SingleIdentifier, UnrefinedUsagePointSet> unrefinedStat;
   private final Map<UnrefinedUsagePointSet, SingleIdentifier> toId;
-  private final Map<SingleIdentifier, RefinedUsagePointSet> refinedStat;
+  private final SortedMap<SingleIdentifier, RefinedUsagePointSet> refinedStat;
 
   private final UnsafeDetector detector;
 
@@ -60,12 +64,23 @@ public class UsageContainer {
   int totalIds = 0;
 
   public UsageContainer(Configuration config, LogManager l) throws InvalidConfigurationException {
-    unrefinedStat = new TreeMap<>();
-    toId = new HashMap<>();
-    refinedStat = new TreeMap<>();
-    falseUnsafes = new TreeSet<>();
-    logger = l;
-    detector = new UnsafeDetector(config);
+    this(new TreeMap<SingleIdentifier, UnrefinedUsagePointSet>(),
+        new HashMap<UnrefinedUsagePointSet, SingleIdentifier>(),
+        new TreeMap<SingleIdentifier, RefinedUsagePointSet>(),
+        new TreeSet<SingleIdentifier>(), l, new UnsafeDetector(config));
+  }
+
+  private UsageContainer(SortedMap<SingleIdentifier, UnrefinedUsagePointSet> pUnrefinedStat,
+      Map<UnrefinedUsagePointSet, SingleIdentifier> pToId,
+      SortedMap<SingleIdentifier, RefinedUsagePointSet> pRefinedStat,
+      Set<SingleIdentifier> pFalseUnsafes, LogManager pLogger,
+      UnsafeDetector pDetector) {
+    unrefinedStat = pUnrefinedStat;
+    toId = pToId;
+    refinedStat = pRefinedStat;
+    falseUnsafes = pFalseUnsafes;
+    logger = pLogger;
+    detector = pDetector;
   }
 
   public void add(final SingleIdentifier id, final UsageInfo usage) {
@@ -214,5 +229,12 @@ public class UsageContainer {
     out.println("Total amount of refined variables:                " + generalRefinedSize);
     out.println("Total amount of refined usages:                   " + allUsages + "(avg. " +
         (generalRefinedSize == 0 ? "0" : (allUsages/generalRefinedSize)) + ")");
+  }
+
+  @Override
+  public UsageContainer clone() {
+    UsageContainer result = new UsageContainer(Maps.newTreeMap(unrefinedStat), Maps.newHashMap(toId),
+        Maps.newTreeMap(refinedStat), Sets.newHashSet(falseUnsafes), logger, detector);
+    return result;
   }
 }

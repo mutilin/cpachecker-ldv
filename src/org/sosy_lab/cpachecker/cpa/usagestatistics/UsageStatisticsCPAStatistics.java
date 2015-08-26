@@ -99,6 +99,13 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   @Option(description="print all unsafe cases in report")
   private boolean printAllUnsafeUsages = false;
 
+  /* Previous container is used when internal time limit occurs
+   * and we need to store statistics. In current one the information can be not
+   * relevant (for example not all ARG was built).
+   * It is better to store unsafes from previous iteration of refinement.
+   */
+  private UsageContainer previousContainer;
+
   private final LogManager logger;
   private int totalUsages = 0;
   private int totalNumberOfUsagePoints = 0;
@@ -133,6 +140,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     shutdownNotifier = pShutdownNotifier;
     //I don't know any normal way to know the output directory
     outputSuffix = outputStatFileName.getAbsolutePath().replace(outputStatFileName.getName(), "");
+    previousContainer = null;
   }
 
   /*
@@ -277,12 +285,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     final AbstractUsagePointSet uinfo = container.getUsages(id);
     final boolean isTrueUnsafe = detector.isTrueUnsafe(uinfo);
 
-    //Evil hack, but in normal case the analysis is terminated also with shutdown
-    //The shutdowns can be distinguished only by reasons
-    if (!shutdownNotifier.getReason().equals("Analysis terminated") && !isTrueUnsafe) {
-      //False unsafes are lost if shutdown is occured
-      return;
-    }
     if (uinfo == null || uinfo.size() == 0) {
       return;
     }
@@ -343,8 +345,20 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   @Override
   public void printStatistics(final PrintStream out, final Result result, final ReachedSet reached) {
 		printStatisticsTimer.start();
-		container = AbstractStates.extractStateByType(reached.getFirstState(), UsageStatisticsState.class)
-		    .getContainer();
+		UsageStatisticsState firstState = AbstractStates.extractStateByType(reached.getFirstState(), UsageStatisticsState.class);
+	  //Evil hack, but in normal case the analysis is terminated also with shutdown
+    //The shutdowns can be distinguished only by reasons
+		if (!shutdownNotifier.getReason().equals("Analysis terminated")) {
+      //False unsafes are lost if shutdown is occurred
+		  logger.log(Level.INFO, "Consider shutdown due to timeout, get previous usage container");
+		  if (previousContainer == null) {
+		    logger.log(Level.WARNING, "Timeout occurs during first iteration. Nothing to store.");
+		    return;
+		  }
+		  container = previousContainer;
+		} else {
+		  container = firstState.getContainer();
+		}
 		detector = container.getUnsafeDetector();
 		final int unsafeSize = container.getUnsafeSize();
 		Writer writer = null;
@@ -452,5 +466,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     String name = id.getType().toASTString(id.getName());
     name = name.replace(" ", "_");
     return name;
+  }
+
+  public void setPreviousContainer(UsageContainer pContainer) {
+    previousContainer = pContainer;
   }
 }

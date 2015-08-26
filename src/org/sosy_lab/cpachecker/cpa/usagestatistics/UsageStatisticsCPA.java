@@ -67,7 +67,7 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
   private final Reducer reducer;
   private final UsageStatisticsCPAStatistics statistics;
   //Do not remove container from CPA - we clean all states while refinement
-  private final UsageContainer container;
+  private UsageContainer container;
   private UsageStatisticsPrecision precision;
   private ShutdownNotifier shutdownNotifier;
   private final CFA cfa;
@@ -184,5 +184,11 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
   @Override
   public AbstractState getInitialState(CFANode pNode, StateSpacePartition pPartition) {
     return new UsageStatisticsState(getWrappedCpa().getInitialState(pNode, pPartition), container);
+  }
+
+  UsageContainer cloneContainer() {
+    statistics.setPreviousContainer(container);
+    container = container.clone();
+    return container;
   }
 }
