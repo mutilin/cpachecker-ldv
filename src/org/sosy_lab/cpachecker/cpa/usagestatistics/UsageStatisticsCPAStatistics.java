@@ -277,7 +277,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     final AbstractUsagePointSet uinfo = container.getUsages(id);
     final boolean isTrueUnsafe = detector.isTrueUnsafe(uinfo);
 
-    if (shutdownNotifier.shouldShutdown() && !isTrueUnsafe) {
+    //Evil hack, but in normal case the analysis is terminated also with shutdown
+    //The shutdowns can be distinguished only by reasons
+    if (!shutdownNotifier.getReason().equals("Analysis terminated") && !isTrueUnsafe) {
       //False unsafes are lost if shutdown is occured
       return;
     }
