@@ -286,12 +286,15 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
   }
 
-  private void createVisualization(final SingleIdentifier id, final Writer pWriter) throws IOException, CPATransferException, InterruptedException {
+  private void createVisualization(final SingleIdentifier id, final Writer pWriter, boolean printOnlyTrueUnsafes) throws IOException, CPATransferException, InterruptedException {
     Writer writer = pWriter;
     final AbstractUsagePointSet uinfo = container.getUsages(id);
     final boolean isTrueUnsafe = detector.isTrueUnsafe(uinfo);
 
     if (uinfo == null || uinfo.size() == 0) {
+      return;
+    }
+    if (printOnlyTrueUnsafes && !isTrueUnsafe) {
       return;
     }
     countStatistics(uinfo);
@@ -348,7 +351,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }*/
   }
 
-  public void printUnsafeRawdata(final ReachedSet reached) {
+  public void printUnsafeRawdata(final ReachedSet reached, boolean printOnlyTrueUnsafes) {
     try {
       printStatisticsTimer.start();
       UsageStatisticsState firstState = AbstractStates.extractStateByType(reached.getFirstState(), UsageStatisticsState.class);
@@ -364,7 +367,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         logger.log(Level.FINEST, "Processing unsafe identifiers");
         Iterator<SingleIdentifier> unsafeIterator = container.getUnsafeIterator();
         while (unsafeIterator.hasNext()) {
-          createVisualization(unsafeIterator.next(), writer);
+          createVisualization(unsafeIterator.next(), writer, printOnlyTrueUnsafes);
         }
         if (writer != null) {
           writer.close();
@@ -410,7 +413,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   @Override
   public void printStatistics(final PrintStream out, final Result result, final ReachedSet reached) {
     //should be the first, as it set the container
-    printUnsafeRawdata(reached);
+    printUnsafeRawdata(reached, false);
     int unsafeSize = container.getFalseUnsafeSize();
     out.println("Amount of unsafes:                                         " + unsafeSize);
     out.println("Amount of unsafe usages:                                   " + totalUsages + "(avg. " +
