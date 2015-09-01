@@ -131,9 +131,10 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
   int lastTrueUnsafes = -1;
   @Override
   public boolean performRefinement(ReachedSet pReached) throws CPAException, InterruptedException {
-    final UsageContainer container = CPAs.retrieveCPA(cpa, UsageStatisticsCPA.class).cloneContainer();
+    CPAs.retrieveCPA(cpa, UsageStatisticsCPA.class).getStats().printUnsafeRawdata(pReached);
 
     iCache.initKeySet();
+    UsageContainer container = AbstractStates.extractStateByType(pReached.getFirstState(), UsageStatisticsState.class).getContainer();
     final RefineableUsageComputer computer = new RefineableUsageComputer(container, logger);
     BAMPredicateCPA bamcpa = CPAs.retrieveCPA(cpa, BAMPredicateCPA.class);
     assert bamcpa != null;

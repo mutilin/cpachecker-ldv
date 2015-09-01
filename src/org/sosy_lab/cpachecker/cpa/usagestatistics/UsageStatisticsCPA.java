@@ -185,10 +185,4 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
   public AbstractState getInitialState(CFANode pNode, StateSpacePartition pPartition) {
     return new UsageStatisticsState(getWrappedCpa().getInitialState(pNode, pPartition), container);
   }
-
-  UsageContainer cloneContainer() {
-    statistics.setPreviousContainer(container);
-    container = container.clone();
-    return container;
-  }
 }

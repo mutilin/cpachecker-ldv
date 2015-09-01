@@ -56,6 +56,9 @@ public class UsageContainer {
 
   private final Set<SingleIdentifier> falseUnsafes;
 
+  //Only for statistics
+  private Set<SingleIdentifier> initialSet = null;
+
   private final LogManager logger;
 
   public Timer resetTimer = new Timer();
@@ -122,6 +125,10 @@ public class UsageContainer {
         RefinedUsagePointSet tmpList = refinedStat.get(id);
         unsafeUsages += tmpList.size();
       }
+      if (initialSet == null) {
+        assert refinedStat.isEmpty();
+        initialSet = Sets.newHashSet(unrefinedStat.keySet());
+      }
     }
   }
 
@@ -132,11 +139,19 @@ public class UsageContainer {
     toId.remove(uset);
   }
 
-  public Iterator<SingleIdentifier> getUnsafeIterator() {
+  public Set<SingleIdentifier> getUnsafes() {
     getUnsafesIfNecessary();
     Set<SingleIdentifier> result = new TreeSet<>(unrefinedStat.keySet());
     result.addAll(refinedStat.keySet());
-    return result.iterator();
+    return result;
+  }
+
+  public Set<SingleIdentifier> getInitialUnsafes() {
+    return initialSet;
+  }
+
+  public Iterator<SingleIdentifier> getUnsafeIterator() {
+    return getUnsafes().iterator();
   }
 
   public Iterator<SingleIdentifier> getUnrefinedUnsafeIterator() {
@@ -160,6 +175,10 @@ public class UsageContainer {
 
   public int getFalseUnsafeSize() {
     return falseUnsafes.size();
+  }
+
+  public Set<SingleIdentifier> getFalseUnsafes() {
+    return falseUnsafes;
   }
 
   public UnsafeDetector getUnsafeDetector() {
