@@ -149,6 +149,22 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     outputSuffix = outputStatFileName.getAbsolutePath().replace(outputStatFileName.getName(), "");
   }
 
+  private void resetAllCounters() {
+    totalUsages = 0;
+    totalNumberOfUsagePoints = 0;
+    maxNumberOfUsagePoints = 0;
+    maxNumberOfUsages = 0;
+
+    totalFailureUsages = 0;
+    totalFailureUnsafes = 0;
+    totalUnsafesWithFailureUsages = 0;
+    totalUnsafesWithFailureUsageInPair = 0;
+    trueUnsafes = 0;
+    trueUsagesInTrueUnsafe = 0;
+    trueUsagesInAllUnsafes = 0;
+    maxTrueUsages = 0;
+  }
+
   /*
    * looks through all unsafe cases of current identifier and find the example of two lines with different locks,
    * one of them must be 'write'
@@ -412,9 +428,10 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
   @Override
   public void printStatistics(final PrintStream out, final Result result, final ReachedSet reached) {
+    resetAllCounters();
     //should be the first, as it set the container
     printUnsafeRawdata(reached, false);
-    int unsafeSize = container.getFalseUnsafeSize();
+    int unsafeSize = container.getUnsafeSize();
     out.println("Amount of unsafes:                                         " + unsafeSize);
     out.println("Amount of unsafe usages:                                   " + totalUsages + "(avg. " +
         (unsafeSize == 0 ? "0" : (totalUsages/unsafeSize))

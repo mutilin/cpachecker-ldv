@@ -58,6 +58,7 @@ public class UsageContainer {
 
   //Only for statistics
   private Set<SingleIdentifier> initialSet = null;
+  private int initialUsages;
 
   private final LogManager logger;
 
@@ -110,6 +111,7 @@ public class UsageContainer {
       unsafeUsages = 0;
       Set<SingleIdentifier> toDelete = new HashSet<>();
       for (SingleIdentifier id : unrefinedStat.keySet()) {
+
         UnrefinedUsagePointSet tmpList = unrefinedStat.get(id);
         if (detector.isUnsafe(tmpList)) {
           unsafeUsages += tmpList.size();
@@ -128,6 +130,7 @@ public class UsageContainer {
       if (initialSet == null) {
         assert refinedStat.isEmpty();
         initialSet = Sets.newHashSet(unrefinedStat.keySet());
+        initialUsages = unsafeUsages;
       }
     }
   }
@@ -248,6 +251,8 @@ public class UsageContainer {
     out.println("Total amount of refined variables:                " + generalRefinedSize);
     out.println("Total amount of refined usages:                   " + allUsages + "(avg. " +
         (generalRefinedSize == 0 ? "0" : (allUsages/generalRefinedSize)) + ")");
+    out.println("Initial amount of unsafes (before refinement):    " + initialSet.size());
+    out.println("Initial amount of usages (before refinement):     " + initialUsages);
   }
 
   @Override

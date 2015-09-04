@@ -71,6 +71,7 @@ import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 import com.google.common.base.Function;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
+import com.google.common.collect.Sets;
 
 
 public class UsageStatisticsRefiner extends BAMPredicateRefiner implements StatisticsProvider {
@@ -206,12 +207,14 @@ top:while ((target = computer.getNextRefineableUsage()) != null) {
           refinedStates.add(interpolants);
           pStat.CacheInterpolantsTime.stop();
           pStat.CacheTime.start();
-          if (iCache.contains(target, formulas, abstractTrace)) {
-          	computer.setResultOfRefinement(target, true, pPath.getInnerEdges());
+          if (iCache.contains(target, Sets.newHashSet(pPath.asEdgesList()))) {
+            computer.setResultOfRefinement(target, true, pPath.getInnerEdges());
 		        logger.log(Level.WARNING, "Interpolants are repeated, consider " + target + " as true");
             target.failureFlag = true;
           } else {
+            assert (iCache.contains(target, formulas, abstractTrace)) : "Different verdicts false-true! Attention!! ALARM!!! AAAA!!!!";
             iCache.add(target, formulas, abstractTrace);
+            iCache.add(target, Sets.newHashSet(pPath.asEdgesList()));
           	computer.setResultOfRefinement(target, false, pPath.getInnerEdges());
           }
           pStat.CacheTime.stop();
