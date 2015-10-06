@@ -46,6 +46,9 @@ public class VariableSkipper {
   @Option(description = "variables, which will be filtered by function location")
   private Set<String> byFunction = null;
 
+  @Option(description = "variables, which will be filtered by function prefix")
+  private Set<String> byFunctionPrefix = null;
+
   public VariableSkipper(Configuration pConfig) throws InvalidConfigurationException {
     pConfig.inject(this);
   }
@@ -71,6 +74,14 @@ public class VariableSkipper {
     String functionName = usage.getLine().getNode().getFunctionName();
     if (byFunction != null && byFunction.contains(functionName)) {
       return true;
+    }
+
+    if (byFunctionPrefix != null) {
+      for (String prefix : byFunctionPrefix) {
+        if (functionName.contains(prefix)) {
+          return true;
+        }
+      }
     }
 
     return false;
