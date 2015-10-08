@@ -40,6 +40,9 @@ public class VariableSkipper {
   @Option(description = "variables, which will be filtered by its name")
   private Set<String> byName = null;
 
+  @Option(description = "variables, which will be filtered by its name prefix")
+  private Set<String> byNamePrefix = null;
+
   @Option(description = "variables, which will be filtered by its type")
   private Set<String> byType = null;
 
@@ -78,7 +81,7 @@ public class VariableSkipper {
 
     if (byFunctionPrefix != null) {
       for (String prefix : byFunctionPrefix) {
-        if (functionName.contains(prefix)) {
+        if (functionName.startsWith(prefix)) {
           return true;
         }
       }
@@ -88,9 +91,18 @@ public class VariableSkipper {
   }
 
   private boolean checkId(SingleIdentifier singleId) {
+    String varName = singleId.getName();
+
     if (byName != null) {
-      if (byName.contains(singleId.getName())) {
+      if (byName.contains(varName)) {
         return true;
+      }
+    }
+    if (byNamePrefix != null) {
+      for (String prefix : byNamePrefix) {
+        if (varName.startsWith(prefix)) {
+          return true;
+        }
       }
     }
     if (byType != null) {
