@@ -76,12 +76,16 @@ import org.sosy_lab.cpachecker.util.identifiers.ReturnIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 import com.google.common.base.Optional;
+import com.google.common.collect.Sets;
 
 @Options(prefix="cpa.local")
 public class LocalTransferRelation implements TransferRelation {
 
   @Option(name="allocatefunctions", description = "functions, which allocate new free memory")
   private Set<String> allocate;
+
+  @Option(name="allocateFunctionPattern", description = "functions, which allocate new free memory")
+  private Set<String> allocatePattern = Sets.newHashSet("alloc");
 
   @Option(name="conservativefunctions", description = "functions, which allocate new free memory")
   private Set<String> conservationOfSharedness;
@@ -201,6 +205,14 @@ public class LocalTransferRelation implements TransferRelation {
       CFunctionCallAssignmentStatement assignExp = ((CFunctionCallAssignmentStatement)exprOnSummary);
       String funcName = assignExp.getRightHandSide().getFunctionNameExpression().toASTString();
       boolean isAllocatedFunction = (allocate == null ? false : allocate.contains(funcName));
+      if (!isAllocatedFunction) {
+        for (String pattern : allocatePattern) {
+          if (funcName.contains(pattern)) {
+            isAllocatedFunction = true;
+            break;
+          }
+        }
+      }
       boolean isConservativeFunction = (conservationOfSharedness == null ? false : conservationOfSharedness.contains(funcName));
 
       CExpression op1 = assignExp.getLeftHandSide();
@@ -210,7 +222,11 @@ public class LocalTransferRelation implements TransferRelation {
       AbstractIdentifier returnId = createId(op1, dereference);
 
       if (isAllocatedFunction) {
-        int num = allocateInfo.get(funcName);
+        Integer num = allocateInfo.get(funcName);
+        if (num == null) {
+          //Means that we use pattern
+          num = 0;
+        }
         if (num == 0) {
           //local data are returned from function
           if (!returnId.isGlobal()) {
@@ -338,10 +354,22 @@ public class LocalTransferRelation implements TransferRelation {
       } else if (right instanceof CFunctionCallExpression) {
 	    	String funcName = ((CFunctionCallExpression)right).getFunctionNameExpression().toASTString();
 	    	boolean isAllocatedFunction = (allocate == null ? false : allocate.contains(funcName));
+	      if (!isAllocatedFunction) {
+	        for (String pattern : allocatePattern) {
+	          if (funcName.contains(pattern)) {
+	            isAllocatedFunction = true;
+	            break;
+	          }
+	        }
+	      }
 	    	boolean isConservativeFunction = (conservationOfSharedness == null ? false : conservationOfSharedness.contains(funcName));
 
 	    	if (isAllocatedFunction) {
-	    		int num = allocateInfo.get(funcName);
+	    		Integer num = allocateInfo.get(funcName);
+	        if (num == null) {
+	          //Means that we use pattern
+	          num = 0;
+	        }
 	        if (num == 0) {
 	          //local data are returned from function
 	          if (!leftId.isGlobal()) {
