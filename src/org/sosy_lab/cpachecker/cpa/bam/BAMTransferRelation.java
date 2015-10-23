@@ -986,6 +986,18 @@ public class BAMTransferRelation implements TransferRelation {
     }
   }
 
+  public void cleanCaches() {
+    argCache.clear();
+    abstractStateToReachedSet.clear();
+    expandedToReducedCache.clear();
+    expandedToBlockCache.clear();
+    forwardPrecisionToExpandedPrecision.clear();
+    reducedToExpand.clear();
+    if (correctARGsForBlocks != null) {
+      correctARGsForBlocks.clear();
+    }
+  }
+
   Pair<Block, ReachedSet> getCachedReachedSet(ARGState root, Precision rootPrecision) {
     CFANode rootNode = extractLocation(root);
     Block rootSubtree = partitioning.getBlockForCallNode(rootNode);
@@ -1219,4 +1231,5 @@ public class BAMTransferRelation implements TransferRelation {
 
     return multipleARGRemover;
   }
+
 }

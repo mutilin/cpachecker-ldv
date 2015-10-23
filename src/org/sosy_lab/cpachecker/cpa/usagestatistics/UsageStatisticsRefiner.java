@@ -39,6 +39,8 @@ import javax.annotation.Nullable;
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
+import org.sosy_lab.common.configuration.Option;
+import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.io.PathTemplate;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
@@ -81,7 +83,7 @@ import com.google.common.base.Function;
 import com.google.common.base.Predicates;
 import com.google.common.collect.Sets;
 
-
+@Options(prefix="cpa.usagestatistics")
 public class UsageStatisticsRefiner extends BAMPredicateRefiner implements StatisticsProvider {
 
   private class Stats implements Statistics {
@@ -116,16 +118,22 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
   final Stats pStat = new Stats();
   private final ConfigurableProgramAnalysis cpa;
   private final LogManager logger;
-  private final int NUMBER_FOR_RESET_PRECISION;
+
+  @Option(name="precisionReset", description="The value of marked unsafes, after which the precision should be cleaned")
+  private int precisionReset = Integer.MAX_VALUE;
+
   private UsageStatisticsRefinementStrategy strategy;
   private Set<List<Integer>> refinedStates;
   private final InterpolantCache iCache = new InterpolantCache();
 
-  public UsageStatisticsRefiner(ConfigurableProgramAnalysis pCpa, UsageStatisticsRefinementStrategy pStrategy) throws CPAException, InvalidConfigurationException {
+  @Option(name="totalARGCleaning", description="clean all ARG or try to reuse some parts of it (memory consuming)")
+  private boolean totalARGCleaning = false;
+
+  public UsageStatisticsRefiner(Configuration pConfig, ConfigurableProgramAnalysis pCpa, UsageStatisticsRefinementStrategy pStrategy) throws CPAException, InvalidConfigurationException {
     super(pCpa, pStrategy);
+    pConfig.inject(this);
     cpa = pCpa;
     UsageStatisticsCPA UScpa = CPAs.retrieveCPA(pCpa, UsageStatisticsCPA.class);
-    NUMBER_FOR_RESET_PRECISION = UScpa.getThePrecisionCleaningLimit();
     logger = UScpa.getLogger();
     strategy = pStrategy;
   }
@@ -153,7 +161,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
                                           predicateCpa.getStaticRefiner(),
                                           refinedStates);
 
-    UsageStatisticsRefiner result = new UsageStatisticsRefiner(pCpa, strategy);
+    UsageStatisticsRefiner result = new UsageStatisticsRefiner(predicateCpa.getConfiguration(), pCpa, strategy);
     result.refinedStates = refinedStates;
     return result;
   }
@@ -246,9 +254,11 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
           iCache.add(target, formulas, abstractTrace);
           iCache.add(target, Sets.newHashSet(pPath.asEdgesList()));
         	computer.setResultOfRefinement(target, false, pPath.getInnerEdges());
-        	subtreesRemover.addStateForRemoving((ARGState)target.getKeyState());
-        	for (ARGState state : strategy.lastAffectedStates) {
-        	  subtreesRemover.addStateForRemoving(state);
+        	if (!totalARGCleaning) {
+          	subtreesRemover.addStateForRemoving((ARGState)target.getKeyState());
+          	for (ARGState state : strategy.lastAffectedStates) {
+          	  subtreesRemover.addStateForRemoving(state);
+          	}
         	}
         }
         pStat.CacheTime.stop();
@@ -263,7 +273,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       lastTrueUnsafes = newTrueUnsafeSize;
     }
     counter += (newTrueUnsafeSize -lastTrueUnsafes);
-    if (counter >= NUMBER_FOR_RESET_PRECISION) {
+    if (counter >= precisionReset) {
       Precision p = pReached.getPrecision(pReached.getFirstState());
       PredicatePrecision predicates = Precisions.extractPrecisionByType(p, PredicatePrecision.class);
       System.out.println("Clean: " + predicates.getLocalPredicates().size());
@@ -280,7 +290,11 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       ARGState firstState = (ARGState) pReached.getFirstState();
       CFANode firstNode = AbstractStates.extractLocation(firstState);
       Precision precision = pReached.getPrecision(firstState);
-      subtreesRemover.cleanCaches();
+      if (totalARGCleaning) {
+        transfer.cleanCaches();
+      } else {
+        subtreesRemover.cleanCaches();
+      }
       pReached.clear();
       PredicatePrecision predicates = Precisions.extractPrecisionByType(precision, PredicatePrecision.class);
       for (SingleIdentifier id : container.getProcessedUnsafes()) {

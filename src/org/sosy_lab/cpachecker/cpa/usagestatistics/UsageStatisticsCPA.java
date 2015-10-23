@@ -27,12 +27,10 @@ import java.util.Collection;
 
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
-import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
-import org.sosy_lab.cpachecker.core.ShutdownNotifier;
 import org.sosy_lab.cpachecker.core.defaults.AbstractSingleWrapperCPA;
 import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
 import org.sosy_lab.cpachecker.core.defaults.MergeSepOperator;
@@ -69,7 +67,6 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
   //Do not remove container from CPA - we clean all states while refinement
   private UsageContainer container;
   private UsageStatisticsPrecision precision;
-  private ShutdownNotifier shutdownNotifier;
   private final CFA cfa;
   private final LogManager logger;
 
@@ -77,20 +74,16 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
     return AutomaticCPAFactory.forType(UsageStatisticsCPA.class);
   }
 
-  @Option(name="precisionReset", description="The value of marked unsafes, after which the precision should be cleaned")
-  private int precisionReset = Integer.MAX_VALUE;
-
   private String outputFileName = "output/localsave";
 
   private UsageStatisticsCPA(ConfigurableProgramAnalysis pCpa, CFA pCfa, LogManager pLogger,
-      Configuration pConfig, ShutdownNotifier pShutdownNotifier) throws InvalidConfigurationException {
+      Configuration pConfig) throws InvalidConfigurationException {
     super(pCpa);
     pConfig.inject(this);
     this.cfa = pCfa;
     this.abstractDomain = new UsageStatisticsDomain(pCpa.getAbstractDomain());
     this.mergeOperator = initializeMergeOperator();
     this.stopOperator = initializeStopOperator();
-    this.shutdownNotifier = pShutdownNotifier;
 
     LockStatisticsCPA LockCPA = (CPAs.retrieveCPA(this, LockStatisticsCPA.class));
     this.statistics = new UsageStatisticsCPAStatistics(pConfig, pLogger,
@@ -175,10 +168,6 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
 
   public LogManager getLogger() {
     return logger;
-  }
-
-  public int getThePrecisionCleaningLimit() {
-    return precisionReset;
   }
 
   @Override
