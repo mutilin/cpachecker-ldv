@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Set;
 
 import org.sosy_lab.common.Pair;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
@@ -22,6 +23,7 @@ import com.google.common.base.Predicates;
 
 public class InterpolantCache {
 	private Map<UsageInfo, List<Pair<BooleanFormula, CFANode>>> visitedFunctions = new HashMap<>();
+	private Map<UsageInfo, Set<CFAEdge>> visitedPaths = new HashMap<>();
   private Set<UsageInfo> unusedKeySet;
 
 	public void initKeySet() {
@@ -31,7 +33,16 @@ public class InterpolantCache {
 	public void removeUnusedCacheEntries() {
 	  for (UsageInfo uinfo : unusedKeySet) {
 	    visitedFunctions.remove(uinfo);
+	    visitedPaths.remove(uinfo);
 	  }
+	}
+
+	public void add(UsageInfo pUinfo, Set<CFAEdge> path) {
+	  visitedPaths.put(pUinfo, path);
+	}
+
+	public boolean contains(UsageInfo pUinfo, Set<CFAEdge> path) {
+	  return path.equals(visitedPaths.get(pUinfo));
 	}
 
   public void add(UsageInfo pUinfo, List<BooleanFormula> interpolants, List<ARGState> points) {
@@ -56,6 +67,7 @@ public class InterpolantCache {
   public void reset() {
     visitedFunctions.clear();
     unusedKeySet = Collections.emptySet();
+    visitedPaths.clear();
   }
 
   private List<CFANode> transformToCFANodes(List<ARGState> points) {

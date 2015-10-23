@@ -99,6 +99,8 @@ public class UnsafeDetector {
       UnrefinedUsagePointSet unrefinedSet = (UnrefinedUsagePointSet) set;
       Pair<UsagePoint, UsagePoint> result = getUnsafePair(unrefinedSet.getTopUsages());
 
+      assert result != null;
+
       return Pair.of(unrefinedSet.getUsageInfo(result.getFirst()).getOneExample(),
           unrefinedSet.getUsageInfo(result.getSecond()).getOneExample());
     }

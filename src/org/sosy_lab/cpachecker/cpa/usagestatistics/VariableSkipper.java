@@ -40,14 +40,23 @@ public class VariableSkipper {
   @Option(description = "variables, which will be filtered by its name")
   private Set<String> byName = null;
 
+  @Option(description = "variables, which will be filtered by its name prefix")
+  private Set<String> byNamePrefix = null;
+
   @Option(description = "variables, which will be filtered by its type")
   private Set<String> byType = null;
+
+  @Option(description = "variables, which will be filtered by function location")
+  private Set<String> byFunction = null;
+
+  @Option(description = "variables, which will be filtered by function prefix")
+  private Set<String> byFunctionPrefix = null;
 
   public VariableSkipper(Configuration pConfig) throws InvalidConfigurationException {
     pConfig.inject(this);
   }
 
-  public boolean shouldBeSkipped(AbstractIdentifier id) {
+  public boolean shouldBeSkipped(AbstractIdentifier id, UsageInfo usage) {
 
     if (id instanceof SingleIdentifier) {
       SingleIdentifier singleId = (SingleIdentifier) id;
@@ -63,13 +72,37 @@ public class VariableSkipper {
         }
       }
     }
+
+    //Check special functions like INIT_LIST_HEAD, in which we should skip all usages
+    String functionName = usage.getLine().getNode().getFunctionName();
+    if (byFunction != null && byFunction.contains(functionName)) {
+      return true;
+    }
+
+    if (byFunctionPrefix != null) {
+      for (String prefix : byFunctionPrefix) {
+        if (functionName.startsWith(prefix)) {
+          return true;
+        }
+      }
+    }
+
     return false;
   }
 
   private boolean checkId(SingleIdentifier singleId) {
+    String varName = singleId.getName();
+
     if (byName != null) {
-      if (byName.contains(singleId.getName())) {
+      if (byName.contains(varName)) {
         return true;
+      }
+    }
+    if (byNamePrefix != null) {
+      for (String prefix : byNamePrefix) {
+        if (varName.startsWith(prefix)) {
+          return true;
+        }
       }
     }
     if (byType != null) {

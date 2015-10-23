@@ -74,6 +74,8 @@ import org.sosy_lab.cpachecker.util.identifiers.LocalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.StructureFieldIdentifier;
 
+import com.google.common.collect.Sets;
+
 @Options(prefix="cpa.usagestatistics")
 public class UsageStatisticsCPAStatistics implements Statistics {
 
@@ -89,8 +91,21 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   @FileOption(FileOption.Type.OUTPUT_FILE)
   private Path outputStatFileName = Paths.get("unsafe_rawdata");
 
+  @Option(name="falseUnsafesOutput", description="path to write results")
+  @FileOption(FileOption.Type.OUTPUT_FILE)
+  private Path outputFalseUnsafes = Paths.get("FalseUnsafes");
+
   @Option(description="print all unsafe cases in report")
   private boolean printAllUnsafeUsages = false;
+
+  @Option(description="print information about false unsafes")
+  private boolean printFalseUnsafes = false;
+
+  /* Previous container is used when internal time limit occurs
+   * and we need to store statistics. In current one the information can be not
+   * relevant (for example not all ARG was built).
+   * It is better to store unsafes from previous iteration of refinement.
+   */
 
   private final LogManager logger;
   private int totalUsages = 0;
@@ -106,6 +121,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   private int trueUsagesInTrueUnsafe = 0;
   private int trueUsagesInAllUnsafes = 0;
   private int maxTrueUsages = 0;
+ // private final ShutdownNotifier shutdownNotifier;
 
   private UsageContainer container;
   private BAMTransferRelation transfer;
@@ -117,12 +133,29 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
   private final String outputSuffix;
 
-  public UsageStatisticsCPAStatistics(Configuration config, LogManager pLogger, LockStatisticsTransferRelation lTransfer) throws InvalidConfigurationException{
+  public UsageStatisticsCPAStatistics(Configuration config, LogManager pLogger,
+      LockStatisticsTransferRelation lTransfer) throws InvalidConfigurationException{
     config.inject(this);
     logger = pLogger;
     lockTransfer = lTransfer;
     //I don't know any normal way to know the output directory
     outputSuffix = outputStatFileName.getAbsolutePath().replace(outputStatFileName.getName(), "");
+  }
+
+  private void resetAllCounters() {
+    totalUsages = 0;
+    totalNumberOfUsagePoints = 0;
+    maxNumberOfUsagePoints = 0;
+    maxNumberOfUsages = 0;
+
+    totalFailureUsages = 0;
+    totalFailureUnsafes = 0;
+    totalUnsafesWithFailureUsages = 0;
+    totalUnsafesWithFailureUsageInPair = 0;
+    trueUnsafes = 0;
+    trueUsagesInTrueUnsafe = 0;
+    trueUsagesInAllUnsafes = 0;
+    maxTrueUsages = 0;
   }
 
   /*
@@ -246,11 +279,15 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
   }
 
-  private void createVisualization(final SingleIdentifier id, final Writer pWriter) throws IOException, CPATransferException, InterruptedException {
+  private void createVisualization(final SingleIdentifier id, final Writer pWriter, boolean printOnlyTrueUnsafes) throws IOException, CPATransferException, InterruptedException {
     Writer writer = pWriter;
     final AbstractUsagePointSet uinfo = container.getUsages(id);
+    final boolean isTrueUnsafe = detector.isTrueUnsafe(uinfo);
 
     if (uinfo == null || uinfo.size() == 0) {
+      return;
+    }
+    if (printOnlyTrueUnsafes && !isTrueUnsafe) {
       return;
     }
     countStatistics(uinfo);
@@ -276,7 +313,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       Path currentPath = Paths.get(outputSuffix + "ErrorPath." + createUniqueName(id) + ".txt");
       writer = Files.openOutputFile(currentPath);
     }
-    if (detector.isTrueUnsafe(uinfo)) {
+    if (isTrueUnsafe) {
     	trueUnsafes++;
       writer.append("Line 0:     N0 -{/*Is true unsafe:*/}-> N0" + "\n");
     }
@@ -307,43 +344,71 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }*/
   }
 
+  public void printUnsafeRawdata(final ReachedSet reached, boolean printOnlyTrueUnsafes) {
+    try {
+      printStatisticsTimer.start();
+      UsageStatisticsState firstState = AbstractStates.extractStateByType(reached.getFirstState(), UsageStatisticsState.class);
+      container = firstState.getContainer();
+      detector = container.getUnsafeDetector();
+      Writer writer = null;
+      try {
+        if (outputFileType == OutputFileType.SINGLE_FILE) {
+          writer = Files.openOutputFile(outputStatFileName);
+          logger.log(Level.FINE, "Print statistics about unsafe cases");
+          printCountStatistics(writer, container.getUnsafeIterator());
+        }
+        logger.log(Level.FINEST, "Processing unsafe identifiers");
+        Iterator<SingleIdentifier> unsafeIterator = container.getUnsafeIterator();
+        while (unsafeIterator.hasNext()) {
+          createVisualization(unsafeIterator.next(), writer, printOnlyTrueUnsafes);
+        }
+        if (writer != null) {
+          writer.close();
+        }
+      } catch(FileNotFoundException e) {
+        logger.log(Level.SEVERE, "File " + outputStatFileName + " not found");
+        return;
+      } catch (IOException e) {
+        logger.log(Level.SEVERE, e.getMessage());
+        return;
+      } catch (CPATransferException e) {
+        logger.log(Level.SEVERE, "Exception during visualization");
+        e.printStackTrace();
+        return;
+      } catch (InterruptedException e) {
+        logger.log(Level.SEVERE, "Printing statistics was interrupted");
+        e.printStackTrace();
+        return;
+      }
+      if (printFalseUnsafes) {
+        Set<SingleIdentifier> currentUnsafes = container.getUnsafes();
+        Set<SingleIdentifier> initialUnsafes = container.getInitialUnsafes();
+        Set<SingleIdentifier> falseUnsafes = Sets.difference(initialUnsafes, currentUnsafes);
+
+        if (falseUnsafes.size() > 0) {
+          try {
+            writer = Files.openOutputFile(outputFalseUnsafes);
+            logger.log(Level.FINE, "Print statistics about false unsafes");
+            for (SingleIdentifier id : falseUnsafes) {
+              writer.append(createUniqueName(id) + "\n");
+            }
+            writer.close();
+          } catch (IOException e) {
+            logger.log(Level.SEVERE, e.getMessage());
+          }
+        }
+      }
+    } finally {
+      printStatisticsTimer.stop();
+    }
+  }
+
   @Override
   public void printStatistics(final PrintStream out, final Result result, final ReachedSet reached) {
-		printStatisticsTimer.start();
-		container = AbstractStates.extractStateByType(reached.getFirstState(), UsageStatisticsState.class)
-		    .getContainer();
-		detector = container.getUnsafeDetector();
-		final int unsafeSize = container.getUnsafeSize();
-		Writer writer = null;
-    try {
-      if (outputFileType == OutputFileType.SINGLE_FILE) {
-        writer = Files.openOutputFile(outputStatFileName);
-        logger.log(Level.FINE, "Print statistics about unsafe cases");
-        printCountStatistics(writer, container.getUnsafeIterator());
-      }
-      logger.log(Level.FINEST, "Processing unsafe identifiers");
-      Iterator<SingleIdentifier> unsafeIterator = container.getUnsafeIterator();
-      while (unsafeIterator.hasNext()) {
-        createVisualization(unsafeIterator.next(), writer);
-      }
-      if (writer != null) {
-        writer.close();
-      }
-    } catch(FileNotFoundException e) {
-      logger.log(Level.SEVERE, "File " + outputStatFileName + " not found");
-      return;
-    } catch (IOException e) {
-      logger.log(Level.SEVERE, e.getMessage());
-      return;
-    } catch (CPATransferException e) {
-      logger.log(Level.SEVERE, "Exception during visualization");
-      e.printStackTrace();
-      return;
-    } catch (InterruptedException e) {
-      logger.log(Level.SEVERE, "Printing statistics was interrupted");
-      e.printStackTrace();
-      return;
-    }
+    resetAllCounters();
+    //should be the first, as it set the container
+    printUnsafeRawdata(reached, false);
+    int unsafeSize = container.getUnsafeSize();
     out.println("Amount of unsafes:                                         " + unsafeSize);
     out.println("Amount of unsafe usages:                                   " + totalUsages + "(avg. " +
         (unsafeSize == 0 ? "0" : (totalUsages/unsafeSize))
@@ -363,7 +428,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     container.printUsagesStatistics(out);
     out.println("Time for transfer relation:         " + transferRelationTimer);
     out.println("Time for reseting unsafes:          " + container.resetTimer);
-    printStatisticsTimer.stop();
     out.println("Time for printing statistics:       " + printStatisticsTimer);
   }
 

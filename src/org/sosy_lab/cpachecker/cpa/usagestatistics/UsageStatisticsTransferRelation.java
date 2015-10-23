@@ -474,7 +474,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       singleId = (SingleIdentifier) state.getLinks(id);
     }
 
-    if (varSkipper.shouldBeSkipped(singleId)) {
+    if (varSkipper.shouldBeSkipped(singleId, usage)) {
       return;
     }
 

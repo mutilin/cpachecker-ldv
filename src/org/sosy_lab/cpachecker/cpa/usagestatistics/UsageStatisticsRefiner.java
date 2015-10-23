@@ -79,6 +79,7 @@ import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 
 import com.google.common.base.Function;
 import com.google.common.base.Predicates;
+import com.google.common.collect.Sets;
 
 
 public class UsageStatisticsRefiner extends BAMPredicateRefiner implements StatisticsProvider {
@@ -162,10 +163,10 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
   int lastTrueUnsafes = -1;
   @Override
   public boolean performRefinement(ReachedSet pReached) throws CPAException, InterruptedException {
-    final UsageContainer container =
-        AbstractStates.extractStateByType(pReached.getFirstState(), UsageStatisticsState.class).getContainer();
+    CPAs.retrieveCPA(cpa, UsageStatisticsCPA.class).getStats().printUnsafeRawdata(pReached, true);
 
     iCache.initKeySet();
+    UsageContainer container = AbstractStates.extractStateByType(pReached.getFirstState(), UsageStatisticsState.class).getContainer();
     final RefineableUsageComputer computer = new RefineableUsageComputer(container, logger);
     MultipleARGSubtreeRemover subtreesRemover = transfer.getMultipleARGSubtreeRemover();
     strategy.init(computer, subgraphStatesToReachedState);
@@ -232,18 +233,18 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       }
       refinementFinish |= counterexample.isSpurious();
       if (counterexample.isSpurious()) {
-        pStat.CacheInterpolantsTime.start();
+        pStat.CacheTime.start();
         Iterator<Pair<Object, PathTemplate>> pairIterator = counterexample.getAllFurtherInformation().iterator();
         List<BooleanFormula> formulas = (List<BooleanFormula>) pairIterator.next().getFirst();
-        pStat.CacheInterpolantsTime.stop();
 
-        pStat.CacheTime.start();
-        if (iCache.contains(target, formulas, abstractTrace)) {
+        if (iCache.contains(target, Sets.newHashSet(pPath.asEdgesList()))) {
         	computer.setResultOfRefinement(target, true, pPath.getInnerEdges());
 	        logger.log(Level.WARNING, "Interpolants are repeated, consider " + target + " as true");
           target.failureFlag = true;
         } else {
+          assert (!iCache.contains(target, formulas, abstractTrace)) : "Different verdicts false-true! Attention!! ALARM!!! AAAA!!!!";
           iCache.add(target, formulas, abstractTrace);
+          iCache.add(target, Sets.newHashSet(pPath.asEdgesList()));
         	computer.setResultOfRefinement(target, false, pPath.getInnerEdges());
         	subtreesRemover.addStateForRemoving((ARGState)target.getKeyState());
         	for (ARGState state : strategy.lastAffectedStates) {

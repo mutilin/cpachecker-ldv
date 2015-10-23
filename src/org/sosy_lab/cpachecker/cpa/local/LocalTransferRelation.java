@@ -76,12 +76,19 @@ import org.sosy_lab.cpachecker.util.identifiers.ReturnIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 import com.google.common.base.Optional;
+import com.google.common.collect.Sets;
 
 @Options(prefix="cpa.local")
 public class LocalTransferRelation implements TransferRelation {
 
   @Option(name="allocatefunctions", description = "functions, which allocate new free memory")
   private Set<String> allocate;
+
+  @Option(name="allocateFunctionPattern", description = "functions, which allocate new free memory")
+  private Set<String> allocatePattern = Sets.newHashSet("alloc");
+
+  @Option(name="conservativefunctions", description = "functions, which allocate new free memory")
+  private Set<String> conservationOfSharedness;
 
   private Map<String, Integer> allocateInfo;
 
@@ -198,6 +205,15 @@ public class LocalTransferRelation implements TransferRelation {
       CFunctionCallAssignmentStatement assignExp = ((CFunctionCallAssignmentStatement)exprOnSummary);
       String funcName = assignExp.getRightHandSide().getFunctionNameExpression().toASTString();
       boolean isAllocatedFunction = (allocate == null ? false : allocate.contains(funcName));
+      if (!isAllocatedFunction) {
+        for (String pattern : allocatePattern) {
+          if (funcName.contains(pattern)) {
+            isAllocatedFunction = true;
+            break;
+          }
+        }
+      }
+      boolean isConservativeFunction = (conservationOfSharedness == null ? false : conservationOfSharedness.contains(funcName));
 
       CExpression op1 = assignExp.getLeftHandSide();
       CType type = op1.getExpressionType();
@@ -206,7 +222,11 @@ public class LocalTransferRelation implements TransferRelation {
       AbstractIdentifier returnId = createId(op1, dereference);
 
       if (isAllocatedFunction) {
-        int num = allocateInfo.get(funcName);
+        Integer num = allocateInfo.get(funcName);
+        if (num == null) {
+          //Means that we use pattern
+          num = 0;
+        }
         if (num == 0) {
           //local data are returned from function
           if (!returnId.isGlobal()) {
@@ -215,6 +235,14 @@ public class LocalTransferRelation implements TransferRelation {
         } else if (num > 0) {
           handleAllocatedFunction(newElement, assignExp.getRightHandSide());
         }
+      } else if (isConservativeFunction){
+
+        List<CExpression> parameters = assignExp.getRightHandSide().getParameterExpressions();
+        // Usually it looks like 'priv = netdev_priv(dev)'
+        // Other cases will be handled if they appear
+        CExpression targetParam = parameters.get(0);
+        AbstractIdentifier paramId = createId(targetParam, dereference);
+        newElement.set(returnId, pSuccessor.getType(paramId));
       } else {
         newElement.set(returnId, returnType);
       }
@@ -326,8 +354,22 @@ public class LocalTransferRelation implements TransferRelation {
       } else if (right instanceof CFunctionCallExpression) {
 	    	String funcName = ((CFunctionCallExpression)right).getFunctionNameExpression().toASTString();
 	    	boolean isAllocatedFunction = (allocate == null ? false : allocate.contains(funcName));
+	      if (!isAllocatedFunction) {
+	        for (String pattern : allocatePattern) {
+	          if (funcName.contains(pattern)) {
+	            isAllocatedFunction = true;
+	            break;
+	          }
+	        }
+	      }
+	    	boolean isConservativeFunction = (conservationOfSharedness == null ? false : conservationOfSharedness.contains(funcName));
+
 	    	if (isAllocatedFunction) {
-	    		int num = allocateInfo.get(funcName);
+	    		Integer num = allocateInfo.get(funcName);
+	        if (num == null) {
+	          //Means that we use pattern
+	          num = 0;
+	        }
 	        if (num == 0) {
 	          //local data are returned from function
 	          if (!leftId.isGlobal()) {
@@ -336,8 +378,17 @@ public class LocalTransferRelation implements TransferRelation {
 	        } else if (num > 0) {
 	        	handleAllocatedFunction(pSuccessor, (CFunctionCallExpression) right);
 	        }
+	    	} else if (isConservativeFunction) {
+	    	  List<CExpression> parameters = ((CFunctionCallExpression)right).getParameterExpressions();
+	    	  // Usually it looks like 'priv = netdev_priv(dev)'
+	    	  // Other cases will be handled if they appear
+	    	  CExpression targetParam = parameters.get(0);
+	    	  AbstractIdentifier paramId = createId(targetParam, leftDereference);
+	    	  pSuccessor.set(leftId, pSuccessor.getType(paramId));
 	    	} else {
-	    	  //unknown function
+	    	  /* unknown function
+	    	   * It is important to reset the value
+	    	   */
 	    	  pSuccessor.set(leftId, null);
 	    	}
       }

@@ -44,8 +44,8 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
   /* Boilerplate code to avoid serializing this class */
 
   private static final long serialVersionUID = -898577877284268426L;
-  private final UsageContainer container;
   private final TemporaryUsageStorage recentUsages;
+  private final UsageContainer container;
 
   private final Map<AbstractIdentifier, AbstractIdentifier> variableBindingRelation;
 

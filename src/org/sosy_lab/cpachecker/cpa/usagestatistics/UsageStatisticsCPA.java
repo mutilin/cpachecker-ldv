@@ -32,6 +32,7 @@ import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.core.ShutdownNotifier;
 import org.sosy_lab.cpachecker.core.defaults.AbstractSingleWrapperCPA;
 import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
 import org.sosy_lab.cpachecker.core.defaults.MergeSepOperator;
@@ -66,8 +67,9 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
   private final Reducer reducer;
   private final UsageStatisticsCPAStatistics statistics;
   //Do not remove container from CPA - we clean all states while refinement
-  private final UsageContainer container;
+  private UsageContainer container;
   private UsageStatisticsPrecision precision;
+  private ShutdownNotifier shutdownNotifier;
   private final CFA cfa;
   private final LogManager logger;
 
@@ -80,13 +82,15 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
 
   private String outputFileName = "output/localsave";
 
-  private UsageStatisticsCPA(ConfigurableProgramAnalysis pCpa, CFA pCfa, LogManager pLogger, Configuration pConfig) throws InvalidConfigurationException {
+  private UsageStatisticsCPA(ConfigurableProgramAnalysis pCpa, CFA pCfa, LogManager pLogger,
+      Configuration pConfig, ShutdownNotifier pShutdownNotifier) throws InvalidConfigurationException {
     super(pCpa);
     pConfig.inject(this);
     this.cfa = pCfa;
     this.abstractDomain = new UsageStatisticsDomain(pCpa.getAbstractDomain());
     this.mergeOperator = initializeMergeOperator();
     this.stopOperator = initializeStopOperator();
+    this.shutdownNotifier = pShutdownNotifier;
 
     LockStatisticsCPA LockCPA = (CPAs.retrieveCPA(this, LockStatisticsCPA.class));
     this.statistics = new UsageStatisticsCPAStatistics(pConfig, pLogger,

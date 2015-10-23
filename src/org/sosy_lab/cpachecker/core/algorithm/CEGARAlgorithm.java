@@ -151,6 +151,9 @@ public class CEGARAlgorithm implements Algorithm, StatisticsProvider {
   @Option(name="refinementLoops", description="Number of loops of refinement")
   private int refinementLoops = -1;
 
+  @Option(name="timeLimit", description="Limitation of time in millis for the refinement")
+  private long refinementLimit = Long.MAX_VALUE;
+
   private final LogManager logger;
   private final Algorithm algorithm;
   private final Refiner mRefiner;
@@ -290,6 +293,11 @@ public class CEGARAlgorithm implements Algorithm, StatisticsProvider {
     stats.totalReachedSizeBeforeRefinement += reached.size();
     stats.maxReachedSizeBeforeRefinement = Math.max(stats.maxReachedSizeBeforeRefinement, reached.size());
     sizeOfReachedSetBeforeRefinement = reached.size();
+
+    if (stats.refinementTimer.getSumTime().asMillis() > refinementLimit) {
+      logger.log(Level.WARNING, "Refinement is stopped due to the limitation of time");
+      return false;
+    }
 
     stats.refinementTimer.start();
     boolean refinementResult;

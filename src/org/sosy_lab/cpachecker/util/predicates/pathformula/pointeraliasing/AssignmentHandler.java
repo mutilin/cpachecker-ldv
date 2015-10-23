@@ -244,13 +244,16 @@ class AssignmentHandler {
 
     if (!useOldSSAIndices) {
       if (lvalue.isAliased()) {
-        addRetentionForAssignment(lvalueType,
-                                  lvalue.asAliased().getAddress(),
-                                  pattern, updatedTypes);
         if (updatedTypes == null) {
           assert isSimpleType(lvalueType) : "Should be impossible due to the first if statement";
           updatedTypes = Collections.singleton(lvalueType);
         }
+        //Michael suggestion to switch the order.
+        //Important in case when we do not sure what update, add retention to the lvalueType
+        addRetentionForAssignment(lvalueType,
+                                  lvalue.asAliased().getAddress(),
+                                  pattern, updatedTypes);
+
         updateSSA(updatedTypes, ssa);
       } else { // Unaliased lvalue
         if (updatedVariables == null) {

@@ -149,10 +149,10 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     UsagePoint p = uinfo.getUsagePoint();
     assert topUsages.contains(p);
 
-    topUsages.remove(p);
-    p.markAsTrue(path);
-    topUsages.add(p);
     unrefinedInformation.remove(p);
+    topUsages.remove(p);
+    p = p.markAsTrue(path);
+    topUsages.add(p);
     refinedInformation.put(p, new RefinedUsageInfoSet(uinfo, path));
   }
 
