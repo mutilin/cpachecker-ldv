@@ -23,9 +23,9 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics.storage;
 
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -41,6 +41,7 @@ import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 
 import com.google.common.collect.Multimap;
+import com.google.common.collect.Sets;
 
 
 public class ARGPathIterator {
@@ -74,61 +75,113 @@ public class ARGPathIterator {
       return computePath(newTarget);
     }
 
-    ARGState nextParent = null, parent, forkState;
+    ARGState nextParent = null, previousCaller, childOfForkState = lastAffectedState;
     do {
-      //This is backward state, it has one parent, need to be displayed to reached set state
-      forkState = findPreviousFork(lastAffectedState);
+      //This is a backward state, which displays the following state after real reduced state, which we want to found
+      childOfForkState = findPreviousFork(childOfForkState);
 
-      if (forkState == null) {
+      if (childOfForkState == null) {
         return null;
       }
 
-      parent = forkState.getParents().iterator().next();
-      assert parent != null;
-      ARGState realForkState = subgraphStatesToReachedState.get(forkState);
-      Collection<AbstractState> callerStates = fromReducedToExpand.get(realForkState);
+      //parent = forkState.getParents().iterator().next();
+     // assert parent != null;
+      ARGState realChildOfForkState = subgraphStatesToReachedState.get(childOfForkState);
+      assert realChildOfForkState.getParents().size() == 1;
+      ARGState forkState = realChildOfForkState.getParents().iterator().next();
+      //Clone is necessary
+      Set<AbstractState> callerStates = Sets.newHashSet(fromReducedToExpand.get(forkState));
+      previousCaller = childOfForkState.getParents().iterator().next();
 
       assert callerStates != null;
 
       Iterator<AbstractState> iterator;
-      if (toCallerStatesIterator.containsKey(realForkState)) {
+      //It is important to put a backward state in map, because we can find the same real state during exploration
+      //but for it a new backward state will be created
+      if (toCallerStatesIterator.containsKey(childOfForkState)) {
         //Means we have already handled this state, just get the next one
-        iterator = toCallerStatesIterator.get(realForkState);
+        iterator = toCallerStatesIterator.get(childOfForkState);
       } else {
         //We get this fork the second time (the first one was from path computer)
-        assert forkState.getParents().size() == 1;
-        ARGState realParent = subgraphStatesToReachedState.get(parent);
-        assert callerStates.remove(realParent);
+        //Found the caller, we have explored the first time
+        ARGState realPreviousCaller = subgraphStatesToReachedState.get(previousCaller);
+        assert callerStates.remove(realPreviousCaller);
         iterator = callerStates.iterator();
-        toCallerStatesIterator.put(realForkState, iterator);
+        toCallerStatesIterator.put(childOfForkState, iterator);
       }
 
       if (iterator.hasNext()) {
         nextParent = (ARGState) iterator.next();
       } else {
         //We need to find the next fork
+        //Do not change the fork state and start exploration from this one
       }
     } while (nextParent == null);
 
     BackwardARGState newNextParent = new BackwardARGState(nextParent);
-    parent.removeFromARG();
-    forkState.addParent(newNextParent);
+    previousCaller.removeFromARG();
+    childOfForkState.addParent(newNextParent);
     subgraphStatesToReachedState.put(newNextParent, nextParent);
     return computePath(newNextParent);
   }
 
+  /**
+   * Due to special structure of ARGPath,
+   * the real fork state (reduced entry) is not included into it.
+   * We need to get it.
+   *
+   * @param parent
+   * @return
+   */
   private ARGState findPreviousFork(ARGState parent) {
+    //TODO there is an optimization to return the list of forks (as we already pass through the full path)
+    List<ARGState> potentialForkStates = new LinkedList<>();
+    Map<ARGState, ARGState> exitStateToEntryState = new HashMap<>();
     ARGState currentState = parent;
-    while (subgraphStatesToReachedState.get(currentState).getParents().size() == 1) {
-      if (currentState.getChildren().size() == 0) {
-        //The last state in the path
-        return null;
-      }
+    ARGState realState = subgraphStatesToReachedState.get(currentState);
+    assert parent.getParents().size() == 1;
+    ARGState currentParent = parent.getParents().iterator().next();
+    ARGState realParent = subgraphStatesToReachedState.get(currentParent);
+    while (currentState.getChildren().size() > 0) {
+
       assert currentState.getChildren().size() == 1;
       currentState = currentState.getChildren().iterator().next();
+      realState = subgraphStatesToReachedState.get(currentState);
+
+      //No matter which parent to take - interesting one is single anyway
+      realParent = realState.getParents().iterator().next();
+
+      //Check if it is an exit state, we are waiting
+      //Attention! Recursion is not supported here!
+      if (exitStateToEntryState.containsKey(realParent)) {
+        //Due to complicated structure of path we saved an expanded exit state and it isn't contained in the path,
+        //so, we look for its parent
+        potentialForkStates.remove(exitStateToEntryState.get(realParent));
+        exitStateToEntryState.remove(realParent);
+      }
+
+      if (fromReducedToExpand.containsKey(realParent) &&
+          fromReducedToExpand.get(realParent).size() > 1) {
+
+        assert realParent.getParents().size() == 0;
+        assert fromReducedToExpand.get(realParent).size() > 1;
+
+        //Now we should check, that there is no corresponding exit state in the path only in this case this is a real fork
+        parent = currentState.getParents().iterator().next();
+        ARGState displayedParent = subgraphStatesToReachedState.get(parent);
+        ARGState displayedChild = displayedParent.getChildren().iterator().next();
+        //Save child and if we meet it, we remove the parent as not a fork
+
+        potentialForkStates.add(currentState);
+        exitStateToEntryState.put(displayedChild, currentState);
+      }
     }
-    assert subgraphStatesToReachedState.get(currentState).getParents().size() > 1;
-    return currentState;
+
+    if (potentialForkStates.isEmpty()) {
+      return null;
+    } else {
+      return potentialForkStates.get(0);
+    }
   }
 
   ARGPath computePath(BackwardARGState pLastElement) throws InterruptedException, CPATransferException {
