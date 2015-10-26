@@ -81,6 +81,7 @@ import org.sosy_lab.cpachecker.util.predicates.Solver;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 
 import com.google.common.base.Function;
+import com.google.common.base.Preconditions;
 import com.google.common.base.Predicates;
 import com.google.common.collect.Sets;
 
@@ -95,6 +96,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     public final Timer CacheTime = new Timer();
     public final Timer CacheInterpolantsTime = new Timer();
     public int totalUsagesToRefine = 0;
+    public int totalPathsToRefine = 0;
     public int skippedUsages = 0;
 
     @Override
@@ -107,6 +109,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       pOut.println("");
       pOut.println("Total number of refinable usages:               " + totalUsagesToRefine);
       pOut.println("Number of skipped usages due to repeated trace: " + skippedUsages);
+      pOut.println("Total number of refinable paths:                " + totalPathsToRefine);
     }
 
     @Override
@@ -123,12 +126,15 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
   @Option(name="precisionReset", description="The value of marked unsafes, after which the precision should be cleaned")
   private int precisionReset = Integer.MAX_VALUE;
 
-  private UsageStatisticsRefinementStrategy strategy;
-  private Set<List<Integer>> refinedStates;
-  private final InterpolantCache iCache = new InterpolantCache();
+  @Option(name="refinablePathLimitation", description="a limit for paths for one usage, which could be refined")
+  private int refinablePathLimitation = Integer.MAX_VALUE;
 
   @Option(name="totalARGCleaning", description="clean all ARG or try to reuse some parts of it (memory consuming)")
   private boolean totalARGCleaning = false;
+
+  private UsageStatisticsRefinementStrategy strategy;
+  private Set<List<Integer>> refinedStates;
+  private final InterpolantCache iCache = new InterpolantCache();
 
   public UsageStatisticsRefiner(Configuration pConfig, ConfigurableProgramAnalysis pCpa, UsageStatisticsRefinementStrategy pStrategy) throws CPAException, InvalidConfigurationException {
     super(pCpa, pStrategy);
@@ -137,6 +143,8 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     UsageStatisticsCPA UScpa = CPAs.retrieveCPA(pCpa, UsageStatisticsCPA.class);
     logger = UScpa.getLogger();
     strategy = pStrategy;
+    Preconditions.checkArgument(refinablePathLimitation > 0,
+        "The option refinablePathLimitation couldn't be " + refinablePathLimitation + ", why in this case you need refiner itself?");
   }
 
   public static Refiner create(ConfigurableProgramAnalysis pCpa) throws CPAException, InvalidConfigurationException {
@@ -203,14 +211,20 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     boolean refinementFinish = false;
     UsageInfo target = null;
     pStat.UnsafeCheck.start();
+    int totalNumberOfPathRefined = 0;
+    //int realGlobalCounter = 0;
     while ((target = computer.getNextRefineableUsage()) != null) {
       pStat.totalUsagesToRefine++;
       pStat.UnsafeCheck.stopIfRunning();
       subgraphStatesToReachedState.clear();
 
+      //int totalLocalCounter = 0;
+      int numberOfPathRefined = 0;
+
       pStat.ComputePath.start();
       ARGPathIterator pathIterator = new ARGPathIterator(target, refinedStates, this.subgraphStatesToReachedState, transfer);
       strategy.lastAffectedState = null;
+
       ARGPath pPath;
       boolean pathIsTrue = false;
       while (!pathIsTrue && ((pPath = pathIterator.next(strategy.lastAffectedState)) != null)) {
@@ -218,12 +232,12 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
         pStat.ComputePath.stop();
 
         List<ARGState> abstractTrace = pPath.asStatesList();
-
         CounterexampleInfo counterexample = null;
         try {
           pStat.Refinement.start();
           rootOfSubgraph = pPath.getFirstState();
           counterexample = performRefinement(argReached, pPath);
+          numberOfPathRefined++;
           pStat.Refinement.stop();
         } catch (IllegalStateException e) {
           //msat_solver return -1 <=> unknown
@@ -265,6 +279,9 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
           computer.setResultOfRefinement(target, true, pPath.getInnerEdges());
         }
         pStat.ComputePath.start();
+        if (numberOfPathRefined <= refinablePathLimitation) {
+          break;
+        }
       }
       pStat.ComputePath.stop();
 
@@ -273,12 +290,15 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
         computer.setResultOfRefinement(target, false, null);
         //Do not need to add state for predicates, because it has been already added the previous time
         subtreesRemover.addStateForRemoving((ARGState)target.getKeyState());
-        pStat.skippedUsages++;
-        pStat.UnsafeCheck.start();
-        continue;
       }
+      if (numberOfPathRefined == 0) {
+        //Usage is skipped due to optimization
+        pStat.skippedUsages++;
+      }
+      totalNumberOfPathRefined+=numberOfPathRefined;
       pStat.UnsafeCheck.start();
     }
+    pStat.totalPathsToRefine += totalNumberOfPathRefined;
     int newTrueUnsafeSize = container.getTrueUnsafeSize();
     if (lastTrueUnsafes == -1) {
       //It's normal, if in the first iteration the true unsafes are not involved in counter
@@ -321,6 +341,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
           PredicatePrecision.class);
 
       System.out.println("Total number of predicates: " + p.getLocalPredicates().size());
+      System.out.println("Total pathes refined: " + totalNumberOfPathRefined);
     }
     pStat.UnsafeCheck.stopIfRunning();
     return refinementFinish;
