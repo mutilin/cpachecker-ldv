@@ -1004,6 +1004,7 @@ public class BAMTransferRelation implements TransferRelation {
     expandedToBlockCache.clear();
     forwardPrecisionToExpandedPrecision.clear();
     reducedToExpand.clear();
+    multiReducedToExpand.clear();
     if (correctARGsForBlocks != null) {
       correctARGsForBlocks.clear();
     }
