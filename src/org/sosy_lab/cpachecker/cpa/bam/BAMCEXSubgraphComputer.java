@@ -232,7 +232,7 @@ public class BAMCEXSubgraphComputer {
     }
     return result;
   }
-  static class BackwardARGState extends ARGState {
+  public static class BackwardARGState extends ARGState {
 
     private static final long serialVersionUID = -3279533907385516993L;
     private int decreasingStateID;

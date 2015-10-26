@@ -57,7 +57,7 @@ public class BAMMultipleCEXSubgraphComputer extends BAMCEXSubgraphComputer{
   }
 
 
-  public ARGState findPath(ARGState target, Set<List<Integer>> pProcessedStates) throws InterruptedException, RecursiveAnalysisFailedException {
+  public ARGState findPath(BackwardARGState newTreeTarget, Set<List<Integer>> pProcessedStates) throws InterruptedException, RecursiveAnalysisFailedException {
 
     Map<ARGState, BackwardARGState> elementsMap = new HashMap<>();
     Stack<ARGState> openElements = new Stack<>();
@@ -68,8 +68,7 @@ public class BAMMultipleCEXSubgraphComputer extends BAMCEXSubgraphComputer{
       remainingStates.add(new LinkedList<>(newList));
     }
 
-    BackwardARGState newTreeTarget = new BackwardARGState(target);
-    pathStateToReachedState.put(newTreeTarget, target);
+    ARGState target = pathStateToReachedState.get(newTreeTarget);
     elementsMap.put(target, newTreeTarget);
     ARGState currentState = target;
 

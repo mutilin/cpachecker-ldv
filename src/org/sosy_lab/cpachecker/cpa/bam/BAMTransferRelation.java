@@ -67,6 +67,7 @@ import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
 import org.sosy_lab.cpachecker.cpa.arg.ARGReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
+import org.sosy_lab.cpachecker.cpa.bam.BAMCEXSubgraphComputer.BackwardARGState;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackCPA;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackTransferRelation;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
@@ -924,7 +925,17 @@ public class BAMTransferRelation implements TransferRelation {
         partitioning, wrappedReducer, argCache, pPathElementToReachedState,
         abstractStateToReachedSet, expandedToReducedCache, reducedToExpand, logger);
 
-        return cexSubgraphComputer.findPath(target, pProcessedStates);
+    BackwardARGState newTarget = new BackwardARGState(target);
+    pPathElementToReachedState.put(newTarget, target);
+        return cexSubgraphComputer.findPath(newTarget, pProcessedStates);
+  }
+
+  public BAMMultipleCEXSubgraphComputer createBAMMultipleSubgraphComputer(Map<ARGState, ARGState> pPathElementToReachedState) {
+    final BAMMultipleCEXSubgraphComputer cexSubgraphComputer = new BAMMultipleCEXSubgraphComputer(
+        partitioning, wrappedReducer, argCache, pPathElementToReachedState,
+        abstractStateToReachedSet, expandedToReducedCache, reducedToExpand, logger);
+
+        return cexSubgraphComputer;
   }
 
   //returns root of a subtree leading from the root element of the given reachedSet to the target state
@@ -1232,4 +1243,7 @@ public class BAMTransferRelation implements TransferRelation {
     return multipleARGRemover;
   }
 
+  public Multimap<AbstractState, AbstractState> getMapFromReducedToExpand() {
+    return multiReducedToExpand;
+  }
 }

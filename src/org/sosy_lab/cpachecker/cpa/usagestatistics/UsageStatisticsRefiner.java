@@ -68,6 +68,7 @@ import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractionManager;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicatePrecision;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateStaticRefiner;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.caches.InterpolantCache;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.ARGPathIterator;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.RefinedUsagePointSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsageContainer;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
@@ -208,10 +209,66 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       subgraphStatesToReachedState.clear();
 
       pStat.ComputePath.start();
-      ARGPath pPath = computePath((ARGState)target.getKeyState(), refinedStates);
-      pStat.ComputePath.stopIfRunning();
+      ARGPathIterator pathIterator = new ARGPathIterator(target, refinedStates, this.subgraphStatesToReachedState, transfer);
+      strategy.lastAffectedState = null;
+      ARGPath pPath;
+      boolean pathIsTrue = false;
+      while (!pathIsTrue && ((pPath = pathIterator.next(strategy.lastAffectedState)) != null)) {
+        //ARGPath pPath = computePath((ARGState)target.getKeyState(), refinedStates);
+        pStat.ComputePath.stop();
 
-      if (pPath == null) {
+        List<ARGState> abstractTrace = pPath.asStatesList();
+
+        CounterexampleInfo counterexample = null;
+        try {
+          pStat.Refinement.start();
+          rootOfSubgraph = pPath.getFirstState();
+          counterexample = performRefinement(argReached, pPath);
+          pStat.Refinement.stop();
+        } catch (IllegalStateException e) {
+          //msat_solver return -1 <=> unknown
+          //consider its as true;
+          logger.log(Level.WARNING, "Solver exception: " + e.getMessage());
+          logger.log(Level.WARNING, "Consider " + target + " as true");
+          computer.setResultOfRefinement(target, true, pPath.getInnerEdges());
+          target.failureFlag = true;
+          pStat.Refinement.stop();
+          pStat.ComputePath.start();
+          continue;
+        }
+        refinementFinish |= counterexample.isSpurious();
+        if (counterexample.isSpurious()) {
+          pStat.CacheTime.start();
+          Iterator<Pair<Object, PathTemplate>> pairIterator = counterexample.getAllFurtherInformation().iterator();
+          List<BooleanFormula> formulas = (List<BooleanFormula>) pairIterator.next().getFirst();
+
+          if (iCache.contains(target, Sets.newHashSet(pPath.asEdgesList()))) {
+          	computer.setResultOfRefinement(target, true, pPath.getInnerEdges());
+  	        logger.log(Level.WARNING, "Interpolants are repeated, consider " + target + " as true");
+            target.failureFlag = true;
+            pathIsTrue = true;
+          } else {
+            assert (!iCache.contains(target, formulas, abstractTrace)) : "Different verdicts false-true! Attention!! ALARM!!! AAAA!!!!";
+            iCache.add(target, formulas, abstractTrace);
+            iCache.add(target, Sets.newHashSet(pPath.asEdgesList()));
+          	/*computer.setResultOfRefinement(target, false, pPath.getInnerEdges());*/
+          	if (!totalARGCleaning) {
+            	subtreesRemover.addStateForRemoving((ARGState)target.getKeyState());
+            	for (ARGState state : strategy.lastAffectedStates) {
+            	  subtreesRemover.addStateForRemoving(state);
+            	}
+          	}
+          }
+          pStat.CacheTime.stop();
+        } else {
+          pathIsTrue = true;
+          computer.setResultOfRefinement(target, true, pPath.getInnerEdges());
+        }
+        pStat.ComputePath.start();
+      }
+      pStat.ComputePath.stop();
+
+      if (!pathIsTrue) {
         logger.log(Level.FINE, "Skip " + target + " due to repeated chunk of the abstract state trace");
         computer.setResultOfRefinement(target, false, null);
         //Do not need to add state for predicates, because it has been already added the previous time
@@ -219,51 +276,6 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
         pStat.skippedUsages++;
         pStat.UnsafeCheck.start();
         continue;
-      }
-
-      List<ARGState> abstractTrace = pPath.asStatesList();
-
-      CounterexampleInfo counterexample = null;
-      try {
-        pStat.Refinement.start();
-        counterexample = performRefinement(argReached, pPath);
-        pStat.Refinement.stop();
-      } catch (IllegalStateException e) {
-        //msat_solver return -1 <=> unknown
-        //consider its as true;
-        logger.log(Level.WARNING, "Solver exception: " + e.getMessage());
-        logger.log(Level.WARNING, "Consider " + target + " as true");
-        computer.setResultOfRefinement(target, true, pPath.getInnerEdges());
-        target.failureFlag = true;
-        pStat.Refinement.stop();
-        pStat.UnsafeCheck.start();
-        continue;
-      }
-      refinementFinish |= counterexample.isSpurious();
-      if (counterexample.isSpurious()) {
-        pStat.CacheTime.start();
-        Iterator<Pair<Object, PathTemplate>> pairIterator = counterexample.getAllFurtherInformation().iterator();
-        List<BooleanFormula> formulas = (List<BooleanFormula>) pairIterator.next().getFirst();
-
-        if (iCache.contains(target, Sets.newHashSet(pPath.asEdgesList()))) {
-        	computer.setResultOfRefinement(target, true, pPath.getInnerEdges());
-	        logger.log(Level.WARNING, "Interpolants are repeated, consider " + target + " as true");
-          target.failureFlag = true;
-        } else {
-          assert (!iCache.contains(target, formulas, abstractTrace)) : "Different verdicts false-true! Attention!! ALARM!!! AAAA!!!!";
-          iCache.add(target, formulas, abstractTrace);
-          iCache.add(target, Sets.newHashSet(pPath.asEdgesList()));
-        	computer.setResultOfRefinement(target, false, pPath.getInnerEdges());
-        	if (!totalARGCleaning) {
-          	subtreesRemover.addStateForRemoving((ARGState)target.getKeyState());
-          	for (ARGState state : strategy.lastAffectedStates) {
-          	  subtreesRemover.addStateForRemoving(state);
-          	}
-        	}
-        }
-        pStat.CacheTime.stop();
-      } else {
-        computer.setResultOfRefinement(target, !counterexample.isSpurious(), pPath.getInnerEdges());
       }
       pStat.UnsafeCheck.start();
     }
@@ -338,6 +350,8 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     private final Set<List<Integer>> refinedStates;
     private Map<ARGState, ARGState> subgraphStatesToReachedState;
     private Set<ARGState> lastAffectedStates = new HashSet<>();
+    //It is backward!
+    private ARGState lastAffectedState = null;
 
     private final Function<ARGState, Integer> GET_ORIGIN_STATE_NUMBERS = new Function<ARGState, Integer>() {
       @Override
@@ -383,6 +397,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       for (ARGState backwardState : pAffectedStates) {
         lastAffectedStates.add(subgraphStatesToReachedState.get(backwardState));
       }
+      lastAffectedState = pAffectedStates.get(pAffectedStates.size() - 1);
     }
 
     private void init(RefineableUsageComputer pComputer, Map<ARGState, ARGState> map) {
