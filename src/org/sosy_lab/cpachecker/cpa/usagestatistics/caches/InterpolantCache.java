@@ -4,10 +4,8 @@ import static com.google.common.collect.FluentIterable.from;
 import static org.sosy_lab.cpachecker.util.AbstractStates.toState;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import org.sosy_lab.common.Pair;
@@ -20,10 +18,12 @@ import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 
 import com.google.common.base.Predicates;
+import com.google.common.collect.LinkedListMultimap;
+import com.google.common.collect.Multimap;
 
 public class InterpolantCache {
-	private Map<UsageInfo, List<Pair<BooleanFormula, CFANode>>> visitedFunctions = new HashMap<>();
-	private Map<UsageInfo, Set<CFAEdge>> visitedPaths = new HashMap<>();
+	private Multimap<UsageInfo, List<Pair<BooleanFormula, CFANode>>> visitedFunctions = LinkedListMultimap.create();
+	private Multimap<UsageInfo, Set<CFAEdge>> visitedPaths = LinkedListMultimap.create();
   private Set<UsageInfo> unusedKeySet;
 
 	public void initKeySet() {
@@ -32,8 +32,8 @@ public class InterpolantCache {
 
 	public void removeUnusedCacheEntries() {
 	  for (UsageInfo uinfo : unusedKeySet) {
-	    visitedFunctions.remove(uinfo);
-	    visitedPaths.remove(uinfo);
+	    visitedFunctions.removeAll(uinfo);
+	    visitedPaths.removeAll(uinfo);
 	  }
 	}
 
@@ -42,7 +42,7 @@ public class InterpolantCache {
 	}
 
 	public boolean contains(UsageInfo pUinfo, Set<CFAEdge> path) {
-	  return path.equals(visitedPaths.get(pUinfo));
+	  return visitedPaths.get(pUinfo).contains(path);
 	}
 
   public void add(UsageInfo pUinfo, List<BooleanFormula> interpolants, List<ARGState> points) {
@@ -52,7 +52,7 @@ public class InterpolantCache {
     visitedFunctions.put(pUinfo, Pair.zipList(interpolants, nodes));
   }
 
-  public boolean contains(UsageInfo pUinfo, List<BooleanFormula> interpolants, List<ARGState> points) {
+ /* public boolean contains(UsageInfo pUinfo, List<BooleanFormula> interpolants, List<ARGState> points) {
     unusedKeySet.remove(pUinfo);
 
     List<CFANode> nodes = transformToCFANodes(points);
@@ -62,7 +62,7 @@ public class InterpolantCache {
   	  return true;
   	}
     return false;
-  }
+  }*/
 
   public void reset() {
     visitedFunctions.clear();

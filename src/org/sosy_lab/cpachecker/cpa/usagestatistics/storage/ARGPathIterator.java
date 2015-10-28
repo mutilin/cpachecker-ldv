@@ -29,6 +29,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
@@ -53,7 +54,7 @@ public class ARGPathIterator {
   private final Multimap<AbstractState, AbstractState> fromReducedToExpand;
   private final BAMMultipleCEXSubgraphComputer subgraphComputer;
 
-  private Map<AbstractState, Iterator<AbstractState>> toCallerStatesIterator = new HashMap<>();
+  private Map<AbstractState, Iterator<ARGState>> toCallerStatesIterator = new HashMap<>();
 
   public ARGPathIterator(UsageInfo pTarget, Set<List<Integer>> pRefinedStates,
       Map<ARGState, ARGState> pSubgraphStatesToReachedState, BAMTransferRelation bamTransfer) {
@@ -89,13 +90,16 @@ public class ARGPathIterator {
       ARGState realChildOfForkState = subgraphStatesToReachedState.get(childOfForkState);
       assert realChildOfForkState.getParents().size() == 1;
       ARGState forkState = realChildOfForkState.getParents().iterator().next();
-      //Clone is necessary
-      Set<AbstractState> callerStates = Sets.newHashSet(fromReducedToExpand.get(forkState));
+      //Clone is necessary, make tree set for determinism
+      Set<ARGState> callerStates = Sets.newTreeSet();
+      for (AbstractState state : fromReducedToExpand.get(forkState)) {
+        callerStates.add((ARGState)state);
+      }
       previousCaller = childOfForkState.getParents().iterator().next();
 
       assert callerStates != null;
 
-      Iterator<AbstractState> iterator;
+      Iterator<ARGState> iterator;
       //It is important to put a backward state in map, because we can find the same real state during exploration
       //but for it a new backward state will be created
       if (toCallerStatesIterator.containsKey(childOfForkState)) {
@@ -111,7 +115,7 @@ public class ARGPathIterator {
       }
 
       if (iterator.hasNext()) {
-        nextParent = (ARGState) iterator.next();
+        nextParent = iterator.next();
       } else {
         //We need to find the next fork
         //Do not change the fork state and start exploration from this one
@@ -134,9 +138,8 @@ public class ARGPathIterator {
    * @return
    */
   private ARGState findPreviousFork(ARGState parent) {
-    //TODO there is an optimization to return the list of forks (as we already pass through the full path)
     List<ARGState> potentialForkStates = new LinkedList<>();
-    Map<ARGState, ARGState> exitStateToEntryState = new HashMap<>();
+    Map<ARGState, ARGState> exitStateToEntryState = new TreeMap<>();
     ARGState currentState = parent;
     ARGState realState = subgraphStatesToReachedState.get(currentState);
     assert parent.getParents().size() == 1;
@@ -156,8 +159,12 @@ public class ARGPathIterator {
       if (exitStateToEntryState.containsKey(realParent)) {
         //Due to complicated structure of path we saved an expanded exit state and it isn't contained in the path,
         //so, we look for its parent
-        potentialForkStates.remove(exitStateToEntryState.get(realParent));
-        exitStateToEntryState.remove(realParent);
+        ARGState entryState = exitStateToEntryState.get(realParent);
+        //remove all child in cache
+        for (ARGState displayedChild : entryState.getChildren()) {
+          exitStateToEntryState.remove(displayedChild);
+        }
+        potentialForkStates.remove(entryState);
       }
 
       if (fromReducedToExpand.containsKey(realParent) &&
@@ -169,11 +176,13 @@ public class ARGPathIterator {
         //Now we should check, that there is no corresponding exit state in the path only in this case this is a real fork
         parent = currentState.getParents().iterator().next();
         ARGState displayedParent = subgraphStatesToReachedState.get(parent);
-        ARGState displayedChild = displayedParent.getChildren().iterator().next();
+        //We may have several children, so add all of them
+        for (ARGState displayedChild : displayedParent.getChildren()) {
+          exitStateToEntryState.put(displayedChild, currentState);
+        }
         //Save child and if we meet it, we remove the parent as not a fork
 
         potentialForkStates.add(currentState);
-        exitStateToEntryState.put(displayedChild, currentState);
       }
     }
 

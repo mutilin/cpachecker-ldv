@@ -36,12 +36,10 @@ import java.util.logging.Level;
 
 import javax.annotation.Nullable;
 
-import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
-import org.sosy_lab.common.io.PathTemplate;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
@@ -59,8 +57,6 @@ import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
 import org.sosy_lab.cpachecker.cpa.arg.ARGReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
-import org.sosy_lab.cpachecker.cpa.arg.ARGUtils;
-import org.sosy_lab.cpachecker.cpa.bam.BAMMultipleCEXSubgraphComputer;
 import org.sosy_lab.cpachecker.cpa.bam.MultipleARGSubtreeRemover;
 import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateCPA;
 import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateRefiner;
@@ -72,13 +68,11 @@ import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.ARGPathIterator;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.RefinedUsagePointSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsageContainer;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
-import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.CPAs;
 import org.sosy_lab.cpachecker.util.Precisions;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 import org.sosy_lab.cpachecker.util.predicates.Solver;
-import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
@@ -192,6 +186,8 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     refinedStates.clear();
     ARGReachedSet argReached = new ARGReachedSet(pReached);
 
+    //Map<Integer, Integer> pathsToNumber = new TreeMap<>();
+
     logger.log(Level.INFO, ("Perform US refinement: " + i++));
     int originUnsafeSize = container.getUnsafeSize();
     System.out.println("Time: " + MainCPAStatistics.programTime);
@@ -218,7 +214,6 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       pStat.UnsafeCheck.stopIfRunning();
       subgraphStatesToReachedState.clear();
 
-      //int totalLocalCounter = 0;
       int numberOfPathRefined = 0;
 
       pStat.ComputePath.start();
@@ -228,10 +223,8 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       ARGPath pPath;
       boolean pathIsTrue = false;
       while (!pathIsTrue && ((pPath = pathIterator.next(strategy.lastAffectedState)) != null)) {
-        //ARGPath pPath = computePath((ARGState)target.getKeyState(), refinedStates);
         pStat.ComputePath.stop();
 
-        List<ARGState> abstractTrace = pPath.asStatesList();
         CounterexampleInfo counterexample = null;
         try {
           pStat.Refinement.start();
@@ -253,8 +246,6 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
         refinementFinish |= counterexample.isSpurious();
         if (counterexample.isSpurious()) {
           pStat.CacheTime.start();
-          Iterator<Pair<Object, PathTemplate>> pairIterator = counterexample.getAllFurtherInformation().iterator();
-          List<BooleanFormula> formulas = (List<BooleanFormula>) pairIterator.next().getFirst();
 
           if (iCache.contains(target, Sets.newHashSet(pPath.asEdgesList()))) {
           	computer.setResultOfRefinement(target, true, pPath.getInnerEdges());
@@ -262,10 +253,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
             target.failureFlag = true;
             pathIsTrue = true;
           } else {
-            assert (!iCache.contains(target, formulas, abstractTrace)) : "Different verdicts false-true! Attention!! ALARM!!! AAAA!!!!";
-            iCache.add(target, formulas, abstractTrace);
             iCache.add(target, Sets.newHashSet(pPath.asEdgesList()));
-          	/*computer.setResultOfRefinement(target, false, pPath.getInnerEdges());*/
           	if (!totalARGCleaning) {
             	subtreesRemover.addStateForRemoving((ARGState)target.getKeyState());
             	for (ARGState state : strategy.lastAffectedStates) {
@@ -279,7 +267,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
           computer.setResultOfRefinement(target, true, pPath.getInnerEdges());
         }
         pStat.ComputePath.start();
-        if (numberOfPathRefined <= refinablePathLimitation) {
+        if (numberOfPathRefined >= refinablePathLimitation) {
           break;
         }
       }
@@ -341,21 +329,9 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
           PredicatePrecision.class);
 
       System.out.println("Total number of predicates: " + p.getLocalPredicates().size());
-      System.out.println("Total pathes refined: " + totalNumberOfPathRefined);
     }
     pStat.UnsafeCheck.stopIfRunning();
     return refinementFinish;
-  }
-
-  ARGPath computePath(ARGState pLastElement, Set<List<Integer>> processedStates) throws InterruptedException, CPATransferException {
-    assert (pLastElement != null && !pLastElement.isDestroyed());
-      //we delete this state from other unsafe
-    rootOfSubgraph = transfer.findPath(pLastElement, subgraphStatesToReachedState, processedStates);
-    assert (rootOfSubgraph != null);
-    if (rootOfSubgraph == BAMMultipleCEXSubgraphComputer.DUMMY_STATE_FOR_REPEATED_STATE) {
-      return null;
-    }
-    return ARGUtils.getRandomPath(rootOfSubgraph);
   }
 
   @Override
