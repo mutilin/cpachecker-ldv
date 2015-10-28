@@ -80,6 +80,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.LinkedListMultimap;
 import com.google.common.collect.Multimap;
 
 @Options(prefix = "cpa.bam")
@@ -119,7 +120,7 @@ public class BAMTransferRelation implements TransferRelation {
 
   final Map<AbstractState, ReachedSet> abstractStateToReachedSet = new HashMap<>();
   final Map<AbstractState, AbstractState> reducedToExpand = new IdentityHashMap<>();
-  final Multimap<AbstractState, AbstractState> multiReducedToExpand = HashMultimap.create();
+  final Multimap<AbstractState, AbstractState> multiReducedToExpand = LinkedListMultimap.create();
   final Map<AbstractState, AbstractState> expandedToReducedCache = new HashMap<>();
   final Map<AbstractState, Block> expandedToBlockCache = new HashMap<>();
 
@@ -1005,6 +1006,8 @@ public class BAMTransferRelation implements TransferRelation {
     forwardPrecisionToExpandedPrecision.clear();
     reducedToExpand.clear();
     multiReducedToExpand.clear();
+    innerStateToExternStates.clear();
+    stateToInnerFunctionCalls.clear();
     if (correctARGsForBlocks != null) {
       correctARGsForBlocks.clear();
     }
