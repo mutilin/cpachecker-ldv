@@ -22,19 +22,12 @@
  *    http://cpachecker.sosy-lab.org
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
-import static com.google.common.collect.FluentIterable.from;
-
 import java.io.PrintStream;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.logging.Level;
-
-import javax.annotation.Nullable;
 
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
@@ -53,17 +46,16 @@ import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
 import org.sosy_lab.cpachecker.core.interfaces.WrapperCPA;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
-import org.sosy_lab.cpachecker.cpa.arg.ARGReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.bam.MultipleARGSubtreeRemover;
 import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateCPA;
 import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateRefiner;
-import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractionManager;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicatePrecision;
-import org.sosy_lab.cpachecker.cpa.predicate.PredicateStaticRefiner;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.caches.InterpolantCache;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.ConfigurableRefinementBlock;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.PathIterator;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.PredicateRefinerAdapter;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.RefinementInterface;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.RefinementResult;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.RefinementStub;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.UsageIterator;
@@ -76,9 +68,7 @@ import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.CPAs;
 import org.sosy_lab.cpachecker.util.Precisions;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
-import org.sosy_lab.cpachecker.util.predicates.Solver;
 
-import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicates;
 
@@ -107,6 +97,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       pOut.println("Total number of refinable usages:               " + totalUsagesToRefine);
       pOut.println("Number of skipped usages due to repeated trace: " + skippedUsages);
       pOut.println("Total number of refinable paths:                " + totalPathsToRefine);
+      refinerBlock.printStatistics(pOut);
     }
 
     @Override
@@ -129,19 +120,27 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
   @Option(name="totalARGCleaning", description="clean all ARG or try to reuse some parts of it (memory consuming)")
   private boolean totalARGCleaning = false;
 
-  private UsageStatisticsRefinementStrategy strategy;
-  private Set<List<Integer>> refinedStates;
+  //private Set<List<Integer>> refinedStates;
   private final InterpolantCache iCache = new InterpolantCache();
 
-  public UsageStatisticsRefiner(Configuration pConfig, ConfigurableProgramAnalysis pCpa, UsageStatisticsRefinementStrategy pStrategy) throws CPAException, InvalidConfigurationException {
-    super(pCpa, pStrategy);
+  private final ConfigurableRefinementBlock<UnrefinedUsagePointSet> refinerBlock;
+
+  private final Map<SingleIdentifier, PredicatePrecision> precisionMap = new HashMap<>();
+
+  public UsageStatisticsRefiner(Configuration pConfig, ConfigurableProgramAnalysis pCpa) throws CPAException, InvalidConfigurationException {
+    super(pCpa);
     pConfig.inject(this);
     cpa = pCpa;
     UsageStatisticsCPA UScpa = CPAs.retrieveCPA(pCpa, UsageStatisticsCPA.class);
     logger = UScpa.getLogger();
-    strategy = pStrategy;
     Preconditions.checkArgument(refinablePathLimitation > 0,
         "The option refinablePathLimitation couldn't be " + refinablePathLimitation + ", why in this case you need refiner itself?");
+
+    RefinementStub stub = new RefinementStub();
+    PredicateRefinerAdapter predicateRefinerAdapter = new PredicateRefinerAdapter(stub, cpa, null);
+    PathIterator pIterator = new PathIterator(this.subgraphStatesToReachedState, transfer, predicateRefinerAdapter);
+    UsageIterator uIterator = new UsageIterator(pIterator, null, logger);
+    refinerBlock = uIterator;
   }
 
   public static Refiner create(ConfigurableProgramAnalysis pCpa) throws CPAException, InvalidConfigurationException {
@@ -154,21 +153,8 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       throw new InvalidConfigurationException(BAMPredicateRefiner.class.getSimpleName() + " needs an BAMPredicateCPA");
     }
 
-    LogManager logger = predicateCpa.getLogger();
-
-    final Set<List<Integer>> refinedStates = new HashSet<>();
-
-    UsageStatisticsRefinementStrategy strategy = new UsageStatisticsRefinementStrategy(
-                                          predicateCpa.getConfiguration(),
-                                          logger,
-                                          predicateCpa,
-                                          predicateCpa.getSolver(),
-                                          predicateCpa.getPredicateManager(),
-                                          predicateCpa.getStaticRefiner(),
-                                          refinedStates);
-
-    UsageStatisticsRefiner result = new UsageStatisticsRefiner(predicateCpa.getConfiguration(), pCpa, strategy);
-    result.refinedStates = refinedStates;
+    UsageStatisticsRefiner result = new UsageStatisticsRefiner(predicateCpa.getConfiguration(), pCpa);
+    //result.refinedStates = refinedStates;
     return result;
   }
 
@@ -181,13 +167,11 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
 
     iCache.initKeySet();
     UsageContainer container = AbstractStates.extractStateByType(pReached.getFirstState(), UsageStatisticsState.class).getContainer();
-    final RefineableUsageComputer computer = new RefineableUsageComputer(container, logger);
-    MultipleARGSubtreeRemover subtreesRemover = transfer.getMultipleARGSubtreeRemover();
-    strategy.init(computer, subgraphStatesToReachedState);
+    //final RefineableUsageComputer computer = new RefineableUsageComputer(container, logger);
     BAMPredicateCPA bamcpa = CPAs.retrieveCPA(cpa, BAMPredicateCPA.class);
     assert bamcpa != null;
-    refinedStates.clear();
-    ARGReachedSet argReached = new ARGReachedSet(pReached);
+    //refinedStates.clear();
+    //ARGReachedSet argReached = new ARGReachedSet(pReached);
 
     //Map<Integer, Integer> pathsToNumber = new TreeMap<>();
 
@@ -208,41 +192,34 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     }
     int counter = lastFalseUnsafeSize - originUnsafeSize;
     boolean refinementFinish = false;
-    UsageInfo target = null;
+    //UsageInfo target = null;
     pStat.UnsafeCheck.start();
-    int totalNumberOfPathRefined = 0;
 
-    //Create a chain of refinement blocks
-    RefinementStub stub = new RefinementStub();
+    Map<Class<? extends RefinementInterface>, Object> updatingMap = new HashMap<>();
+    updatingMap.put(PredicateRefinerAdapter.class, pReached);
+    updatingMap.put(UsageIterator.class, container);
+    refinerBlock.start(updatingMap);
 
-    try {
-      PredicateRefinerAdapter predicateRefinerAdapter = new PredicateRefinerAdapter(stub, cpa, pReached);
-      PathIterator pIterator = new PathIterator(this.subgraphStatesToReachedState, transfer, predicateRefinerAdapter);
-      UsageIterator uIterator = new UsageIterator(pIterator, container, logger);
+    iterator = container.getUnsafeIterator();
+    while (iterator.hasNext()) {
+      SingleIdentifier currentId = iterator.next();
+      AbstractUsagePointSet pointSet = container.getUsages(currentId);
+      if (pointSet instanceof UnrefinedUsagePointSet) {
+        RefinementResult result = refinerBlock.call((UnrefinedUsagePointSet)pointSet);
+        refinementFinish |= result.isFalse();
 
-      iterator = container.getUnsafeIterator();
-      while (iterator.hasNext()) {
-        SingleIdentifier currentId = iterator.next();
-        AbstractUsagePointSet pointSet = container.getUsages(currentId);
-        if (pointSet instanceof UnrefinedUsagePointSet) {
-          RefinementResult result = uIterator.call((UnrefinedUsagePointSet)pointSet);
-          refinementFinish |= result.isFalse();
-          /*if (result.isFalse()) {
-            Pair<List<ARGState>, Precision> info = result.getInfo(PredicateRefinerAdapter.class);
-            if (precisionMap.containsKey(currentId)) {
-              updatedPrecision = precisionMap.get(currentId).mergeWith(newPrecisionFromPredicates);
-            } else {
-              updatedPrecision = newPrecisionFromPredicates;
-            }
-            precisionMap.put(currentId, updatedPrecision);
-
-          }*/
+        PredicatePrecision info = (PredicatePrecision) result.getInfo(UsageIterator.class);
+        if (info != null) {
+          PredicatePrecision updatedPrecision;
+          if (precisionMap.containsKey(currentId)) {
+            updatedPrecision = precisionMap.get(currentId).mergeWith(info);
+          } else {
+            updatedPrecision = info;
+          }
+          precisionMap.put(currentId, updatedPrecision);
         }
-      }
 
-    } catch (InvalidConfigurationException e) {
-      e.printStackTrace();
-      return refinementFinish;
+      }
     }
 
     //int realGlobalCounter = 0;
@@ -350,21 +327,23 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       if (totalARGCleaning) {
         transfer.cleanCaches();
       } else {
+        MultipleARGSubtreeRemover subtreesRemover = transfer.getMultipleARGSubtreeRemover();
         subtreesRemover.cleanCaches();
       }
       pReached.clear();
       PredicatePrecision predicates = Precisions.extractPrecisionByType(precision, PredicatePrecision.class);
       for (SingleIdentifier id : container.getProcessedUnsafes()) {
-        PredicatePrecision predicatesForId = strategy.precisionMap.get(id);
+        PredicatePrecision predicatesForId = precisionMap.get(id);
         if (predicatesForId != null) {
           predicates.subtract(predicatesForId);
         }
-        strategy.precisionMap.remove(id);
+        precisionMap.remove(id);
       }
       pReached.add(cpa.getInitialState(firstNode, StateSpacePartition.getDefaultPartition()), precision);
       PredicatePrecision p = Precisions.extractPrecisionByType(pReached.getPrecision(pReached.getFirstState()),
           PredicatePrecision.class);
 
+      subgraphStatesToReachedState.clear();
       System.out.println("Total number of predicates: " + p.getLocalPredicates().size());
     }
     pStat.UnsafeCheck.stopIfRunning();
@@ -377,66 +356,4 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     pStatsCollection.add(pStat);
   }
 
-  protected static class UsageStatisticsRefinementStrategy extends BAMPredicateAbstractionRefinementStrategy {
-
-    protected final Map<SingleIdentifier, PredicatePrecision> precisionMap = new HashMap<>();
-    protected RefineableUsageComputer computer;
-    private final Set<List<Integer>> refinedStates;
-    private Map<ARGState, ARGState> subgraphStatesToReachedState;
-    private Set<ARGState> lastAffectedStates = new HashSet<>();
-    //It is backward!
-    private ARGState lastAffectedState = null;
-
-    private final Function<ARGState, Integer> GET_ORIGIN_STATE_NUMBERS = new Function<ARGState, Integer>() {
-      @Override
-      @Nullable
-      public Integer apply(@Nullable ARGState pInput) {
-        assert subgraphStatesToReachedState.containsKey(pInput);
-        return subgraphStatesToReachedState.get(pInput).getStateId();
-      }
-    };
-
-    public UsageStatisticsRefinementStrategy(final Configuration config, final LogManager logger,
-        final BAMPredicateCPA predicateCpa,
-        final Solver pSolver,
-        final PredicateAbstractionManager pPredAbsMgr,
-        final PredicateStaticRefiner pStaticRefiner,
-        final Set<List<Integer>> pRefinedStates)
-            throws CPAException, InvalidConfigurationException {
-      super(config, logger, predicateCpa, pSolver, pPredAbsMgr, pStaticRefiner);
-      refinedStates = pRefinedStates;
-    }
-
-    @Override
-    protected void finishRefinementOfPath(ARGState pUnreachableState,
-        List<ARGState> pAffectedStates, ARGReachedSet pReached,
-        boolean pRepeatedCounterexample)
-        throws CPAException {
-
-      super.finishRefinementOfPath(pUnreachableState, pAffectedStates, pReached, pRepeatedCounterexample);
-
-      SingleIdentifier currentId = computer.getCurrentRefiningId();
-      PredicatePrecision updatedPrecision;
-      if (precisionMap.containsKey(currentId)) {
-        updatedPrecision = precisionMap.get(currentId).mergeWith(newPrecisionFromPredicates);
-      } else {
-        updatedPrecision = newPrecisionFromPredicates;
-      }
-      precisionMap.put(currentId, updatedPrecision);
-
-      List<Integer>changedStateNumbers = from(pAffectedStates).transform(GET_ORIGIN_STATE_NUMBERS).toList();
-      refinedStates.add(changedStateNumbers);
-
-      lastAffectedStates.clear();
-      for (ARGState backwardState : pAffectedStates) {
-        lastAffectedStates.add(subgraphStatesToReachedState.get(backwardState));
-      }
-      lastAffectedState = pAffectedStates.get(pAffectedStates.size() - 1);
-    }
-
-    private void init(RefineableUsageComputer pComputer, Map<ARGState, ARGState> map) {
-      computer = pComputer;
-      subgraphStatesToReachedState = map;
-    }
-  }
 }

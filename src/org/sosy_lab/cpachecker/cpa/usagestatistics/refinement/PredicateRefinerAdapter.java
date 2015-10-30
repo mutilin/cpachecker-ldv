@@ -23,11 +23,14 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics.refinement;
 
+import java.io.PrintStream;
+import java.util.Map;
 import java.util.logging.Level;
 
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.log.LogManager;
+import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.core.CounterexampleInfo;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.WrapperCPA;
@@ -42,6 +45,10 @@ import org.sosy_lab.cpachecker.exceptions.CPAException;
 public class PredicateRefinerAdapter extends WrappedConfigurableRefinementBlock<ARGPath, ARGPath> {
   UsageStatisticsPredicateRefiner refiner;
   LogManager logger;
+
+  //Statistics
+  private Timer totalTimer = new Timer();
+  private int solverFailures = 0;
 
   public PredicateRefinerAdapter(ConfigurableRefinementBlock<ARGPath> wrapper,
       ConfigurableProgramAnalysis pCpa, ReachedSet pReached) throws CPAException, InvalidConfigurationException {
@@ -63,28 +70,54 @@ public class PredicateRefinerAdapter extends WrappedConfigurableRefinementBlock<
 
   @Override
   public RefinementResult call(ARGPath pInput) throws CPAException, InterruptedException {
+    totalTimer.start();
+    RefinementResult result;
+
     try {
       CounterexampleInfo cex = refiner.performRefinement(pInput);
 
       if (!cex.isSpurious()) {
-        return wrappedRefiner.call(pInput);
+        totalTimer.stop();
+        result = wrappedRefiner.call(pInput);
+        totalTimer.start();
       } else {
-        RefinementResult result = RefinementResult.createFalse();
+        result = RefinementResult.createFalse();
         result.addInfo(PredicateRefinerAdapter.class, Pair.of(refiner.getLastAffectedStates(), refiner.getLastPrecision()));
-        return result;
       }
     } catch (IllegalStateException e) {
       //msat_solver return -1 <=> unknown
       //consider its as true;
       logger.log(Level.WARNING, "Solver exception: " + e.getMessage());
+      solverFailures++;
     //  logger.log(Level.WARNING, "Consider " + target + " as true");
      // computer.setResultOfRefinement(target, true, pPath.getInnerEdges());
     //  target.failureFlag = true;
     //  pStat.Refinement.stop();
     //  pStat.ComputePath.start();
     //  continue;
+      result = RefinementResult.createUnknown();
     }
-    return RefinementResult.createUnknown();
+    totalTimer.stop();
+    return result;
+  }
+
+  @Override
+  public void start(Map<Class<? extends RefinementInterface>, Object> pUpdateInfo) {
+    if (pUpdateInfo.containsKey(PredicateRefinerAdapter.class)) {
+      Object info = pUpdateInfo.get(PredicateRefinerAdapter.class);
+      assert info instanceof ReachedSet;
+      refiner.updateReachedSet((ReachedSet)info);
+    }
+    wrappedRefiner.start(pUpdateInfo);
+
+  }
+
+  @Override
+  public void printStatistics(PrintStream pOut) {
+    pOut.println("--PredicateRefinerAdapter--");
+    pOut.println("Timer for block:           " + totalTimer);
+    pOut.println("Solver failures:           " + solverFailures);
+    wrappedRefiner.printStatistics(pOut);
   }
 
 }

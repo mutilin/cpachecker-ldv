@@ -48,13 +48,15 @@ import org.sosy_lab.cpachecker.util.predicates.Solver;
 public class UsageStatisticsPredicateRefiner extends BAMPredicateRefiner {
 
   private UsageStatisticsRefinementStrategy strategy;
-  private final ARGReachedSet ARGReached;
+  private ARGReachedSet ARGReached;
 
   public UsageStatisticsPredicateRefiner(ConfigurableProgramAnalysis pCpa,
       UsageStatisticsRefinementStrategy pStrategy, ReachedSet reached) throws CPAException, InvalidConfigurationException {
     super(pCpa, pStrategy);
     strategy = pStrategy;
-    ARGReached = new ARGReachedSet(reached);
+    if (reached != null) {
+      ARGReached = new ARGReachedSet(reached);
+    }
   }
 
   public static UsageStatisticsPredicateRefiner create(ConfigurableProgramAnalysis pCpa, ReachedSet reached) throws CPAException, InvalidConfigurationException {
@@ -91,6 +93,10 @@ public class UsageStatisticsPredicateRefiner extends BAMPredicateRefiner {
 
   public PredicatePrecision getLastPrecision() {
     return strategy.lastAddedPrecision;
+  }
+
+  public void updateReachedSet(ReachedSet pReached) {
+    ARGReached = new ARGReachedSet(pReached);
   }
 
   protected static class UsageStatisticsRefinementStrategy extends BAMPredicateAbstractionRefinementStrategy {

@@ -23,7 +23,12 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics.refinement;
 
+import java.io.PrintStream;
+import java.util.Map;
+
 
 public interface RefinementInterface {
-
+  void start(Map<Class<? extends RefinementInterface>, Object> updateInfo);
+  RefinementResult finish(Class<? extends RefinementInterface> callerClass);
+  void printStatistics(PrintStream pOut);
 }

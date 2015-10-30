@@ -23,6 +23,9 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics.refinement;
 
+import java.io.PrintStream;
+import java.util.Map;
+
 import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 
@@ -37,6 +40,14 @@ public class RefinementStub implements ConfigurableRefinementBlock<ARGPath> {
   @Override
   public RefinementResult finish(Class<? extends RefinementInterface> pCallerClass) {
     return RefinementResult.createTrue();
+  }
+
+  @Override
+  public void start(Map<Class<? extends RefinementInterface>, Object> pUpdateInfo) {
+  }
+
+  @Override
+  public void printStatistics(PrintStream pOut) {
   }
 
 }
