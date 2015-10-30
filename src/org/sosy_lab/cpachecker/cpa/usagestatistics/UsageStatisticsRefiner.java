@@ -44,7 +44,6 @@ import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
-import org.sosy_lab.cpachecker.core.CounterexampleInfo;
 import org.sosy_lab.cpachecker.core.MainCPAStatistics;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
@@ -54,7 +53,6 @@ import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
 import org.sosy_lab.cpachecker.core.interfaces.WrapperCPA;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
-import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
 import org.sosy_lab.cpachecker.cpa.arg.ARGReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.bam.MultipleARGSubtreeRemover;
@@ -64,8 +62,14 @@ import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractionManager;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicatePrecision;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateStaticRefiner;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.caches.InterpolantCache;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.ARGPathIterator;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.PathIterator;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.PredicateRefinerAdapter;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.RefinementResult;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.RefinementStub;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.UsageIterator;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.AbstractUsagePointSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.RefinedUsagePointSet;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UnrefinedUsagePointSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsageContainer;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
@@ -77,7 +81,6 @@ import org.sosy_lab.cpachecker.util.predicates.Solver;
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicates;
-import com.google.common.collect.Sets;
 
 @Options(prefix="cpa.usagestatistics")
 public class UsageStatisticsRefiner extends BAMPredicateRefiner implements StatisticsProvider {
@@ -208,8 +211,42 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     UsageInfo target = null;
     pStat.UnsafeCheck.start();
     int totalNumberOfPathRefined = 0;
+
+    //Create a chain of refinement blocks
+    RefinementStub stub = new RefinementStub();
+
+    try {
+      PredicateRefinerAdapter predicateRefinerAdapter = new PredicateRefinerAdapter(stub, cpa, pReached);
+      PathIterator pIterator = new PathIterator(this.subgraphStatesToReachedState, transfer, predicateRefinerAdapter);
+      UsageIterator uIterator = new UsageIterator(pIterator, container, logger);
+
+      iterator = container.getUnsafeIterator();
+      while (iterator.hasNext()) {
+        SingleIdentifier currentId = iterator.next();
+        AbstractUsagePointSet pointSet = container.getUsages(currentId);
+        if (pointSet instanceof UnrefinedUsagePointSet) {
+          RefinementResult result = uIterator.call((UnrefinedUsagePointSet)pointSet);
+          refinementFinish |= result.isFalse();
+          /*if (result.isFalse()) {
+            Pair<List<ARGState>, Precision> info = result.getInfo(PredicateRefinerAdapter.class);
+            if (precisionMap.containsKey(currentId)) {
+              updatedPrecision = precisionMap.get(currentId).mergeWith(newPrecisionFromPredicates);
+            } else {
+              updatedPrecision = newPrecisionFromPredicates;
+            }
+            precisionMap.put(currentId, updatedPrecision);
+
+          }*/
+        }
+      }
+
+    } catch (InvalidConfigurationException e) {
+      e.printStackTrace();
+      return refinementFinish;
+    }
+
     //int realGlobalCounter = 0;
-    while ((target = computer.getNextRefineableUsage()) != null) {
+   /* while ((target = computer.getNextRefineableUsage()) != null) {
       pStat.totalUsagesToRefine++;
       pStat.UnsafeCheck.stopIfRunning();
       subgraphStatesToReachedState.clear();
@@ -286,7 +323,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       totalNumberOfPathRefined+=numberOfPathRefined;
       pStat.UnsafeCheck.start();
     }
-    pStat.totalPathsToRefine += totalNumberOfPathRefined;
+    pStat.totalPathsToRefine += totalNumberOfPathRefined;*/
     int newTrueUnsafeSize = container.getTrueUnsafeSize();
     if (lastTrueUnsafes == -1) {
       //It's normal, if in the first iteration the true unsafes are not involved in counter

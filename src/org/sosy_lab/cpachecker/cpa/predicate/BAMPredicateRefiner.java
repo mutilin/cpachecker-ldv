@@ -378,7 +378,7 @@ public class BAMPredicateRefiner extends AbstractBAMBasedRefiner implements Stat
    * This is an extension of {@link PredicateAbstractionRefinementStrategy}
    * that takes care of updating the BAM state.
    */
-  protected static class BAMPredicateAbstractionRefinementStrategy extends PredicateAbstractionRefinementStrategy {
+  public static class BAMPredicateAbstractionRefinementStrategy extends PredicateAbstractionRefinementStrategy {
 
     private final RefineableRelevantPredicatesComputer relevantPredicatesComputer;
     private final BAMPredicateCPA predicateCpa;

@@ -23,7 +23,6 @@
  */
 package org.sosy_lab.cpachecker.cpa.bam;
 
-import static com.google.common.base.Preconditions.checkState;
 import static org.sosy_lab.cpachecker.util.statistics.StatisticsUtils.toPercent;
 
 import java.io.IOException;
@@ -110,7 +109,8 @@ class BAMCPAStatistics implements Statistics {
   }
 
   public void addRefiner(AbstractBAMBasedRefiner pRefiner) {
-    checkState(refiner == null);
+    //Now we may recreate this refiner
+    //checkState(refiner == null);
     refiner = pRefiner;
   }
 

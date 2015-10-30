@@ -64,6 +64,7 @@ public class BAMMultipleCEXSubgraphComputer extends BAMCEXSubgraphComputer{
     ARGState root = null;
 
     //Deep clone to be patient about modification
+    remainingStates.clear();
     for (List<Integer> newList : pProcessedStates) {
       remainingStates.add(new LinkedList<>(newList));
     }
