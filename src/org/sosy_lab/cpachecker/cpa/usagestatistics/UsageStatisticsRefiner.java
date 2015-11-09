@@ -277,7 +277,9 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
         logger.log(Level.FINE, "Skip " + target + " due to repeated chunk of the abstract state trace");
         computer.setResultOfRefinement(target, false, null);
         //Do not need to add state for predicates, because it has been already added the previous time
-        subtreesRemover.addStateForRemoving((ARGState)target.getKeyState());
+        if (!totalARGCleaning) {
+          subtreesRemover.addStateForRemoving((ARGState)target.getKeyState());
+        }
       }
       if (numberOfPathRefined == 0) {
         //Usage is skipped due to optimization
