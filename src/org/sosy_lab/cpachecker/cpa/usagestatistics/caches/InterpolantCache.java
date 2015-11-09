@@ -3,56 +3,54 @@ package org.sosy_lab.cpachecker.cpa.usagestatistics.caches;
 import static com.google.common.collect.FluentIterable.from;
 import static org.sosy_lab.cpachecker.util.AbstractStates.toState;
 
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import org.sosy_lab.common.Pair;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 import org.sosy_lab.cpachecker.util.AbstractStates;
-import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
 
 import com.google.common.base.Predicates;
-import com.google.common.collect.LinkedListMultimap;
-import com.google.common.collect.Multimap;
 
 public class InterpolantCache {
-	private Multimap<UsageInfo, List<Pair<BooleanFormula, CFANode>>> visitedFunctions = LinkedListMultimap.create();
-	private Multimap<UsageInfo, Set<CFAEdge>> visitedPaths = LinkedListMultimap.create();
-  private Set<UsageInfo> unusedKeySet;
+	//private Multimap<UsageInfo, List<Pair<BooleanFormula, CFANode>>> visitedFunctions = LinkedListMultimap.create();
+	private Set<Set<CFAEdge>> visitedPaths = new HashSet<>();
+  //private Set<UsageInfo> unusedKeySet;
 
 	public void initKeySet() {
-	  unusedKeySet = new HashSet<>(visitedFunctions.keySet());
+	  //unusedKeySet = new HashSet<>(visitedPaths.keySet());
 	}
 
 	public void removeUnusedCacheEntries() {
-	  for (UsageInfo uinfo : unusedKeySet) {
-	    visitedFunctions.removeAll(uinfo);
+	/*  for (UsageInfo uinfo : unusedKeySet) {
+	   // visitedFunctions.removeAll(uinfo);
 	    visitedPaths.removeAll(uinfo);
-	  }
+	  }*/
 	}
 
 	public void add(UsageInfo pUinfo, Set<CFAEdge> path) {
-	  visitedPaths.put(pUinfo, path);
+	  //remove key state tto optimize memory
+	  //pUinfo.setKeyState(null);
+	  visitedPaths.add(path);
 	}
 
 	public boolean contains(UsageInfo pUinfo, Set<CFAEdge> path) {
-	  return visitedPaths.get(pUinfo).contains(path);
+	  //unusedKeySet.remove(pUinfo);
+	  return visitedPaths.contains(path);
 	}
 
-  public void add(UsageInfo pUinfo, List<BooleanFormula> interpolants, List<ARGState> points) {
+  /*public void add(UsageInfo pUinfo, List<BooleanFormula> interpolants, List<ARGState> points) {
 
     List<CFANode> nodes = transformToCFANodes(points);
     assert (interpolants.size() == nodes.size());
     visitedFunctions.put(pUinfo, Pair.zipList(interpolants, nodes));
   }
 
- /* public boolean contains(UsageInfo pUinfo, List<BooleanFormula> interpolants, List<ARGState> points) {
+  public boolean contains(UsageInfo pUinfo, List<BooleanFormula> interpolants, List<ARGState> points) {
     unusedKeySet.remove(pUinfo);
 
     List<CFANode> nodes = transformToCFANodes(points);
@@ -65,8 +63,8 @@ public class InterpolantCache {
   }*/
 
   public void reset() {
-    visitedFunctions.clear();
-    unusedKeySet = Collections.emptySet();
+    //visitedFunctions.clear();
+    //unusedKeySet = Collections.emptySet();
     visitedPaths.clear();
   }
 

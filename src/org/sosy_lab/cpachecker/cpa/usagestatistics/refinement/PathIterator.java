@@ -38,6 +38,7 @@ import java.util.TreeMap;
 import javax.annotation.Nullable;
 
 import org.sosy_lab.common.Pair;
+import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
@@ -48,6 +49,7 @@ import org.sosy_lab.cpachecker.cpa.bam.BAMMultipleCEXSubgraphComputer;
 import org.sosy_lab.cpachecker.cpa.bam.BAMTransferRelation;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicatePrecision;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsRefiner;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 
@@ -63,10 +65,15 @@ public class PathIterator extends WrappedConfigurableRefinementBlock<UsageInfo, 
   private final BAMTransferRelation transfer;
   private final Multimap<AbstractState, AbstractState> fromReducedToExpand;
   private final BAMMultipleCEXSubgraphComputer subgraphComputer;
+  //private final LogManager logger;
 
   //Statistics
   private Timer totalTimer = new Timer();
+  private Timer computingPath = new Timer();
+  private Timer additionTimer = new Timer();
   private int numberOfPathCalculated = 0;
+  private int successfulAdditionChecks = 0;
+  //private int numberOfrepeatedPaths = 0;
 
   private Map<AbstractState, Iterator<ARGState>> toCallerStatesIterator = new HashMap<>();
 
@@ -80,16 +87,18 @@ public class PathIterator extends WrappedConfigurableRefinementBlock<UsageInfo, 
   };
 
   public PathIterator(Map<ARGState, ARGState> pSubgraphStatesToReachedState, BAMTransferRelation bamTransfer,
-      ConfigurableRefinementBlock<ARGPath> pWrapper) {
+      ConfigurableRefinementBlock<ARGPath> pWrapper, LogManager l) {
     super(pWrapper);
     subgraphStatesToReachedState = pSubgraphStatesToReachedState;
     transfer = bamTransfer;
     fromReducedToExpand = transfer.getMapFromReducedToExpand();
     subgraphComputer = transfer.createBAMMultipleSubgraphComputer(subgraphStatesToReachedState);
+    //logger = l;
   }
 
   @Override
   public RefinementResult call(UsageInfo pInput) throws CPAException, InterruptedException {
+    totalTimer.start();
     //The first time, we have no path to iterate
     BackwardARGState newTarget = new BackwardARGState((ARGState)pInput.getKeyState());
     subgraphStatesToReachedState.put(newTarget, (ARGState)pInput.getKeyState());
@@ -101,10 +110,13 @@ public class PathIterator extends WrappedConfigurableRefinementBlock<UsageInfo, 
       ARGState startingState;
 
       numberOfPathCalculated++;
+      totalTimer.stop();
       RefinementResult wrapperResult = wrappedRefiner.call(currentPath);
+      totalTimer.start();
 
       if (wrapperResult.isTrue()) {
-        wrapperResult.addInfo(PathIterator.class, currentPath);
+        wrapperResult.addInfo(PathIterator.class, Pair.of(currentPath, completePrecision));
+        totalTimer.stop();
         return wrapperResult;
       } else if (wrapperResult.isFalse()) {
         //Get a starting state
@@ -114,12 +126,6 @@ public class PathIterator extends WrappedConfigurableRefinementBlock<UsageInfo, 
         List<Integer>changedStateNumbers = from(affectedStates).transform(GET_ORIGIN_STATE_NUMBERS).toList();
         refinedStates.add(changedStateNumbers);
 
-        /*if (!totalARGCleaning) {
-          subtreesRemover.addStateForRemoving((ARGState)target.getKeyState());
-          for (ARGState state : strategy.lastAffectedStates) {
-            subtreesRemover.addStateForRemoving(state);
-          }
-        }*/
         PredicatePrecision precision = ((Pair<List<ARGState>, PredicatePrecision>)predicateInfo).getSecond();
 
         if (precision != null) {
@@ -132,12 +138,15 @@ public class PathIterator extends WrappedConfigurableRefinementBlock<UsageInfo, 
         result = wrapperResult;
         startingState = currentPath.getFirstState().getChildren().iterator().next();
       }
+      computingPath.start();
       currentPath = next(startingState);
+      computingPath.stop();
     }
     if (result.isFalse()) {
       //No unknown verdict, therefore all paths are false: set a result for usage as false
       result.addInfo(PathIterator.class, completePrecision);
     }
+    totalTimer.stop();
     return result;
   }
 
@@ -271,7 +280,14 @@ public class PathIterator extends WrappedConfigurableRefinementBlock<UsageInfo, 
     if (rootOfSubgraph == BAMMultipleCEXSubgraphComputer.DUMMY_STATE_FOR_REPEATED_STATE) {
       return null;
     }
-    return ARGUtils.getRandomPath(rootOfSubgraph);
+    ARGPath result = ARGUtils.getRandomPath(rootOfSubgraph);
+    additionTimer.start();
+    List<Integer> stateNumbers = from(result.asStatesList()).transform(GET_ORIGIN_STATE_NUMBERS).toList();
+    if (refinedStates.contains(stateNumbers)) {
+      successfulAdditionChecks++;
+    }
+    additionTimer.stop();
+    return result;
   }
 
   @Override
@@ -282,9 +298,20 @@ public class PathIterator extends WrappedConfigurableRefinementBlock<UsageInfo, 
   @Override
   public void printStatistics(PrintStream pOut) {
     pOut.println("--PathIterator--");
-    pOut.println("Timer for block:           " + totalTimer);
+    pOut.println("Timer for block:                     " + totalTimer);
+    pOut.println("--Timer for path computing:          " + computingPath);
+    pOut.println("--Timer for addition checks:         " + additionTimer);
     pOut.println("Number of path calculated:           " + numberOfPathCalculated);
+    pOut.println("Number of successful Addition Checks:" + successfulAdditionChecks);
     wrappedRefiner.printStatistics(pOut);
   }
 
+  @Override
+  public RefinementResult finish(Class<? extends Object> callerClass) {
+    if (callerClass.equals(UsageStatisticsRefiner.class)) {
+      //Refinement iteration finishes
+      refinedStates.clear();
+    }
+    return wrappedRefiner.finish(callerClass);
+  }
 }

@@ -71,4 +71,9 @@ public class RefinementResult {
   public static RefinementResult createUnknown() {
     return new RefinementResult(RefinementStatus.UNKNOWN);
   }
+
+  @Override
+  public String toString() {
+    return status.name();
+  }
 }

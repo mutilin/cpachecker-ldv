@@ -38,7 +38,7 @@ public class RefinementStub implements ConfigurableRefinementBlock<ARGPath> {
   }
 
   @Override
-  public RefinementResult finish(Class<? extends RefinementInterface> pCallerClass) {
+  public RefinementResult finish(Class<? extends Object> pCallerClass) {
     return RefinementResult.createTrue();
   }
 

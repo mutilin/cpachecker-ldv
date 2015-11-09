@@ -28,6 +28,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.logging.Level;
 
+import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
@@ -69,6 +70,7 @@ public class UsageIterator extends WrappedConfigurableRefinementBlock<UnrefinedU
   public RefinementResult call(UnrefinedUsagePointSet pInput) throws CPAException, InterruptedException {
     AbstractUsageInfoSet refineableUsageInfoSet;
 
+    totalTimer.start();
     usagePointIterator = pInput.getPointIterator();
 
     PredicatePrecision completePrecision = PredicatePrecision.empty();
@@ -85,7 +87,9 @@ public class UsageIterator extends WrappedConfigurableRefinementBlock<UnrefinedU
           currentUsageInfo = currentRefineableUsageInfoSet.getOneExample();
 
           numberOfUsagesRefined++;
+          totalTimer.stop();
           result = wrappedRefiner.call(currentUsageInfo);
+          totalTimer.start();
 
           if (result.status == RefinementStatus.FALSE) {
             logger.log(Level.FINE, "Usage " + currentUsageInfo + " is not reachable, remove it from container");
@@ -96,13 +100,19 @@ public class UsageIterator extends WrappedConfigurableRefinementBlock<UnrefinedU
             }
           } else if (result.status == RefinementStatus.TRUE) {
             logger.log(Level.FINE, "Usage " + currentUsageInfo + " is reachable, mark it as true");
-            ARGPath path = (ARGPath)result.getInfo(PathIterator.class);
+            Pair<ARGPath, PredicatePrecision> pair = (Pair<ARGPath, PredicatePrecision>)result.getInfo(PathIterator.class);
+            ARGPath path = pair.getFirst();
+            PredicatePrecision precision = pair.getSecond();
+            if (precision != null) {
+              completePrecision = completePrecision.mergeWith(precision);
+            }
             //TODO May be, .asEdgesList? One more edge.
             pInput.markAsReachableUsage(currentUsageInfo, path.getInnerEdges());
             if (detector.isTrueUnsafe(pInput)) {
               container.setAsRefined(pInput);
               result = RefinementResult.createTrue();
               result.addInfo(UsageIterator.class, completePrecision);
+              totalTimer.stop();
               return result;
             }
             //switch to another point
@@ -118,6 +128,7 @@ public class UsageIterator extends WrappedConfigurableRefinementBlock<UnrefinedU
             //May be we remove all 'write' accesses, so move to other id
             result = RefinementResult.createFalse();
             result.addInfo(UsageIterator.class, completePrecision);
+            totalTimer.stop();
             return result;
           } else {
             //We change the tree structure, recreate an iterator
@@ -128,6 +139,7 @@ public class UsageIterator extends WrappedConfigurableRefinementBlock<UnrefinedU
     }
     result = RefinementResult.createUnknown();
     result.addInfo(UsageIterator.class, completePrecision);
+    totalTimer.stop();
     return result;
   }
 

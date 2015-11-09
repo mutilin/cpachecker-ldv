@@ -27,6 +27,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Set;
 import java.util.logging.Level;
 
 import org.sosy_lab.common.configuration.Configuration;
@@ -35,6 +36,7 @@ import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.MainCPAStatistics;
@@ -51,7 +53,6 @@ import org.sosy_lab.cpachecker.cpa.bam.MultipleARGSubtreeRemover;
 import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateCPA;
 import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateRefiner;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicatePrecision;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.caches.InterpolantCache;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.ConfigurableRefinementBlock;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.PathIterator;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.PredicateRefinerAdapter;
@@ -89,14 +90,14 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     @Override
     public void printStatistics(PrintStream pOut, Result pResult, ReachedSet pReached) {
       pOut.println("Time for choosing target usage      " + UnsafeCheck);
-      pOut.println("Time for computing path             " + ComputePath);
-      pOut.println("Time for refinement                 " + Refinement);
-      pOut.println("Time for formula cache              " + CacheTime);
-      pOut.println("Time for interpolant cache          " + CacheInterpolantsTime);
+      //pOut.println("Time for computing path             " + ComputePath);
+      //pOut.println("Time for refinement                 " + Refinement);
+     // pOut.println("Time for formula cache              " + CacheTime);
+     // pOut.println("Time for interpolant cache          " + CacheInterpolantsTime);
       pOut.println("");
-      pOut.println("Total number of refinable usages:               " + totalUsagesToRefine);
-      pOut.println("Number of skipped usages due to repeated trace: " + skippedUsages);
-      pOut.println("Total number of refinable paths:                " + totalPathsToRefine);
+     // pOut.println("Total number of refinable usages:               " + totalUsagesToRefine);
+     // pOut.println("Number of skipped usages due to repeated trace: " + skippedUsages);
+    //  pOut.println("Total number of refinable paths:                " + totalPathsToRefine);
       refinerBlock.printStatistics(pOut);
     }
 
@@ -121,7 +122,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
   private boolean totalARGCleaning = false;
 
   //private Set<List<Integer>> refinedStates;
-  private final InterpolantCache iCache = new InterpolantCache();
+  private final Set<Set<CFAEdge>> iCache;
 
   private final ConfigurableRefinementBlock<UnrefinedUsagePointSet> refinerBlock;
 
@@ -138,9 +139,10 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
 
     RefinementStub stub = new RefinementStub();
     PredicateRefinerAdapter predicateRefinerAdapter = new PredicateRefinerAdapter(stub, cpa, null);
-    PathIterator pIterator = new PathIterator(this.subgraphStatesToReachedState, transfer, predicateRefinerAdapter);
+    PathIterator pIterator = new PathIterator(this.subgraphStatesToReachedState, transfer, predicateRefinerAdapter, logger);
     UsageIterator uIterator = new UsageIterator(pIterator, null, logger);
     refinerBlock = uIterator;
+    iCache = predicateRefinerAdapter.getInterpolantCache();
   }
 
   public static Refiner create(ConfigurableProgramAnalysis pCpa) throws CPAException, InvalidConfigurationException {
@@ -165,7 +167,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
   public boolean performRefinement(ReachedSet pReached) throws CPAException, InterruptedException {
     CPAs.retrieveCPA(cpa, UsageStatisticsCPA.class).getStats().printUnsafeRawdata(pReached, true);
 
-    iCache.initKeySet();
+    //iCache.initKeySet();
     UsageContainer container = AbstractStates.extractStateByType(pReached.getFirstState(), UsageStatisticsState.class).getContainer();
     //final RefineableUsageComputer computer = new RefineableUsageComputer(container, logger);
     BAMPredicateCPA bamcpa = CPAs.retrieveCPA(cpa, BAMPredicateCPA.class);
@@ -203,13 +205,15 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     iterator = container.getUnsafeIterator();
     while (iterator.hasNext()) {
       SingleIdentifier currentId = iterator.next();
+
       AbstractUsagePointSet pointSet = container.getUsages(currentId);
       if (pointSet instanceof UnrefinedUsagePointSet) {
         RefinementResult result = refinerBlock.call((UnrefinedUsagePointSet)pointSet);
         refinementFinish |= result.isFalse();
 
         PredicatePrecision info = (PredicatePrecision) result.getInfo(UsageIterator.class);
-        if (info != null) {
+
+        if (info != null && !info.getLocalPredicates().isEmpty()) {
           PredicatePrecision updatedPrecision;
           if (precisionMap.containsKey(currentId)) {
             updatedPrecision = precisionMap.get(currentId).mergeWith(info);
@@ -218,7 +222,6 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
           }
           precisionMap.put(currentId, updatedPrecision);
         }
-
       }
     }
 
@@ -313,12 +316,12 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       System.out.println("Clean: " + predicates.getLocalPredicates().size());
       pReached.updatePrecision(pReached.getFirstState(),
           Precisions.replaceByType(p, PredicatePrecision.empty(), Predicates.instanceOf(PredicatePrecision.class)));
-      iCache.reset();
+      iCache.clear();
       lastFalseUnsafeSize = originUnsafeSize;
       lastTrueUnsafes = newTrueUnsafeSize;
     }
     if (refinementFinish) {
-      iCache.removeUnusedCacheEntries();
+      //iCache.removeUnusedCacheEntries();
       bamcpa.clearAllCaches();
       ARGState.clearIdGenerator();
       ARGState firstState = (ARGState) pReached.getFirstState();
@@ -344,6 +347,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
           PredicatePrecision.class);
 
       subgraphStatesToReachedState.clear();
+      refinerBlock.finish(UsageStatisticsRefiner.class);
       System.out.println("Total number of predicates: " + p.getLocalPredicates().size());
     }
     pStat.UnsafeCheck.stopIfRunning();

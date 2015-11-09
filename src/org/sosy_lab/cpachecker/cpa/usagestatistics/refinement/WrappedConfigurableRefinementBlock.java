@@ -32,7 +32,7 @@ public abstract class WrappedConfigurableRefinementBlock<I, O> implements Config
   }
 
   @Override
-  public RefinementResult finish(Class<? extends RefinementInterface> callerClass) {
+  public RefinementResult finish(Class<? extends Object> callerClass) {
     return wrappedRefiner.finish(callerClass);
   }
 }
