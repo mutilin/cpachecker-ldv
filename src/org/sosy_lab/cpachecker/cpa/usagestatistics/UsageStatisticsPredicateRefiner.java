@@ -31,6 +31,7 @@ import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.core.CounterexampleInfo;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
+import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.WrapperCPA;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
@@ -93,6 +94,10 @@ public class UsageStatisticsPredicateRefiner extends BAMPredicateRefiner {
 
   public PredicatePrecision getLastPrecision() {
     return strategy.lastAddedPrecision;
+  }
+
+  public Precision getCurrentPrecision() {
+    return ARGReached.asReachedSet().getPrecision(ARGReached.asReachedSet().getFirstState());
   }
 
   public void updateReachedSet(ReachedSet pReached) {

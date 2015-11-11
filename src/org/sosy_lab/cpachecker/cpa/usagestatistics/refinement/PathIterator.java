@@ -49,7 +49,6 @@ import org.sosy_lab.cpachecker.cpa.bam.BAMMultipleCEXSubgraphComputer;
 import org.sosy_lab.cpachecker.cpa.bam.BAMTransferRelation;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicatePrecision;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsRefiner;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 
@@ -283,16 +282,13 @@ public class PathIterator extends WrappedConfigurableRefinementBlock<UsageInfo, 
     ARGPath result = ARGUtils.getRandomPath(rootOfSubgraph);
     additionTimer.start();
     List<Integer> stateNumbers = from(result.asStatesList()).transform(GET_ORIGIN_STATE_NUMBERS).toList();
-    if (refinedStates.contains(stateNumbers)) {
-      successfulAdditionChecks++;
+    for (List<Integer> previousStates : refinedStates) {
+      if (stateNumbers.containsAll(previousStates)) {
+        successfulAdditionChecks++;
+      }
     }
     additionTimer.stop();
     return result;
-  }
-
-  @Override
-  public void start(Map<Class<? extends RefinementInterface>, Object> pUpdateInfo) {
-    wrappedRefiner.start(pUpdateInfo);
   }
 
   @Override
@@ -308,7 +304,7 @@ public class PathIterator extends WrappedConfigurableRefinementBlock<UsageInfo, 
 
   @Override
   public RefinementResult finish(Class<? extends Object> callerClass) {
-    if (callerClass.equals(UsageStatisticsRefiner.class)) {
+    if (callerClass.equals(IdentifierIterator.class)) {
       //Refinement iteration finishes
       refinedStates.clear();
     }

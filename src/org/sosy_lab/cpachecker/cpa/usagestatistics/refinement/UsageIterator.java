@@ -25,7 +25,6 @@ package org.sosy_lab.cpachecker.cpa.usagestatistics.refinement;
 
 import java.io.PrintStream;
 import java.util.Iterator;
-import java.util.Map;
 import java.util.logging.Level;
 
 import org.sosy_lab.common.Pair;
@@ -36,15 +35,17 @@ import org.sosy_lab.cpachecker.cpa.predicate.PredicatePrecision;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.RefinementResult.RefinementStatus;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.AbstractUsageInfoSet;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.AbstractUsagePointSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UnrefinedUsageInfoSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UnrefinedUsagePointSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UnsafeDetector;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsageContainer;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsagePoint;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
+import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 
-public class UsageIterator extends WrappedConfigurableRefinementBlock<UnrefinedUsagePointSet, UsageInfo> {
+public class UsageIterator extends WrappedConfigurableRefinementBlock<SingleIdentifier, UsageInfo> {
   private UsageContainer container;
   private UnsafeDetector detector;
   private Iterator<UsagePoint>  usagePointIterator;
@@ -67,91 +68,101 @@ public class UsageIterator extends WrappedConfigurableRefinementBlock<UnrefinedU
   }
 
   @Override
-  public RefinementResult call(UnrefinedUsagePointSet pInput) throws CPAException, InterruptedException {
+  public RefinementResult call(SingleIdentifier pInput) throws CPAException, InterruptedException {
     AbstractUsageInfoSet refineableUsageInfoSet;
 
     totalTimer.start();
-    usagePointIterator = pInput.getPointIterator();
+    AbstractUsagePointSet pointSet = container.getUsages(pInput);
+
+    assert (pointSet instanceof UnrefinedUsagePointSet);
+
+    UnrefinedUsagePointSet currentUsagePointSet = (UnrefinedUsagePointSet)pointSet;
+
+    usagePointIterator = currentUsagePointSet.getPointIterator();
 
     PredicatePrecision completePrecision = PredicatePrecision.empty();
 
     RefinementResult result;
 
-    while (usagePointIterator.hasNext()) {
-      currentUsagePoint = usagePointIterator.next();
-      refineableUsageInfoSet = pInput.getUsageInfo(currentUsagePoint);
+    /*Map<Class<? extends RefinementInterface>, Object> updateInfoForPredicateCaches = new HashMap<>();
+    updateInfoForPredicateCaches.put(PredicateRefinerAdapter.class, pInput);
+    wrappedRefiner.start(getClass(), updateInfoForPredicateCaches);*/
 
-      if (!refineableUsageInfoSet.isTrue()) {
-        currentRefineableUsageInfoSet = (UnrefinedUsageInfoSet)refineableUsageInfoSet;
-        while (currentRefineableUsageInfoSet.size() > 0) {
-          currentUsageInfo = currentRefineableUsageInfoSet.getOneExample();
+      try {
+      while (usagePointIterator.hasNext()) {
+        currentUsagePoint = usagePointIterator.next();
+        refineableUsageInfoSet = currentUsagePointSet.getUsageInfo(currentUsagePoint);
 
-          numberOfUsagesRefined++;
-          totalTimer.stop();
-          result = wrappedRefiner.call(currentUsageInfo);
-          totalTimer.start();
+        if (!refineableUsageInfoSet.isTrue()) {
+          currentRefineableUsageInfoSet = (UnrefinedUsageInfoSet)refineableUsageInfoSet;
+          while (currentRefineableUsageInfoSet.size() > 0) {
+            currentUsageInfo = currentRefineableUsageInfoSet.getOneExample();
 
-          if (result.status == RefinementStatus.FALSE) {
-            logger.log(Level.FINE, "Usage " + currentUsageInfo + " is not reachable, remove it from container");
-            currentRefineableUsageInfoSet.remove(currentUsageInfo);
-            PredicatePrecision precision = (PredicatePrecision)result.getInfo(PathIterator.class);
-            if (precision != null) {
-              completePrecision = completePrecision.mergeWith(precision);
-            }
-          } else if (result.status == RefinementStatus.TRUE) {
-            logger.log(Level.FINE, "Usage " + currentUsageInfo + " is reachable, mark it as true");
-            Pair<ARGPath, PredicatePrecision> pair = (Pair<ARGPath, PredicatePrecision>)result.getInfo(PathIterator.class);
-            ARGPath path = pair.getFirst();
-            PredicatePrecision precision = pair.getSecond();
-            if (precision != null) {
-              completePrecision = completePrecision.mergeWith(precision);
-            }
-            //TODO May be, .asEdgesList? One more edge.
-            pInput.markAsReachableUsage(currentUsageInfo, path.getInnerEdges());
-            if (detector.isTrueUnsafe(pInput)) {
-              container.setAsRefined(pInput);
-              result = RefinementResult.createTrue();
-              result.addInfo(UsageIterator.class, completePrecision);
-              totalTimer.stop();
-              return result;
-            }
-            //switch to another point
-            break;
-          } else {
-            //TODO What?
-          }
-        }
-        if (currentRefineableUsageInfoSet.size() == 0) {
-          //There are no usages in the point
-          pInput.remove(currentUsagePoint);
-          if (!detector.isUnsafe(pInput)) {
-            //May be we remove all 'write' accesses, so move to other id
-            result = RefinementResult.createFalse();
-            result.addInfo(UsageIterator.class, completePrecision);
+            numberOfUsagesRefined++;
             totalTimer.stop();
-            return result;
-          } else {
-            //We change the tree structure, recreate an iterator
-            usagePointIterator = pInput.getPointIterator();
+            result = wrappedRefiner.call(currentUsageInfo);
+            totalTimer.start();
+
+            if (result.status == RefinementStatus.FALSE) {
+              logger.log(Level.FINE, "Usage " + currentUsageInfo + " is not reachable, remove it from container");
+              currentRefineableUsageInfoSet.remove(currentUsageInfo);
+              PredicatePrecision precision = (PredicatePrecision)result.getInfo(PathIterator.class);
+              if (precision != null) {
+                completePrecision = completePrecision.mergeWith(precision);
+              }
+            } else if (result.status == RefinementStatus.TRUE) {
+              logger.log(Level.FINE, "Usage " + currentUsageInfo + " is reachable, mark it as true");
+              Pair<ARGPath, PredicatePrecision> pair = (Pair<ARGPath, PredicatePrecision>)result.getInfo(PathIterator.class);
+              ARGPath path = pair.getFirst();
+              PredicatePrecision precision = pair.getSecond();
+              if (precision != null) {
+                completePrecision = completePrecision.mergeWith(precision);
+              }
+              //TODO May be, .asEdgesList? One more edge.
+              currentUsagePointSet.markAsReachableUsage(currentUsageInfo, path.getInnerEdges());
+              if (detector.isTrueUnsafe(currentUsagePointSet)) {
+                container.setAsRefined(currentUsagePointSet);
+                result = RefinementResult.createTrue();
+                result.addInfo(UsageIterator.class, completePrecision);
+                return result;
+              }
+              //switch to another point
+              break;
+            } else {
+              //TODO What?
+            }
+          }
+          if (currentRefineableUsageInfoSet.size() == 0) {
+            //There are no usages in the point
+            currentUsagePointSet.remove(currentUsagePoint);
+            if (!detector.isUnsafe(currentUsagePointSet)) {
+              //May be we remove all 'write' accesses, so move to other id
+              result = RefinementResult.createFalse();
+              result.addInfo(UsageIterator.class, completePrecision);
+              return result;
+            } else {
+              //We change the tree structure, recreate an iterator
+              usagePointIterator = currentUsagePointSet.getPointIterator();
+            }
           }
         }
       }
+      result = RefinementResult.createUnknown();
+      result.addInfo(UsageIterator.class, completePrecision);
+      return result;
+    } finally {
+      totalTimer.stop();
+      //wrappedRefiner.finish(getClass());
     }
-    result = RefinementResult.createUnknown();
-    result.addInfo(UsageIterator.class, completePrecision);
-    totalTimer.stop();
-    return result;
   }
 
   @Override
-  public void start(Map<Class<? extends RefinementInterface>, Object> pUpdateInfo) {
-    if (pUpdateInfo.containsKey(UsageIterator.class)) {
-      Object info = pUpdateInfo.get(UsageIterator.class);
-      assert info instanceof UsageContainer;
-      container = (UsageContainer) info;
+  protected void handleStartSignal(Class<? extends RefinementInterface> pCallerClass, Object pData) {
+    if (pCallerClass.equals(IdentifierIterator.class)) {
+      assert pData instanceof UsageContainer;
+      container = (UsageContainer) pData;
       detector = container.getUnsafeDetector();
     }
-    wrappedRefiner.start(pUpdateInfo);
   }
 
   @Override

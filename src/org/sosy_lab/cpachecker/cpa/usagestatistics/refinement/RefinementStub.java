@@ -43,11 +43,13 @@ public class RefinementStub implements ConfigurableRefinementBlock<ARGPath> {
   }
 
   @Override
-  public void start(Map<Class<? extends RefinementInterface>, Object> pUpdateInfo) {
+  public void printStatistics(PrintStream pOut) {
   }
 
   @Override
-  public void printStatistics(PrintStream pOut) {
+  public void start(Class<? extends RefinementInterface> pCallerClass,
+      Map<Class<? extends RefinementInterface>, Object> pUpdateInfo) {
+
   }
 
 }

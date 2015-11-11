@@ -38,13 +38,16 @@ import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.core.CounterexampleInfo;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
+import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.WrapperCPA;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
 import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateCPA;
 import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateRefiner;
+import org.sosy_lab.cpachecker.cpa.predicate.PredicatePrecision;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsPredicateRefiner;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
+import org.sosy_lab.cpachecker.util.Precisions;
 
 import com.google.common.collect.Sets;
 
@@ -53,8 +56,8 @@ public class PredicateRefinerAdapter extends WrappedConfigurableRefinementBlock<
   UsageStatisticsPredicateRefiner refiner;
   LogManager logger;
 
-  private final Map<Set<CFAEdge>, List<CFAEdge>> falseCache = new HashMap<>();
-  private final Set<List<CFAEdge>> trueCache = new HashSet<>();
+  private final Map<Set<CFAEdge>, PredicatePrecision> falseCache = new HashMap<>();
+  private final Set<Set<CFAEdge>> trueCache = new HashSet<>();
 
   //Statistics
   private Timer totalTimer = new Timer();
@@ -84,23 +87,34 @@ public class PredicateRefinerAdapter extends WrappedConfigurableRefinementBlock<
     totalTimer.start();
     RefinementResult result;
 
-    try {
       List<CFAEdge> currentPath = pInput.getInnerEdges();
       if (trueCache.contains(currentPath)) {
         //Somewhen we have already refined this path as true
         result = RefinementResult.createTrue();
         totalTimer.stop();
-        System.out.println(currentPath.hashCode() + " is in true cache");
         result = wrappedRefiner.call(pInput);
         totalTimer.start();
       } else {
         Set<CFAEdge> edgeSet = Sets.newHashSet(currentPath);
         if (falseCache.containsKey(edgeSet)) {
-          numberOfrepeatedPaths++;
-          System.out.println(currentPath.hashCode() + " is in false cache, previous is " + falseCache.get(edgeSet).hashCode());
-          logger.log(Level.WARNING, "Path is repeated");
+          PredicatePrecision previousPreds = falseCache.get(edgeSet);
+          Precision currentPrecision = refiner.getCurrentPrecision();
+          PredicatePrecision currentPreds = Precisions.extractPrecisionByType(currentPrecision, PredicatePrecision.class);
+          if (previousPreds.calculateDifferenceTo(currentPreds) == 0) {
+            //All old interpolants are present => we are looped
+            numberOfrepeatedPaths++;
+            logger.log(Level.WARNING, "Path is repeated");
+            totalTimer.stop();
+            result = wrappedRefiner.call(pInput);
+            totalTimer.start();
+          } else {
+            //rerefine it to obtain new states
+            logger.log(Level.WARNING, "Path is repeated, but predicates are missed");
+            result = performPredicateRefinement(pInput);
+            //We expect the same result
+            assert result.isFalse();
+          }
           //pInput.failureFlag = true;
-          result = RefinementResult.createTrue();
         } else {
           /*if (!totalARGCleaning) {
             subtreesRemover.addStateForRemoving((ARGState)target.getKeyState());
@@ -108,20 +122,30 @@ public class PredicateRefinerAdapter extends WrappedConfigurableRefinementBlock<
               subtreesRemover.addStateForRemoving(state);
             }
           }*/
-          CounterexampleInfo cex = refiner.performRefinement(pInput);
-
-          if (!cex.isSpurious()) {
-            trueCache.add(currentPath);
-            totalTimer.stop();
-            result = wrappedRefiner.call(pInput);
-            totalTimer.start();
-          } else {
-            result = RefinementResult.createFalse();
-            result.addInfo(PredicateRefinerAdapter.class, Pair.of(refiner.getLastAffectedStates(), refiner.getLastPrecision()));
-            falseCache.put(edgeSet, currentPath);
-          }
+          result = performPredicateRefinement(pInput);
         }
       }
+    totalTimer.stop();
+    return result;
+  }
+
+  private RefinementResult performPredicateRefinement(ARGPath path) throws CPAException, InterruptedException {
+    RefinementResult result;
+    try {
+      CounterexampleInfo cex = refiner.performRefinement(path);
+      Set<CFAEdge> edgeSet = Sets.newHashSet(path.getInnerEdges());
+
+      if (!cex.isSpurious()) {
+        trueCache.add(edgeSet);
+        totalTimer.stop();
+        result = wrappedRefiner.call(path);
+        totalTimer.start();
+      } else {
+        result = RefinementResult.createFalse();
+        result.addInfo(PredicateRefinerAdapter.class, Pair.of(refiner.getLastAffectedStates(), refiner.getLastPrecision()));
+        falseCache.put(edgeSet, refiner.getLastPrecision());
+      }
+
     } catch (IllegalStateException e) {
       //msat_solver return -1 <=> unknown
       //consider its as true;
@@ -135,19 +159,15 @@ public class PredicateRefinerAdapter extends WrappedConfigurableRefinementBlock<
     //  continue;
       result = RefinementResult.createUnknown();
     }
-    totalTimer.stop();
     return result;
   }
 
   @Override
-  public void start(Map<Class<? extends RefinementInterface>, Object> pUpdateInfo) {
-    if (pUpdateInfo.containsKey(PredicateRefinerAdapter.class)) {
-      Object info = pUpdateInfo.get(PredicateRefinerAdapter.class);
-      assert info instanceof ReachedSet;
-      refiner.updateReachedSet((ReachedSet)info);
+  protected void handleStartSignal(Class<? extends RefinementInterface> pCallerClass, Object pData) {
+    if (pCallerClass.equals(IdentifierIterator.class)) {
+      assert pData instanceof ReachedSet;
+      refiner.updateReachedSet((ReachedSet)pData);
     }
-    wrappedRefiner.start(pUpdateInfo);
-
   }
 
   @Override
@@ -159,9 +179,10 @@ public class PredicateRefinerAdapter extends WrappedConfigurableRefinementBlock<
     wrappedRefiner.printStatistics(pOut);
   }
 
-  public Set<Set<CFAEdge>> getInterpolantCache() {
-    //TODO rewrite using start and finish signals
-    return falseCache.keySet();
+  @Override
+  public RefinementResult finish(Class<? extends Object> pCallerClass) {
+    RefinementResult result = super.finish(pCallerClass);
+    return result;
   }
 
 }

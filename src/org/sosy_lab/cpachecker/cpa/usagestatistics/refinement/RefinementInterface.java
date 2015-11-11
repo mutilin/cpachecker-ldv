@@ -28,7 +28,7 @@ import java.util.Map;
 
 
 public interface RefinementInterface {
-  void start(Map<Class<? extends RefinementInterface>, Object> updateInfo);
+  void start(Class<? extends RefinementInterface> callerClass, Map<Class<? extends RefinementInterface>, Object> updateInfo);
   RefinementResult finish(Class<? extends Object> callerClass);
   void printStatistics(PrintStream pOut);
 }
