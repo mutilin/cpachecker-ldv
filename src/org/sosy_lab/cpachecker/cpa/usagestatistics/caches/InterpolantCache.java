@@ -42,6 +42,7 @@ public class InterpolantCache {
 	}
 
 	public boolean contains(UsageInfo pUinfo, Set<CFAEdge> path) {
+	  unusedKeySet.remove(pUinfo);
 	  return visitedPaths.get(pUinfo).contains(path);
 	}
 

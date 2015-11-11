@@ -225,46 +225,46 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
       while (!pathIsTrue && ((pPath = pathIterator.next(strategy.lastAffectedState)) != null)) {
         pStat.ComputePath.stop();
 
-        CounterexampleInfo counterexample = null;
-        try {
-          pStat.Refinement.start();
-          rootOfSubgraph = pPath.getFirstState();
-          counterexample = performRefinement(argReached, pPath);
-          numberOfPathRefined++;
-          pStat.Refinement.stop();
-        } catch (IllegalStateException e) {
-          //msat_solver return -1 <=> unknown
-          //consider its as true;
-          logger.log(Level.WARNING, "Solver exception: " + e.getMessage());
-          logger.log(Level.WARNING, "Consider " + target + " as true");
+        if (iCache.contains(target, Sets.newHashSet(pPath.getInnerEdges()))) {
           computer.setResultOfRefinement(target, true, pPath.getInnerEdges());
+          logger.log(Level.WARNING, "Path is repeated");
           target.failureFlag = true;
-          pStat.Refinement.stop();
-          pStat.ComputePath.start();
-          continue;
-        }
-        refinementFinish |= counterexample.isSpurious();
-        if (counterexample.isSpurious()) {
-          pStat.CacheTime.start();
+          pathIsTrue = true;
+        } else {
 
-          if (iCache.contains(target, Sets.newHashSet(pPath.asEdgesList()))) {
-          	computer.setResultOfRefinement(target, true, pPath.getInnerEdges());
-  	        logger.log(Level.WARNING, "Interpolants are repeated, consider " + target + " as true");
+          CounterexampleInfo counterexample = null;
+          try {
+            pStat.Refinement.start();
+            rootOfSubgraph = pPath.getFirstState();
+            counterexample = performRefinement(argReached, pPath);
+            numberOfPathRefined++;
+            pStat.Refinement.stop();
+          } catch (IllegalStateException e) {
+            //msat_solver return -1 <=> unknown
+            //consider its as true;
+            logger.log(Level.WARNING, "Solver exception: " + e.getMessage());
+            logger.log(Level.WARNING, "Consider " + target + " as true");
+            computer.setResultOfRefinement(target, true, pPath.getInnerEdges());
             target.failureFlag = true;
-            pathIsTrue = true;
-          } else {
-            iCache.add(target, Sets.newHashSet(pPath.asEdgesList()));
+            pStat.Refinement.stop();
+            pStat.ComputePath.start();
+            continue;
+          }
+          refinementFinish |= counterexample.isSpurious();
+          if (counterexample.isSpurious()) {
+            pStat.CacheTime.start();
+            iCache.add(target, Sets.newHashSet(pPath.getInnerEdges()));
           	if (!totalARGCleaning) {
             	subtreesRemover.addStateForRemoving((ARGState)target.getKeyState());
             	for (ARGState state : strategy.lastAffectedStates) {
             	  subtreesRemover.addStateForRemoving(state);
             	}
           	}
+            pStat.CacheTime.stop();
+          } else {
+            pathIsTrue = true;
+            computer.setResultOfRefinement(target, true, pPath.getInnerEdges());
           }
-          pStat.CacheTime.stop();
-        } else {
-          pathIsTrue = true;
-          computer.setResultOfRefinement(target, true, pPath.getInnerEdges());
         }
         pStat.ComputePath.start();
         if (numberOfPathRefined >= refinablePathLimitation) {
