@@ -41,7 +41,6 @@ import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.WrapperCPA;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
-import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
 import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateCPA;
 import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateRefiner;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicatePrecision;
@@ -52,7 +51,7 @@ import org.sosy_lab.cpachecker.util.Precisions;
 import com.google.common.collect.Sets;
 
 
-public class PredicateRefinerAdapter extends WrappedConfigurableRefinementBlock<ARGPath, ARGPath> {
+public class PredicateRefinerAdapter extends WrappedConfigurableRefinementBlock<ExtendedARGPath, ExtendedARGPath> {
   UsageStatisticsPredicateRefiner refiner;
   LogManager logger;
 
@@ -64,7 +63,7 @@ public class PredicateRefinerAdapter extends WrappedConfigurableRefinementBlock<
   private int solverFailures = 0;
   private int numberOfrepeatedPaths = 0;
 
-  public PredicateRefinerAdapter(ConfigurableRefinementBlock<ARGPath> wrapper,
+  public PredicateRefinerAdapter(ConfigurableRefinementBlock<ExtendedARGPath> wrapper,
       ConfigurableProgramAnalysis pCpa, ReachedSet pReached) throws CPAException, InvalidConfigurationException {
     super(wrapper);
 
@@ -83,7 +82,7 @@ public class PredicateRefinerAdapter extends WrappedConfigurableRefinementBlock<
   }
 
   @Override
-  public RefinementResult call(ARGPath pInput) throws CPAException, InterruptedException {
+  public RefinementResult call(ExtendedARGPath pInput) throws CPAException, InterruptedException {
     totalTimer.start();
     RefinementResult result;
 
@@ -129,7 +128,7 @@ public class PredicateRefinerAdapter extends WrappedConfigurableRefinementBlock<
     return result;
   }
 
-  private RefinementResult performPredicateRefinement(ARGPath path) throws CPAException, InterruptedException {
+  private RefinementResult performPredicateRefinement(ExtendedARGPath path) throws CPAException, InterruptedException {
     RefinementResult result;
     try {
       CounterexampleInfo cex = refiner.performRefinement(path);

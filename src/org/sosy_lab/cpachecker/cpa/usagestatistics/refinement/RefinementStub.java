@@ -24,16 +24,14 @@
 package org.sosy_lab.cpachecker.cpa.usagestatistics.refinement;
 
 import java.io.PrintStream;
-import java.util.Map;
 
-import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 
 
-public class RefinementStub implements ConfigurableRefinementBlock<ARGPath> {
+public class RefinementStub implements ConfigurableRefinementBlock<ExtendedARGPath> {
 
   @Override
-  public RefinementResult call(ARGPath pInput) throws CPAException, InterruptedException {
+  public RefinementResult call(ExtendedARGPath pInput) throws CPAException, InterruptedException {
     return RefinementResult.createTrue();
   }
 
@@ -48,7 +46,7 @@ public class RefinementStub implements ConfigurableRefinementBlock<ARGPath> {
 
   @Override
   public void start(Class<? extends RefinementInterface> pCallerClass,
-      Map<Class<? extends RefinementInterface>, Object> pUpdateInfo) {
+      Class<? extends RefinementInterface> dstClass, Object pUpdateInfo) {
 
   }
 

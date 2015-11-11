@@ -23,7 +23,6 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics.refinement;
 
-import java.util.Map;
 
 
 public abstract class WrappedConfigurableRefinementBlock<I, O> implements ConfigurableRefinementBlock<I> {
@@ -31,21 +30,29 @@ public abstract class WrappedConfigurableRefinementBlock<I, O> implements Config
 
   protected void handleStartSignal(Class<? extends RefinementInterface> callerClass, Object data) {}
 
+  protected void sendStartSignal(Class<? extends RefinementInterface> dstClass, Object data) {
+    wrappedRefiner.start(getClass(), dstClass, data);
+  }
+
   public WrappedConfigurableRefinementBlock(ConfigurableRefinementBlock<O> wrapper) {
     wrappedRefiner = wrapper;
   }
 
   @Override
-  public void start(Class<? extends RefinementInterface> callerClass, Map<Class<? extends RefinementInterface>, Object> updateInfo) {
-    if (updateInfo.containsKey(getClass())) {
-      handleStartSignal(callerClass, updateInfo.get(getClass()));
+  public void start(Class<? extends RefinementInterface> callerClass, Class<? extends RefinementInterface> dstClass, Object data) {
+    if (dstClass.equals(getClass())) {
+      handleStartSignal(callerClass, data);
     }
-    wrappedRefiner.start(callerClass, updateInfo);
+    wrappedRefiner.start(callerClass, dstClass, data);
   }
 
 
   @Override
   public RefinementResult finish(Class<? extends Object> callerClass) {
     return wrappedRefiner.finish(callerClass);
+  }
+
+  protected RefinementResult sendFinishSignal() {
+    return wrappedRefiner.finish(getClass());
   }
 }

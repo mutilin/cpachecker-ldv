@@ -57,7 +57,7 @@ import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
 
 
-public class PathIterator extends WrappedConfigurableRefinementBlock<UsageInfo, ARGPath> {
+public class PathIterator extends WrappedConfigurableRefinementBlock<UsageInfo, ExtendedARGPath> {
 
   private final Set<List<Integer>> refinedStates = new HashSet<>();
   private final Map<ARGState, ARGState> subgraphStatesToReachedState;
@@ -86,7 +86,7 @@ public class PathIterator extends WrappedConfigurableRefinementBlock<UsageInfo, 
   };
 
   public PathIterator(Map<ARGState, ARGState> pSubgraphStatesToReachedState, BAMTransferRelation bamTransfer,
-      ConfigurableRefinementBlock<ARGPath> pWrapper, LogManager l) {
+      ConfigurableRefinementBlock<ExtendedARGPath> pWrapper, LogManager l) {
     super(pWrapper);
     subgraphStatesToReachedState = pSubgraphStatesToReachedState;
     transfer = bamTransfer;
@@ -110,7 +110,7 @@ public class PathIterator extends WrappedConfigurableRefinementBlock<UsageInfo, 
 
       numberOfPathCalculated++;
       totalTimer.stop();
-      RefinementResult wrapperResult = wrappedRefiner.call(currentPath);
+      RefinementResult wrapperResult = wrappedRefiner.call(new ExtendedARGPath(currentPath, pInput));
       totalTimer.start();
 
       if (wrapperResult.isTrue()) {

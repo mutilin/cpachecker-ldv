@@ -48,10 +48,6 @@ import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 public class UsageIterator extends WrappedConfigurableRefinementBlock<SingleIdentifier, UsageInfo> {
   private UsageContainer container;
   private UnsafeDetector detector;
-  private Iterator<UsagePoint>  usagePointIterator;
-  private UnrefinedUsageInfoSet currentRefineableUsageInfoSet;
-  private UsagePoint currentUsagePoint;
-  private UsageInfo currentUsageInfo;
   private final LogManager logger;
 
   //Statistics
@@ -70,6 +66,10 @@ public class UsageIterator extends WrappedConfigurableRefinementBlock<SingleIden
   @Override
   public RefinementResult call(SingleIdentifier pInput) throws CPAException, InterruptedException {
     AbstractUsageInfoSet refineableUsageInfoSet;
+    Iterator<UsagePoint>  usagePointIterator;
+    UnrefinedUsageInfoSet currentRefineableUsageInfoSet;
+    UsagePoint currentUsagePoint;
+    UsageInfo currentUsageInfo;
 
     totalTimer.start();
     AbstractUsagePointSet pointSet = container.getUsages(pInput);
@@ -84,11 +84,7 @@ public class UsageIterator extends WrappedConfigurableRefinementBlock<SingleIden
 
     RefinementResult result;
 
-    /*Map<Class<? extends RefinementInterface>, Object> updateInfoForPredicateCaches = new HashMap<>();
-    updateInfoForPredicateCaches.put(PredicateRefinerAdapter.class, pInput);
-    wrappedRefiner.start(getClass(), updateInfoForPredicateCaches);*/
-
-      try {
+    try {
       while (usagePointIterator.hasNext()) {
         currentUsagePoint = usagePointIterator.next();
         refineableUsageInfoSet = currentUsagePointSet.getUsageInfo(currentUsagePoint);
@@ -152,7 +148,6 @@ public class UsageIterator extends WrappedConfigurableRefinementBlock<SingleIden
       return result;
     } finally {
       totalTimer.stop();
-      //wrappedRefiner.finish(getClass());
     }
   }
 

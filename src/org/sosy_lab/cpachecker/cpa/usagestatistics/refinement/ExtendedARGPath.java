@@ -24,10 +24,18 @@
 package org.sosy_lab.cpachecker.cpa.usagestatistics.refinement;
 
 import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 
 
 public class ExtendedARGPath extends ARGPath {
-  public ExtendedARGPath(ARGPath origin) {
+  private final UsageInfo usage;
+
+  public ExtendedARGPath(ARGPath origin, UsageInfo target) {
     super(origin.asStatesList(), origin.asEdgesList());
+    usage = target;
+  }
+
+  public UsageInfo getUsageInfo() {
+    return usage;
   }
 }
