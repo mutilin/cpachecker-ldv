@@ -152,7 +152,7 @@ public class UsageIterator extends WrappedConfigurableRefinementBlock<SingleIden
   }
 
   @Override
-  protected void handleStartSignal(Class<? extends RefinementInterface> pCallerClass, Object pData) {
+  protected void handleUpdateSignal(Class<? extends RefinementInterface> pCallerClass, Object pData) {
     if (pCallerClass.equals(IdentifierIterator.class)) {
       assert pData instanceof UsageContainer;
       container = (UsageContainer) pData;

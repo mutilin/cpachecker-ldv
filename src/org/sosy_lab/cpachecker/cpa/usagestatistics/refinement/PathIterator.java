@@ -303,11 +303,11 @@ public class PathIterator extends WrappedConfigurableRefinementBlock<UsageInfo, 
   }
 
   @Override
-  public RefinementResult finish(Class<? extends Object> callerClass) {
+  public Object handleFinishSignal(Class<? extends RefinementInterface> callerClass) {
     if (callerClass.equals(IdentifierIterator.class)) {
       //Refinement iteration finishes
       refinedStates.clear();
     }
-    return wrappedRefiner.finish(callerClass);
+    return null;
   }
 }

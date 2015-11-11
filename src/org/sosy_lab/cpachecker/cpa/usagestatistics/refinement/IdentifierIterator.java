@@ -25,8 +25,10 @@ package org.sosy_lab.cpachecker.cpa.usagestatistics.refinement;
 
 import java.io.PrintStream;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Set;
 import java.util.logging.Level;
 
 import org.sosy_lab.common.configuration.Configuration;
@@ -126,8 +128,8 @@ public class IdentifierIterator extends WrappedConfigurableRefinementBlock<Reach
     int counter = lastFalseUnsafeSize - originUnsafeSize;
     boolean refinementFinish = false;
 
-    sendStartSignal(PredicateRefinerAdapter.class, pReached);
-    sendStartSignal(UsageIterator.class, container);
+    sendUpdateSignal(PredicateRefinerAdapter.class, pReached);
+    sendUpdateSignal(UsageIterator.class, container);
 
     iterator = container.getUnsafeIterator();
     while (iterator.hasNext()) {
@@ -165,7 +167,7 @@ public class IdentifierIterator extends WrappedConfigurableRefinementBlock<Reach
           Precisions.replaceByType(p, PredicatePrecision.empty(), Predicates.instanceOf(PredicatePrecision.class)));
 
       //TODO will we need other finish signal?
-      wrappedRefiner.finish(getClass());
+      //wrappedRefiner.finish(getClass());
       lastFalseUnsafeSize = originUnsafeSize;
       lastTrueUnsafes = newTrueUnsafeSize;
     }
@@ -183,19 +185,22 @@ public class IdentifierIterator extends WrappedConfigurableRefinementBlock<Reach
       }
       pReached.clear();
       PredicatePrecision predicates = Precisions.extractPrecisionByType(precision, PredicatePrecision.class);
+      Set<SingleIdentifier> removedIds = new HashSet<>();
       for (SingleIdentifier id : container.getProcessedUnsafes()) {
         PredicatePrecision predicatesForId = precisionMap.get(id);
         if (predicatesForId != null) {
           predicates.subtract(predicatesForId);
         }
         precisionMap.remove(id);
+        removedIds.add(id);
       }
+      sendUpdateSignal(PredicateRefinerAdapter.class, removedIds);
       pReached.add(cpa.getInitialState(firstNode, StateSpacePartition.getDefaultPartition()), precision);
       PredicatePrecision p = Precisions.extractPrecisionByType(pReached.getPrecision(pReached.getFirstState()),
           PredicatePrecision.class);
 
       subgraphStatesToReachedState.clear();
-      wrappedRefiner.finish(IdentifierIterator.class);
+      sendFinishSignal();
       System.out.println("Total number of predicates: " + p.getLocalPredicates().size());
     }
     //pStat.UnsafeCheck.stopIfRunning();

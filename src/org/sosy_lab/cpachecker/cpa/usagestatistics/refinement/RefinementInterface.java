@@ -27,7 +27,9 @@ import java.io.PrintStream;
 
 
 public interface RefinementInterface {
-  void start(Class<? extends RefinementInterface> callerClass, Class<? extends RefinementInterface> dstClass, Object data);
-  RefinementResult finish(Class<? extends Object> callerClass);
+
+  void update(Class<? extends RefinementInterface> callerClass, Class<? extends RefinementInterface> dstClass, Object data);
+  void start(Class<? extends RefinementInterface> callerClass);
+  Object finish(Class<? extends RefinementInterface> callerClass);
   void printStatistics(PrintStream pOut);
 }

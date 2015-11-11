@@ -28,10 +28,24 @@ package org.sosy_lab.cpachecker.cpa.usagestatistics.refinement;
 public abstract class WrappedConfigurableRefinementBlock<I, O> implements ConfigurableRefinementBlock<I> {
   protected ConfigurableRefinementBlock<O> wrappedRefiner;
 
-  protected void handleStartSignal(Class<? extends RefinementInterface> callerClass, Object data) {}
+  protected void handleStartSignal(Class<? extends RefinementInterface> callerClass) {}
 
-  protected void sendStartSignal(Class<? extends RefinementInterface> dstClass, Object data) {
-    wrappedRefiner.start(getClass(), dstClass, data);
+  protected Object handleFinishSignal(Class<? extends RefinementInterface> callerClass) {return null;}
+
+  protected void handleUpdateSignal(Class<? extends RefinementInterface> callerClass, Object data) {}
+
+  protected void handleSignal(Class<? extends RefinementInterface> callerClass, Object data) {}
+
+  protected void sendStartSignal() {
+    wrappedRefiner.start(getClass());
+  }
+
+  protected void sendFinishSignal() {
+    wrappedRefiner.finish(getClass());
+  }
+
+  protected void sendUpdateSignal(Class<? extends RefinementInterface> dstClass, Object data) {
+    wrappedRefiner.update(getClass(), dstClass, data);
   }
 
   public WrappedConfigurableRefinementBlock(ConfigurableRefinementBlock<O> wrapper) {
@@ -39,20 +53,24 @@ public abstract class WrappedConfigurableRefinementBlock<I, O> implements Config
   }
 
   @Override
-  public void start(Class<? extends RefinementInterface> callerClass, Class<? extends RefinementInterface> dstClass, Object data) {
-    if (dstClass.equals(getClass())) {
-      handleStartSignal(callerClass, data);
+  public final void update(Class<? extends RefinementInterface> callerClass, Class<? extends RefinementInterface> dstClass, Object data) {
+    if (getClass().equals(dstClass)) {
+      handleUpdateSignal(callerClass, data);
+    } else {
+      wrappedRefiner.update(callerClass, dstClass, data);
     }
-    wrappedRefiner.start(callerClass, dstClass, data);
   }
-
 
   @Override
-  public RefinementResult finish(Class<? extends Object> callerClass) {
-    return wrappedRefiner.finish(callerClass);
+  public final void start(Class<? extends RefinementInterface> callerClass) {
+    handleStartSignal(callerClass);
+    wrappedRefiner.start(callerClass);
   }
 
-  protected RefinementResult sendFinishSignal() {
-    return wrappedRefiner.finish(getClass());
+  @Override
+  public final Object finish(Class<? extends RefinementInterface> callerClass) {
+    Object result = handleFinishSignal(callerClass);
+    //How to join?
+    return wrappedRefiner.finish(callerClass);
   }
 }

@@ -36,18 +36,22 @@ public class RefinementStub implements ConfigurableRefinementBlock<ExtendedARGPa
   }
 
   @Override
-  public RefinementResult finish(Class<? extends Object> pCallerClass) {
-    return RefinementResult.createTrue();
-  }
-
-  @Override
   public void printStatistics(PrintStream pOut) {
   }
 
   @Override
-  public void start(Class<? extends RefinementInterface> pCallerClass,
-      Class<? extends RefinementInterface> dstClass, Object pUpdateInfo) {
-
+  public void update(Class<? extends RefinementInterface> pCallerClass, Class<? extends RefinementInterface> pDstClass,
+      Object pData) {
   }
+
+  @Override
+  public void start(Class<? extends RefinementInterface> pCallerClass) {
+  }
+
+  @Override
+  public Object finish(Class<? extends RefinementInterface> pCallerClass) {
+    return null;
+  }
+
 
 }

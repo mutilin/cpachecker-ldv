@@ -24,6 +24,7 @@
 package org.sosy_lab.cpachecker.cpa.usagestatistics.refinement;
 
 import java.io.PrintStream;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -47,7 +48,10 @@ import org.sosy_lab.cpachecker.cpa.predicate.PredicatePrecision;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsPredicateRefiner;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.util.Precisions;
+import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
+import com.google.common.collect.LinkedHashMultimap;
+import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
 
 
@@ -56,6 +60,7 @@ public class PredicateRefinerAdapter extends WrappedConfigurableRefinementBlock<
   LogManager logger;
 
   private final Map<Set<CFAEdge>, PredicatePrecision> falseCache = new HashMap<>();
+  private final Multimap<SingleIdentifier, Set<CFAEdge>> idCached = LinkedHashMultimap.create();
   private final Set<Set<CFAEdge>> trueCache = new HashSet<>();
 
   //Statistics
@@ -106,6 +111,7 @@ public class PredicateRefinerAdapter extends WrappedConfigurableRefinementBlock<
             totalTimer.stop();
             result = wrappedRefiner.call(pInput);
             totalTimer.start();
+            pInput.getUsageInfo().failureFlag = true;
           } else {
             //rerefine it to obtain new states
             logger.log(Level.WARNING, "Path is repeated, but predicates are missed");
@@ -143,6 +149,7 @@ public class PredicateRefinerAdapter extends WrappedConfigurableRefinementBlock<
         result = RefinementResult.createFalse();
         result.addInfo(PredicateRefinerAdapter.class, Pair.of(refiner.getLastAffectedStates(), refiner.getLastPrecision()));
         falseCache.put(edgeSet, refiner.getLastPrecision());
+        idCached.put(path.getUsageInfo().getId(), edgeSet);
       }
 
     } catch (IllegalStateException e) {
@@ -162,10 +169,24 @@ public class PredicateRefinerAdapter extends WrappedConfigurableRefinementBlock<
   }
 
   @Override
-  protected void handleStartSignal(Class<? extends RefinementInterface> pCallerClass, Object pData) {
+  protected void handleUpdateSignal(Class<? extends RefinementInterface> pCallerClass, Object pData) {
     if (pCallerClass.equals(IdentifierIterator.class)) {
-      assert pData instanceof ReachedSet;
-      refiner.updateReachedSet((ReachedSet)pData);
+      if (pData instanceof ReachedSet) {
+        //Updating new reached set
+        refiner.updateReachedSet((ReachedSet)pData);
+      } else {
+        //Finishing with a set of removed ids
+        assert pData instanceof Set<?>;
+        Set<SingleIdentifier> removedIds = (Set<SingleIdentifier>) pData;
+
+        for (SingleIdentifier id : removedIds) {
+          Collection<Set<CFAEdge>> correspondingPaths = idCached.get(id);
+          for (Set<CFAEdge> path : correspondingPaths) {
+            falseCache.remove(path);
+          }
+          idCached.removeAll(id);
+        }
+      }
     }
   }
 
@@ -175,13 +196,8 @@ public class PredicateRefinerAdapter extends WrappedConfigurableRefinementBlock<
     pOut.println("Timer for block:                  " + totalTimer);
     pOut.println("Solver failures:                  " + solverFailures);
     pOut.println("Number of repeated paths:         " + numberOfrepeatedPaths);
+    pOut.println("Size of false cache:              " + falseCache.size());
     wrappedRefiner.printStatistics(pOut);
-  }
-
-  @Override
-  public RefinementResult finish(Class<? extends Object> pCallerClass) {
-    RefinementResult result = super.finish(pCallerClass);
-    return result;
   }
 
 }
