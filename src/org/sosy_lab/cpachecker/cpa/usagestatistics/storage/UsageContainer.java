@@ -104,6 +104,7 @@ public class UsageContainer {
     } else {
       uset = unrefinedStat.get(id);
     }
+    usage.setId(id);
     uset.add(usage);
   }
 
