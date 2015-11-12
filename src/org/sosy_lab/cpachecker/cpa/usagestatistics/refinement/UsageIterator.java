@@ -25,6 +25,7 @@ package org.sosy_lab.cpachecker.cpa.usagestatistics.refinement;
 
 import java.io.PrintStream;
 import java.util.Iterator;
+import java.util.Set;
 import java.util.logging.Level;
 
 import org.sosy_lab.common.Pair;
@@ -62,7 +63,6 @@ public class UsageIterator extends WrappedConfigurableRefinementBlock<SingleIden
     }
     logger = l;
   }
-
   @Override
   public RefinementResult call(SingleIdentifier pInput) throws CPAException, InterruptedException {
     AbstractUsageInfoSet refineableUsageInfoSet;
@@ -83,7 +83,6 @@ public class UsageIterator extends WrappedConfigurableRefinementBlock<SingleIden
     PredicatePrecision completePrecision = PredicatePrecision.empty();
 
     RefinementResult result;
-
     try {
       while (usagePointIterator.hasNext()) {
         currentUsagePoint = usagePointIterator.next();
@@ -91,9 +90,12 @@ public class UsageIterator extends WrappedConfigurableRefinementBlock<SingleIden
 
         if (!refineableUsageInfoSet.isTrue()) {
           currentRefineableUsageInfoSet = (UnrefinedUsageInfoSet)refineableUsageInfoSet;
-          while (currentRefineableUsageInfoSet.size() > 0) {
-            currentUsageInfo = currentRefineableUsageInfoSet.getOneExample();
 
+          Set<UsageInfo> usages = currentRefineableUsageInfoSet.getUsages();
+          Iterator<UsageInfo> usageIterator = usages.iterator();
+
+          while (usageIterator.hasNext()) {
+            currentUsageInfo = usageIterator.next();
             numberOfUsagesRefined++;
             totalTimer.stop();
             result = wrappedRefiner.call(currentUsageInfo);
@@ -101,6 +103,7 @@ public class UsageIterator extends WrappedConfigurableRefinementBlock<SingleIden
 
             if (result.status == RefinementStatus.FALSE) {
               logger.log(Level.FINE, "Usage " + currentUsageInfo + " is not reachable, remove it from container");
+              //TODO when we remove unknown usages, is there a memory leak?
               currentRefineableUsageInfoSet.remove(currentUsageInfo);
               PredicatePrecision precision = (PredicatePrecision)result.getInfo(PathIterator.class);
               if (precision != null) {
@@ -114,13 +117,18 @@ public class UsageIterator extends WrappedConfigurableRefinementBlock<SingleIden
               if (precision != null) {
                 completePrecision = completePrecision.mergeWith(precision);
               }
+              Pair<ExtendedARGPath, ExtendedARGPath> trueRace = result.getTrueRace();
               //TODO May be, .asEdgesList? One more edge.
-              currentUsagePointSet.markAsReachableUsage(currentUsageInfo, path.getInnerEdges());
-              if (detector.isTrueUnsafe(currentUsagePointSet)) {
-                container.setAsRefined(currentUsagePointSet);
-                result = RefinementResult.createTrue();
-                result.addInfo(UsageIterator.class, completePrecision);
-                return result;
+              if (trueRace.getSecond() == null) {
+                //True verdict is proved only for single path
+                currentUsagePointSet.markAsReachableUsage(currentUsageInfo, path.getInnerEdges());
+                if (detector.isTrueUnsafe(currentUsagePointSet)) {
+                  container.setAsRefined(currentUsagePointSet);
+                  //It should be true unsafe
+                  result = RefinementResult.createTrue();
+                  result.addInfo(UsageIterator.class, completePrecision);
+                  return result;
+                }
               }
               //switch to another point
               break;
@@ -145,9 +153,11 @@ public class UsageIterator extends WrappedConfigurableRefinementBlock<SingleIden
       }
       result = RefinementResult.createUnknown();
       result.addInfo(UsageIterator.class, completePrecision);
+      Object returnVal = sendFinishSignal();
+      currentUsagePointSet.reset();
       return result;
     } finally {
-      totalTimer.stop();
+      totalTimer.stopIfRunning();
     }
   }
 

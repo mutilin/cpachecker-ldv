@@ -26,6 +26,8 @@ package org.sosy_lab.cpachecker.cpa.usagestatistics.refinement;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.sosy_lab.common.Pair;
+
 
 public class RefinementResult {
   public enum RefinementStatus {
@@ -33,11 +35,13 @@ public class RefinementResult {
     FALSE,
     UNKNOWN
   }
-  Map<Class<? extends RefinementInterface>, Object> auxiliaryInfo = new HashMap<>();
+  private final Map<Class<? extends RefinementInterface>, Object> auxiliaryInfo = new HashMap<>();
+  private final Pair<ExtendedARGPath, ExtendedARGPath> trueRace;
   RefinementStatus status;
 
-  private RefinementResult(RefinementStatus rStatus) {
+  private RefinementResult(RefinementStatus rStatus, ExtendedARGPath firstPath, ExtendedARGPath secondPath) {
     status = rStatus;
+    trueRace = Pair.of(firstPath, secondPath);
   }
 
   public void addInfo(Class<? extends RefinementInterface> caller, Object info) {
@@ -61,15 +65,28 @@ public class RefinementResult {
   }
 
   public static RefinementResult createTrue() {
-    return new RefinementResult(RefinementStatus.TRUE);
+    //TODO remove this method and use smth else - true verdict should be always with info about races
+    return new RefinementResult(RefinementStatus.TRUE, null, null);
+  }
+
+  public static RefinementResult createTrue(ExtendedARGPath firstPath) {
+    return new RefinementResult(RefinementStatus.TRUE, firstPath, null);
+  }
+
+  public static RefinementResult createTrue(ExtendedARGPath firstPath, ExtendedARGPath secondPath) {
+    return new RefinementResult(RefinementStatus.TRUE, firstPath, secondPath);
   }
 
   public static RefinementResult createFalse() {
-    return new RefinementResult(RefinementStatus.FALSE);
+    return new RefinementResult(RefinementStatus.FALSE, null, null);
   }
 
   public static RefinementResult createUnknown() {
-    return new RefinementResult(RefinementStatus.UNKNOWN);
+    return new RefinementResult(RefinementStatus.UNKNOWN, null, null);
+  }
+
+  public Pair<ExtendedARGPath, ExtendedARGPath> getTrueRace() {
+    return trueRace;
   }
 
   @Override

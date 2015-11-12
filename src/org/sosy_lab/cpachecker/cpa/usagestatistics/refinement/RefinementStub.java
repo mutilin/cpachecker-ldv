@@ -32,7 +32,7 @@ public class RefinementStub implements ConfigurableRefinementBlock<ExtendedARGPa
 
   @Override
   public RefinementResult call(ExtendedARGPath pInput) throws CPAException, InterruptedException {
-    return RefinementResult.createTrue();
+    return RefinementResult.createTrue(pInput);
   }
 
   @Override

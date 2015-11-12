@@ -94,7 +94,7 @@ public class PredicateRefinerAdapter extends WrappedConfigurableRefinementBlock<
       List<CFAEdge> currentPath = pInput.getInnerEdges();
       if (trueCache.contains(currentPath)) {
         //Somewhen we have already refined this path as true
-        result = RefinementResult.createTrue();
+        //result = RefinementResult.createTrue();
         totalTimer.stop();
         result = wrappedRefiner.call(pInput);
         totalTimer.start();

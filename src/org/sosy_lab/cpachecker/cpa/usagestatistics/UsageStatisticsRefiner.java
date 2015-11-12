@@ -95,6 +95,8 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     UsageStatisticsCPA UScpa = CPAs.retrieveCPA(pCpa, UsageStatisticsCPA.class);
     LogManager logger = UScpa.getLogger();
     RefinementStub stub = new RefinementStub();
+    //RefinementPairStub stub = new RefinementPairStub();
+    //PairIterator pairIterator = new PairIterator(stub);
     PredicateRefinerAdapter predicateRefinerAdapter = new PredicateRefinerAdapter(stub, cpa, null);
     PathIterator pIterator = new PathIterator(this.subgraphStatesToReachedState, transfer, predicateRefinerAdapter, logger);
     UsageIterator uIterator = new UsageIterator(pIterator, null, UScpa.getLogger());

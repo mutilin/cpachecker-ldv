@@ -23,6 +23,8 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics.refinement;
 
+import org.sosy_lab.cpachecker.exceptions.CPAException;
+
 
 
 public abstract class WrappedConfigurableRefinementBlock<I, O> implements ConfigurableRefinementBlock<I> {
@@ -30,7 +32,7 @@ public abstract class WrappedConfigurableRefinementBlock<I, O> implements Config
 
   protected void handleStartSignal(Class<? extends RefinementInterface> callerClass) {}
 
-  protected Object handleFinishSignal(Class<? extends RefinementInterface> callerClass) {return null;}
+  protected Object handleFinishSignal(Class<? extends RefinementInterface> callerClass) throws CPAException, InterruptedException {return null;}
 
   protected void handleUpdateSignal(Class<? extends RefinementInterface> callerClass, Object data) {}
 
@@ -40,8 +42,8 @@ public abstract class WrappedConfigurableRefinementBlock<I, O> implements Config
     wrappedRefiner.start(getClass());
   }
 
-  protected void sendFinishSignal() {
-    wrappedRefiner.finish(getClass());
+  protected Object sendFinishSignal() throws CPAException, InterruptedException {
+    return wrappedRefiner.finish(getClass());
   }
 
   protected void sendUpdateSignal(Class<? extends RefinementInterface> dstClass, Object data) {
@@ -68,7 +70,7 @@ public abstract class WrappedConfigurableRefinementBlock<I, O> implements Config
   }
 
   @Override
-  public final Object finish(Class<? extends RefinementInterface> callerClass) {
+  public final Object finish(Class<? extends RefinementInterface> callerClass) throws CPAException, InterruptedException {
     Object result = handleFinishSignal(callerClass);
     //How to join?
     return wrappedRefiner.finish(callerClass);
