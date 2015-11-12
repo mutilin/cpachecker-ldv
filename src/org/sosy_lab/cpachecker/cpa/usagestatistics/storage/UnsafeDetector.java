@@ -86,6 +86,22 @@ public class UnsafeDetector {
     return isUnsafe((UnrefinedUsagePointSet)set);
   }
 
+  public boolean isUnsafe(Set<UsageInfo> set) {
+    return isUnsafe(preparePointSet(set));
+  }
+
+  public boolean isTrueUnsafe(Set<UsageInfo> set) {
+    return isTrueUnsafe(preparePointSet(set));
+  }
+
+  private UnrefinedUsagePointSet preparePointSet(Set<UsageInfo> set) {
+    UnrefinedUsagePointSet tmpSet = new UnrefinedUsagePointSet();
+    for (UsageInfo uinfo : set) {
+      tmpSet.add(uinfo);
+    }
+    return tmpSet;
+  }
+
   private boolean isUnsafe(UnrefinedUsagePointSet set) {
     return isUnsafe(set.getTopUsages());
   }
