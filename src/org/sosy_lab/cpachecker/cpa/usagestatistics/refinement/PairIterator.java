@@ -44,6 +44,21 @@ public class PairIterator extends WrappedConfigurableRefinementBlock<ExtendedARG
 
   @Override
   public RefinementResult call(ExtendedARGPath pInput) throws CPAException, InterruptedException {
+    loopTimer.start();
+    calledSize.add(storedPaths.size());
+    for (int i = 0; i < storedPaths.size(); i++) {
+      Pair<ExtendedARGPath, ExtendedARGPath> pair = Pair.of(storedPaths.get(i), pInput);
+      handledPairs++;
+      RefinementResult result = wrappedRefiner.call(pair);
+
+      if (result.isTrue()) {
+        //Race detected
+        storedPaths.clear();
+        loopTimer.stop();
+        return result;
+      }
+    }
+    loopTimer.stop();
     storedPaths.add(pInput);
     return RefinementResult.createUnknown();
   }
@@ -53,6 +68,7 @@ public class PairIterator extends WrappedConfigurableRefinementBlock<ExtendedARG
     pOut.println("--PairIterator--");
     pOut.println("Number of handled paths: " + handledPairs);
     pOut.println("Total calls:       " + calledSize.size());
+    pOut.println("Total time:        " + loopTimer);
     pOut.println(calledSize);
   }
 
@@ -60,18 +76,10 @@ public class PairIterator extends WrappedConfigurableRefinementBlock<ExtendedARG
   public Object handleFinishSignal(Class<? extends RefinementInterface> callerClass) throws CPAException, InterruptedException {
     loopTimer.start();
     if (callerClass.equals(UsageIterator.class)) {
-      System.out.println("Number of paths: " + storedPaths.size());
-      calledSize.add(storedPaths.size());
-      for (int i = 0; i < storedPaths.size(); i++) {
-        for (int j = i + 1; j < storedPaths.size(); j++) {
-          Pair<ExtendedARGPath, ExtendedARGPath> pair = Pair.of(storedPaths.get(i), storedPaths.get(j));
-          handledPairs++;
-          RefinementResult result = wrappedRefiner.call(pair);
-        }
-      }
+      //System.out.println("Number of paths: " + storedPaths.size());
       storedPaths.clear();
     }
     loopTimer.stop();
-    return null;
+    return RefinementResult.createFalse();
   }
 }

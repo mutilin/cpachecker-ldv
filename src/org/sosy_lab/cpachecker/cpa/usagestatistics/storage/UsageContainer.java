@@ -224,10 +224,14 @@ public class UsageContainer {
   }
 
   public void setAsRefined(UnrefinedUsagePointSet set) {
+    Pair<RefinedUsageInfoSet, RefinedUsageInfoSet> unsafePair = detector.getTrueUnsafePair(set);
+    setAsRefined(set, unsafePair.getFirst().getOneExample(), unsafePair.getSecond().getOneExample());
+  }
+
+  public void setAsRefined(UnrefinedUsagePointSet set, UsageInfo firstUsage, UsageInfo secondUsage) {
     assert toId.containsKey(set);
     SingleIdentifier id = toId.get(set);
-    Pair<RefinedUsageInfoSet, RefinedUsageInfoSet> unsafePair = detector.getTrueUnsafePair(set);
-    refinedStat.put(id, RefinedUsagePointSet.create(unsafePair.getFirst(), unsafePair.getSecond()));
+    refinedStat.put(id, RefinedUsagePointSet.create(firstUsage, secondUsage));
     removeIdFromCaches(id);
   }
 

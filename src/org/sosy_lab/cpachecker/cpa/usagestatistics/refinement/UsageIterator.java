@@ -37,6 +37,7 @@ import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.RefinementResult.RefinementStatus;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.AbstractUsageInfoSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.AbstractUsagePointSet;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.RefinedUsagePointSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UnrefinedUsageInfoSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UnrefinedUsagePointSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UnsafeDetector;
@@ -117,18 +118,23 @@ public class UsageIterator extends WrappedConfigurableRefinementBlock<SingleIden
               if (precision != null) {
                 completePrecision = completePrecision.mergeWith(precision);
               }
-              Pair<ExtendedARGPath, ExtendedARGPath> trueRace = result.getTrueRace();
+              Pair<UsageInfo, UsageInfo> trueRace = result.getTrueRace();
               //TODO May be, .asEdgesList? One more edge.
-              if (trueRace.getSecond() == null) {
-                //True verdict is proved only for single path
-                currentUsagePointSet.markAsReachableUsage(currentUsageInfo, path.getInnerEdges());
-                if (detector.isTrueUnsafe(currentUsagePointSet)) {
-                  container.setAsRefined(currentUsagePointSet);
-                  //It should be true unsafe
-                  result = RefinementResult.createTrue();
-                  result.addInfo(UsageIterator.class, completePrecision);
-                  return result;
-                }
+              //True verdict is proved only for single path
+              if (trueRace.getSecond() != null) {
+                //Race is found, return it
+                container.setAsRefined(currentUsagePointSet, result.getTrueRace().getFirst(), result.getTrueRace().getSecond());
+                result.addInfo(UsageIterator.class, completePrecision);
+                return result;
+              }
+              currentUsagePointSet.markAsReachableUsage(currentUsageInfo, path.getInnerEdges());
+              if (detector.isTrueUnsafe(currentUsagePointSet)) {
+                container.setAsRefined(currentUsagePointSet);
+                //It should be true unsafe
+                RefinedUsagePointSet tmpSet = (RefinedUsagePointSet) container.getUsages(pInput);
+                result = RefinementResult.createTrue(tmpSet.getUnsafePair().getFirst(), tmpSet.getUnsafePair().getSecond());
+                result.addInfo(UsageIterator.class, completePrecision);
+                return result;
               }
               //switch to another point
               break;
@@ -151,9 +157,18 @@ public class UsageIterator extends WrappedConfigurableRefinementBlock<SingleIden
           }
         }
       }
-      result = RefinementResult.createUnknown();
-      result.addInfo(UsageIterator.class, completePrecision);
       Object returnVal = sendFinishSignal();
+      if (returnVal instanceof RefinementResult) {
+        result = (RefinementResult) returnVal;
+
+        if (result.isTrue()) {
+          Pair<UsageInfo, UsageInfo> race = result.getTrueRace();
+          UsageInfo tmpUsage = race.getFirst();
+        }
+      } else {
+        result = RefinementResult.createUnknown();
+      }
+      result.addInfo(UsageIterator.class, completePrecision);
       currentUsagePointSet.reset();
       return result;
     } finally {

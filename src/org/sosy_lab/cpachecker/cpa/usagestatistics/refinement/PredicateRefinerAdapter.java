@@ -67,6 +67,7 @@ public class PredicateRefinerAdapter extends WrappedConfigurableRefinementBlock<
   private Timer totalTimer = new Timer();
   private int solverFailures = 0;
   private int numberOfrepeatedPaths = 0;
+  private int numberOfrefinedPaths = 0;
 
   public PredicateRefinerAdapter(ConfigurableRefinementBlock<ExtendedARGPath> wrapper,
       ConfigurableProgramAnalysis pCpa, ReachedSet pReached) throws CPAException, InvalidConfigurationException {
@@ -137,6 +138,7 @@ public class PredicateRefinerAdapter extends WrappedConfigurableRefinementBlock<
   private RefinementResult performPredicateRefinement(ExtendedARGPath path) throws CPAException, InterruptedException {
     RefinementResult result;
     try {
+      numberOfrefinedPaths++;
       CounterexampleInfo cex = refiner.performRefinement(path);
       Set<CFAEdge> edgeSet = Sets.newHashSet(path.getInnerEdges());
 
@@ -194,6 +196,7 @@ public class PredicateRefinerAdapter extends WrappedConfigurableRefinementBlock<
   public void printStatistics(PrintStream pOut) {
     pOut.println("--PredicateRefinerAdapter--");
     pOut.println("Timer for block:                  " + totalTimer);
+    pOut.println("Number of refined paths:          " + numberOfrefinedPaths);
     pOut.println("Solver failures:                  " + solverFailures);
     pOut.println("Number of repeated paths:         " + numberOfrepeatedPaths);
     pOut.println("Size of false cache:              " + falseCache.size());

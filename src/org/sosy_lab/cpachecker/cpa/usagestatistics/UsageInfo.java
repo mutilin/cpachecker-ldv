@@ -38,8 +38,6 @@ import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsagePoint;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
-import org.sosy_lab.cpachecker.util.identifiers.StructureFieldIdentifier;
-import org.sosy_lab.cpachecker.util.identifiers.StructureIdentifier;
 
 import com.google.common.base.Predicate;
 
@@ -228,5 +226,15 @@ public class UsageInfo implements Comparable<UsageInfo> {
       }
     }).toList();
     path = edges;
+  }
+
+  @Override
+  public UsageInfo clone() {
+    UsageInfo result = new UsageInfo(accessType, line, locks);
+    result.id = this.id;
+    result.keyState = this.keyState;
+    result.path = this.path;
+    result.failureFlag = this.failureFlag;
+    return result;
   }
 }

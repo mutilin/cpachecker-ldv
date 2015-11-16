@@ -12,6 +12,7 @@ public class RefinedUsageInfoSet implements AbstractUsageInfoSet {
   private final UsageInfo refinedUsage;
 
   public RefinedUsageInfoSet(UsageInfo uinfo, List<CFAEdge> path) {
+    //TODO refactoring: reset path many times
     refinedUsage = uinfo;
     refinedUsage.resetKeyState(path);
   }

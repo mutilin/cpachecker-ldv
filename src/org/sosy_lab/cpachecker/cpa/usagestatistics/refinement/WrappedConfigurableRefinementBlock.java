@@ -71,8 +71,18 @@ public abstract class WrappedConfigurableRefinementBlock<I, O> implements Config
 
   @Override
   public final Object finish(Class<? extends RefinementInterface> callerClass) throws CPAException, InterruptedException {
-    Object result = handleFinishSignal(callerClass);
-    //How to join?
-    return wrappedRefiner.finish(callerClass);
+    Object myResult = handleFinishSignal(callerClass);
+    Object wrapperResult = wrappedRefiner.finish(callerClass);
+    if (myResult != null) {
+      if (wrapperResult == null) {
+        return myResult;
+      } else {
+        //How to join?
+        assert false;
+        return wrapperResult;
+      }
+    } else {
+      return myResult;
+    }
   }
 }

@@ -27,6 +27,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.sosy_lab.common.Pair;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 
 
 public class RefinementResult {
@@ -36,12 +37,12 @@ public class RefinementResult {
     UNKNOWN
   }
   private final Map<Class<? extends RefinementInterface>, Object> auxiliaryInfo = new HashMap<>();
-  private final Pair<ExtendedARGPath, ExtendedARGPath> trueRace;
+  private final Pair<UsageInfo, UsageInfo> trueRace;
   RefinementStatus status;
 
-  private RefinementResult(RefinementStatus rStatus, ExtendedARGPath firstPath, ExtendedARGPath secondPath) {
+  private RefinementResult(RefinementStatus rStatus, UsageInfo firstUsage, UsageInfo secondUsage) {
     status = rStatus;
-    trueRace = Pair.of(firstPath, secondPath);
+    trueRace = Pair.of(firstUsage, secondUsage);
   }
 
   public void addInfo(Class<? extends RefinementInterface> caller, Object info) {
@@ -64,17 +65,32 @@ public class RefinementResult {
     return status == RefinementStatus.UNKNOWN;
   }
 
-  public static RefinementResult createTrue() {
-    //TODO remove this method and use smth else - true verdict should be always with info about races
-    return new RefinementResult(RefinementStatus.TRUE, null, null);
+  public static RefinementResult createTrue(ExtendedARGPath firstPath, ExtendedARGPath secondPath) {
+
+    UsageInfo firstUsage = firstPath.getUsageInfo();
+    UsageInfo secondUsage = secondPath.getUsageInfo();
+
+    if (firstUsage == secondUsage) {
+      secondUsage = secondUsage.clone();
+    }
+    firstUsage.resetKeyState(firstPath.getInnerEdges());
+    secondUsage.resetKeyState(secondPath.getInnerEdges());
+    return new RefinementResult(RefinementStatus.TRUE, firstUsage, secondUsage);
   }
 
   public static RefinementResult createTrue(ExtendedARGPath firstPath) {
-    return new RefinementResult(RefinementStatus.TRUE, firstPath, null);
+    UsageInfo firstUsage = firstPath.getUsageInfo();
+
+    firstUsage.resetKeyState(firstPath.getInnerEdges());
+    return new RefinementResult(RefinementStatus.TRUE, firstUsage, null);
   }
 
-  public static RefinementResult createTrue(ExtendedARGPath firstPath, ExtendedARGPath secondPath) {
-    return new RefinementResult(RefinementStatus.TRUE, firstPath, secondPath);
+  public static RefinementResult createTrue() {
+    return new RefinementResult(RefinementStatus.TRUE, null, null);
+  }
+
+  public static RefinementResult createTrue(UsageInfo firstUsage, UsageInfo secondUsage) {
+    return new RefinementResult(RefinementStatus.TRUE, firstUsage, secondUsage);
   }
 
   public static RefinementResult createFalse() {
@@ -85,7 +101,7 @@ public class RefinementResult {
     return new RefinementResult(RefinementStatus.UNKNOWN, null, null);
   }
 
-  public Pair<ExtendedARGPath, ExtendedARGPath> getTrueRace() {
+  public Pair<UsageInfo, UsageInfo> getTrueRace() {
     return trueRace;
   }
 
