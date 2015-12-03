@@ -23,6 +23,7 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
+import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.PrintStream;
@@ -31,8 +32,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
+
+import javax.xml.parsers.ParserConfigurationException;
 
 import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.Configuration;
@@ -45,8 +49,12 @@ import org.sosy_lab.common.io.Path;
 import org.sosy_lab.common.io.Paths;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
+import org.sosy_lab.cpachecker.cfa.ast.FileLocation;
+import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.BlankEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
+import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionReturnEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CReturnStatementEdge;
@@ -56,6 +64,8 @@ import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.arg.ARGUtils;
+import org.sosy_lab.cpachecker.cpa.bam.BAMCEXSubgraphComputer.BackwardARGState;
+import org.sosy_lab.cpachecker.cpa.bam.BAMMultipleCEXSubgraphComputer;
 import org.sosy_lab.cpachecker.cpa.bam.BAMTransferRelation;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsTransferRelation;
@@ -69,10 +79,19 @@ import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsageContainer;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsagePoint;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
+import org.sosy_lab.cpachecker.util.SourceLocationMapper;
+import org.sosy_lab.cpachecker.util.automaton.AutomatonGraphmlCommon;
+import org.sosy_lab.cpachecker.util.automaton.AutomatonGraphmlCommon.AssumeCase;
+import org.sosy_lab.cpachecker.util.automaton.AutomatonGraphmlCommon.GraphMlBuilder;
+import org.sosy_lab.cpachecker.util.automaton.AutomatonGraphmlCommon.GraphType;
+import org.sosy_lab.cpachecker.util.automaton.AutomatonGraphmlCommon.KeyDef;
+import org.sosy_lab.cpachecker.util.automaton.AutomatonGraphmlCommon.NodeFlag;
+import org.sosy_lab.cpachecker.util.automaton.AutomatonGraphmlCommon.NodeType;
 import org.sosy_lab.cpachecker.util.identifiers.GlobalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.LocalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.StructureFieldIdentifier;
+import org.w3c.dom.Element;
 
 import com.google.common.collect.Sets;
 
@@ -173,11 +192,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       writer.append("Line 0:     N0 -{/*Failure in refinement*/}-> N0\n");
     }
     if (usage.getKeyState() != null) {
-      Set<List<Integer>> emptySet = Collections.emptySet();
-      ARGState root = transfer.findPath((ARGState)usage.getKeyState(), new HashMap<ARGState, ARGState>(), emptySet);
-      ARGPath path = ARGUtils.getRandomPath(root);
-      //path is transformed internally
-      usage.resetKeyState(path.getInnerEdges());
+      createPath(usage);
     }
     int callstackDepth = 1;
     /*
@@ -323,6 +338,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     Pair<UsageInfo, UsageInfo> tmpPair = detector.getUnsafePair(uinfo);
     createVisualization(id, tmpPair.getFirst(), writer);
     createVisualization(id, tmpPair.getSecond(), writer);
+    dumpGraphMl(id, tmpPair);
     if (tmpPair.getFirst().failureFlag && tmpPair.getSecond().failureFlag) {
       totalFailureUnsafes++;
     } else if (tmpPair.getFirst().failureFlag || tmpPair.getSecond().failureFlag) {
@@ -342,6 +358,195 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         }
       }
     }*/
+  }
+
+  private void createPath(UsageInfo usage) {
+    assert usage.getKeyState() != null;
+
+    Set<List<Integer>> emptySet = Collections.emptySet();
+    Map<ARGState, ARGState> pathToARG = new HashMap<>();
+    BAMMultipleCEXSubgraphComputer subgraphComputer = transfer.createBAMMultipleSubgraphComputer(pathToARG);
+    ARGState target = (ARGState)usage.getKeyState();
+    BackwardARGState newTreeTarget = new BackwardARGState(target);
+    pathToARG.put(newTreeTarget, target);
+    ARGState root;
+    try {
+      root = subgraphComputer.findPath(newTreeTarget, emptySet);
+    } catch (InterruptedException e) {
+      e.printStackTrace();
+      return;
+    } catch (CPATransferException e) {
+      e.printStackTrace();
+      return;
+    }
+    ARGPath path = ARGUtils.getRandomPath(root);
+    //path is transformed internally
+    usage.resetKeyState(path.getInnerEdges());
+  }
+
+  private void dumpGraphMl(SingleIdentifier pId, Pair<UsageInfo, UsageInfo> pTmpPair) {
+    UsageInfo firstUsage = pTmpPair.getFirst();
+    UsageInfo secondUsage = pTmpPair.getSecond();
+    List<CFAEdge> firstPath, secondPath;
+
+    if (firstUsage.getKeyState() != null) {
+      createPath(firstUsage);
+    }
+    firstPath = firstUsage.getPath();
+    if (secondUsage.getKeyState() != null) {
+      createPath(secondUsage);
+    }
+    secondPath = secondUsage.getPath();
+
+    Writer w;
+    try {
+      File name = new File("output/" + pId.getName()+ ".graphml");
+      w = Files.openOutputFile(Paths.get(name.getAbsolutePath()));
+      GraphMlBuilder builder = new GraphMlBuilder(w);
+
+
+      builder.appendDocHeader();
+      builder.appendNewKeyDef(KeyDef.ASSUMPTION, null);
+      builder.appendNewKeyDef(KeyDef.SOURCECODE, null);
+      builder.appendNewKeyDef(KeyDef.SOURCECODELANGUAGE, null);
+      builder.appendNewKeyDef(KeyDef.CONTROLCASE, null);
+      builder.appendNewKeyDef(KeyDef.ORIGINLINE, null);
+      String defaultSourcefileName = SourceLocationMapper.getFileLocationsFromCfaEdge(firstPath.get(0)).iterator().next().getFileName();
+      assert defaultSourcefileName != null;
+      builder.appendNewKeyDef(KeyDef.ORIGINFILE, defaultSourcefileName);
+      builder.appendNewKeyDef(KeyDef.NODETYPE, AutomatonGraphmlCommon.defaultNodeType.text);
+      for (NodeFlag f : NodeFlag.values()) {
+        builder.appendNewKeyDef(f.key, "false");
+      }
+
+      builder.appendNewKeyDef(KeyDef.FUNCTIONENTRY, null);
+      builder.appendNewKeyDef(KeyDef.FUNCTIONEXIT, null);
+      builder.appendGraphHeader(GraphType.PROGRAMPATH, "C");
+      String currentId, nextId;
+      currentId = getId();
+      Element start = builder.createNodeElement(currentId, NodeType.ONPATH);
+      builder.addDataElementChild(start, NodeFlag.ISENTRY.key, "true");
+      builder.appendToAppendable(start);
+
+      nextId = currentId;
+
+      Iterator<CFAEdge> iterator = firstPath.iterator();
+      Element result = null;
+
+      while (iterator.hasNext()) {
+        CFAEdge pEdge = iterator.next();
+        currentId = nextId;
+        nextId = getId();
+
+        result = builder.createEdgeElement(currentId, nextId);
+
+        if (pEdge.getSuccessor() instanceof FunctionEntryNode) {
+          FunctionEntryNode in = (FunctionEntryNode) pEdge.getSuccessor();
+          builder.addDataElementChild(result, KeyDef.FUNCTIONENTRY, in.getFunctionName());
+
+        }
+        if (pEdge.getSuccessor() instanceof FunctionExitNode) {
+          FunctionExitNode out = (FunctionExitNode) pEdge.getSuccessor();
+          builder.addDataElementChild(result, KeyDef.FUNCTIONEXIT, out.getFunctionName());
+        }
+
+        if (pEdge instanceof AssumeEdge) {
+          AssumeEdge a = (AssumeEdge) pEdge;
+          AssumeCase assumeCase = a.getTruthAssumption() ? AssumeCase.THEN : AssumeCase.ELSE;
+          builder.addDataElementChild(result, KeyDef.CONTROLCASE, assumeCase.toString());
+        }
+
+        Set<FileLocation> locations = SourceLocationMapper.getFileLocationsFromCfaEdge(pEdge);
+        if (locations.size() > 0) {
+          FileLocation l = locations.iterator().next();
+          if (!l.getFileName().equals(defaultSourcefileName)) {
+            builder.addDataElementChild(result, KeyDef.ORIGINFILE, l.getFileName());
+            builder.addDataElementChild(result, KeyDef.ORIGINFILE, l.getFileName());
+          }
+          builder.addDataElementChild(result, KeyDef.ORIGINLINE, Integer.toString(l.getStartingLineInOrigin()));
+          builder.addDataElementChild(result, KeyDef.OFFSET, Integer.toString(l.getNodeOffset()));
+        }
+
+        if (!pEdge.getRawStatement().trim().isEmpty()) {
+          builder.addDataElementChild(result, KeyDef.SOURCECODE, pEdge.getRawStatement());
+        }
+
+        builder.addDataElementChild(result, KeyDef.THREADIDENTIFIER, "0");
+
+        builder.appendToAppendable(result);
+
+        result = builder.createNodeElement(nextId, NodeType.ONPATH);
+        builder.appendToAppendable(result);
+      }
+
+      iterator = secondPath.iterator();
+      while (iterator.hasNext()) {
+        CFAEdge pEdge = iterator.next();
+        currentId = nextId;
+        nextId = getId();
+
+        result = builder.createEdgeElement(currentId, nextId);
+
+        if (pEdge.getSuccessor() instanceof FunctionEntryNode) {
+          FunctionEntryNode in = (FunctionEntryNode) pEdge.getSuccessor();
+          builder.addDataElementChild(result, KeyDef.FUNCTIONENTRY, in.getFunctionName());
+
+        }
+        if (pEdge.getSuccessor() instanceof FunctionExitNode) {
+          FunctionExitNode out = (FunctionExitNode) pEdge.getSuccessor();
+          builder.addDataElementChild(result, KeyDef.FUNCTIONEXIT, out.getFunctionName());
+        }
+
+        if (pEdge instanceof AssumeEdge) {
+          AssumeEdge a = (AssumeEdge) pEdge;
+          AssumeCase assumeCase = a.getTruthAssumption() ? AssumeCase.THEN : AssumeCase.ELSE;
+          builder.addDataElementChild(result, KeyDef.CONTROLCASE, assumeCase.toString());
+        }
+
+        Set<FileLocation> locations = SourceLocationMapper.getFileLocationsFromCfaEdge(pEdge);
+        if (locations.size() > 0) {
+          FileLocation l = locations.iterator().next();
+          if (!l.getFileName().equals(defaultSourcefileName)) {
+            builder.addDataElementChild(result, KeyDef.ORIGINFILE, l.getFileName());
+            builder.addDataElementChild(result, KeyDef.ORIGINFILE, l.getFileName());
+          }
+          builder.addDataElementChild(result, KeyDef.ORIGINLINE, Integer.toString(l.getStartingLineInOrigin()));
+          builder.addDataElementChild(result, KeyDef.OFFSET, Integer.toString(l.getNodeOffset()));
+        }
+
+        if (!pEdge.getRawStatement().trim().isEmpty()) {
+          builder.addDataElementChild(result, KeyDef.SOURCECODE, pEdge.getRawStatement());
+        }
+
+        builder.addDataElementChild(result, KeyDef.THREADIDENTIFIER, "1");
+
+        builder.appendToAppendable(result);
+
+        result = builder.createNodeElement(nextId, NodeType.ONPATH);
+        if (iterator.hasNext()) {
+          builder.appendToAppendable(result);
+        }
+      }
+
+      builder.addDataElementChild(result, NodeFlag.ISVIOLATION.key, "true");
+      builder.appendToAppendable(result);
+
+      builder.appendFooter();
+    } catch (IOException e) {
+      e.printStackTrace();
+    } catch (ParserConfigurationException e) {
+      e.printStackTrace();
+    }
+
+  }
+
+  int idCounter = 0;
+  private String getId() {
+    return "A" + idCounter++;
+  }
+
+  private Element appendPath(List<CFAEdge> edges) {
+    return null;
   }
 
   public void printUnsafeRawdata(final ReachedSet reached, boolean printOnlyTrueUnsafes) {

@@ -108,7 +108,9 @@ public class AutomatonGraphmlCommon {
     FUNCTIONEXIT("returnFrom", "edge", "returnFromFunction", "string"),
 
     CFAPREDECESSORNODE("predecessor", "edge", "predecessor", "string"),
-    CFASUCCESSORNODE("successor", "edge", "successor", "string");
+    CFASUCCESSORNODE("successor", "edge", "successor", "string"),
+
+    THREADIDENTIFIER("thread", "edge", "thread", "int");
 
     public final String id;
     public final String keyFor;
