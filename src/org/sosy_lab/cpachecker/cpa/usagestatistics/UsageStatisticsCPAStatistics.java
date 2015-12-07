@@ -400,7 +400,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
     Writer w;
     try {
-      File name = new File("output/" + pId.getName()+ ".graphml");
+      File name = new File("output/multithreadedTraces/" + pId.getName()+ ".graphml");
       w = Files.openOutputFile(Paths.get(name.getAbsolutePath()));
       GraphMlBuilder builder = new GraphMlBuilder(w);
 
@@ -461,7 +461,8 @@ public class UsageStatisticsCPAStatistics implements Statistics {
           FileLocation l = locations.iterator().next();
           if (!l.getFileName().equals(defaultSourcefileName)) {
             builder.addDataElementChild(result, KeyDef.ORIGINFILE, l.getFileName());
-            builder.addDataElementChild(result, KeyDef.ORIGINFILE, l.getFileName());
+          } else {
+            builder.addDataElementChild(result, KeyDef.ORIGINFILE, defaultSourcefileName);
           }
           builder.addDataElementChild(result, KeyDef.ORIGINLINE, Integer.toString(l.getStartingLineInOrigin()));
           builder.addDataElementChild(result, KeyDef.OFFSET, Integer.toString(l.getNodeOffset()));
@@ -532,6 +533,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       builder.appendToAppendable(result);
 
       builder.appendFooter();
+      w.close();
     } catch (IOException e) {
       e.printStackTrace();
     } catch (ParserConfigurationException e) {
