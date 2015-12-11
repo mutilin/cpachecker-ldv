@@ -46,6 +46,8 @@ public class PairIterator extends WrappedConfigurableRefinementBlock<ExtendedARG
   public RefinementResult call(ExtendedARGPath pInput) throws CPAException, InterruptedException {
     loopTimer.start();
     calledSize.add(storedPaths.size());
+    //We allow to check the race between path with itself
+    storedPaths.add(pInput);
     for (int i = 0; i < storedPaths.size(); i++) {
       Pair<ExtendedARGPath, ExtendedARGPath> pair = Pair.of(storedPaths.get(i), pInput);
       handledPairs++;
@@ -59,7 +61,6 @@ public class PairIterator extends WrappedConfigurableRefinementBlock<ExtendedARG
       }
     }
     loopTimer.stop();
-    storedPaths.add(pInput);
     return RefinementResult.createUnknown();
   }
 
