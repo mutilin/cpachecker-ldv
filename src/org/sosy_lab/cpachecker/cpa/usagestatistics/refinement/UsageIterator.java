@@ -172,6 +172,7 @@ public class UsageIterator extends WrappedConfigurableRefinementBlock<SingleIden
       currentUsagePointSet.reset();
       return result;
     } finally {
+      sendFinishSignal();
       totalTimer.stopIfRunning();
     }
   }
