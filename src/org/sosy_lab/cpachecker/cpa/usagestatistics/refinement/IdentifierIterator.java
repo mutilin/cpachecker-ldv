@@ -80,8 +80,6 @@ public class IdentifierIterator extends WrappedConfigurableRefinementBlock<Reach
 
   private final BAMTransferRelation transfer;
 
-  private final Map<ARGState, ARGState> subgraphStatesToReachedState;
-
   //private Set<List<Integer>> refinedStates;
   //private final Set<Set<CFAEdge>> iCache;
   int i = 0;
@@ -91,7 +89,7 @@ public class IdentifierIterator extends WrappedConfigurableRefinementBlock<Reach
   private final Map<SingleIdentifier, PredicatePrecision> precisionMap = new HashMap<>();
 
   public IdentifierIterator(ConfigurableRefinementBlock<SingleIdentifier> pWrapper, Configuration config,
-      ConfigurableProgramAnalysis pCpa, BAMTransferRelation pTransfer, Map<ARGState, ARGState> map) throws InvalidConfigurationException {
+      ConfigurableProgramAnalysis pCpa, BAMTransferRelation pTransfer) throws InvalidConfigurationException {
     super(pWrapper);
     config.inject(this);
     cpa = pCpa;
@@ -100,7 +98,6 @@ public class IdentifierIterator extends WrappedConfigurableRefinementBlock<Reach
     Preconditions.checkArgument(refinablePathLimitation > 0,
         "The option refinablePathLimitation couldn't be " + refinablePathLimitation + ", why in this case you need refiner itself?");
     transfer = pTransfer;
-    subgraphStatesToReachedState = map;
     //iCache = predicateRefinerAdapter.getInterpolantCache();
   }
 
@@ -199,7 +196,6 @@ public class IdentifierIterator extends WrappedConfigurableRefinementBlock<Reach
       PredicatePrecision p = Precisions.extractPrecisionByType(pReached.getPrecision(pReached.getFirstState()),
           PredicatePrecision.class);
 
-      subgraphStatesToReachedState.clear();
       sendFinishSignal();
       System.out.println("Total number of predicates: " + p.getLocalPredicates().size());
     }

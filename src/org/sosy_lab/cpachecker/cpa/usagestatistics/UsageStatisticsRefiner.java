@@ -101,7 +101,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     PredicateRefinerAdapter predicateRefinerAdapter = new PredicateRefinerAdapter(pairIterator, cpa, null);
     PathIterator pIterator = new PathIterator(this.subgraphStatesToReachedState, transfer, predicateRefinerAdapter, logger);
     UsageIterator uIterator = new UsageIterator(pIterator, null, UScpa.getLogger());
-    startingBlock = new IdentifierIterator(uIterator, pConfig, pCpa, transfer, subgraphStatesToReachedState);
+    startingBlock = new IdentifierIterator(uIterator, pConfig, pCpa, transfer);
     //iCache = predicateRefinerAdapter.getInterpolantCache();
   }
 
