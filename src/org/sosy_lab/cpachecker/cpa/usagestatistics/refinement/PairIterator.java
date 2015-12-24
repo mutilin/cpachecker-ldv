@@ -36,7 +36,8 @@ public class PairIterator extends WrappedConfigurableRefinementBlock<ExtendedARG
   private List<ExtendedARGPath> storedPaths = new LinkedList<>();
   private int handledPairs = 0;
   private Timer loopTimer = new Timer();
-  private List<Integer> calledSize = new LinkedList<>();
+  private List<Integer> trueSizes = new LinkedList<>();
+  private List<Integer> falseSizes = new LinkedList<>();
 
   public PairIterator(ConfigurableRefinementBlock<Pair<ExtendedARGPath, ExtendedARGPath>> pWrapper) {
     super(pWrapper);
@@ -45,7 +46,6 @@ public class PairIterator extends WrappedConfigurableRefinementBlock<ExtendedARG
   @Override
   public RefinementResult call(ExtendedARGPath pInput) throws CPAException, InterruptedException {
     loopTimer.start();
-    calledSize.add(storedPaths.size());
     //We allow to check the race between path with itself
     storedPaths.add(pInput);
     for (int i = 0; i < storedPaths.size(); i++) {
@@ -55,6 +55,7 @@ public class PairIterator extends WrappedConfigurableRefinementBlock<ExtendedARG
 
       if (result.isTrue()) {
         //Race detected
+        trueSizes.add(storedPaths.size());
         storedPaths.clear();
         loopTimer.stop();
         return result;
@@ -68,9 +69,11 @@ public class PairIterator extends WrappedConfigurableRefinementBlock<ExtendedARG
   public void printStatistics(PrintStream pOut) {
     pOut.println("--PairIterator--");
     pOut.println("Number of handled paths: " + handledPairs);
-    pOut.println("Total calls:       " + calledSize.size());
-    pOut.println("Total time:        " + loopTimer);
-    pOut.println(calledSize);
+    pOut.println("Total calls:             " + trueSizes.size() + falseSizes.size());
+    pOut.println("Total time:              " + loopTimer);
+    pOut.println(trueSizes);
+    pOut.println("");
+    pOut.println(falseSizes);
   }
 
   @Override
@@ -78,7 +81,10 @@ public class PairIterator extends WrappedConfigurableRefinementBlock<ExtendedARG
     loopTimer.start();
     if (callerClass.equals(UsageIterator.class)) {
       //System.out.println("Number of paths: " + storedPaths.size());
-      storedPaths.clear();
+      if (storedPaths.size() > 0) {
+        falseSizes.add(storedPaths.size());
+        storedPaths.clear();
+      }
     }
     loopTimer.stop();
     return RefinementResult.createFalse();

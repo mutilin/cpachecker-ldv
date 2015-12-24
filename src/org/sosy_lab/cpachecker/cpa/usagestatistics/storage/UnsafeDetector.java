@@ -122,6 +122,10 @@ public class UnsafeDetector {
     }
   }
 
+  public Pair<UsagePoint, UsagePoint> getUnsafePointPair(UnrefinedUsagePointSet set) {
+    return getUnsafePair(set.getTopUsages());
+  }
+
   private boolean isUnsafe(SortedSet<UsagePoint> points) {
     if (points.size() >= 1) {
       Iterator<UsagePoint> iterator = points.iterator();

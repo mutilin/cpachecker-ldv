@@ -127,6 +127,7 @@ public class IdentifierIterator extends WrappedConfigurableRefinementBlock<Reach
 
     sendUpdateSignal(PredicateRefinerAdapter.class, pReached);
     sendUpdateSignal(UsageIterator.class, container);
+    sendUpdateSignal(PointIterator.class, container);
 
     iterator = container.getUnsafeIterator();
     while (iterator.hasNext()) {
@@ -137,7 +138,7 @@ public class IdentifierIterator extends WrappedConfigurableRefinementBlock<Reach
         RefinementResult result = wrappedRefiner.call(currentId);
         refinementFinish |= result.isFalse();
 
-        PredicatePrecision info = (PredicatePrecision) result.getInfo(UsageIterator.class);
+        PredicatePrecision info = (PredicatePrecision) result.getPrecision();
 
         if (info != null && !info.getLocalPredicates().isEmpty()) {
           PredicatePrecision updatedPrecision;
@@ -147,6 +148,10 @@ public class IdentifierIterator extends WrappedConfigurableRefinementBlock<Reach
             updatedPrecision = info;
           }
           precisionMap.put(currentId, updatedPrecision);
+        }
+
+        if (result.isTrue()) {
+          container.setAsRefined(((UnrefinedUsagePointSet)pointSet), result);
         }
       }
     }

@@ -27,6 +27,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.sosy_lab.common.Pair;
+import org.sosy_lab.cpachecker.cpa.predicate.PredicatePrecision;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 
 
@@ -38,11 +39,14 @@ public class RefinementResult {
   }
   private final Map<Class<? extends RefinementInterface>, Object> auxiliaryInfo = new HashMap<>();
   private final Pair<UsageInfo, UsageInfo> trueRace;
+  //Currently only predicate one
+  private PredicatePrecision precision;
   RefinementStatus status;
 
   private RefinementResult(RefinementStatus rStatus, UsageInfo firstUsage, UsageInfo secondUsage) {
     status = rStatus;
     trueRace = Pair.of(firstUsage, secondUsage);
+    precision = PredicatePrecision.empty();
   }
 
   public void addInfo(Class<? extends RefinementInterface> caller, Object info) {
@@ -103,6 +107,14 @@ public class RefinementResult {
 
   public Pair<UsageInfo, UsageInfo> getTrueRace() {
     return trueRace;
+  }
+
+  public void addPrecision(PredicatePrecision p) {
+    precision = precision.mergeWith(p);
+  }
+
+  public PredicatePrecision getPrecision() {
+    return precision;
   }
 
   @Override

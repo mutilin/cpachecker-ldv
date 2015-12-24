@@ -48,17 +48,19 @@ import org.sosy_lab.cpachecker.cpa.arg.ARGUtils;
 import org.sosy_lab.cpachecker.cpa.bam.BAMCEXSubgraphComputer.BackwardARGState;
 import org.sosy_lab.cpachecker.cpa.bam.BAMMultipleCEXSubgraphComputer;
 import org.sosy_lab.cpachecker.cpa.bam.BAMTransferRelation;
-import org.sosy_lab.cpachecker.cpa.predicate.PredicatePrecision;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 
 import com.google.common.base.Function;
+import com.google.common.base.Preconditions;
+import com.google.common.collect.LinkedHashMultimap;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
 
 
-public class PathIterator extends WrappedConfigurableRefinementBlock<UsageInfo, ExtendedARGPath> {
+public class PathPairIterator extends
+    GenericIterator<Pair<UsageInfo, UsageInfo>, Pair<ExtendedARGPath, ExtendedARGPath>> {
 
   private final Set<List<Integer>> refinedStates = new HashSet<>();
   private final Map<ARGState, ARGState> subgraphStatesToReachedState;
@@ -69,7 +71,6 @@ public class PathIterator extends WrappedConfigurableRefinementBlock<UsageInfo, 
   private final SortedMap<Integer, Integer> computedPaths = new TreeMap<>();
 
   //Statistics
-  private Timer totalTimer = new Timer();
   private Timer computingPath = new Timer();
   private Timer additionTimer = new Timer();
   private int numberOfPathCalculated = 0;
@@ -80,6 +81,9 @@ public class PathIterator extends WrappedConfigurableRefinementBlock<UsageInfo, 
   private Map<AbstractState, Iterator<ARGState>> toCallerStatesIterator = new HashMap<>();
   private Map<UsageInfo, ARGState> previousForkForUsage = new HashMap<>();
 
+  private Multimap<UsageInfo, ExtendedARGPath> computedPathsForUsage = LinkedHashMultimap.create();
+  private Map<UsageInfo, Iterator<ExtendedARGPath>> currentIterators = new HashMap<>();
+
   private final Function<ARGState, Integer> GET_ORIGIN_STATE_NUMBERS = new Function<ARGState, Integer>() {
     @Override
     @Nullable
@@ -89,85 +93,202 @@ public class PathIterator extends WrappedConfigurableRefinementBlock<UsageInfo, 
     }
   };
 
-  public PathIterator(Map<ARGState, ARGState> pSubgraphStatesToReachedState, BAMTransferRelation bamTransfer,
-      ConfigurableRefinementBlock<ExtendedARGPath> pWrapper, LogManager l) {
+  //internal state
+  private ExtendedARGPath firstPath = null;
+
+  public PathPairIterator(ConfigurableRefinementBlock<Pair<ExtendedARGPath, ExtendedARGPath>> pWrapper
+      ,Map<ARGState, ARGState> pSubgraphStatesToReachedState, BAMTransferRelation bamTransfer, LogManager l) {
     super(pWrapper);
     subgraphStatesToReachedState = pSubgraphStatesToReachedState;
     transfer = bamTransfer;
     fromReducedToExpand = transfer.getMapFromReducedToExpand();
     subgraphComputer = transfer.createBAMMultipleSubgraphComputer(subgraphStatesToReachedState);
-    //logger = l;
   }
 
   @Override
-  public RefinementResult call(UsageInfo pInput) throws CPAException, InterruptedException {
-    totalTimer.start();
-
-    ARGPath currentPath;
-    RefinementResult result = RefinementResult.createFalse();
-
-    if (previousForkForUsage.containsKey(pInput)) {
-      //The first time, we have no path to iterate
-      BackwardARGState newTarget = new BackwardARGState((ARGState)pInput.getKeyState());
-      subgraphStatesToReachedState.put(newTarget, (ARGState)pInput.getKeyState());
-      currentPath = computePath(newTarget);
-      assert currentPath != null : "W-H-Y-?-?-!-!";
-    } else {
-      currentPath = next(previousForkForUsage.get(pInput));
-    }
-
-    PredicatePrecision completePrecision = PredicatePrecision.empty();
-    while (currentPath != null) {
-      ARGState startingState;
-
-      result = handlePath(new ExtendedARGPath(currentPath, pInput), completePrecision);
-
-      computingPath.start();
-      currentPath = next(previousForkForUsage.get(pInput));
-      computingPath.stop();
-    }
-    if (result.isFalse()) {
-      //No unknown verdict, therefore all paths are false: set a result for usage as false
-      result.addInfo(PathIterator.class, completePrecision);
-    }
-    totalTimer.stop();
-    return result;
+  protected void init(Pair<UsageInfo, UsageInfo> pInput) {
+    firstPath = null;
   }
 
-  private RefinementResult handlePath(ExtendedARGPath path, PredicatePrecision completePrecision) throws CPAException, InterruptedException {
-    numberOfPathCalculated++;
-    currentNumberForId++;
-    totalTimer.stop();
-    RefinementResult wrapperResult = wrappedRefiner.call(path);
-    totalTimer.start();
+  @Override
+  protected Pair<ExtendedARGPath, ExtendedARGPath> getNext(Pair<UsageInfo, UsageInfo> pInput) {
+    UsageInfo firstUsage, secondUsage;
+    firstUsage = pInput.getFirst();
+    secondUsage = pInput.getSecond();
 
-    if (wrapperResult.isTrue()) {
-      wrapperResult.addInfo(PathIterator.class, Pair.of(path, completePrecision));
-      totalTimer.stop();
-    } else if (wrapperResult.isFalse()) {
-      //Get a starting state
-      Object predicateInfo = wrapperResult.getInfo(PredicateRefinerAdapter.class);
-      assert predicateInfo instanceof Pair;
-      List<ARGState> affectedStates = ((Pair<List<ARGState>, PredicatePrecision>)predicateInfo).getFirst();
+    try {
+      if (firstPath == null) {
+        //First time or it was unreachable last time
+        firstPath = preparePath(firstUsage);
+        if (firstPath == null) {
+          checkAreUsagesUnreachable(pInput);
+          return null;
+        }
+      }
+
+      ExtendedARGPath secondPath = preparePath(secondUsage);
+
+      if (secondPath == null) {
+        //Reset the iterator
+        currentIterators.remove(secondUsage);
+        //And move shift the first one
+        firstPath = preparePath(firstUsage);
+        if (firstPath == null) {
+          checkAreUsagesUnreachable(pInput);
+          return null;
+        }
+        secondPath = preparePath(secondUsage);
+        if (secondPath == null) {
+          checkAreUsagesUnreachable(pInput);
+          return null;
+        }
+      }
+
+      return Pair.of(firstPath, secondPath);
+    } catch (CPAException e) {
+      Preconditions.checkArgument(false, e.getMessage());
+      return null;
+    } catch (InterruptedException e) {
+      Preconditions.checkArgument(false, e.getMessage());
+      return null;
+    }
+  }
+
+  private void checkAreUsagesUnreachable(Pair<UsageInfo, UsageInfo> pInput) {
+    UsageInfo firstUsage = pInput.getFirst();
+    UsageInfo secondUsage = pInput.getSecond();
+
+    if (computedPathsForUsage.get(firstUsage).size() == 0) {
+      firstUsage.setAsUnreachable();
+    }
+    if (computedPathsForUsage.get(secondUsage).size() == 0) {
+      secondUsage.setAsUnreachable();
+    }
+  }
+
+  @Override
+  protected void finalize(Pair<UsageInfo, UsageInfo> pInput, Pair<ExtendedARGPath, ExtendedARGPath> pathPair, RefinementResult wrapperResult) {
+    ExtendedARGPath firstExtendedPath, secondExtendedPath;
+
+    firstExtendedPath = pathPair.getFirst();
+    secondExtendedPath = pathPair.getSecond();
+
+    Object predicateInfo = wrapperResult.getInfo(PredicateRefinerAdapter.class);
+    if (predicateInfo != null && predicateInfo instanceof List) {
+      List<ARGState> affectedStates = (List<ARGState>)predicateInfo;
+      //affectedStates may be null, if the path was refined somewhen before
+
+      //A feature of GenericSinglePathRefiner: if one path is false, the second one is not refined
+      if (firstExtendedPath.isUnreachable()) {
+        //This one is false
+        handleAffectedStates(affectedStates, firstExtendedPath);
+        handleAffectedStates(null, secondExtendedPath);
+        //Need to clean first path
+        firstPath = null;
+      } else {
+        //The second one must be
+        Preconditions.checkArgument(secondExtendedPath.isUnreachable(), "Either the first path, or the second one must be unreachable here");
+        handleAffectedStates(null, firstExtendedPath);
+        handleAffectedStates(affectedStates, secondExtendedPath);
+      }
+    }
+    updateTheComputedSet(firstExtendedPath);
+    updateTheComputedSet(secondExtendedPath);
+  }
+
+  @Override
+  public void printDetailedStatistics(PrintStream pOut) {
+    pOut.println("--PathPairIterator--");
+    pOut.println("--Timer for path computing:          " + computingPath);
+    pOut.println("--Timer for addition checks:         " + additionTimer);
+    pOut.println("Number of path calculated:           " + numberOfPathCalculated);
+    pOut.println("Number of successful Addition Checks:" + successfulAdditionChecks);
+    for (Integer paths : computedPaths.keySet()) {
+      pOut.println(paths + ":" + computedPaths.get(paths));
+    }
+  }
+
+  @Override
+  public Object handleFinishSignal(Class<? extends RefinementInterface> callerClass) {
+    if (callerClass.equals(IdentifierIterator.class)) {
+      //Refinement iteration finishes
+      subgraphStatesToReachedState.clear();
+      refinedStates.clear();
+    } else if (callerClass.equals(PointIterator.class)) {
+      if (!computedPaths.containsKey(currentNumberForId)) {
+        computedPaths.put(currentNumberForId, 1);
+      } else {
+        computedPaths.put(currentNumberForId, computedPaths.get(currentNumberForId) + 1);
+      }
+      currentNumberForId = 0;
+      toCallerStatesIterator.clear();
+      previousForkForUsage.clear();
+      currentIterators.clear();
+      computedPathsForUsage.clear();
+    }
+    return null;
+  }
+
+  private void updateTheComputedSet(ExtendedARGPath path) {
+    UsageInfo usage = path.getUsageInfo();
+
+    if (!path.isUnreachable() && !computedPathsForUsage.containsEntry(usage, path)) {
+      computedPathsForUsage.put(usage, path);
+    } else if (path.isUnreachable() && computedPathsForUsage.containsEntry(usage, path)) {
+      computedPathsForUsage.remove(usage, path);
+    }
+  }
+
+  private ExtendedARGPath preparePath(UsageInfo info) throws CPATransferException, InterruptedException {
+    ARGPath currentPath;
+
+    //Start from already computed set (it is partially refined)
+    Iterator<ExtendedARGPath> iterator = currentIterators.get(info);
+    if (iterator == null) {
+      //first call
+      iterator = computedPathsForUsage.get(info).iterator();
+    }
+
+    if (iterator.hasNext()) {
+      return iterator.next();
+    }
+
+    computingPath.start();
+    //try to compute more paths
+    if (!previousForkForUsage.containsKey(info)) {
+      //The first time, we have no path to iterate
+      BackwardARGState newTarget = new BackwardARGState((ARGState)info.getKeyState());
+      subgraphStatesToReachedState.put(newTarget, (ARGState)info.getKeyState());
+      currentPath = computePath(newTarget);
+      //currentPath may become null if it goes through repeated (refined) states
+    } else {
+      currentPath = next(previousForkForUsage.get(info));
+    }
+    computingPath.stop();
+
+    if (currentPath == null) {
+      //no path to iterate, finishing
+      return null;
+    }
+    //Not add result now, only after refinement
+    return new ExtendedARGPath(currentPath, info);
+  }
+
+  private void handleAffectedStates(List<ARGState> affectedStates, ExtendedARGPath path) {
+    ARGState nextStart;
+    if (affectedStates != null) {
       List<Integer>changedStateNumbers = from(affectedStates).transform(GET_ORIGIN_STATE_NUMBERS).toList();
       refinedStates.add(changedStateNumbers);
 
-      PredicatePrecision precision = ((Pair<List<ARGState>, PredicatePrecision>)predicateInfo).getSecond();
-
-      if (precision != null) {
-        completePrecision = completePrecision.mergeWith(precision);
-      }
-
-      previousForkForUsage.put(path.getUsageInfo(), affectedStates.get(affectedStates.size() - 1));
+      nextStart = affectedStates.get(affectedStates.size() - 1);
     } else {
-      //start with the beginning
-      previousForkForUsage.put(path.getUsageInfo(), path.getFirstState().getChildren().iterator().next());
+      nextStart = path.getFirstState().getChildren().iterator().next();
     }
-    return wrapperResult;
+    previousForkForUsage.put(path.getUsageInfo(), nextStart);
   }
 
   //lastAffectedState is Backward!
-  public ARGPath next(ARGState lastAffectedState) throws CPATransferException, InterruptedException  {
+  private ARGPath next(ARGState lastAffectedState) throws CPATransferException, InterruptedException  {
     assert lastAffectedState != null;
 
     ARGState nextParent = null, previousCaller, childOfForkState = lastAffectedState;
@@ -305,39 +426,7 @@ public class PathIterator extends WrappedConfigurableRefinementBlock<UsageInfo, 
       }
     }
     additionTimer.stop();
+    numberOfPathCalculated++;
     return result;
-  }
-
-  @Override
-  public void printStatistics(PrintStream pOut) {
-    pOut.println("--PathIterator--");
-    pOut.println("Timer for block:                     " + totalTimer);
-    pOut.println("--Timer for path computing:          " + computingPath);
-    pOut.println("--Timer for addition checks:         " + additionTimer);
-    pOut.println("Number of path calculated:           " + numberOfPathCalculated);
-    pOut.println("Number of successful Addition Checks:" + successfulAdditionChecks);
-    for (Integer paths : computedPaths.keySet()) {
-      pOut.println(paths + ":" + computedPaths.get(paths));
-    }
-    wrappedRefiner.printStatistics(pOut);
-  }
-
-  @Override
-  public Object handleFinishSignal(Class<? extends RefinementInterface> callerClass) {
-    if (callerClass.equals(IdentifierIterator.class)) {
-      //Refinement iteration finishes
-      subgraphStatesToReachedState.clear();
-      refinedStates.clear();
-    } else if (callerClass.equals(UsageIterator.class)) {
-      if (!computedPaths.containsKey(currentNumberForId)) {
-        computedPaths.put(currentNumberForId, 1);
-      } else {
-        computedPaths.put(currentNumberForId, computedPaths.get(currentNumberForId) + 1);
-      }
-      currentNumberForId = 0;
-      toCallerStatesIterator.clear();
-      previousForkForUsage.clear();
-    }
-    return null;
   }
 }

@@ -42,8 +42,10 @@ import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsState;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.RefinementResult;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 
@@ -226,6 +228,12 @@ public class UsageContainer {
   public void setAsRefined(UnrefinedUsagePointSet set) {
     Pair<RefinedUsageInfoSet, RefinedUsageInfoSet> unsafePair = detector.getTrueUnsafePair(set);
     setAsRefined(set, unsafePair.getFirst().getOneExample(), unsafePair.getSecond().getOneExample());
+  }
+
+  public void setAsRefined(UnrefinedUsagePointSet set, RefinementResult result) {
+    Preconditions.checkArgument(result.isTrue(), "Result is not true, can not set the set as refined");
+
+    setAsRefined(set, result.getTrueRace().getFirst(), result.getTrueRace().getSecond());
   }
 
   public void setAsRefined(UnrefinedUsagePointSet set, UsageInfo firstUsage, UsageInfo secondUsage) {

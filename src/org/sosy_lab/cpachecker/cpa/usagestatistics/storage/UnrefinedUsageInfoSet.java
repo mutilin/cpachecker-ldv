@@ -2,6 +2,7 @@ package org.sosy_lab.cpachecker.cpa.usagestatistics.storage;
 
 import java.util.Iterator;
 import java.util.Set;
+import java.util.SortedSet;
 import java.util.TreeSet;
 
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
@@ -9,13 +10,17 @@ import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsState;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 
-import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Sets;
 
 public class UnrefinedUsageInfoSet implements AbstractUsageInfoSet {
-  private final Set<UsageInfo> unrefinedUsages;
+  private final SortedSet<UsageInfo> unrefinedUsages;
 
   public UnrefinedUsageInfoSet() {
     unrefinedUsages = new TreeSet<>();
+  }
+
+  private UnrefinedUsageInfoSet(SortedSet<UsageInfo> usages) {
+    unrefinedUsages = Sets.newTreeSet(usages);
   }
 
   public void add(UsageInfo newInfo) {
@@ -53,12 +58,18 @@ public class UnrefinedUsageInfoSet implements AbstractUsageInfoSet {
   }
 
   @Override
-  public ImmutableSet<UsageInfo> getUsages() {
-    return ImmutableSet.copyOf(unrefinedUsages);
+  public Set<UsageInfo> getUsages() {
+    return unrefinedUsages;
   }
 
   @Override
   public boolean isTrue() {
     return false;
+  }
+
+  @Override
+  public UnrefinedUsageInfoSet clone() {
+    //For avoiding concurrent modification in refinement
+    return new UnrefinedUsageInfoSet(this.unrefinedUsages);
   }
 }

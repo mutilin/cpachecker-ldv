@@ -40,12 +40,12 @@ import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateCPA;
 import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateRefiner;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.IdentifierIterator;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.PairIterator;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.PathIterator;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.PathPairIterator;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.PointIterator;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.PredicateRefinerAdapter;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.RefinementPairStub;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.RefinementResult;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.UsageIterator;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.UsagePairIterator;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.util.CPAs;
 
@@ -97,11 +97,11 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
     LogManager logger = UScpa.getLogger();
     //RefinementStub stub = new RefinementStub();
     RefinementPairStub stub = new RefinementPairStub();
-    PairIterator pairIterator = new PairIterator(stub);
-    PredicateRefinerAdapter predicateRefinerAdapter = new PredicateRefinerAdapter(pairIterator, cpa, null);
-    PathIterator pIterator = new PathIterator(this.subgraphStatesToReachedState, transfer, predicateRefinerAdapter, logger);
-    UsageIterator uIterator = new UsageIterator(pIterator, null, UScpa.getLogger());
-    startingBlock = new IdentifierIterator(uIterator, pConfig, pCpa, transfer);
+    PredicateRefinerAdapter predicateRefinerAdapter = new PredicateRefinerAdapter(stub, cpa, null);
+    PathPairIterator pIterator = new PathPairIterator(predicateRefinerAdapter, this.subgraphStatesToReachedState, transfer, logger);
+    UsagePairIterator uIterator = new UsagePairIterator(pIterator, UScpa.getLogger());
+    PointIterator pointIterator = new PointIterator(uIterator, null);
+    startingBlock = new IdentifierIterator(pointIterator, pConfig, pCpa, transfer);
     //iCache = predicateRefinerAdapter.getInterpolantCache();
   }
 

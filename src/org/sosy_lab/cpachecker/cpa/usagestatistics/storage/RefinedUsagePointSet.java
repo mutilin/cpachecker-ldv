@@ -45,7 +45,8 @@ public class RefinedUsagePointSet implements AbstractUsagePointSet {
   }
 
   public static RefinedUsagePointSet create(UsageInfo newSet, UsageInfo newSet2) {
-    if (newSet == newSet2) {
+    //We may clone it, so just clone can not help
+    if (newSet.getPath().equals(newSet2.getPath()) && newSet.equals(newSet2)) {
       return new RefinedUsagePointSet(newSet);
     } else {
       return new DoubleRefinedUsagePointSet(newSet, newSet2);

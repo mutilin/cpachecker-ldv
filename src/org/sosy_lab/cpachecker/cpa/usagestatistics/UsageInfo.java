@@ -56,6 +56,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
   private List<CFAEdge> path;
   private SingleIdentifier id = null;
   public boolean failureFlag;
+  private boolean reachable;
 
   public UsageInfo(@Nonnull Access atype, @Nonnull LineInfo l, @Nonnull LockStatisticsState lock) {
     line = l;
@@ -63,6 +64,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
     accessType = atype;
     keyState = null;
     failureFlag = false;
+    reachable = true;
   }
 
   public UsageInfo(@Nonnull Access atype,  int l, @Nonnull UsageStatisticsState state) {
@@ -226,6 +228,14 @@ public class UsageInfo implements Comparable<UsageInfo> {
       }
     }).toList();
     path = edges;
+  }
+
+  public boolean isReachable() {
+    return reachable;
+  }
+
+  public void setAsUnreachable() {
+    reachable = false;
   }
 
   @Override
