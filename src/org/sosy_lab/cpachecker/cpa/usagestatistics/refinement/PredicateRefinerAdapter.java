@@ -154,12 +154,6 @@ public class PredicateRefinerAdapter extends GenericSinglePathRefiner {
       //consider its as true;
       logger.log(Level.WARNING, "Solver exception: " + e.getMessage());
       solverFailures++;
-    //  logger.log(Level.WARNING, "Consider " + target + " as true");
-     // computer.setResultOfRefinement(target, true, pPath.getInnerEdges());
-    //  target.failureFlag = true;
-    //  pStat.Refinement.stop();
-    //  pStat.ComputePath.start();
-    //  continue;
       result = RefinementResult.createUnknown();
     }
     return result;
@@ -192,7 +186,9 @@ public class PredicateRefinerAdapter extends GenericSinglePathRefiner {
     if (pCallerClass.equals(IdentifierIterator.class)) {
       for (Set<CFAEdge> edges : falseCacheForCurrentIteration.keySet()) {
         PredicatePrecision precision = falseCacheForCurrentIteration.get(edges);
-        assert !falseCache.containsKey(edges);
+        //false cache may contain other precision
+        //It happens if we clean it for other Id and rerefine it now
+        //Just replace old precision
         falseCache.put(edges, precision);
       }
       falseCacheForCurrentIteration.clear();

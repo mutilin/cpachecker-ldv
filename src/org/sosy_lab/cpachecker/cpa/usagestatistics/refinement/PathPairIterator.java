@@ -116,6 +116,7 @@ public class PathPairIterator extends
     firstUsage = pInput.getFirst();
     secondUsage = pInput.getSecond();
 
+
     try {
       if (firstPath == null) {
         //First time or it was unreachable last time
@@ -127,7 +128,6 @@ public class PathPairIterator extends
       }
 
       ExtendedARGPath secondPath = preparePath(secondUsage);
-
       if (secondPath == null) {
         //Reset the iterator
         currentIterators.remove(secondUsage);
@@ -143,7 +143,6 @@ public class PathPairIterator extends
           return null;
         }
       }
-
       return Pair.of(firstPath, secondPath);
     } catch (CPAException e) {
       Preconditions.checkArgument(false, e.getMessage());
@@ -191,6 +190,8 @@ public class PathPairIterator extends
         handleAffectedStates(null, firstExtendedPath);
         handleAffectedStates(affectedStates, secondExtendedPath);
       }
+    } else if (firstPath.isUnreachable()){
+      firstPath = null;
     }
     updateTheComputedSet(firstExtendedPath);
     updateTheComputedSet(secondExtendedPath);
@@ -250,7 +251,11 @@ public class PathPairIterator extends
     }
 
     if (iterator.hasNext()) {
-      return iterator.next();
+      ExtendedARGPath path = iterator.next();
+      if (path.isUnreachable()) {
+        System.out.println("Here");
+      }
+      return path;
     }
 
     computingPath.start();
