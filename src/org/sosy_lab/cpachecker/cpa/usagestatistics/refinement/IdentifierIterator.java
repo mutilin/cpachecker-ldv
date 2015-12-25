@@ -126,7 +126,7 @@ public class IdentifierIterator extends WrappedConfigurableRefinementBlock<Reach
     boolean refinementFinish = false;
 
     sendUpdateSignal(PredicateRefinerAdapter.class, pReached);
-    sendUpdateSignal(UsageIterator.class, container);
+    sendUpdateSignal(UsagePairIterator.class, container);
     sendUpdateSignal(PointIterator.class, container);
 
     iterator = container.getUnsafeIterator();
@@ -138,7 +138,7 @@ public class IdentifierIterator extends WrappedConfigurableRefinementBlock<Reach
         RefinementResult result = wrappedRefiner.call(currentId);
         refinementFinish |= result.isFalse();
 
-        PredicatePrecision info = (PredicatePrecision) result.getPrecision();
+        PredicatePrecision info = result.getPrecision();
 
         if (info != null && !info.getLocalPredicates().isEmpty()) {
           PredicatePrecision updatedPrecision;

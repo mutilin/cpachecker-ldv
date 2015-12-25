@@ -30,6 +30,8 @@ import org.sosy_lab.common.Pair;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicatePrecision;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 
+import com.google.common.base.Preconditions;
+
 
 public class RefinementResult {
   public enum RefinementStatus {
@@ -45,11 +47,19 @@ public class RefinementResult {
 
   private RefinementResult(RefinementStatus rStatus, UsageInfo firstUsage, UsageInfo secondUsage) {
     status = rStatus;
-    trueRace = Pair.of(firstUsage, secondUsage);
+    if (firstUsage != null && secondUsage != null) {
+      //True result
+      Preconditions.checkArgument(status == RefinementStatus.TRUE);
+      trueRace = Pair.of(firstUsage, secondUsage);
+    } else {
+      //Other results
+      trueRace = null;
+    }
     precision = PredicatePrecision.empty();
   }
 
   public void addInfo(Class<? extends RefinementInterface> caller, Object info) {
+    //Now used only for transferring precision
     auxiliaryInfo.put(caller, info);
   }
 
@@ -82,19 +92,9 @@ public class RefinementResult {
     return new RefinementResult(RefinementStatus.TRUE, firstUsage, secondUsage);
   }
 
-  public static RefinementResult createTrue(ExtendedARGPath firstPath) {
-    UsageInfo firstUsage = firstPath.getUsageInfo();
-
-    firstUsage.resetKeyState(firstPath.getInnerEdges());
-    return new RefinementResult(RefinementStatus.TRUE, firstUsage, null);
-  }
-
   public static RefinementResult createTrue() {
+    //Used for temporary result
     return new RefinementResult(RefinementStatus.TRUE, null, null);
-  }
-
-  public static RefinementResult createTrue(UsageInfo firstUsage, UsageInfo secondUsage) {
-    return new RefinementResult(RefinementStatus.TRUE, firstUsage, secondUsage);
   }
 
   public static RefinementResult createFalse() {
@@ -106,6 +106,7 @@ public class RefinementResult {
   }
 
   public Pair<UsageInfo, UsageInfo> getTrueRace() {
+    Preconditions.checkArgument(status == RefinementStatus.TRUE);
     return trueRace;
   }
 
