@@ -111,9 +111,8 @@ public class InterruptFilter extends
     List<String> callerFunctions = from(path.getStateSet()).
                                  filter(isFirstCall).
                                  transform(getFunctionName).toList();
-    //assert callerFunctions.size() == 1;
     //TODO Now I believe, it is enough to check the last function called from main - this is related to the call stack
-    if (callerFunctions.size() > 1) {
+    if (callerFunctions.size() >= 1) {
       String targetFunctionName = callerFunctions.get(callerFunctions.size() - 1);
       return interruptHandlerNames.contains(targetFunctionName);
     } else {
