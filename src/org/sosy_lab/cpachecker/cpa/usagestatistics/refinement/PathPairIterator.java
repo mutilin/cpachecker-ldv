@@ -33,7 +33,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.SortedMap;
 import java.util.TreeMap;
 
 import javax.annotation.Nullable;
@@ -67,14 +66,11 @@ public class PathPairIterator extends
   private final BAMTransferRelation transfer;
   private final Multimap<AbstractState, AbstractState> fromReducedToExpand;
   private final BAMMultipleCEXSubgraphComputer subgraphComputer;
-  //private final LogManager logger;
-  private final SortedMap<Integer, Integer> computedPaths = new TreeMap<>();
 
   //Statistics
   private Timer computingPath = new Timer();
   private Timer additionTimer = new Timer();
   private int numberOfPathCalculated = 0;
-  private int currentNumberForId = 0;
   private int successfulAdditionChecks = 0;
   //private int numberOfrepeatedPaths = 0;
 
@@ -92,6 +88,8 @@ public class PathPairIterator extends
       return subgraphStatesToReachedState.get(pInput).getStateId();
     }
   };
+
+  private final static Iterator<ExtendedARGPath> DUMMY_INTERATOR = new HashSet<ExtendedARGPath>().iterator();
 
   //internal state
   private ExtendedARGPath firstPath = null;
@@ -116,28 +114,27 @@ public class PathPairIterator extends
     firstUsage = pInput.getFirst();
     secondUsage = pInput.getSecond();
 
-
     try {
       if (firstPath == null) {
         //First time or it was unreachable last time
-        firstPath = preparePath(firstUsage);
+        firstPath = getNextPath(firstUsage);
         if (firstPath == null) {
           checkAreUsagesUnreachable(pInput);
           return null;
         }
       }
 
-      ExtendedARGPath secondPath = preparePath(secondUsage);
+      ExtendedARGPath secondPath = getNextPath(secondUsage);
       if (secondPath == null) {
         //Reset the iterator
         currentIterators.remove(secondUsage);
         //And move shift the first one
-        firstPath = preparePath(firstUsage);
+        firstPath = getNextPath(firstUsage);
         if (firstPath == null) {
           checkAreUsagesUnreachable(pInput);
           return null;
         }
-        secondPath = preparePath(secondUsage);
+        secondPath = getNextPath(secondUsage);
         if (secondPath == null) {
           checkAreUsagesUnreachable(pInput);
           return null;
@@ -166,7 +163,7 @@ public class PathPairIterator extends
   }
 
   @Override
-  protected void finalize(Pair<UsageInfo, UsageInfo> pInput, Pair<ExtendedARGPath, ExtendedARGPath> pathPair, RefinementResult wrapperResult) {
+  protected void finalize(Pair<ExtendedARGPath, ExtendedARGPath> pathPair, RefinementResult wrapperResult) {
     ExtendedARGPath firstExtendedPath, secondExtendedPath;
 
     firstExtendedPath = pathPair.getFirst();
@@ -190,8 +187,12 @@ public class PathPairIterator extends
         handleAffectedStates(null, firstExtendedPath);
         handleAffectedStates(affectedStates, secondExtendedPath);
       }
-    } else if (firstPath.isUnreachable()){
-      firstPath = null;
+    } else {
+      handleAffectedStates(null, firstExtendedPath);
+      handleAffectedStates(null, secondExtendedPath);
+      if (firstPath.isUnreachable()){
+        firstPath = null;
+      }
     }
     updateTheComputedSet(firstExtendedPath);
     updateTheComputedSet(secondExtendedPath);
@@ -204,9 +205,6 @@ public class PathPairIterator extends
     pOut.println("--Timer for addition checks:         " + additionTimer);
     pOut.println("Number of path calculated:           " + numberOfPathCalculated);
     pOut.println("Number of successful Addition Checks:" + successfulAdditionChecks);
-    for (Integer paths : computedPaths.keySet()) {
-      pOut.println(paths + ":" + computedPaths.get(paths));
-    }
   }
 
   @Override
@@ -216,12 +214,6 @@ public class PathPairIterator extends
       subgraphStatesToReachedState.clear();
       refinedStates.clear();
     } else if (callerClass.equals(PointIterator.class)) {
-      if (!computedPaths.containsKey(currentNumberForId)) {
-        computedPaths.put(currentNumberForId, 1);
-      } else {
-        computedPaths.put(currentNumberForId, computedPaths.get(currentNumberForId) + 1);
-      }
-      currentNumberForId = 0;
       toCallerStatesIterator.clear();
       previousForkForUsage.clear();
       currentIterators.clear();
@@ -236,11 +228,13 @@ public class PathPairIterator extends
     if (!path.isUnreachable() && !computedPathsForUsage.containsEntry(usage, path)) {
       computedPathsForUsage.put(usage, path);
     } else if (path.isUnreachable() && computedPathsForUsage.containsEntry(usage, path)) {
+      //We should reset iterator to avoid ConcurrentModificationException
+      currentIterators.remove(usage);
       computedPathsForUsage.remove(usage, path);
     }
   }
 
-  private ExtendedARGPath preparePath(UsageInfo info) throws CPATransferException, InterruptedException {
+  private ExtendedARGPath getNextPath(UsageInfo info) throws CPATransferException, InterruptedException {
     ARGPath currentPath;
 
     //Start from already computed set (it is partially refined)
@@ -248,14 +242,14 @@ public class PathPairIterator extends
     if (iterator == null) {
       //first call
       iterator = computedPathsForUsage.get(info).iterator();
+      currentIterators.put(info, iterator);
     }
 
-    if (iterator.hasNext()) {
-      ExtendedARGPath path = iterator.next();
-      if (path.isUnreachable()) {
-        System.out.println("Here");
-      }
-      return path;
+    if (iterator != DUMMY_INTERATOR && iterator.hasNext()) {
+      return iterator.next();
+    } else if (iterator != DUMMY_INTERATOR) {
+      //We handle all previously found paths, disable the iterator
+      currentIterators.put(info, DUMMY_INTERATOR);
     }
 
     computingPath.start();
@@ -267,7 +261,7 @@ public class PathPairIterator extends
       currentPath = computePath(newTarget);
       //currentPath may become null if it goes through repeated (refined) states
     } else {
-      currentPath = next(previousForkForUsage.get(info));
+      currentPath = computeNextPath(previousForkForUsage.get(info));
     }
     computingPath.stop();
 
@@ -293,7 +287,7 @@ public class PathPairIterator extends
   }
 
   //lastAffectedState is Backward!
-  private ARGPath next(ARGState lastAffectedState) throws CPATransferException, InterruptedException  {
+  private ARGPath computeNextPath(ARGState lastAffectedState) throws CPATransferException, InterruptedException  {
     assert lastAffectedState != null;
 
     ARGState nextParent = null, previousCaller, childOfForkState = lastAffectedState;

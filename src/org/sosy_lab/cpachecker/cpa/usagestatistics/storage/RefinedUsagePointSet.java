@@ -25,14 +25,14 @@ public class RefinedUsagePointSet implements AbstractUsagePointSet {
     }
 
     @Override
-    public AbstractUsageInfoSet getUsageInfo(UsagePoint point) {
-      AbstractUsageInfoSet result = super.getUsageInfo(point);
+    public UsageInfoSet getUsageInfo(UsagePoint point) {
+      UsageInfoSet result = super.getUsageInfo(point);
       if (result != null) {
         return result;
       }
       UsagePoint p = target2.getUsagePoint();
       if (p.equals(point)) {
-        return new RefinedUsageInfoSet(target2, target2.getPath());
+        return new UsageInfoSet(target2);
       }
       return null;
     }
@@ -45,7 +45,7 @@ public class RefinedUsagePointSet implements AbstractUsagePointSet {
   }
 
   public static RefinedUsagePointSet create(UsageInfo newSet, UsageInfo newSet2) {
-    //We may clone it, so just clone can not help
+    //We may clone it, so just == can not help
     if (newSet.getPath().equals(newSet2.getPath()) && newSet.equals(newSet2)) {
       return new RefinedUsagePointSet(newSet);
     } else {
@@ -59,10 +59,10 @@ public class RefinedUsagePointSet implements AbstractUsagePointSet {
   }
 
   @Override
-  public AbstractUsageInfoSet getUsageInfo(UsagePoint point) {
+  public UsageInfoSet getUsageInfo(UsagePoint point) {
     UsagePoint p = target.getUsagePoint();
     if (p.equals(point)) {
-      return new RefinedUsageInfoSet(target, target.getPath());
+      return new UsageInfoSet(target);
     }
     return null;
   }

@@ -35,7 +35,6 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.logging.Level;
 
-import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.log.LogManager;
@@ -50,9 +49,9 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 
 public class UsageContainer {
-  private final SortedMap<SingleIdentifier, UnrefinedUsagePointSet> unrefinedStat;
+  private final SortedMap<SingleIdentifier, UnrefinedUsagePointSet> unrefinedIds;
   private final Map<UnrefinedUsagePointSet, SingleIdentifier> toId;
-  private final SortedMap<SingleIdentifier, RefinedUsagePointSet> refinedStat;
+  private final SortedMap<SingleIdentifier, RefinedUsagePointSet> refinedIds;
 
   private final UnsafeDetector detector;
 
@@ -82,9 +81,9 @@ public class UsageContainer {
       SortedMap<SingleIdentifier, RefinedUsagePointSet> pRefinedStat,
       Set<SingleIdentifier> pFalseUnsafes, LogManager pLogger,
       UnsafeDetector pDetector) {
-    unrefinedStat = pUnrefinedStat;
+    unrefinedIds = pUnrefinedStat;
     toId = pToId;
-    refinedStat = pRefinedStat;
+    refinedIds = pRefinedStat;
     falseUnsafes = pFalseUnsafes;
     logger = pLogger;
     detector = pDetector;
@@ -96,15 +95,15 @@ public class UsageContainer {
     if (falseUnsafes.contains(id)) {
       return;
     }
-    if (refinedStat.containsKey(id)) {
+    if (refinedIds.containsKey(id)) {
       return;
     }
-    if (!unrefinedStat.containsKey(id)) {
+    if (!unrefinedIds.containsKey(id)) {
       uset = new UnrefinedUsagePointSet();
-      unrefinedStat.put(id, uset);
+      unrefinedIds.put(id, uset);
       toId.put(uset, id);
     } else {
-      uset = unrefinedStat.get(id);
+      uset = unrefinedIds.get(id);
     }
     usage.setId(id);
     uset.add(usage);
@@ -115,9 +114,9 @@ public class UsageContainer {
       processedUnsafes.clear();
       unsafeUsages = 0;
       Set<SingleIdentifier> toDelete = new HashSet<>();
-      for (SingleIdentifier id : unrefinedStat.keySet()) {
+      for (SingleIdentifier id : unrefinedIds.keySet()) {
 
-        UnrefinedUsagePointSet tmpList = unrefinedStat.get(id);
+        UnrefinedUsagePointSet tmpList = unrefinedIds.get(id);
         if (detector.isUnsafe(tmpList)) {
           unsafeUsages += tmpList.size();
         } else {
@@ -128,13 +127,13 @@ public class UsageContainer {
       for (SingleIdentifier id : toDelete) {
         removeIdFromCaches(id);
       }
-      for (SingleIdentifier id : refinedStat.keySet()) {
-        RefinedUsagePointSet tmpList = refinedStat.get(id);
+      for (SingleIdentifier id : refinedIds.keySet()) {
+        RefinedUsagePointSet tmpList = refinedIds.get(id);
         unsafeUsages += tmpList.size();
       }
       if (initialSet == null) {
-        assert refinedStat.isEmpty();
-        initialSet = Sets.newHashSet(unrefinedStat.keySet());
+        assert refinedIds.isEmpty();
+        initialSet = Sets.newHashSet(unrefinedIds.keySet());
         initialUsages = unsafeUsages;
       }
     }
@@ -142,16 +141,16 @@ public class UsageContainer {
 
   private void removeIdFromCaches(SingleIdentifier id) {
     //It is important to remove it from both of the caches
-    UnrefinedUsagePointSet uset = unrefinedStat.get(id);
-    unrefinedStat.remove(id);
+    UnrefinedUsagePointSet uset = unrefinedIds.get(id);
+    unrefinedIds.remove(id);
     toId.remove(uset);
     processedUnsafes.add(id);
   }
 
   public Set<SingleIdentifier> getUnsafes() {
     getUnsafesIfNecessary();
-    Set<SingleIdentifier> result = new TreeSet<>(unrefinedStat.keySet());
-    result.addAll(refinedStat.keySet());
+    Set<SingleIdentifier> result = new TreeSet<>(unrefinedIds.keySet());
+    result.addAll(refinedIds.keySet());
     return result;
   }
 
@@ -165,17 +164,17 @@ public class UsageContainer {
 
   public Iterator<SingleIdentifier> getUnrefinedUnsafeIterator() {
     getUnsafesIfNecessary();
-    Set<SingleIdentifier> result = new TreeSet<>(unrefinedStat.keySet());
+    Set<SingleIdentifier> result = new TreeSet<>(unrefinedIds.keySet());
     return result.iterator();
   }
 
   public int getUnsafeSize() {
     getUnsafesIfNecessary();
-    return unrefinedStat.size() + refinedStat.size();
+    return unrefinedIds.size() + refinedIds.size();
   }
 
   public int getTrueUnsafeSize() {
-    return refinedStat.size();
+    return refinedIds.size();
   }
 
   public int getFalseUnsafeSize() {
@@ -193,7 +192,7 @@ public class UsageContainer {
   public void resetUnrefinedUnsafes() {
     resetTimer.start();
     unsafeUsages = -1;
-    for (UnrefinedUsagePointSet uset : unrefinedStat.values()) {
+    for (UnrefinedUsagePointSet uset : unrefinedIds.values()) {
       uset.reset();
     }
     logger.log(Level.FINE, "Unsafes are reseted");
@@ -201,17 +200,17 @@ public class UsageContainer {
   }
 
   public void removeState(final UsageStatisticsState pUstate) {
-    for (UnrefinedUsagePointSet uset : unrefinedStat.values()) {
+    for (UnrefinedUsagePointSet uset : unrefinedIds.values()) {
       uset.remove(pUstate);
     }
     logger.log(Level.ALL, "All unsafes related to key state " + pUstate + " were removed from reached set");
   }
 
   public AbstractUsagePointSet getUsages(SingleIdentifier id) {
-    if (unrefinedStat.containsKey(id)) {
-      return unrefinedStat.get(id);
+    if (unrefinedIds.containsKey(id)) {
+      return unrefinedIds.get(id);
     } else {
-      return refinedStat.get(id);
+      return refinedIds.get(id);
     }
   }
 
@@ -219,15 +218,10 @@ public class UsageContainer {
     getUnsafesIfNecessary();
     LinkedList<UnrefinedUsagePointSet> result = new LinkedList<>();
     //Not just values()! We must create a collection deterministically
-    for (SingleIdentifier id : unrefinedStat.keySet()) {
-      result.add(unrefinedStat.get(id));
+    for (SingleIdentifier id : unrefinedIds.keySet()) {
+      result.add(unrefinedIds.get(id));
     }
     return result;
-  }
-
-  public void setAsRefined(UnrefinedUsagePointSet set) {
-    Pair<RefinedUsageInfoSet, RefinedUsageInfoSet> unsafePair = detector.getTrueUnsafePair(set);
-    setAsRefined(set, unsafePair.getFirst().getOneExample(), unsafePair.getSecond().getOneExample());
   }
 
   public void setAsRefined(UnrefinedUsagePointSet set, RefinementResult result) {
@@ -236,17 +230,22 @@ public class UsageContainer {
     setAsRefined(set, result.getTrueRace().getFirst(), result.getTrueRace().getSecond());
   }
 
+  public void setAsFalseUnsafe(SingleIdentifier id) {
+    falseUnsafes.add(id);
+    removeIdFromCaches(id);
+  }
+
   public void setAsRefined(UnrefinedUsagePointSet set, UsageInfo firstUsage, UsageInfo secondUsage) {
     assert toId.containsKey(set);
     SingleIdentifier id = toId.get(set);
-    refinedStat.put(id, RefinedUsagePointSet.create(firstUsage, secondUsage));
+    refinedIds.put(id, RefinedUsagePointSet.create(firstUsage, secondUsage));
     removeIdFromCaches(id);
   }
 
   public void printUsagesStatistics(final PrintStream out) {
     int allUsages = 0, maxUsage = 0;
-    final int generalUnrefinedSize = unrefinedStat.keySet().size();
-    for (UnrefinedUsagePointSet uset : unrefinedStat.values()) {
+    final int generalUnrefinedSize = unrefinedIds.keySet().size();
+    for (UnrefinedUsagePointSet uset : unrefinedIds.values()) {
       allUsages += uset.size();
       if (maxUsage < uset.size()) {
         maxUsage = uset.size();
@@ -255,9 +254,9 @@ public class UsageContainer {
     out.println("Total amount of unrefined variables:              " + generalUnrefinedSize);
     out.println("Total amount of unrefined usages:                 " + allUsages + "(avg. " +
         (generalUnrefinedSize == 0 ? "0" : (allUsages/generalUnrefinedSize)) + ", max " + maxUsage + ")");
-    final int generalRefinedSize = refinedStat.keySet().size();
+    final int generalRefinedSize = refinedIds.keySet().size();
     allUsages = 0;
-    for (RefinedUsagePointSet uset : refinedStat.values()) {
+    for (RefinedUsagePointSet uset : refinedIds.values()) {
       allUsages += uset.size();
     }
     out.println("Total amount of refined variables:                " + generalRefinedSize);
@@ -269,8 +268,8 @@ public class UsageContainer {
 
   @Override
   public UsageContainer clone() {
-    UsageContainer result = new UsageContainer(Maps.newTreeMap(unrefinedStat), Maps.newHashMap(toId),
-        Maps.newTreeMap(refinedStat), Sets.newHashSet(falseUnsafes), logger, detector);
+    UsageContainer result = new UsageContainer(Maps.newTreeMap(unrefinedIds), Maps.newHashMap(toId),
+        Maps.newTreeMap(refinedIds), Sets.newHashSet(falseUnsafes), logger, detector);
     return result;
   }
 

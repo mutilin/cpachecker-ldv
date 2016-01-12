@@ -47,32 +47,35 @@ public abstract class GenericSinglePathRefiner extends
   public final RefinementResult call(Pair<ExtendedARGPath, ExtendedARGPath> pInput) throws CPAException, InterruptedException {
     totalTimer.start();
 
-    ExtendedARGPath firstPath = pInput.getFirst();
-    ExtendedARGPath secondPath = pInput.getSecond();
+    try {
+      ExtendedARGPath firstPath = pInput.getFirst();
+      ExtendedARGPath secondPath = pInput.getSecond();
 
-    PredicatePrecision completePrecision = PredicatePrecision.empty();
-    //Refine paths separately
-    RefinementResult result = refinePath(firstPath);
-    if (result.isFalse()) {
-      return result;
-    }
-    PredicatePrecision precision = result.getPrecision();
-    if (precision != null) {
-      completePrecision = completePrecision.mergeWith(precision);
-    }
-    result = refinePath(secondPath);
-    precision = result.getPrecision();
-    if (precision != null) {
-      completePrecision = completePrecision.mergeWith(precision);
-    }
-    if (result.isFalse()) {
+      PredicatePrecision completePrecision = PredicatePrecision.empty();
+      //Refine paths separately
+      RefinementResult result = refinePath(firstPath);
+      if (result.isFalse()) {
+        return result;
+      }
+      PredicatePrecision precision = result.getPrecision();
+      if (precision != null) {
+        completePrecision = completePrecision.mergeWith(precision);
+      }
+      result = refinePath(secondPath);
+      precision = result.getPrecision();
+      if (precision != null) {
+        completePrecision = completePrecision.mergeWith(precision);
+      }
+      if (result.isFalse()) {
+        result.addPrecision(completePrecision);
+        return result;
+      }
+      result = wrappedRefiner.call(pInput);
       result.addPrecision(completePrecision);
       return result;
+    } finally {
+      totalTimer.stop();
     }
-    result = wrappedRefiner.call(pInput);
-    result.addPrecision(completePrecision);
-    totalTimer.stop();
-    return result;
   }
 
   private RefinementResult refinePath(ExtendedARGPath path) throws CPAException, InterruptedException {
@@ -98,7 +101,7 @@ public abstract class GenericSinglePathRefiner extends
   @Override
   public void printStatistics(PrintStream pOut) {
     pOut.println("Timer for block:           " + totalTimer);
-    pOut.println("Number of calls:     " + numberOfRefinements);
+    pOut.println("Number of calls:           " + numberOfRefinements);
     wrappedRefiner.printStatistics(pOut);
   }
 

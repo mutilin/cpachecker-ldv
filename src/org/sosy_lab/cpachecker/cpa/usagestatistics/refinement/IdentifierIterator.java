@@ -130,6 +130,7 @@ public class IdentifierIterator extends WrappedConfigurableRefinementBlock<Reach
     sendUpdateSignal(PointIterator.class, container);
 
     iterator = container.getUnsafeIterator();
+    boolean isPrecisionChanged = false;
     while (iterator.hasNext()) {
       SingleIdentifier currentId = iterator.next();
 
@@ -148,10 +149,16 @@ public class IdentifierIterator extends WrappedConfigurableRefinementBlock<Reach
             updatedPrecision = info;
           }
           precisionMap.put(currentId, updatedPrecision);
+          isPrecisionChanged = true;
         }
 
         if (result.isTrue()) {
           container.setAsRefined(((UnrefinedUsagePointSet)pointSet), result);
+        } else if (result.isFalse() && !isPrecisionChanged) {
+          //We do not add a precision, but consider the unsafe as false
+          //set it as false now, because it will occur again, as precision is not changed
+          //We can not look at precision size here - the result can be false due to heuristics
+          container.setAsFalseUnsafe(currentId);
         }
       }
     }

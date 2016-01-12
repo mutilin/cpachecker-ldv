@@ -12,14 +12,20 @@ import org.sosy_lab.cpachecker.util.AbstractStates;
 
 import com.google.common.collect.Sets;
 
-public class UnrefinedUsageInfoSet implements AbstractUsageInfoSet {
+public class UsageInfoSet {
   private final SortedSet<UsageInfo> unrefinedUsages;
 
-  public UnrefinedUsageInfoSet() {
+  public UsageInfoSet() {
     unrefinedUsages = new TreeSet<>();
   }
 
-  private UnrefinedUsageInfoSet(SortedSet<UsageInfo> usages) {
+  public UsageInfoSet(UsageInfo uinfo) {
+    //Means, that the race is found and this particular usage is a part of the result;
+    this();
+    add(uinfo);
+  }
+
+  private UsageInfoSet(SortedSet<UsageInfo> usages) {
     unrefinedUsages = Sets.newTreeSet(usages);
   }
 
@@ -27,12 +33,10 @@ public class UnrefinedUsageInfoSet implements AbstractUsageInfoSet {
     unrefinedUsages.add(newInfo);
   }
 
-  @Override
   public int size() {
     return unrefinedUsages.size();
   }
 
-  @Override
   public boolean remove(UsageStatisticsState pUstate) {
     Iterator<UsageInfo> iterator = unrefinedUsages.iterator();
     boolean changed = false;
@@ -52,24 +56,17 @@ public class UnrefinedUsageInfoSet implements AbstractUsageInfoSet {
     return unrefinedUsages.remove(uinfo);
   }
 
-  @Override
   public UsageInfo getOneExample() {
     return unrefinedUsages.iterator().next();
   }
 
-  @Override
   public Set<UsageInfo> getUsages() {
     return unrefinedUsages;
   }
 
   @Override
-  public boolean isTrue() {
-    return false;
-  }
-
-  @Override
-  public UnrefinedUsageInfoSet clone() {
+  public UsageInfoSet clone() {
     //For avoiding concurrent modification in refinement
-    return new UnrefinedUsageInfoSet(this.unrefinedUsages);
+    return new UsageInfoSet(this.unrefinedUsages);
   }
 }

@@ -89,7 +89,6 @@ public class PredicateRefinerAdapter extends GenericSinglePathRefiner {
     List<CFAEdge> currentPath = pInput.getInnerEdges();
     if (trueCache.contains(currentPath)) {
       //Somewhen we have already refined this path as true
-      //result = RefinementResult.createTrue();
       result = RefinementResult.createTrue();
     } else {
       Set<CFAEdge> edgeSet = Sets.newHashSet(currentPath);
@@ -165,18 +164,6 @@ public class PredicateRefinerAdapter extends GenericSinglePathRefiner {
       if (pData instanceof ReachedSet) {
         //Updating new reached set
         refiner.updateReachedSet((ReachedSet)pData);
-      } else {
-        //Finishing with a set of removed ids
-        /*assert pData instanceof Set<?>;
-        Set<SingleIdentifier> removedIds = (Set<SingleIdentifier>) pData;
-
-        for (SingleIdentifier id : removedIds) {
-          Collection<Set<CFAEdge>> correspondingPaths = idCached.get(id);
-          for (Set<CFAEdge> path : correspondingPaths) {
-            falseCache.remove(path);
-          }
-          idCached.removeAll(id);
-        }*/
       }
     }
   }
