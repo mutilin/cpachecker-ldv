@@ -28,6 +28,7 @@ import static com.google.common.collect.FluentIterable.from;
 import java.io.PrintStream;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
@@ -78,7 +79,7 @@ public class PathPairIterator extends
   private Map<UsageInfo, ARGState> previousForkForUsage = new HashMap<>();
 
   private Multimap<UsageInfo, ExtendedARGPath> computedPathsForUsage = LinkedHashMultimap.create();
-  private Map<UsageInfo, Iterator<ExtendedARGPath>> currentIterators = new HashMap<>();
+  private Map<UsageInfo, Iterator<ExtendedARGPath>> currentIterators = new IdentityHashMap<>();
 
   private final Function<ARGState, Integer> GET_ORIGIN_STATE_NUMBERS = new Function<ARGState, Integer>() {
     @Override
@@ -316,16 +317,17 @@ public class PathPairIterator extends
       Iterator<ARGState> iterator;
       //It is important to put a backward state in map, because we can find the same real state during exploration
       //but for it a new backward state will be created
-      if (toCallerStatesIterator.containsKey(childOfForkState)) {
+      //Disagree, try to put a real state
+      if (toCallerStatesIterator.containsKey(realChildOfForkState)) {
         //Means we have already handled this state, just get the next one
-        iterator = toCallerStatesIterator.get(childOfForkState);
+        iterator = toCallerStatesIterator.get(realChildOfForkState);
       } else {
         //We get this fork the second time (the first one was from path computer)
         //Found the caller, we have explored the first time
         ARGState realPreviousCaller = subgraphStatesToReachedState.get(previousCaller);
         assert callerStates.remove(realPreviousCaller);
         iterator = callerStates.iterator();
-        toCallerStatesIterator.put(childOfForkState, iterator);
+        toCallerStatesIterator.put(realChildOfForkState, iterator);
       }
 
       if (iterator.hasNext()) {
@@ -337,10 +339,30 @@ public class PathPairIterator extends
     } while (nextParent == null);
 
     BackwardARGState newNextParent = new BackwardARGState(nextParent);
-    previousCaller.removeFromARG();
-    childOfForkState.addParent(newNextParent);
     subgraphStatesToReachedState.put(newNextParent, nextParent);
+    //Because of cached paths, we cannot change the part of it
+    ARGState clonedChildOfForkState = cloneTheRestOfPath(childOfForkState);
+    clonedChildOfForkState.addParent(newNextParent);
     return computePath(newNextParent);
+  }
+
+  private ARGState cloneTheRestOfPath(ARGState pChildOfForkState) {
+    ARGState currentState = pChildOfForkState;
+    ARGState originState = subgraphStatesToReachedState.get(currentState);
+    BackwardARGState previousState = new BackwardARGState(currentState), clonedState;
+    subgraphStatesToReachedState.put(previousState, originState);
+    ARGState result = previousState;
+
+    while (!currentState.getChildren().isEmpty()) {
+      assert currentState.getChildren().size() == 1;
+      currentState = currentState.getChildren().iterator().next();
+      originState = subgraphStatesToReachedState.get(currentState);
+      clonedState = new BackwardARGState(currentState);
+      subgraphStatesToReachedState.put(clonedState, originState);
+      clonedState.addParent(previousState);
+      previousState = clonedState;
+    }
+    return result;
   }
 
   /**

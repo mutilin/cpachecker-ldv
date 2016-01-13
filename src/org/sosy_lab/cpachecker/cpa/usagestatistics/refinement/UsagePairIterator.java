@@ -75,18 +75,22 @@ public class UsagePairIterator extends GenericIterator<Pair<UsageInfoSet, UsageI
 
     Pair<UsageInfo, UsageInfo> result = checkSecondIterator();
 
-    if (result != null) {
-      return result;
+    if (result == null && firstUsageIterator.hasNext()) {
+      firstUsage = firstUsageIterator.next();
+      UsageInfoSet secondUsageInfoSet = pInput.getSecond();
+      Iterable<UsageInfo> secondUsages = secondUsageInfoSet.getUsages();
+      secondUsageIterator = secondUsages.iterator();
+      result = checkSecondIterator();
+    }
+    if (result == null) {
+      return null;
     } else {
-      if (firstUsageIterator.hasNext()) {
-        firstUsage = firstUsageIterator.next();
-        UsageInfoSet secondUsageInfoSet = pInput.getSecond();
-        Iterable<UsageInfo> secondUsages = secondUsageInfoSet.getUsages();
-        secondUsageIterator = secondUsages.iterator();
-        return checkSecondIterator();
-      } else {
-        return null;
+      UsageInfo firstUsage = result.getFirst();
+      UsageInfo secondUsage = result.getSecond();
+      if (firstUsage == secondUsage) {
+        secondUsage = secondUsage.clone();
       }
+      return Pair.of(firstUsage, secondUsage);
     }
   }
 
