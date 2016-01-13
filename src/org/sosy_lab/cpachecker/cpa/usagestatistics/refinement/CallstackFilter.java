@@ -48,14 +48,23 @@ import org.sosy_lab.cpachecker.util.AbstractStates;
 import com.google.common.base.Function;
 import com.google.common.base.Predicate;
 
+/** This filter is used for filtering races by callstacks
+ *  For instance, there can not be a race, if the two usages starts with the same interrupt handler -
+ *  it can not be executed in parallel with itself.
+ *  There also can be functions, which can be executed only in one thread.
+ */
+
 @Options(prefix="cpa.usagestatistics")
-public class InterruptFilter extends
+public class CallstackFilter extends
     WrappedConfigurableRefinementBlock<Pair<ExtendedARGPath, ExtendedARGPath>, Pair<ExtendedARGPath, ExtendedARGPath>> {
 
   Timer totalTimer = new Timer();
 
-  @Option(name = "interruptHandlers", description = "The names of interrupt handlers")
-  private Set<String> interruptHandlerNames = new HashSet<>();
+  @Option(name = "notSelfParallelFunctions", description = "The functions, which cannot be executed in parallel with themselves")
+  private Set<String> notSelfParallelFunctions = new HashSet<>();
+
+  @Option(name = "singleThreadFunctions", description = "The functions, which are executed in one thread")
+  private Set<String> singleThreadFunctions = new HashSet<>();
 
   private String mainFunction = "ldv_main";
 
@@ -83,7 +92,7 @@ public class InterruptFilter extends
     }
   };
 
-  public InterruptFilter(ConfigurableRefinementBlock<Pair<ExtendedARGPath, ExtendedARGPath>> pWrapper,
+  public CallstackFilter(ConfigurableRefinementBlock<Pair<ExtendedARGPath, ExtendedARGPath>> pWrapper,
       Configuration pConfig) throws InvalidConfigurationException {
     super(pWrapper);
     pConfig.inject(this);
@@ -97,7 +106,12 @@ public class InterruptFilter extends
     try {
       ExtendedARGPath firstPath = pInput.getFirst();
       ExtendedARGPath secondPath = pInput.getSecond();
-      if (isInterruptHandlerCall(firstPath) && isInterruptHandlerCall(secondPath)) {
+      String firstFunctionCall = getFirstFunctionCall(firstPath);
+      String secondFunctionCall = getFirstFunctionCall(secondPath);
+
+      if (notSelfParallelFunctions.contains(firstFunctionCall) && firstFunctionCall.equals(secondFunctionCall)) {
+        return RefinementResult.createFalse();
+      } else if (singleThreadFunctions.contains(firstFunctionCall) || singleThreadFunctions.contains(secondFunctionCall)) {
         return RefinementResult.createFalse();
       } else {
         return wrappedRefiner.call(pInput);
@@ -107,17 +121,17 @@ public class InterruptFilter extends
     }
   }
 
-  private boolean isInterruptHandlerCall(ExtendedARGPath path) {
+  private String getFirstFunctionCall(ExtendedARGPath path) {
     List<String> callerFunctions = from(path.getStateSet()).
-                                 filter(isFirstCall).
-                                 transform(getFunctionName).toList();
+        filter(isFirstCall).
+        transform(getFunctionName).toList();
+
     //TODO Now I believe, it is enough to check the last function called from main - this is related to the call stack
     if (callerFunctions.size() >= 1) {
-      String targetFunctionName = callerFunctions.get(callerFunctions.size() - 1);
-      return interruptHandlerNames.contains(targetFunctionName);
+      return callerFunctions.get(callerFunctions.size() - 1);
     } else {
       //Usage in main
-      return false;
+      return null;
     }
   }
 
