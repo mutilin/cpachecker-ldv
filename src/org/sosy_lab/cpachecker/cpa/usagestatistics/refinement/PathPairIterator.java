@@ -54,7 +54,6 @@ import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.LinkedHashMultimap;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
 
@@ -76,9 +75,9 @@ public class PathPairIterator extends
   //private int numberOfrepeatedPaths = 0;
 
   private Map<AbstractState, Iterator<ARGState>> toCallerStatesIterator = new HashMap<>();
-  private Map<UsageInfo, ARGState> previousForkForUsage = new HashMap<>();
+  private Map<UsageInfo, ARGState> previousForkForUsage = new IdentityHashMap<>();
 
-  private Multimap<UsageInfo, ExtendedARGPath> computedPathsForUsage = LinkedHashMultimap.create();
+  private Map<UsageInfo, List<ExtendedARGPath>> computedPathsForUsage = new IdentityHashMap<>();
   private Map<UsageInfo, Iterator<ExtendedARGPath>> currentIterators = new IdentityHashMap<>();
 
   private final Function<ARGState, Integer> GET_ORIGIN_STATE_NUMBERS = new Function<ARGState, Integer>() {
@@ -155,11 +154,13 @@ public class PathPairIterator extends
     UsageInfo firstUsage = pInput.getFirst();
     UsageInfo secondUsage = pInput.getSecond();
 
-    if (computedPathsForUsage.get(firstUsage).size() == 0) {
-      firstUsage.setAsUnreachable();
-    }
-    if (computedPathsForUsage.get(secondUsage).size() == 0) {
-      secondUsage.setAsUnreachable();
+    checkIsUsageUnreachable(firstUsage);
+    checkIsUsageUnreachable(secondUsage);
+  }
+
+  private void checkIsUsageUnreachable(UsageInfo pInput) {
+    if (!computedPathsForUsage.containsKey(pInput) || computedPathsForUsage.get(pInput).size() == 0) {
+      pInput.setAsUnreachable();
     }
   }
 
@@ -226,12 +227,24 @@ public class PathPairIterator extends
   private void updateTheComputedSet(ExtendedARGPath path) {
     UsageInfo usage = path.getUsageInfo();
 
-    if (!path.isUnreachable() && !computedPathsForUsage.containsEntry(usage, path)) {
-      computedPathsForUsage.put(usage, path);
-    } else if (path.isUnreachable() && computedPathsForUsage.containsEntry(usage, path)) {
-      //We should reset iterator to avoid ConcurrentModificationException
-      currentIterators.remove(usage);
-      computedPathsForUsage.remove(usage, path);
+    boolean alreadyComputed = computedPathsForUsage.containsKey(usage);
+
+    if (!path.isUnreachable()) {
+      List<ExtendedARGPath> alreadyComputedPaths;
+      if (!alreadyComputed) {
+        alreadyComputedPaths = new LinkedList<>();
+      } else {
+        alreadyComputedPaths = computedPathsForUsage.get(usage);
+      }
+      if (!alreadyComputedPaths.contains(path)) {
+        alreadyComputedPaths.add(path);
+      }
+    } else if (path.isUnreachable() && alreadyComputed) {
+      List<ExtendedARGPath> alreadyComputedPaths = computedPathsForUsage.get(usage);
+      if (alreadyComputedPaths.contains(path)) {
+        //We should reset iterator to avoid ConcurrentModificationException
+        alreadyComputedPaths.remove(path);
+      }
     }
   }
 
@@ -240,13 +253,12 @@ public class PathPairIterator extends
 
     //Start from already computed set (it is partially refined)
     Iterator<ExtendedARGPath> iterator = currentIterators.get(info);
-    if (iterator == null) {
+    if (iterator == null && computedPathsForUsage.containsKey(info)) {
       //first call
       iterator = computedPathsForUsage.get(info).iterator();
       currentIterators.put(info, iterator);
     }
-
-    if (iterator != DUMMY_INTERATOR && iterator.hasNext()) {
+    if (iterator != null && iterator != DUMMY_INTERATOR && iterator.hasNext()) {
       return iterator.next();
     } else if (iterator != DUMMY_INTERATOR) {
       //We handle all previously found paths, disable the iterator
