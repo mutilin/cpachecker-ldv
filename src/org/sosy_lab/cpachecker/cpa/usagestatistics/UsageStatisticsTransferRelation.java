@@ -34,7 +34,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
 
-import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
@@ -74,6 +73,7 @@ import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCFAEdgeException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
+import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.GeneralIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.IdentifierCreator;
@@ -171,7 +171,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
     boolean needToReset = false;
     if (checkFunciton(pCfaEdge, skippedfunctions)) {
-      callstackTransfer.setFlag();
+      callstackTransfer.enableRecursiveContext();
       needToReset = true;
       if (node.getLeavingSummaryEdge() != null) {
         currentEdge = node.getLeavingSummaryEdge();
@@ -193,7 +193,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       }
     }
     if (needToReset) {
-      callstackTransfer.resetFlag();
+      callstackTransfer.disableRecursiveContext();
     }
     statistics.transferRelationTimer.stop();
     return result;

@@ -1,8 +1,9 @@
 package org.sosy_lab.cpachecker.cpa.usagestatistics.storage;
 
-import org.sosy_lab.common.Pair;
+
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsState;
+import org.sosy_lab.cpachecker.util.Pair;
 
 public class RefinedUsagePointSet implements AbstractUsagePointSet {
 

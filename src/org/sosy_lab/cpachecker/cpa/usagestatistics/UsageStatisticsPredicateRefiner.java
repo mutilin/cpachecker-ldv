@@ -43,7 +43,7 @@ import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractionManager;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicatePrecision;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateStaticRefiner;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
-import org.sosy_lab.cpachecker.util.predicates.Solver;
+import org.sosy_lab.cpachecker.util.predicates.smt.Solver;
 
 
 public class UsageStatisticsPredicateRefiner extends BAMPredicateRefiner {
@@ -52,7 +52,7 @@ public class UsageStatisticsPredicateRefiner extends BAMPredicateRefiner {
   private ARGReachedSet ARGReached;
 
   public UsageStatisticsPredicateRefiner(ConfigurableProgramAnalysis pCpa,
-      UsageStatisticsRefinementStrategy pStrategy, ReachedSet reached) throws CPAException, InvalidConfigurationException {
+      UsageStatisticsRefinementStrategy pStrategy, ReachedSet reached) throws InvalidConfigurationException {
     super(pCpa, pStrategy);
     strategy = pStrategy;
     if (reached != null) {
@@ -60,7 +60,7 @@ public class UsageStatisticsPredicateRefiner extends BAMPredicateRefiner {
     }
   }
 
-  public static UsageStatisticsPredicateRefiner create(ConfigurableProgramAnalysis pCpa, ReachedSet reached) throws CPAException, InvalidConfigurationException {
+  public static UsageStatisticsPredicateRefiner create(ConfigurableProgramAnalysis pCpa, ReachedSet reached) throws  InvalidConfigurationException {
     if (!(pCpa instanceof WrapperCPA)) {
       throw new InvalidConfigurationException(BAMPredicateRefiner.class.getSimpleName() + " could not find the PredicateCPA");
     }
@@ -113,8 +113,7 @@ public class UsageStatisticsPredicateRefiner extends BAMPredicateRefiner {
         final BAMPredicateCPA predicateCpa,
         final Solver pSolver,
         final PredicateAbstractionManager pPredAbsMgr,
-        final PredicateStaticRefiner pStaticRefiner)
-            throws CPAException, InvalidConfigurationException {
+        final PredicateStaticRefiner pStaticRefiner) throws InvalidConfigurationException {
       super(config, logger, predicateCpa, pSolver, pPredAbsMgr, pStaticRefiner);
     }
 

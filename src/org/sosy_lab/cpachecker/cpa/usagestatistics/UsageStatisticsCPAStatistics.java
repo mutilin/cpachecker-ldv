@@ -34,7 +34,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.logging.Level;
 
-import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.FileOption;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
@@ -56,6 +55,7 @@ import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.arg.ARGUtils;
+import org.sosy_lab.cpachecker.cpa.bam.BAMCEXSubgraphComputer.BackwardARGState;
 import org.sosy_lab.cpachecker.cpa.bam.BAMTransferRelation;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsTransferRelation;
@@ -68,6 +68,7 @@ import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsageInfoSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsagePoint;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
+import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.identifiers.GlobalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.LocalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
@@ -171,7 +172,10 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
     if (usage.getKeyState() != null) {
       Set<List<Integer>> emptySet = Collections.emptySet();
-      ARGState root = transfer.findPath((ARGState)usage.getKeyState(), new HashMap<ARGState, ARGState>(), emptySet);
+      BackwardARGState newKeyState = new BackwardARGState((ARGState)usage.getKeyState());
+      HashMap<ARGState, ARGState> tmpCache = new HashMap<>();
+      tmpCache.put(newKeyState, (ARGState)usage.getKeyState());
+      ARGState root = transfer.createBAMMultipleSubgraphComputer(tmpCache).findPath(newKeyState, emptySet);
       ARGPath path = ARGUtils.getRandomPath(root);
       //path is transformed internally
       usage.resetKeyState(path.getInnerEdges());

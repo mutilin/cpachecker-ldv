@@ -29,11 +29,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
-import org.sosy_lab.cpachecker.core.counterexample.Model;
-import org.sosy_lab.cpachecker.exceptions.SolverException;
-import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
-import org.sosy_lab.cpachecker.util.predicates.interfaces.FormulaManager;
-import org.sosy_lab.cpachecker.util.predicates.interfaces.InterpolatingProverEnvironmentWithAssumptions;
+import org.sosy_lab.solver.Model;
+import org.sosy_lab.solver.SolverException;
+import org.sosy_lab.solver.api.BooleanFormula;
+import org.sosy_lab.solver.api.Formula;
+import org.sosy_lab.solver.api.FormulaManager;
+import org.sosy_lab.solver.api.InterpolatingProverEnvironmentWithAssumptions;
 
 /**
  * This is a class that allows to use a different SMT solver for interpolation
@@ -66,6 +67,16 @@ public class SeparateInterpolatingProverEnvironment<T> implements InterpolatingP
   }
 
   @Override
+  public T addConstraint(BooleanFormula constraint) {
+    return itpEnv.addConstraint(convertToItp(constraint));
+  }
+
+  @Override
+  public void push() {
+    itpEnv.push();
+  }
+
+  @Override
   public boolean isUnsat() throws InterruptedException, SolverException {
     return itpEnv.isUnsat();
   }
@@ -78,6 +89,16 @@ public class SeparateInterpolatingProverEnvironment<T> implements InterpolatingP
   @Override
   public void close() {
     itpEnv.close();
+  }
+
+  @SuppressWarnings("unchecked")
+  @Override
+  public <E extends Formula> E evaluate(E f) {
+    if (f instanceof BooleanFormula) {
+      return (E)itpEnv.evaluate(convertToItp((BooleanFormula) f));
+    }
+    throw new UnsupportedOperationException("Evaluation in interpolating "
+        + "environment supports only BooleanFormula's");
   }
 
   @Override
@@ -104,6 +125,10 @@ public class SeparateInterpolatingProverEnvironment<T> implements InterpolatingP
       result.add(convertToMain(itp));
     }
     return result;
+  }
+
+  private BooleanFormula convertToItp(BooleanFormula f) {
+    return itpFmgr.parse(mainFmgr.dumpFormula(f).toString());
   }
 
   private BooleanFormula convertToMain(BooleanFormula f) {

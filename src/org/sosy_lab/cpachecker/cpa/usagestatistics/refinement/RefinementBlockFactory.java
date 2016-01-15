@@ -26,7 +26,6 @@ package org.sosy_lab.cpachecker.cpa.usagestatistics.refinement;
 import java.util.List;
 import java.util.Map;
 
-import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
@@ -40,8 +39,8 @@ import org.sosy_lab.cpachecker.cpa.bam.BAMTransferRelation;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsCPA;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsageInfoSet;
-import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.util.CPAs;
+import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 @Options(prefix="cpa.usagestatistics")
@@ -80,7 +79,7 @@ public class RefinementBlockFactory {
     pConfig.inject(this);
   }
 
-  public ConfigurableRefinementBlock<ReachedSet> create() throws InvalidConfigurationException, CPAException {
+  public ConfigurableRefinementBlock<ReachedSet> create() throws InvalidConfigurationException {
     BAMCPA bam = CPAs.retrieveCPA(cpa, BAMCPA.class);
     BAMTransferRelation bamTransfer = bam.getTransferRelation();
     UsageStatisticsCPA usCPA = CPAs.retrieveCPA(cpa, UsageStatisticsCPA.class);

@@ -213,13 +213,6 @@ public class CEGARAlgorithm implements Algorithm, StatisticsProvider {
   /**
    * This constructor gets a Refiner object instead of generating it
    * from the refiner parameter.
-   *
-   * @param algorithm
-   * @param pRefiner
-   * @param config
-   * @param logger
-   * @throws InvalidConfigurationException
-   * @throws CPAException
    */
   public CEGARAlgorithm(Algorithm algorithm, Refiner pRefiner, Configuration config, LogManager logger) throws InvalidConfigurationException {
     config.inject(this);
@@ -229,8 +222,9 @@ public class CEGARAlgorithm implements Algorithm, StatisticsProvider {
   }
 
   @Override
-  public boolean run(ReachedSet reached) throws CPAException, InterruptedException {
-    boolean isComplete        = true;
+  public AlgorithmStatus run(ReachedSet reached) throws CPAException, InterruptedException {
+    AlgorithmStatus status = AlgorithmStatus.SOUND_AND_PRECISE;
+
     int initialReachedSetSize = reached.size();
     boolean refinedInPreviousIteration = false;
     stats.totalTimer.start();
@@ -240,7 +234,7 @@ public class CEGARAlgorithm implements Algorithm, StatisticsProvider {
         refinementSuccessful = false;
 
         // run algorithm
-        isComplete &= algorithm.run(reached);
+        status = status.update(algorithm.run(reached));
 
         if (stats.countRefinements == refinementLoops) {
           break;
@@ -273,7 +267,7 @@ public class CEGARAlgorithm implements Algorithm, StatisticsProvider {
     } finally {
       stats.totalTimer.stop();
     }
-    return isComplete;
+    return status;
   }
 
   private boolean refinementNecessary(ReachedSet reached) {
@@ -287,6 +281,7 @@ public class CEGARAlgorithm implements Algorithm, StatisticsProvider {
     }
   }
 
+  @SuppressWarnings("NonAtomicVolatileUpdate") // statistics written only by one thread
   private boolean refine(ReachedSet reached) throws CPAException, InterruptedException {
     logger.log(Level.FINE, "Error found, performing CEGAR");
     stats.countRefinements++;

@@ -24,6 +24,7 @@
 package org.sosy_lab.cpachecker.cpa.value.symbolic.type;
 
 import org.sosy_lab.cpachecker.cfa.types.Type;
+import org.sosy_lab.cpachecker.util.states.MemoryLocation;
 
 /**
  * {@link BinarySymbolicExpression} representing multiplication.
@@ -37,13 +38,29 @@ public class MultiplicationExpression extends BinarySymbolicExpression {
     super(pOperand1, pOperand2, pExpressionType, pCalculationType);
   }
 
+  protected MultiplicationExpression(
+      final SymbolicExpression pOperand1,
+      final SymbolicExpression pOperand2,
+      final Type pExpressionType,
+      final Type pCalculationType,
+      final MemoryLocation pRepresentedLocation
+  ) {
+    super(pOperand1, pOperand2, pExpressionType, pCalculationType, pRepresentedLocation);
+  }
+
+  @Override
+  public MultiplicationExpression copyForLocation(final MemoryLocation pRepresentedLocation) {
+    return new MultiplicationExpression(getOperand1(), getOperand2(), getType(),
+        getCalculationType(), pRepresentedLocation);
+  }
+
   @Override
   public <VisitorReturnT> VisitorReturnT accept(SymbolicValueVisitor<VisitorReturnT> pVisitor) {
     return pVisitor.visit(this);
   }
 
   @Override
-  public String toString() {
-    return "(" + getOperand1() + " * " + getOperand2() + ")";
+  public String getOperationString() {
+    return "*";
   }
 }

@@ -25,6 +25,8 @@ package org.sosy_lab.cpachecker.util.automaton;
 
 import java.io.IOException;
 import java.io.Writer;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 import javax.annotation.Nullable;
@@ -38,6 +40,9 @@ import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 
+import org.sosy_lab.common.io.Path;
+import org.sosy_lab.common.io.Paths;
+import org.sosy_lab.cpachecker.cfa.Language;
 import org.sosy_lab.cpachecker.cfa.ast.c.CDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CTypeDeclaration;
@@ -47,12 +52,19 @@ import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
 import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionReturnEdge;
+import org.sosy_lab.cpachecker.cfa.types.MachineModel;
+import org.sosy_lab.cpachecker.core.CPAchecker;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 
 import com.google.common.base.Preconditions;
+import com.google.common.base.Splitter;
 import com.google.common.collect.Maps;
+import com.google.common.hash.HashCode;
+import com.google.common.hash.Hashing;
+import com.google.common.io.BaseEncoding;
+import com.google.common.io.ByteSource;
 import com.google.common.io.CharStreams;
 
 
@@ -83,18 +95,21 @@ public class AutomatonGraphmlCommon {
 
   public static enum KeyDef {
     INVARIANT("invariant", "node", "invariant", "string"),
+    INVARIANTSCOPE("invariant.scope", "node", "invariant.scope", "string"),
     NAMED("named", "node", "namedValue", "string"),
-
     NODETYPE("nodetype", "node", "nodeType", "string"),
-
-    ISFRONTIERNODE("frontier","node","isFrontierNode","boolean"),
-    ISVIOLATIONNODE("violation","node","isViolationNode","boolean"),
-    ISENTRYNODE("entry","node","isEntryNode","boolean"),
-    ISSINKNODE("sink","node","isSinkNode","boolean"),
+    ISFRONTIERNODE("frontier", "node", "isFrontierNode", "boolean"),
+    ISVIOLATIONNODE("violation", "node", "isViolationNode", "boolean"),
+    ISENTRYNODE("entry", "node", "isEntryNode", "boolean"),
+    ISSINKNODE("sink", "node", "isSinkNode", "boolean"),
     VIOLATEDPROPERTY("violatedProperty", "node", "violatedProperty", "string"),
-
     SOURCECODELANGUAGE("sourcecodelang", "graph", "sourcecodeLanguage", "string"),
-
+    PROGRAMFILE("programfile", "graph", "programFile", "string"),
+    PROGRAMHASH("programhash", "graph", "programHash", "string"),
+    SPECIFICATION("specification", "graph", "specification", "string"),
+    MEMORYMODEL("memorymodel", "graph", "memoryModel", "string"),
+    ARCHITECTURE("architecture", "graph", "architecture", "string"),
+    PRODUCER("producer", "graph", "producer", "string"),
     SOURCECODE("sourcecode", "edge", "sourcecode", "string"),
     ORIGINLINE("startline", "edge", "startline", "int"),
     OFFSET("startoffset", "edge", "startoffset", "int"),
@@ -103,12 +118,11 @@ public class AutomatonGraphmlCommon {
     CONTROLCASE("control", "edge", "control", "string"),
     ASSUMPTION("assumption", "edge", "assumption", "string"),
     ASSUMPTIONSCOPE("assumption.scope", "edge", "assumption.scope", "string"),
-
     FUNCTIONENTRY("enterFunction", "edge", "enterFunction", "string"),
     FUNCTIONEXIT("returnFrom", "edge", "returnFromFunction", "string"),
-
     CFAPREDECESSORNODE("predecessor", "edge", "predecessor", "string"),
-    CFASUCCESSORNODE("successor", "edge", "successor", "string");
+    CFASUCCESSORNODE("successor", "edge", "successor", "string"),
+    GRAPH_TYPE("type", "graph", "witness-type", "string");
 
     public final String id;
     public final String keyFor;
@@ -155,8 +169,8 @@ public class AutomatonGraphmlCommon {
   }
 
   public enum GraphType {
-    PROGRAMPATH("traces automaton"),
-    CONDITION("assumptions automaton");
+    ERROR_WITNESS("FALSE"),
+    PROOF_WITNESS("TRUE");
 
     public final String text;
 
@@ -167,6 +181,15 @@ public class AutomatonGraphmlCommon {
     @Override
     public String toString() {
       return text;
+    }
+
+    public static GraphType parse(String pTextualRepresentation) {
+      for (GraphType element : values()) {
+        if (element.text.equals(pTextualRepresentation)) {
+          return element;
+        }
+      }
+      throw new IllegalArgumentException("No such enumeration element: " + pTextualRepresentation);
     }
   }
 
@@ -283,7 +306,7 @@ public class AutomatonGraphmlCommon {
       return result;
     }
 
-    public void appendNewNode(String nodeId, NodeType nodeType) throws IOException {
+    public void appendNewNode(String nodeId, NodeType nodeType) {
       Element result = createNodeElement(nodeId, nodeType);
       appendToAppendable(result);
     }
@@ -304,9 +327,50 @@ public class AutomatonGraphmlCommon {
       target.append("<graphml xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns=\"http://graphml.graphdrawing.org/xmlns\">\n");
     }
 
-    public void appendGraphHeader(GraphType pGraphType, String pSourceLanguage) throws IOException {
+    public void appendGraphHeader(GraphType pGraphType,
+        Language pLanguage,
+        Iterable<String> pSpecifications,
+        String pProgramNames,
+        String pMemoryModel,
+        MachineModel pMachineModel) throws IOException {
       target.append("<graph edgedefault=\"directed\">");
-      appendDataElement(KeyDef.SOURCECODELANGUAGE, pSourceLanguage);
+      appendDataElement(KeyDef.GRAPH_TYPE, pGraphType.toString());
+      appendDataElement(KeyDef.SOURCECODELANGUAGE, pLanguage.toString());
+      appendDataElement(KeyDef.PRODUCER, "CPAchecker " + CPAchecker.getCPAcheckerVersion());
+      for (String specification : pSpecifications) {
+        appendDataElement(KeyDef.SPECIFICATION, specification);
+      }
+
+      /*
+       * TODO: We should allow multiple program files here.
+       * As soon as we do, we should also hash each file separately.
+       */
+      appendDataElement(KeyDef.PROGRAMFILE, pProgramNames);
+      appendDataElement(KeyDef.PROGRAMHASH, computeProgramHash(pProgramNames));
+
+      appendDataElement(KeyDef.MEMORYMODEL, pMemoryModel);
+      switch (pMachineModel) {
+        case LINUX32:
+          appendDataElement(KeyDef.ARCHITECTURE, "32bit");
+          break;
+        case LINUX64:
+          appendDataElement(KeyDef.ARCHITECTURE, "64bit");
+          break;
+        default:
+          appendDataElement(KeyDef.ARCHITECTURE, pMachineModel.toString());
+          break;
+      }
+    }
+
+    private String computeProgramHash(String pProgramDenotations) throws IOException {
+      List<ByteSource> sources = new ArrayList<>(1);
+      Splitter commaSplitter = Splitter.on(',').omitEmptyStrings().trimResults();
+      for (String programDenotation : commaSplitter.split(pProgramDenotations)) {
+        Path programPath = Paths.get(programDenotation);
+        sources.add(programPath.asByteSource());
+      }
+      HashCode hash = ByteSource.concat(sources).hash(Hashing.sha1());
+      return BaseEncoding.base16().lowerCase().encode(hash.asBytes());
     }
 
     public void appendNewKeyDef(KeyDef keyDef, @Nullable String defaultValue) {

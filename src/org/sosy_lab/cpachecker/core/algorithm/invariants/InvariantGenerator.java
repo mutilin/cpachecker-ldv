@@ -65,11 +65,17 @@ public interface InvariantGenerator {
    * for some time during the invariant generation runs,
    * or return a current snapshot of the invariants quickly.
    *
-   * @return
    * @throws CPAException If the invariant generation failed.
    * @throws InterruptedException If the invariant generation was interrupted.
    */
   InvariantSupplier get() throws CPAException, InterruptedException;
+
+  /**
+   * Return whether the invariant generation has already proved
+   * that the specification holds, and no further checks are necessary.
+   * If possible, this method should be cheap.
+   */
+  boolean isProgramSafe();
 
   /**
    * Add a specific invariant that is guaranteed to hold to the set of facts

@@ -39,13 +39,13 @@ import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.logging.Level;
 
+import org.sosy_lab.common.ShutdownNotifier;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.postprocessing.global.singleloop.CFASingleLoopTransformation;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
-import org.sosy_lab.cpachecker.core.ShutdownNotifier;
 import org.sosy_lab.cpachecker.core.algorithm.Algorithm;
 import org.sosy_lab.cpachecker.core.algorithm.invariants.InvariantGenerator;
 import org.sosy_lab.cpachecker.core.algorithm.invariants.InvariantSupplier;
@@ -55,9 +55,10 @@ import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.StateSpacePartition;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSetFactory;
+import org.sosy_lab.cpachecker.cpa.bounds.BoundsCPA;
+import org.sosy_lab.cpachecker.cpa.bounds.BoundsState;
+import org.sosy_lab.cpachecker.cpa.callstack.CallstackCPA;
 import org.sosy_lab.cpachecker.cpa.edgeexclusion.EdgeExclusionPrecision;
-import org.sosy_lab.cpachecker.cpa.loopstack.LoopstackCPA;
-import org.sosy_lab.cpachecker.cpa.loopstack.LoopstackState;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateCPA;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
@@ -67,16 +68,18 @@ import org.sosy_lab.cpachecker.util.CFAUtils;
 import org.sosy_lab.cpachecker.util.CPAs;
 import org.sosy_lab.cpachecker.util.LoopStructure.Loop;
 import org.sosy_lab.cpachecker.util.Precisions;
-import org.sosy_lab.cpachecker.util.predicates.Solver;
-import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormula;
-import org.sosy_lab.cpachecker.util.predicates.interfaces.BooleanFormulaManager;
-import org.sosy_lab.cpachecker.util.predicates.interfaces.PathFormulaManager;
-import org.sosy_lab.cpachecker.util.predicates.interfaces.ProverEnvironment;
-import org.sosy_lab.cpachecker.util.predicates.interfaces.view.BooleanFormulaManagerView;
-import org.sosy_lab.cpachecker.util.predicates.interfaces.view.FormulaManagerView;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormula;
+import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormulaManager;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.SSAMap;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.SSAMap.SSAMapBuilder;
+import org.sosy_lab.cpachecker.util.predicates.smt.BooleanFormulaManagerView;
+import org.sosy_lab.cpachecker.util.predicates.smt.FormulaManagerView;
+import org.sosy_lab.cpachecker.util.predicates.smt.Solver;
+import org.sosy_lab.solver.SolverException;
+import org.sosy_lab.solver.api.BooleanFormula;
+import org.sosy_lab.solver.api.BooleanFormulaManager;
+import org.sosy_lab.solver.api.ProverEnvironment;
+import org.sosy_lab.solver.api.SolverContext.ProverOptions;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
@@ -100,8 +103,6 @@ class KInductionProver implements AutoCloseable {
   private final ConfigurableProgramAnalysis cpa;
 
   private final ReachedSet reached;
-
-  private final Loop loop;
 
   private final Solver solver;
 
@@ -166,7 +167,6 @@ class KInductionProver implements AutoCloseable {
     reachedSetFactory = checkNotNull(pReachedSetFactory);
     shutdownNotifier = checkNotNull(pShutdownNotifier);
     havocLoopTerminationConditionVariablesOnly = pHavocLoopTerminationConditionVariablesOnly;
-    loop = Iterables.getOnlyElement(pCFA.getLoopStructure().get().getAllLoops());
     reached = reachedSetFactory.create();
 
     PredicateCPA stepCasePredicateCPA = CPAs.retrieveCPA(cpa, PredicateCPA.class);
@@ -180,7 +180,7 @@ class KInductionProver implements AutoCloseable {
   }
 
   public Collection<CandidateInvariant> getConfirmedCandidates() {
-    return confirmedCandidates;
+    return from(confirmedCandidates).toSet();
   }
 
   /**
@@ -201,15 +201,10 @@ class KInductionProver implements AutoCloseable {
    * popping them off of the prover stack, is taken care of automatically.
    *
    * @return the prover environment to be used within the KInductionProver.
-   *
-   * @throws CPAException if the supporting invariant generation encountered
-   * an exception.
-   * @throws InterruptedException if the supporting invariant generation is
-   * interrupted.
    */
   private ProverEnvironment getProver() {
     if (!isProverInitialized()) {
-      prover = solver.newProverEnvironmentWithModelGeneration();
+      prover = solver.newProverEnvironment(ProverOptions.GENERATE_MODELS);
     }
     assert isProverInitialized();
     return prover;
@@ -238,13 +233,14 @@ class KInductionProver implements AutoCloseable {
    * Gets the most current invariants generated by the invariant generator.
    *
    * @return the most current invariants generated by the invariant generator.
-   * @throws InterruptedException
-   * @throws CPATransferException
    */
-  private BooleanFormula getCurrentLoopHeadInvariants() throws CPATransferException, InterruptedException {
+  private BooleanFormula getCurrentLoopHeadInvariants(Set<CFANode> pStopLocations) throws CPATransferException, InterruptedException {
     if (!bfmgr.isFalse(loopHeadInvariants) && invariantGenerationRunning) {
-      CFANode loopHead = Iterables.getOnlyElement(loop.getLoopHeads());
-      loopHeadInvariants = getCurrentLocationInvariants(loopHead, fmgr, pfmgr);
+      BooleanFormula lhi = bfmgr.makeBoolean(false);
+      for (CFANode loopHead : pStopLocations) {
+        lhi = bfmgr.or(lhi, getCurrentLocationInvariants(loopHead, fmgr, pfmgr));
+      }
+      loopHeadInvariants = lhi;
     }
     return loopHeadInvariants;
   }
@@ -255,10 +251,8 @@ class KInductionProver implements AutoCloseable {
 
     BooleanFormula invariant = currentInvariantsSupplier.getInvariantFor(pLocation, pFMGR, pPFMGR);
 
-    if (loop.getLoopHeads().contains(pLocation)) {
-      for (EdgeFormulaNegation ci : from(getConfirmedCandidates()).filter(EdgeFormulaNegation.class)) {
-        invariant = bfmgr.and(invariant, ci.getCandidate(pFMGR, pPFMGR));
-      }
+    for (CandidateInvariant confirmedCandidate : this.confirmedCandidates) {
+      invariant = bfmgr.and(invariant, confirmedCandidate.getFormula(pFMGR, pPFMGR));
     }
 
     return invariant;
@@ -267,7 +261,7 @@ class KInductionProver implements AutoCloseable {
   @Override
   public void close() {
     if (isProverInitialized()) {
-      while (stackDepth-- > 0) {
+      while (stackDepth-- > 0 && !shutdownNotifier.shouldShutdown()) {
         prover.pop();
       }
       prover.close();
@@ -310,13 +304,7 @@ class KInductionProver implements AutoCloseable {
    */
   public final boolean check(final int k,
       final Set<CandidateInvariant> candidateInvariants)
-      throws CPAException, InterruptedException {
-
-    // Early return if the invariant generation proved the program correct
-    if (bfmgr.isFalse(getCurrentLoopHeadInvariants())) {
-      return true;
-    }
-
+      throws CPAException, InterruptedException, SolverException {
     stats.inductionPreparation.start();
 
     // Proving program safety with induction consists of two parts:
@@ -330,7 +318,8 @@ class KInductionProver implements AutoCloseable {
     // Run algorithm in order to create formula (A & B)
     logger.log(Level.INFO, "Running algorithm to create induction hypothesis");
 
-    LoopstackCPA stepCaseLoopstackCPA = CPAs.retrieveCPA(cpa, LoopstackCPA.class);
+    BoundsCPA stepCaseBoundsCPA = CPAs.retrieveCPA(cpa, BoundsCPA.class);
+    CallstackCPA stepCaseCallstackCPA = CPAs.retrieveCPA(cpa, CallstackCPA.class);
 
     // Initialize the reached set if necessary
     ensureReachedSetInitialized(reached);
@@ -357,7 +346,8 @@ class KInductionProver implements AutoCloseable {
             predecessorReachedSet = reachedSetFactory.create();
           } else {
             predecessorReachedSet = reached;
-            stepCaseLoopstackCPA.setMaxLoopIterations(k);
+            stepCaseBoundsCPA.setMaxLoopIterations(k);
+            stepCaseCallstackCPA.setMaxRecursionDepth(k);
             BMCHelper.unroll(logger, predecessorReachedSet, reachedSetInitializer, algorithm, cpa);
           }
         }
@@ -367,23 +357,26 @@ class KInductionProver implements AutoCloseable {
     }
 
     // Assert the known invariants at the loop head at the first iteration.
+    Set<CFANode> stopLocations = getStopLocations(reached);
     Iterable<AbstractState> loopHeadStates =
-        AbstractStates.filterLocations(reached, loop.getLoopHeads()).filter(new Predicate<AbstractState>() {
+        AbstractStates.filterLocations(reached, stopLocations).filter(new Predicate<AbstractState>() {
 
           @Override
           public boolean apply(AbstractState pArg0) {
             if (pArg0 == null) {
               return false;
             }
-            LoopstackState ls = AbstractStates.extractStateByType(pArg0, LoopstackState.class);
-            return ls != null && ls.getIteration() <= 1;
+            BoundsState ls = AbstractStates.extractStateByType(pArg0, BoundsState.class);
+            return ls != null && ls.getDeepestIteration() <= 1;
           }});
-    BooleanFormula invariants = getCurrentLoopHeadInvariants();
+    BooleanFormula invariants = getCurrentLoopHeadInvariants(stopLocations);
     BooleanFormula loopHeadInv = bfmgr.and(from(BMCHelper.assertAt(loopHeadStates, invariants, fmgr)).toList());
 
     // Create the formula asserting the faultiness of the successor
-    stepCaseLoopstackCPA.setMaxLoopIterations(k + 1);
+    stepCaseBoundsCPA.setMaxLoopIterations(k + 1);
+    stepCaseCallstackCPA.setMaxRecursionDepth(k + 1);
     BMCHelper.unroll(logger, reached, reachedSetInitializer, algorithm, cpa);
+    stopLocations = getStopLocations(reached);
 
     this.previousK = k + 1;
 
@@ -420,7 +413,7 @@ class KInductionProver implements AutoCloseable {
 
       // Re-attempt the proof immediately, if new invariants are available
       BooleanFormula oldInvariants = invariants;
-      BooleanFormula currentInvariants = getCurrentLoopHeadInvariants();
+      BooleanFormula currentInvariants = getCurrentLoopHeadInvariants(stopLocations);
       while (!isInvariant && !currentInvariants.equals(oldInvariants)) {
         push(fmgr.instantiate(currentInvariants, SSAMap.emptySSAMap().withDefault(1)));
         isInvariant = prover.isUnsat();
@@ -431,7 +424,7 @@ class KInductionProver implements AutoCloseable {
 
         pop();
         oldInvariants = currentInvariants;
-        currentInvariants = getCurrentLoopHeadInvariants();
+        currentInvariants = getCurrentLoopHeadInvariants(stopLocations);
       }
 
       // If the proof is successful, move the problem from the set of open
@@ -456,55 +449,59 @@ class KInductionProver implements AutoCloseable {
   }
 
   private void ensureReachedSetInitialized(ReachedSet pReachedSet) throws InterruptedException, CPAException {
-    if (pReachedSet.size() > 1) {
+    if (pReachedSet.size() > 1 || !cfa.getLoopStructure().isPresent()) {
       return;
     }
-    CFANode loopHead = Iterables.getOnlyElement(loop.getLoopHeads());
-    if (havocLoopTerminationConditionVariablesOnly) {
-      CFANode mainEntryNode = cfa.getMainFunction();
-      Precision precision = cpa.getInitialPrecision(mainEntryNode, StateSpacePartition.getDefaultPartition());
-      precision = excludeEdges(precision, CFAUtils.leavingEdges(loopHead));
-      pReachedSet.add(cpa.getInitialState(mainEntryNode, StateSpacePartition.getDefaultPartition()), precision);
-      algorithm.run(pReachedSet);
-      Collection<AbstractState> loopHeadStates = new ArrayList<>();
-      Iterables.addAll(loopHeadStates, filterLocation(pReachedSet, loopHead));
-      pReachedSet.clear();
-      Collection<String> loopTerminationConditionVariables = getTerminationConditionVariables(loop);
-      for (AbstractState loopHeadState : loopHeadStates) {
-        // Havoc the "loop termination condition" variables in predicate analysis state
-        PredicateAbstractState pas = extractStateByType(loopHeadState, PredicateAbstractState.class);
-        PathFormula pathFormula = pas.getPathFormula();
-        SSAMapBuilder ssaMapBuilder = pathFormula.getSsa().builder();
-        Set<String> containedVariables = ssaMapBuilder.allVariables();
-        for (String variable : loopTerminationConditionVariables) {
-          if (containedVariables.contains(variable)) {
-            CType type = ssaMapBuilder.getType(variable);
-            int freshIndex = ssaMapBuilder.getFreshIndex(variable);
-            ssaMapBuilder.setIndex(variable, type, freshIndex);
+    for (Loop loop : cfa.getLoopStructure().get().getAllLoops()) {
+      for (CFANode loopHead : loop.getLoopHeads()) {
+        if (havocLoopTerminationConditionVariablesOnly) {
+          CFANode mainEntryNode = cfa.getMainFunction();
+          Precision precision = cpa.getInitialPrecision(mainEntryNode, StateSpacePartition.getDefaultPartition());
+          precision = excludeEdges(precision, CFAUtils.leavingEdges(loopHead));
+          pReachedSet.add(cpa.getInitialState(mainEntryNode, StateSpacePartition.getDefaultPartition()), precision);
+          algorithm.run(pReachedSet);
+          Collection<AbstractState> loopHeadStates = new ArrayList<>();
+          Iterables.addAll(loopHeadStates, filterLocation(pReachedSet, loopHead));
+          pReachedSet.clear();
+          Collection<String> loopTerminationConditionVariables = getTerminationConditionVariables(loop);
+          for (AbstractState loopHeadState : loopHeadStates) {
+            // Havoc the "loop termination condition" variables in predicate analysis state
+            PredicateAbstractState pas = extractStateByType(loopHeadState, PredicateAbstractState.class);
+            PathFormula pathFormula = pas.getPathFormula();
+            SSAMapBuilder ssaMapBuilder = pathFormula.getSsa().builder();
+            Set<String> containedVariables = ssaMapBuilder.allVariables();
+            for (String variable : loopTerminationConditionVariables) {
+              if (containedVariables.contains(variable)) {
+                CType type = ssaMapBuilder.getType(variable);
+                int freshIndex = ssaMapBuilder.getFreshIndex(variable);
+                ssaMapBuilder.setIndex(variable, type, freshIndex);
+              }
+            }
+
+            AbstractState newLoopHeadState = cpa.getInitialState(loopHead, StateSpacePartition.getDefaultPartition());
+
+            PredicateAbstractState newPAS = extractStateByType(newLoopHeadState, PredicateAbstractState.class);
+            newPAS.setPathFormula(pfmgr.makeNewPathFormula(pathFormula, ssaMapBuilder.build()));
+
+            pReachedSet.add(newLoopHeadState, cpa.getInitialPrecision(loopHead, StateSpacePartition.getDefaultPartition()));
           }
+        } else {
+          Precision precision = cpa.getInitialPrecision(loopHead, StateSpacePartition.getDefaultPartition());
+          pReachedSet.add(cpa.getInitialState(loopHead, StateSpacePartition.getDefaultPartition()), precision);
         }
-
-        AbstractState newLoopHeadState = cpa.getInitialState(loopHead, StateSpacePartition.getDefaultPartition());
-
-        PredicateAbstractState newPAS = extractStateByType(newLoopHeadState, PredicateAbstractState.class);
-        newPAS.setPathFormula(pfmgr.makeNewPathFormula(pathFormula, ssaMapBuilder.build()));
-
-        pReachedSet.add(newLoopHeadState, cpa.getInitialPrecision(loopHead, StateSpacePartition.getDefaultPartition()));
       }
-    } else {
-      Precision precision = cpa.getInitialPrecision(loopHead, StateSpacePartition.getDefaultPartition());
-      pReachedSet.add(cpa.getInitialState(loopHead, StateSpacePartition.getDefaultPartition()), precision);
     }
   }
 
   private Collection<String> getTerminationConditionVariables(Loop pLoop) throws CPATransferException, InterruptedException {
     Collection<String> result = new HashSet<>();
     result.add(CFASingleLoopTransformation.PROGRAM_COUNTER_VAR_NAME);
-    CFANode loopHead = Iterables.getOnlyElement(pLoop.getLoopHeads());
     Set<CFANode> visited = new HashSet<>();
     Queue<CFANode> waitlist = new ArrayDeque<>();
-    waitlist.offer(loopHead);
-    visited.add(loopHead);
+    for (CFANode loopHead : pLoop.getLoopHeads()) {
+      waitlist.offer(loopHead);
+      visited.add(loopHead);
+    }
     while (!waitlist.isEmpty()) {
       CFANode current = waitlist.poll();
       assert pLoop.getLoopNodes().contains(current);
@@ -542,6 +539,10 @@ class KInductionProver implements AutoCloseable {
       return Precisions.replaceByType(pPrecision, newPrecision, Predicates.instanceOf(EdgeExclusionPrecision.class));
     }
     return pPrecision;
+  }
+
+  private static Set<CFANode> getStopLocations(ReachedSet pReachedSet) {
+    return from(pReachedSet).filter(BMCAlgorithm.IS_STOP_STATE).transform(AbstractStates.EXTRACT_LOCATION).toSet();
   }
 
 }

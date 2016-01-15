@@ -25,12 +25,16 @@ package org.sosy_lab.cpachecker.cpa.value.symbolic.type;
 
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
 import org.sosy_lab.cpachecker.cpa.value.type.NumericValue;
+import org.sosy_lab.cpachecker.util.predicates.smt.FormulaManagerView;
+import org.sosy_lab.cpachecker.util.states.MemoryLocation;
+
+import com.google.common.base.Optional;
 
 /**
  * Identifier for basic symbolic values.
  * Symbolic identifiers are used to track equality between
  * variables that have non-deterministic values.
- *
+ * <p/>
  * <p>Example:
  * <pre>
  *    int a = nondet_int();
@@ -56,13 +60,21 @@ public class SymbolicIdentifier implements SymbolicValue, Comparable<SymbolicIde
   // this objects unique id for identifying it
   private final long id;
 
+  private final Optional<MemoryLocation> representedLocation;
+
   public SymbolicIdentifier(long pId) {
     id = pId;
+    representedLocation = Optional.absent();
+  }
+
+  private SymbolicIdentifier(final long pId, final MemoryLocation pRepresentedLocation) {
+    id = pId;
+    representedLocation = Optional.of(pRepresentedLocation);
   }
 
   /**
    * Returns a new instance of a <code>SymbolicIdentifier</code>.
-   *
+   * <p/>
    * <p>Each call to this method returns a new, unique <code>SymbolicIdentifier</code>.</p>
    *
    * @return a new instance of a <code>SymbolicIdentifier</code>
@@ -76,18 +88,38 @@ public class SymbolicIdentifier implements SymbolicValue, Comparable<SymbolicIde
     return pVisitor.visit(this);
   }
 
+  @Override
+  public Optional<MemoryLocation> getRepresentedLocation() {
+    return representedLocation;
+  }
+
+  @Override
+  public SymbolicValue copyForLocation(MemoryLocation pLocation) {
+    return new SymbolicIdentifier(id, pLocation);
+  }
+
+  @Override
+  public String getRepresentation() {
+    if (representedLocation.isPresent()) {
+      return representedLocation.get().toString();
+    } else {
+      return toString();
+    }
+  }
+
   public long getId() {
     return id;
   }
 
   @Override
   public int hashCode() {
-    return (int) (id ^ (id >>> 32));
+    return getRepresentedLocation().hashCode() + ((int) (id ^ (id >>> 32)));
   }
 
   @Override
   public boolean equals(Object pOther) {
-    return pOther instanceof SymbolicIdentifier && ((SymbolicIdentifier) pOther).id == id;
+    return pOther instanceof SymbolicIdentifier && ((SymbolicIdentifier) pOther).id == id
+        && ((SymbolicIdentifier) pOther).getRepresentedLocation().equals(getRepresentedLocation());
   }
 
   @Override
@@ -152,29 +184,50 @@ public class SymbolicIdentifier implements SymbolicValue, Comparable<SymbolicIde
 
     /**
      * Converts a given {@link SymbolicIdentifier} to a String.
-     * The returned <code>String</code> contains all information necessary for uniquely identifying the given
+     * The returned <code>String</code> contains all information necessary for uniquely identifying
+     * the given
      * identifier.
+     * <p/>
+     * <p>For a given identifier p,
+     * <code>convertToIdentifier(convertToStringEncoding(p)) = p</code>
+     * is always true.
      *
-     *  <p>For a given identifier p, <code>convert(convert(p)) = p</code> is always true.
-     *
-     * @param pIdentifier the <code>SymbolicIdentifier</code> to convert to a string
-     * @return a <code>String</code> containing all information necessary for converting it to a identifier
+     * @param pIdentifier the <code>SymbolicIdentifier</code> to convert to a
+     *    string
+     * @return a <code>String</code> containing all information necessary for converting it to a
+     * identifier
      */
-    public String convert(SymbolicIdentifier pIdentifier) {
+    public String convertToStringEncoding(SymbolicIdentifier pIdentifier) {
       return PREFIX + pIdentifier.getId();
+    }
+
+    /**
+     * Returns, for a String representation s of a {@link SymbolicIdentifier},
+     * the string encoding that would result from calling
+     * convertToStringEncoding(convertToIdentifier(s)).
+     */
+    public String normalizeStringEncoding(final String pStringRepresentation) {
+      return convertToStringEncoding(convertToIdentifier(pStringRepresentation));
     }
 
     /**
      * Converts a given encoding of a {@link SymbolicIdentifier} to the corresponding
      * <code>SymbolicIdentifier</code>.
+     * <p/>
+     * Only valid encodings, as produced by {@link #convertToStringEncoding(SymbolicIdentifier)},
+     * are allowed.
      *
-     * Only valid encodings, as produced by {@link #convert(SymbolicIdentifier)}, are allowed.
-     *
-     * @param pIdentifierInformation a <code>String</code> encoding of a <code>SymbolicIdentifier</code>
+     * @param pIdentifierInformation a <code>String</code> encoding of a
+     * <code>SymbolicIdentifier</code>
      * @return the <code>SymbolicIdentifier</code> representing the given encoding
      */
-    public SymbolicIdentifier convert(String pIdentifierInformation) {
-      final long id = Long.parseLong(pIdentifierInformation.substring(PREFIX.length()));
+    public SymbolicIdentifier convertToIdentifier(
+        String pIdentifierInformation) {
+
+      final String variableName = FormulaManagerView.parseName(pIdentifierInformation).getFirst();
+      final String identifierIdOnly = variableName.substring(PREFIX.length());
+      final long id = Long.parseLong(identifierIdOnly);
+
       return new SymbolicIdentifier(id);
     }
 
@@ -182,11 +235,13 @@ public class SymbolicIdentifier implements SymbolicValue, Comparable<SymbolicIde
      * Returns whether the given string is a valid encoding of a {@link SymbolicIdentifier}.
      *
      * @param pName the string to analyse
-     * @return <code>true</code> if the given string is a valid encoding of a <code>SymbolicIdentifier</code>,
-     *    <code>false</code> otherwise
+     * @return <code>true</code> if the given string is a valid encoding of a
+     * <code>SymbolicIdentifier</code>,
+     * <code>false</code> otherwise
      */
     public boolean isSymbolicEncoding(String pName) {
-      return pName.matches(PREFIX + "[0-9]+");
+      String variableName = FormulaManagerView.parseName(pName).getFirst();
+      return variableName.matches(PREFIX + "[0-9]*");
     }
   }
 }

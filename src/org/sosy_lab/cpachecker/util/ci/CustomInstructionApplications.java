@@ -35,13 +35,15 @@ import org.sosy_lab.cpachecker.util.AbstractStates;
 public class CustomInstructionApplications {
 
   private final Map<CFANode, AppliedCustomInstruction> cis;
+  private final CustomInstruction ci;
 
   /**
    * Constructor of CustomInstructionApplications
    * @param pCis ImmutableMap
    */
-  public CustomInstructionApplications(final Map<CFANode, AppliedCustomInstruction> pCis) {
+  public CustomInstructionApplications(final Map<CFANode, AppliedCustomInstruction> pCis, final CustomInstruction pCi) {
     cis = pCis;
+    ci = pCi;
   }
 
   /**
@@ -64,7 +66,6 @@ public class CustomInstructionApplications {
    * @param pIsEnd AbstractState
    * @param pCIStart AbstractState
    * @return true if pIsEnd is an endNode of pCISart
-   * @throws CPAException
    */
   public boolean isEndState(final AbstractState pIsEnd, final AbstractState pCIStart) throws CPAException {
     return isEndState(pIsEnd, AbstractStates.extractLocation(pCIStart));
@@ -75,7 +76,6 @@ public class CustomInstructionApplications {
    * @param pIsEnd AbstractState
    * @param pCIStart CFANode
    * @return true if pIsEnd is an endNode of pCISart
-   * @throws CPAException
    */
   public boolean isEndState(final AbstractState pIsEnd, final CFANode pCIStart) throws CPAException {
     assert(cis.containsKey(pCIStart));
@@ -94,6 +94,14 @@ public class CustomInstructionApplications {
     }
 
     return cis.get(locState);
+  }
+
+  public CustomInstruction getCustomInstruction() {
+    return ci;
+  }
+
+  public Map<CFANode, AppliedCustomInstruction> getMapping() {
+    return cis;
   }
 
 }

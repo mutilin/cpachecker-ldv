@@ -36,14 +36,15 @@ import org.sosy_lab.common.collect.PathCopyingPersistentTreeMap;
 import org.sosy_lab.cpachecker.cfa.types.Type;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.value.ValueAnalysisState;
-import org.sosy_lab.cpachecker.util.states.MemoryLocation;
 import org.sosy_lab.cpachecker.cpa.value.type.Value;
+import org.sosy_lab.cpachecker.util.refinement.Interpolant;
+import org.sosy_lab.cpachecker.util.states.MemoryLocation;
 
 /**
  * This class represents a Value-Analysis interpolant, itself, just a mere wrapper around a map
  * from memory locations to values, representing a variable assignment.
  */
-public class ValueAnalysisInterpolant {
+public class ValueAnalysisInterpolant implements Interpolant<ValueAnalysisState> {
   /**
    * the variable assignment of the interpolant
    */
@@ -80,17 +81,24 @@ public class ValueAnalysisInterpolant {
 
   /**
    * This method serves as factory method for an initial, i.e. an interpolant representing "true"
-   *
-   * @return
    */
   public static ValueAnalysisInterpolant createInitial() {
     return new ValueAnalysisInterpolant();
   }
 
+  @Override
   public Set<MemoryLocation> getMemoryLocations() {
     return isFalse()
         ? Collections.<MemoryLocation>emptySet()
         : Collections.unmodifiableSet(assignment.keySet());
+  }
+
+  @SuppressWarnings("unchecked")
+  @Override
+  public <T extends Interpolant<ValueAnalysisState>> T join(final T pOther) {
+    assert pOther instanceof ValueAnalysisInterpolant;
+
+    return (T) join0((ValueAnalysisInterpolant) pOther);
   }
 
   /**
@@ -101,7 +109,7 @@ public class ValueAnalysisInterpolant {
    * @return a new value-analysis interpolant containing the joined mapping of this and the other value-analysis
    * interpolant
    */
-  public ValueAnalysisInterpolant join(ValueAnalysisInterpolant other) {
+  private ValueAnalysisInterpolant join0(ValueAnalysisInterpolant other) {
 
     if (assignment == null || other.assignment == null) {
       return ValueAnalysisInterpolant.FALSE;
@@ -152,7 +160,8 @@ public class ValueAnalysisInterpolant {
     }
 
     ValueAnalysisInterpolant other = (ValueAnalysisInterpolant) obj;
-    return Objects.equals(assignment, other.assignment) && Objects.equals(assignmentTypes, other.assignmentTypes);
+    return Objects.equals(assignment, other.assignment) && Objects.equals(
+        assignmentTypes, other.assignmentTypes);
   }
 
   /**
@@ -160,6 +169,7 @@ public class ValueAnalysisInterpolant {
    *
    * @return true, if the interpolant represents "true", else false
    */
+  @Override
   public boolean isTrue() {
     return !isFalse() && assignment.isEmpty();
   }
@@ -169,6 +179,7 @@ public class ValueAnalysisInterpolant {
    *
    * @return true, if the interpolant represents "false", else true
    */
+  @Override
   public boolean isFalse() {
     return assignment == null;
   }
@@ -178,6 +189,7 @@ public class ValueAnalysisInterpolant {
    *
    * @return true, if the interpolant is trivial, else false
    */
+  @Override
   public boolean isTrivial() {
     return isFalse() || isTrue();
   }
@@ -187,8 +199,14 @@ public class ValueAnalysisInterpolant {
    *
    * @return a value-analysis state that represents the same variable assignment as the interpolant
    */
-  public ValueAnalysisState createValueAnalysisState() {
-    return new ValueAnalysisState(PathCopyingPersistentTreeMap.copyOf(assignment), PathCopyingPersistentTreeMap.copyOf(assignmentTypes));
+  @Override
+  public ValueAnalysisState reconstructState() {
+    if (assignment == null || assignmentTypes == null) {
+      throw new IllegalStateException("Can't reconstruct state from FALSE-interpolant");
+
+    } else {
+      return new ValueAnalysisState(PathCopyingPersistentTreeMap.copyOf(assignment), PathCopyingPersistentTreeMap.copyOf(assignmentTypes));
+    }
   }
 
   @Override
@@ -233,6 +251,7 @@ public class ValueAnalysisInterpolant {
    * @param toRetain the set of memory location identifiers to retain in the interpolant.
    * @return the weakened interpolant
    */
+  @SuppressWarnings("ConstantConditions") // isTrivial() checks for FALSE-interpolants
   public ValueAnalysisInterpolant weaken(Set<String> toRetain) {
     if (isTrivial()) {
       return this;
@@ -251,6 +270,8 @@ public class ValueAnalysisInterpolant {
     return weakenedItp;
   }
 
+  @SuppressWarnings("ConstantConditions") // isTrivial() asserts that assignment != null
+  @Override
   public int getSize() {
     return isTrivial() ? 0 : assignment.size();
   }

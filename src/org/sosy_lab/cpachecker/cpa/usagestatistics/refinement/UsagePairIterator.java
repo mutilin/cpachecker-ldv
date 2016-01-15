@@ -27,10 +27,10 @@ import java.io.PrintStream;
 import java.util.Iterator;
 import java.util.logging.Level;
 
-import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsageInfoSet;
+import org.sosy_lab.cpachecker.util.Pair;
 
 
 public class UsagePairIterator extends GenericIterator<Pair<UsageInfoSet, UsageInfoSet>, Pair<UsageInfo, UsageInfo>>{

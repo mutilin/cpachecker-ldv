@@ -29,7 +29,6 @@ import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
-import org.sosy_lab.cpachecker.core.interfaces.Refiner;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
 import org.sosy_lab.cpachecker.core.interfaces.WrapperCPA;
@@ -61,13 +60,13 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
 
   private final ConfigurableRefinementBlock<ReachedSet> startingBlock;
 
-  public UsageStatisticsRefiner(Configuration pConfig, ConfigurableProgramAnalysis pCpa) throws CPAException, InvalidConfigurationException {
+  public UsageStatisticsRefiner(Configuration pConfig, ConfigurableProgramAnalysis pCpa) throws InvalidConfigurationException {
     super(pCpa);
     RefinementBlockFactory factory = new RefinementBlockFactory(this.subgraphStatesToReachedState, pCpa, pConfig);
     startingBlock = factory.create();
   }
 
-  public static Refiner create(ConfigurableProgramAnalysis pCpa) throws CPAException, InvalidConfigurationException {
+  public static UsageStatisticsRefiner create(ConfigurableProgramAnalysis pCpa) throws InvalidConfigurationException {
     if (!(pCpa instanceof WrapperCPA)) {
       throw new InvalidConfigurationException(BAMPredicateRefiner.class.getSimpleName() + " could not find the PredicateCPA");
     }

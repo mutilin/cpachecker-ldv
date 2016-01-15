@@ -26,9 +26,9 @@ package org.sosy_lab.cpachecker.cpa.usagestatistics.refinement;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.sosy_lab.common.Pair;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicatePrecision;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
+import org.sosy_lab.cpachecker.util.Pair;
 
 import com.google.common.base.Preconditions;
 
