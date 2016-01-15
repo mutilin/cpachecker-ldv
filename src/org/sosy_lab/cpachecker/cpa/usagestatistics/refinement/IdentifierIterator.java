@@ -102,7 +102,7 @@ public class IdentifierIterator extends WrappedConfigurableRefinementBlock<Reach
   }
 
   @Override
-  public RefinementResult call(ReachedSet pReached) throws CPAException, InterruptedException {
+  public RefinementResult performRefinement(ReachedSet pReached) throws CPAException, InterruptedException {
     UsageContainer container = AbstractStates.extractStateByType(pReached.getFirstState(), UsageStatisticsState.class).getContainer();
     BAMPredicateCPA bamcpa = CPAs.retrieveCPA(cpa, BAMPredicateCPA.class);
     assert bamcpa != null;
@@ -136,7 +136,7 @@ public class IdentifierIterator extends WrappedConfigurableRefinementBlock<Reach
 
       AbstractUsagePointSet pointSet = container.getUsages(currentId);
       if (pointSet instanceof UnrefinedUsagePointSet) {
-        RefinementResult result = wrappedRefiner.call(currentId);
+        RefinementResult result = wrappedRefiner.performRefinement(currentId);
         refinementFinish |= result.isFalse();
 
         PredicatePrecision info = result.getPrecision();

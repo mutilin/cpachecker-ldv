@@ -46,7 +46,7 @@ public abstract class GenericIterator<I, O> extends WrappedConfigurableRefinemen
   }
 
   @Override
-  public final RefinementResult call(I pInput) throws CPAException, InterruptedException {
+  public final RefinementResult performRefinement(I pInput) throws CPAException, InterruptedException {
 
     O iteration;
 
@@ -81,7 +81,7 @@ public abstract class GenericIterator<I, O> extends WrappedConfigurableRefinemen
   private RefinementResult iterate(O iteration) throws CPAException, InterruptedException {
     numOfIterations++;
     totalTimer.stop();
-    RefinementResult result = wrappedRefiner.call(iteration);
+    RefinementResult result = wrappedRefiner.performRefinement(iteration);
     totalTimer.start();
 
     if (result.isTrue()) {

@@ -100,7 +100,7 @@ public class CallstackFilter extends
   }
 
   @Override
-  public RefinementResult call(Pair<ExtendedARGPath, ExtendedARGPath> pInput) throws CPAException, InterruptedException {
+  public RefinementResult performRefinement(Pair<ExtendedARGPath, ExtendedARGPath> pInput) throws CPAException, InterruptedException {
     totalTimer.start();
 
     try {
@@ -114,7 +114,7 @@ public class CallstackFilter extends
       } else if (singleThreadFunctions.contains(firstFunctionCall) || singleThreadFunctions.contains(secondFunctionCall)) {
         return RefinementResult.createFalse();
       } else {
-        return wrappedRefiner.call(pInput);
+        return wrappedRefiner.performRefinement(pInput);
       }
     } finally {
       totalTimer.stop();

@@ -42,8 +42,8 @@ public abstract class WrappedConfigurableRefinementBlock<I, O> implements Config
     wrappedRefiner.start(getClass());
   }
 
-  protected Object sendFinishSignal() throws CPAException, InterruptedException {
-    return wrappedRefiner.finish(getClass());
+  protected void sendFinishSignal() throws CPAException, InterruptedException {
+    wrappedRefiner.finish(getClass());
   }
 
   protected void sendUpdateSignal(Class<? extends RefinementInterface> dstClass, Object data) {
@@ -70,19 +70,8 @@ public abstract class WrappedConfigurableRefinementBlock<I, O> implements Config
   }
 
   @Override
-  public final Object finish(Class<? extends RefinementInterface> callerClass) throws CPAException, InterruptedException {
-    Object myResult = handleFinishSignal(callerClass);
-    Object wrapperResult = wrappedRefiner.finish(callerClass);
-    if (myResult != null) {
-      if (wrapperResult == null) {
-        return myResult;
-      } else {
-        //How to join?
-        assert false;
-        return wrapperResult;
-      }
-    } else {
-      return myResult;
-    }
+  public final void finish(Class<? extends RefinementInterface> callerClass) throws CPAException, InterruptedException {
+    handleFinishSignal(callerClass);
+    wrappedRefiner.finish(callerClass);
   }
 }

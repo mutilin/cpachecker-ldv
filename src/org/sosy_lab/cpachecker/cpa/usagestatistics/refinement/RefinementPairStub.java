@@ -48,8 +48,7 @@ public class RefinementPairStub implements ConfigurableRefinementBlock<Pair<Exte
   }
 
   @Override
-  public Object finish(Class<? extends RefinementInterface> pCallerClass) throws CPAException, InterruptedException {
-    return null;
+  public void finish(Class<? extends RefinementInterface> pCallerClass) throws CPAException, InterruptedException {
   }
 
   @Override
@@ -58,7 +57,7 @@ public class RefinementPairStub implements ConfigurableRefinementBlock<Pair<Exte
   }
 
   @Override
-  public RefinementResult call(Pair<ExtendedARGPath, ExtendedARGPath> pInput) throws CPAException, InterruptedException {
+  public RefinementResult performRefinement(Pair<ExtendedARGPath, ExtendedARGPath> pInput) throws CPAException, InterruptedException {
 
     if (detector == null) {
       detector = AbstractStates.extractStateByType(pInput.getFirst().getUsageInfo().getKeyState(),

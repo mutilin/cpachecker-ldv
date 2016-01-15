@@ -32,6 +32,6 @@ public interface RefinementInterface {
 
   void update(Class<? extends RefinementInterface> callerClass, Class<? extends RefinementInterface> dstClass, Object data);
   void start(Class<? extends RefinementInterface> callerClass);
-  Object finish(Class<? extends RefinementInterface> callerClass) throws CPAException, InterruptedException;
+  void finish(Class<? extends RefinementInterface> callerClass) throws CPAException, InterruptedException;
   void printStatistics(PrintStream pOut);
 }

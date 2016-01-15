@@ -44,7 +44,7 @@ public abstract class GenericSinglePathRefiner extends
   }
 
   @Override
-  public final RefinementResult call(Pair<ExtendedARGPath, ExtendedARGPath> pInput) throws CPAException, InterruptedException {
+  public final RefinementResult performRefinement(Pair<ExtendedARGPath, ExtendedARGPath> pInput) throws CPAException, InterruptedException {
     totalTimer.start();
 
     try {
@@ -70,7 +70,7 @@ public abstract class GenericSinglePathRefiner extends
         result.addPrecision(completePrecision);
         return result;
       }
-      result = wrappedRefiner.call(pInput);
+      result = wrappedRefiner.performRefinement(pInput);
       result.addPrecision(completePrecision);
       return result;
     } finally {

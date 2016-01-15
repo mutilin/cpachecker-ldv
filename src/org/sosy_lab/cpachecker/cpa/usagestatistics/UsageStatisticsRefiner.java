@@ -27,8 +27,6 @@ import java.util.Collection;
 
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
-import org.sosy_lab.common.configuration.Options;
-import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.Refiner;
@@ -38,17 +36,10 @@ import org.sosy_lab.cpachecker.core.interfaces.WrapperCPA;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateCPA;
 import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateRefiner;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.IdentifierIterator;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.InterruptFilter;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.PathPairIterator;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.PointIterator;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.PredicateRefinerAdapter;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.RefinementPairStub;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.UsagePairIterator;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.ConfigurableRefinementBlock;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.RefinementBlockFactory;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
-import org.sosy_lab.cpachecker.util.CPAs;
 
-@Options(prefix="cpa.usagestatistics")
 public class UsageStatisticsRefiner extends BAMPredicateRefiner implements StatisticsProvider {
 
   private class Stats implements Statistics {
@@ -67,25 +58,13 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
   }
 
   final Stats pStat = new Stats();
-  private final ConfigurableProgramAnalysis cpa;
 
-  private final IdentifierIterator startingBlock;
+  private final ConfigurableRefinementBlock<ReachedSet> startingBlock;
 
   public UsageStatisticsRefiner(Configuration pConfig, ConfigurableProgramAnalysis pCpa) throws CPAException, InvalidConfigurationException {
     super(pCpa);
-    pConfig.inject(this);
-    cpa = pCpa;
-    UsageStatisticsCPA UScpa = CPAs.retrieveCPA(pCpa, UsageStatisticsCPA.class);
-    LogManager logger = UScpa.getLogger();
-    //RefinementStub stub = new RefinementStub();
-    RefinementPairStub stub = new RefinementPairStub();
-    InterruptFilter filter = new InterruptFilter(stub, pConfig);
-    PredicateRefinerAdapter predicateRefinerAdapter = new PredicateRefinerAdapter(filter, cpa, null);
-    PathPairIterator pIterator = new PathPairIterator(predicateRefinerAdapter, this.subgraphStatesToReachedState, transfer, logger);
-    UsagePairIterator uIterator = new UsagePairIterator(pIterator, UScpa.getLogger());
-    PointIterator pointIterator = new PointIterator(uIterator, null);
-    startingBlock = new IdentifierIterator(pointIterator, pConfig, pCpa, transfer);
-    //iCache = predicateRefinerAdapter.getInterpolantCache();
+    RefinementBlockFactory factory = new RefinementBlockFactory(this.subgraphStatesToReachedState, pCpa, pConfig);
+    startingBlock = factory.create();
   }
 
   public static Refiner create(ConfigurableProgramAnalysis pCpa) throws CPAException, InvalidConfigurationException {
@@ -104,7 +83,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
 
   @Override
   public boolean performRefinement(ReachedSet pReached) throws CPAException, InterruptedException {
-    return startingBlock.call(pReached).isTrue();
+    return startingBlock.performRefinement(pReached).isTrue();
   }
 
   @Override
