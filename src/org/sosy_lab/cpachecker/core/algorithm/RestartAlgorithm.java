@@ -262,7 +262,9 @@ public class RestartAlgorithm implements Algorithm, StatisticsProvider {
 
           } else {
             // sound analysis and completely finished, terminate
-            return status;
+            if (!configFilesIterator.hasNext()) {
+              return status;
+            }
           }
           lastAnalysisTerminated = true;
 

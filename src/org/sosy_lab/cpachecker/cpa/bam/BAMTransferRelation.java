@@ -573,7 +573,7 @@ public class BAMTransferRelation implements TransferRelation {
 
   public BAMMultipleCEXSubgraphComputer createBAMMultipleSubgraphComputer(Map<ARGState, ARGState> pPathElementToReachedState) {
     final BAMMultipleCEXSubgraphComputer cexSubgraphComputer = new BAMMultipleCEXSubgraphComputer(bamCPA,
-        pPathElementToReachedState, data.expandedStateToReducedState);
+        pPathElementToReachedState, reducedToExpand);
 
         return cexSubgraphComputer;
   }

@@ -62,7 +62,7 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
 
   public UsageStatisticsRefiner(Configuration pConfig, ConfigurableProgramAnalysis pCpa) throws InvalidConfigurationException {
     super(pCpa);
-    RefinementBlockFactory factory = new RefinementBlockFactory(this.subgraphStatesToReachedState, pCpa, pConfig);
+    RefinementBlockFactory factory = new RefinementBlockFactory(pCpa, pConfig);
     startingBlock = factory.create();
   }
 

@@ -38,7 +38,6 @@ import java.util.TreeMap;
 
 import javax.annotation.Nullable;
 
-import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
@@ -48,8 +47,6 @@ import org.sosy_lab.cpachecker.cpa.bam.BAMCEXSubgraphComputer.BackwardARGState;
 import org.sosy_lab.cpachecker.cpa.bam.BAMMultipleCEXSubgraphComputer;
 import org.sosy_lab.cpachecker.cpa.bam.BAMTransferRelation;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
-import org.sosy_lab.cpachecker.exceptions.CPAException;
-import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.Pair;
 
 import com.google.common.base.Function;
@@ -65,7 +62,7 @@ public class PathPairIterator extends
   private final Map<ARGState, ARGState> subgraphStatesToReachedState;
   private final BAMTransferRelation transfer;
   private final Multimap<AbstractState, AbstractState> fromReducedToExpand;
-  private final BAMMultipleCEXSubgraphComputer subgraphComputer;
+  private BAMMultipleCEXSubgraphComputer subgraphComputer;
 
   //Statistics
   private Timer computingPath = new Timer();
@@ -95,17 +92,20 @@ public class PathPairIterator extends
   private ExtendedARGPath firstPath = null;
 
   public PathPairIterator(ConfigurableRefinementBlock<Pair<ExtendedARGPath, ExtendedARGPath>> pWrapper
-      ,Map<ARGState, ARGState> pSubgraphStatesToReachedState, BAMTransferRelation bamTransfer, LogManager l) {
+      ,Map<ARGState, ARGState> pSubgraphStatesToReachedState, BAMTransferRelation bamTransfer) {
     super(pWrapper);
     subgraphStatesToReachedState = pSubgraphStatesToReachedState;
     transfer = bamTransfer;
     fromReducedToExpand = transfer.getMapFromReducedToExpand();
-    subgraphComputer = transfer.createBAMMultipleSubgraphComputer(subgraphStatesToReachedState);
+
   }
 
   @Override
   protected void init(Pair<UsageInfo, UsageInfo> pInput) {
     firstPath = null;
+    //subgraph computer need partitioning, which is not built at creation.
+    //Thus, we move the creation of subgraphcomputer here
+    subgraphComputer = transfer.createBAMMultipleSubgraphComputer(subgraphStatesToReachedState);
   }
 
   @Override
@@ -114,40 +114,32 @@ public class PathPairIterator extends
     firstUsage = pInput.getFirst();
     secondUsage = pInput.getSecond();
 
-    try {
+    if (firstPath == null) {
+      //First time or it was unreachable last time
+      firstPath = getNextPath(firstUsage);
       if (firstPath == null) {
-        //First time or it was unreachable last time
-        firstPath = getNextPath(firstUsage);
-        if (firstPath == null) {
-          checkAreUsagesUnreachable(pInput);
-          return null;
-        }
+        checkAreUsagesUnreachable(pInput);
+        return null;
       }
-
-      ExtendedARGPath secondPath = getNextPath(secondUsage);
-      if (secondPath == null) {
-        //Reset the iterator
-        currentIterators.remove(secondUsage);
-        //And move shift the first one
-        firstPath = getNextPath(firstUsage);
-        if (firstPath == null) {
-          checkAreUsagesUnreachable(pInput);
-          return null;
-        }
-        secondPath = getNextPath(secondUsage);
-        if (secondPath == null) {
-          checkAreUsagesUnreachable(pInput);
-          return null;
-        }
-      }
-      return Pair.of(firstPath, secondPath);
-    } catch (CPAException e) {
-      Preconditions.checkArgument(false, e.getMessage());
-      return null;
-    } catch (InterruptedException e) {
-      Preconditions.checkArgument(false, e.getMessage());
-      return null;
     }
+
+    ExtendedARGPath secondPath = getNextPath(secondUsage);
+    if (secondPath == null) {
+      //Reset the iterator
+      currentIterators.remove(secondUsage);
+      //And move shift the first one
+      firstPath = getNextPath(firstUsage);
+      if (firstPath == null) {
+        checkAreUsagesUnreachable(pInput);
+        return null;
+      }
+      secondPath = getNextPath(secondUsage);
+      if (secondPath == null) {
+        checkAreUsagesUnreachable(pInput);
+        return null;
+      }
+    }
+    return Pair.of(firstPath, secondPath);
   }
 
   private void checkAreUsagesUnreachable(Pair<UsageInfo, UsageInfo> pInput) {
@@ -248,7 +240,7 @@ public class PathPairIterator extends
     }
   }
 
-  private ExtendedARGPath getNextPath(UsageInfo info) throws CPATransferException, InterruptedException {
+  private ExtendedARGPath getNextPath(UsageInfo info) {
     ARGPath currentPath;
 
     //Start from already computed set (it is partially refined)
@@ -300,7 +292,7 @@ public class PathPairIterator extends
   }
 
   //lastAffectedState is Backward!
-  private ARGPath computeNextPath(ARGState lastAffectedState) throws CPATransferException, InterruptedException  {
+  private ARGPath computeNextPath(ARGState lastAffectedState) {
     assert lastAffectedState != null;
 
     ARGState nextParent = null, previousCaller, childOfForkState = lastAffectedState;
@@ -441,7 +433,7 @@ public class PathPairIterator extends
     }
   }
 
-  ARGPath computePath(BackwardARGState pLastElement) throws InterruptedException, CPATransferException {
+  ARGPath computePath(BackwardARGState pLastElement) {
     assert (pLastElement != null && !pLastElement.isDestroyed());
       //we delete this state from other unsafe
 

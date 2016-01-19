@@ -122,7 +122,7 @@ class AssignmentHandler {
     final CExpressionVisitorWithPointerAliasing rhsVisitor = new CExpressionVisitorWithPointerAliasing(conv, edge, function, ssa, constraints, errorConditions, pts);
 
     final Expression rhsExpression;
-    if (rhs == null || (rhs instanceof CExpression && ((CExpression)rhs).accept(new IsRelevantLhsVisitor(conv)))) {
+    if (rhs == null || (rhs instanceof CExpression && !((CExpression)rhs).accept(new IsRelevantLhsVisitor(conv)))) {
       rhsExpression = Value.nondetValue();
     } else {
       CRightHandSide r = rhs;
@@ -285,17 +285,20 @@ class AssignmentHandler {
         //This is fix for races, global assignements are replaced by nondet
         return bfmgr.makeBoolean(true);
       }
+      //tmpFix
       // There are only two cases of assignment to an array
-      Preconditions.checkArgument(
+      if (!(
         // Initializing array with a value (possibly nondet), useful for stack declarations and memset implementation
         rvalue.isValue() && isSimpleType(rvalueType) ||
         // Array assignment (needed for structure assignment implementation)
         // Only possible from another array of the same type
         rvalue.asLocation().isAliased() &&
         rvalueType instanceof CArrayType &&
-        CTypeUtils.simplifyType(((CArrayType) rvalueType).getType()).equals(lvalueElementType),
-        "Impossible array assignment due to incompatible types: assignment of %s to %s",
-        rvalueType, lvalueType);
+        CTypeUtils.simplifyType(((CArrayType) rvalueType).getType()).equals(lvalueElementType))) {
+        //"Impossible array assignment due to incompatible types: assignment of %s to %s",
+        //rvalueType, lvalueType)
+        return bfmgr.makeBoolean(true);
+      }
 
       Integer length = CTypeUtils.getArrayLength(lvalueArrayType);
       // Try to fix the length if it's unknown (or too big)

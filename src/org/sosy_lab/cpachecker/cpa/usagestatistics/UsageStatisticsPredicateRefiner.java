@@ -25,6 +25,7 @@ package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
@@ -102,6 +103,10 @@ public class UsageStatisticsPredicateRefiner extends BAMPredicateRefiner {
 
   public void updateReachedSet(ReachedSet pReached) {
     ARGReached = new ARGReachedSet(pReached);
+  }
+
+  public Map<ARGState, ARGState> getInternalMapForStates() {
+    return this.subgraphStatesToReachedState;
   }
 
   protected static class UsageStatisticsRefinementStrategy extends BAMPredicateAbstractionRefinementStrategy {

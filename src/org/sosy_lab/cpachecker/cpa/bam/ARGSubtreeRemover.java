@@ -89,7 +89,8 @@ public class ARGSubtreeRemover {
     final ARGState lastState = (ARGState)mainReachedSet.asReachedSet().getLastState();
 
     assert pPathElementToReachedState.get(pPath.asStatesList().get(0)) == firstState : "path should start with root state";
-    assert pPathElementToReachedState.get(Iterables.getLast(pPath.asStatesList())) == lastState : "path should end with target state";
+    //Lockator: wrong assertion for us
+    //assert pPathElementToReachedState.get(Iterables.getLast(pPath.asStatesList())) == lastState : "path should end with target state";
     assert lastState.isTarget();
 
     final List<ARGState> relevantCallNodes = getRelevantDefinitionNodes(pPath.asStatesList(), element, pPathElementToReachedState);

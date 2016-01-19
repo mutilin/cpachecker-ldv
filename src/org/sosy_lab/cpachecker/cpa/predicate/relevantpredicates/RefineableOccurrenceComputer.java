@@ -83,8 +83,4 @@ public class RefineableOccurrenceComputer extends OccurrenceComputer implements 
   public String toString() {
     return "RefineableOccurrenceComputer (" + definitelyRelevantPredicates + ")";
   }
-  
-  public void clear() {
-    definitelyRelevantPredicates.clear();
-  }
 }

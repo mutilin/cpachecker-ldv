@@ -416,7 +416,10 @@ public class PredicateAbstractionRefinementStrategy extends RefinementStrategy {
       precisionTypes.add(VariableTrackingPrecision.isMatchingCPAClass(ValueAnalysisCPA.class));
     }
 
-    pReached.removeSubtree(pRefinementRoot, precisions, precisionTypes);
+    //Lockator: we do not remove subgraph directly
+    //pReached.removeSubtree(pRefinementRoot, precisions, precisionTypes);
+    pReached.updateFirstStatePrecision(pNewPrecision, Predicates.instanceOf(PredicatePrecision.class));
+
 
     assert (refinementCount > 0) || reached.size() == 1;
 

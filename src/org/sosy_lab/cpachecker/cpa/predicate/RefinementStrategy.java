@@ -22,8 +22,6 @@
  *    http://cpachecker.sosy-lab.org
  */
 package org.sosy_lab.cpachecker.cpa.predicate;
-import static org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState.getPredicateState;
-
 import static org.sosy_lab.cpachecker.util.statistics.StatisticsWriter.writingStatisticsTo;
 
 import java.io.PrintStream;
@@ -153,7 +151,8 @@ public abstract class RefinementStrategy {
     // Hook
     finishRefinementOfPath(infeasiblePartOfARG, changedElements, pReached, pRepeatedCounterexample);
 
-    assert !pReached.asReachedSet().contains(lastElement);
+    //Lockator: we do not remove the state
+    //assert !pReached.asReachedSet().contains(lastElement);
   }
 
   // returns a pair consisting of the root of the infeasible part of the ARG and a list of all

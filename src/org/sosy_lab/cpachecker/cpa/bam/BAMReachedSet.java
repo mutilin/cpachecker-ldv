@@ -80,7 +80,8 @@ public class BAMReachedSet extends ARGReachedSet.ForwardingARGReachedSet {
     assert subgraph.containsAll(path.asStatesList()) : "path should traverse reached states";
     assert pRootOfSubgraph == path.getFirstState() : "path should start with root-state";
     assert subgraph.containsAll(pRootOfSubgraph.getSubgraph()) : "reached states should match states reachable from root";
-    assert pRootOfSubgraph.getSubgraph().containsAll(subgraph) : "states reachable from root should match reached states";
+    //Lockator: we refine restore several paths before refinement, disable the assertion
+    //assert pRootOfSubgraph.getSubgraph().containsAll(subgraph) : "states reachable from root should match reached states";
   }
 
   @Override

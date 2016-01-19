@@ -23,6 +23,7 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics.refinement;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -64,16 +65,15 @@ public class RefinementBlockFactory {
   }
 
   private final static String CLASS_PREFIX = "org.sosy_lab.cpachecker.cpa.usagestatistics.refinement";
-  final Map<ARGState, ARGState> subgraphStatesToReachedState;
+  Map<ARGState, ARGState> subgraphStatesToReachedState = new HashMap<>();
   final ConfigurableProgramAnalysis cpa;
   Configuration config;
 
   @Option(name = "refinementChain", description = "The order of refinement blocks")
   List<RefinementBlockTypes> RefinementChain;
 
-  public RefinementBlockFactory(Map<ARGState, ARGState> pSubgraphStatesToReachedState,
-      ConfigurableProgramAnalysis pCpa, Configuration pConfig) throws InvalidConfigurationException {
-    subgraphStatesToReachedState = pSubgraphStatesToReachedState;
+  public RefinementBlockFactory(ConfigurableProgramAnalysis pCpa, Configuration pConfig) throws InvalidConfigurationException {
+    //subgraphStatesToReachedState = pSubgraphStatesToReachedState;
     cpa = pCpa;
     config = pConfig;
     pConfig.inject(this);
@@ -125,7 +125,7 @@ public class RefinementBlockFactory {
         case PathIterator:
           if (currentBlockType == currentInnerBlockType.ExtendedARGPath) {
             currentBlock = new PathPairIterator((ConfigurableRefinementBlock<Pair<ExtendedARGPath, ExtendedARGPath>>) currentBlock,
-                subgraphStatesToReachedState, bamTransfer, logger);
+                subgraphStatesToReachedState, bamTransfer);
             currentBlockType = currentInnerBlockType.UsageInfo;
           } else {
             throwException("Path iterator", currentBlock.getClass().getSimpleName());
@@ -136,6 +136,7 @@ public class RefinementBlockFactory {
           if (currentBlockType == currentInnerBlockType.ExtendedARGPath) {
             currentBlock = new PredicateRefinerAdapter((ConfigurableRefinementBlock<Pair<ExtendedARGPath, ExtendedARGPath>>) currentBlock,
                 cpa, null);
+            subgraphStatesToReachedState = ((PredicateRefinerAdapter)currentBlock).getInternalMapForStates();
           } else {
             throwException("Predicate refiner", currentBlock.getClass().getSimpleName());
           }
