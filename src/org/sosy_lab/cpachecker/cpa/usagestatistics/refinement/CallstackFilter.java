@@ -25,28 +25,15 @@ package org.sosy_lab.cpachecker.cpa.usagestatistics.refinement;
 
 import static com.google.common.collect.FluentIterable.from;
 
-import java.io.PrintStream;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-
-import javax.annotation.Nullable;
 
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
-import org.sosy_lab.common.time.Timer;
-import org.sosy_lab.cpachecker.cfa.model.CFANode;
-import org.sosy_lab.cpachecker.cfa.model.c.CFunctionEntryNode;
-import org.sosy_lab.cpachecker.cpa.arg.ARGState;
-import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
-import org.sosy_lab.cpachecker.exceptions.CPAException;
-import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Pair;
-
-import com.google.common.base.Function;
-import com.google.common.base.Predicate;
 
 /** This filter is used for filtering races by callstacks
  *  For instance, there can not be a race, if the two usages starts with the same interrupt handler -
@@ -55,74 +42,34 @@ import com.google.common.base.Predicate;
  */
 
 @Options(prefix="cpa.usagestatistics")
-public class CallstackFilter extends
-    WrappedConfigurableRefinementBlock<Pair<ExtendedARGPath, ExtendedARGPath>, Pair<ExtendedARGPath, ExtendedARGPath>> {
-
-  Timer totalTimer = new Timer();
+public class CallstackFilter extends GenericFilter<String> {
 
   @Option(name = "notSelfParallelFunctions", description = "The functions, which cannot be executed in parallel with themselves")
-  private Set<String> notSelfParallelFunctions = new HashSet<>();
+  protected Set<String> notSelfParallelFunctions = new HashSet<>();
 
   @Option(name = "singleThreadFunctions", description = "The functions, which are executed in one thread")
-  private Set<String> singleThreadFunctions = new HashSet<>();
-
-  private String mainFunction = "ldv_main";
-
-  Predicate<ARGState> isFirstCall = new Predicate<ARGState>() {
-    @Override
-    public boolean apply(@Nullable ARGState pInput) {
-      CFANode location = AbstractStates.extractLocation(pInput);
-      if (location instanceof CFunctionEntryNode) {
-        CallstackState callstack = AbstractStates.extractStateByType(pInput, CallstackState.class);
-        if (callstack.getPreviousState() != null && callstack.getPreviousState().getCurrentFunction().equals(mainFunction)) {
-          return true;
-        }
-      }
-      return false;
-    }
-
-  };
-
-  Function<ARGState, String> getFunctionName = new Function<ARGState, String>() {
-    @Override
-    public String apply(@Nullable ARGState pInput) {
-      CFANode location = AbstractStates.extractLocation(pInput);
-
-      return location.getFunctionName();
-    }
-  };
+  protected Set<String> singleThreadFunctions = new HashSet<>();
 
   public CallstackFilter(ConfigurableRefinementBlock<Pair<ExtendedARGPath, ExtendedARGPath>> pWrapper,
       Configuration pConfig) throws InvalidConfigurationException {
-    super(pWrapper);
-    pConfig.inject(this);
-    mainFunction = pConfig.getProperty("analysis.entryFunction");
+    super(pWrapper, pConfig);
+    pConfig.inject(this, CallstackFilter.class);
   }
 
   @Override
-  public RefinementResult performRefinement(Pair<ExtendedARGPath, ExtendedARGPath> pInput) throws CPAException, InterruptedException {
-    totalTimer.start();
-
-    try {
-      ExtendedARGPath firstPath = pInput.getFirst();
-      ExtendedARGPath secondPath = pInput.getSecond();
-      String firstFunctionCall = getFirstFunctionCall(firstPath);
-      String secondFunctionCall = getFirstFunctionCall(secondPath);
-
-      if (notSelfParallelFunctions.contains(firstFunctionCall) && firstFunctionCall.equals(secondFunctionCall)) {
-        return RefinementResult.createFalse();
-      } else if (singleThreadFunctions.contains(firstFunctionCall) || singleThreadFunctions.contains(secondFunctionCall)) {
-        return RefinementResult.createFalse();
-      } else {
-        return wrappedRefiner.performRefinement(pInput);
-      }
-    } finally {
-      totalTimer.stop();
+  protected RefinementResult filter(String pFirstPathCore, String pSecondPathCore) {
+    if (notSelfParallelFunctions.contains(pFirstPathCore) && pFirstPathCore.equals(pSecondPathCore)) {
+      return RefinementResult.createFalse();
+    } else if (singleThreadFunctions.contains(pFirstPathCore) || singleThreadFunctions.contains(pSecondPathCore)) {
+      return RefinementResult.createFalse();
+    } else {
+      return RefinementResult.createTrue();
     }
   }
 
-  private String getFirstFunctionCall(ExtendedARGPath path) {
-    List<String> callerFunctions = from(path.getStateSet()).
+  @Override
+  protected String getPathCore(ExtendedARGPath pPath) {
+    List<String> callerFunctions = from(pPath.getStateSet()).
         filter(isFirstCall).
         transform(getFunctionName).toList();
 
@@ -133,12 +80,6 @@ public class CallstackFilter extends
       //Usage in main
       return null;
     }
-  }
-
-  @Override
-  public void printStatistics(PrintStream pOut) {
-    pOut.println("--InterruptFilter--");
-    pOut.println("Timer for block:           " + totalTimer);
   }
 
 }
