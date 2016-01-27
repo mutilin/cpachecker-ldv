@@ -2,12 +2,10 @@ package org.sosy_lab.cpachecker.cpa.usagestatistics.storage;
 
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
-import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
@@ -142,19 +140,5 @@ public class UsagePoint implements Comparable<UsagePoint> {
       result += ", " + keyUsage.getLine();
     }
     return result + ")";
-  }
-
-
-  /* It is important to clone usage point, because we have a auxiliary container,
-   * which is used in case of timeout.
-   *
-   */
-  public UsagePoint markAsTrue(List<CFAEdge> path) {
-    UsagePoint result = new UsagePoint(this.locks, this.access, this.keyUsage);
-    if (keyUsage != null) {
-      result.keyUsage.resetKeyState(path);
-    }
-    result.coveredUsages.clear();
-    return result;
   }
 }

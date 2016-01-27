@@ -112,16 +112,16 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     callstackTransfer = transfer;
     statistics = s;
 
+    logger = pLogger;
     binderFunctionInfo = new HashMap<>();
     if (binderFunctions != null) {
       BinderFunctionInfo tmpInfo;
       for (String name : binderFunctions) {
-        tmpInfo = new BinderFunctionInfo(name, config);
+        tmpInfo = new BinderFunctionInfo(name, config, logger);
         binderFunctionInfo.put(name, tmpInfo);
       }
     }
     handler = new ExpressionHandler();
-    logger = pLogger;
     varSkipper = new VariableSkipper(config);
   }
 

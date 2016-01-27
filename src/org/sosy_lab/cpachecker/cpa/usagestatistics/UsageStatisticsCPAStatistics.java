@@ -370,7 +370,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         return;
       }
       if (printFalseUnsafes) {
-        Set<SingleIdentifier> currentUnsafes = container.getUnsafes();
+        Set<SingleIdentifier> currentUnsafes = container.getAllUnsafes();
         Set<SingleIdentifier> initialUnsafes = container.getInitialUnsafes();
         Set<SingleIdentifier> falseUnsafes = Sets.difference(initialUnsafes, currentUnsafes);
 
