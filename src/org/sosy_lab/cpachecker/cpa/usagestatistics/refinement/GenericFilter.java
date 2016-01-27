@@ -88,19 +88,19 @@ WrappedConfigurableRefinementBlock<Pair<ExtendedARGPath, ExtendedARGPath>, Pair<
       P firstPathCore = getPathCore(firstPath);
       P secondPathCore = getPathCore(secondPath);
 
-      RefinementResult result = filter(firstPathCore, secondPathCore);
+      Boolean b = filter(firstPathCore, secondPathCore);
 
-      if (result.isTrue()) {
-        result = wrappedRefiner.performRefinement(pInput);
+      if (b) {
+        return wrappedRefiner.performRefinement(pInput);
       }
-      return result;
+      return RefinementResult.createFalse();
     } finally {
       totalTimer.stop();
     }
   }
 
 
-  protected abstract RefinementResult filter(P pFirstPathCore, P pSecondPathCore);
+  protected abstract Boolean filter(P pFirstPathCore, P pSecondPathCore);
 
   protected abstract P getPathCore(ExtendedARGPath path);
 

@@ -33,6 +33,7 @@ import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
+import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.util.Pair;
 
 /** This filter is used for filtering races by callstacks
@@ -57,20 +58,20 @@ public class CallstackFilter extends GenericFilter<String> {
   }
 
   @Override
-  protected RefinementResult filter(String pFirstPathCore, String pSecondPathCore) {
+  protected Boolean filter(String pFirstPathCore, String pSecondPathCore) {
     if (notSelfParallelFunctions.contains(pFirstPathCore) && pFirstPathCore.equals(pSecondPathCore)) {
-      return RefinementResult.createFalse();
+      return false;
     } else if (singleThreadFunctions.contains(pFirstPathCore) || singleThreadFunctions.contains(pSecondPathCore)) {
-      return RefinementResult.createFalse();
+      return false;
     } else {
-      return RefinementResult.createTrue();
+      return true;
     }
   }
 
   @Override
   protected String getPathCore(ExtendedARGPath pPath) {
-    List<String> callerFunctions = from(pPath.getStateSet()).
-        filter(isFirstCall).
+    List<ARGState> firstCalls = from(pPath.getStateSet()).filter(isFirstCall).toList();
+    List<String> callerFunctions = from(firstCalls).
         transform(getFunctionName).toList();
 
     //TODO Now I believe, it is enough to check the last function called from main - this is related to the call stack

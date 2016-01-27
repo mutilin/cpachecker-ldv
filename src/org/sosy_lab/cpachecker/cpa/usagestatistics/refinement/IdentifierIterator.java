@@ -136,6 +136,9 @@ public class IdentifierIterator extends WrappedConfigurableRefinementBlock<Reach
 
       AbstractUsagePointSet pointSet = container.getUsages(currentId);
       if (pointSet instanceof UnrefinedUsagePointSet) {
+        if (currentId.getName().equals("code")) {
+          System.out.println("this");
+        }
         RefinementResult result = wrappedRefiner.performRefinement(currentId);
         refinementFinish |= result.isFalse();
 
@@ -153,7 +156,7 @@ public class IdentifierIterator extends WrappedConfigurableRefinementBlock<Reach
         }
 
         if (result.isTrue()) {
-          container.setAsRefined(((UnrefinedUsagePointSet)pointSet), result);
+          container.setAsRefined(currentId, result);
         } else if (result.isFalse() && !isPrecisionChanged) {
           //We do not add a precision, but consider the unsafe as false
           //set it as false now, because it will occur again, as precision is not changed
