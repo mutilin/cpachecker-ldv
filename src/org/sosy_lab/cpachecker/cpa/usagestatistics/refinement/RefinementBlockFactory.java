@@ -48,12 +48,19 @@ import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 public class RefinementBlockFactory {
 
   public static enum RefinementBlockTypes {
-    IdentifierIterator,
-    PointIterator,
-    UsageIterator,
-    PathIterator,
-    PredicateRefiner,
-    CallstackFilter;
+    IdentifierIterator(currentInnerBlockType.SingleIdentifier),
+    PointIterator(currentInnerBlockType.UsageInfoSet),
+    UsageIterator(currentInnerBlockType.UsageInfo),
+    PathIterator(currentInnerBlockType.ExtendedARGPath),
+    PredicateRefiner(currentInnerBlockType.ExtendedARGPath),
+    CallstackFilter(currentInnerBlockType.ExtendedARGPath),
+    ProbeFilter(currentInnerBlockType.ExtendedARGPath);
+
+    public final currentInnerBlockType innerType;
+
+    private RefinementBlockTypes(currentInnerBlockType type) {
+      innerType = type;
+    }
   }
 
   private static enum currentInnerBlockType {
@@ -73,7 +80,6 @@ public class RefinementBlockFactory {
   List<RefinementBlockTypes> RefinementChain;
 
   public RefinementBlockFactory(ConfigurableProgramAnalysis pCpa, Configuration pConfig) throws InvalidConfigurationException {
-    //subgraphStatesToReachedState = pSubgraphStatesToReachedState;
     cpa = pCpa;
     config = pConfig;
     pConfig.inject(this);
@@ -91,68 +97,54 @@ public class RefinementBlockFactory {
 
     for (int i = RefinementChain.size() - 1; i >= 0; i--) {
 
-      switch (RefinementChain.get(i)) {
-        case IdentifierIterator:
-          if (currentBlockType == currentInnerBlockType.SingleIdentifier) {
+      RefinementBlockTypes currentType = RefinementChain.get(i);
+      if (currentBlockType == currentType.innerType) {
+        switch (currentType) {
+          case IdentifierIterator:
             currentBlock = new IdentifierIterator((ConfigurableRefinementBlock<SingleIdentifier>) currentBlock,
                 config, cpa, bamTransfer);
             currentBlockType = currentInnerBlockType.ReachedSet;
-          } else {
-            throwException("Identifier iterator", currentBlock.getClass().getSimpleName());
-          }
-          break;
+            break;
 
-        case PointIterator:
-          if (currentBlockType == currentInnerBlockType.UsageInfoSet) {
+          case PointIterator:
             currentBlock = new PointIterator((ConfigurableRefinementBlock<Pair<UsageInfoSet, UsageInfoSet>>) currentBlock,
                 null);
             currentBlockType = currentInnerBlockType.SingleIdentifier;
-          } else {
-            throwException("Point iterator", currentBlock.getClass().getSimpleName());
-          }
-          break;
+            break;
 
-        case UsageIterator:
-          if (currentBlockType == currentInnerBlockType.UsageInfo) {
+          case UsageIterator:
             currentBlock = new UsagePairIterator((ConfigurableRefinementBlock<Pair<UsageInfo, UsageInfo>>) currentBlock,
                 logger);
             currentBlockType = currentInnerBlockType.UsageInfoSet;
-          } else {
-            throwException("Usage iterator", currentBlock.getClass().getSimpleName());
-          }
-          break;
+            break;
 
-        case PathIterator:
-          if (currentBlockType == currentInnerBlockType.ExtendedARGPath) {
+          case PathIterator:
             currentBlock = new PathPairIterator((ConfigurableRefinementBlock<Pair<ExtendedARGPath, ExtendedARGPath>>) currentBlock,
                 subgraphStatesToReachedState, bamTransfer);
             currentBlockType = currentInnerBlockType.UsageInfo;
-          } else {
-            throwException("Path iterator", currentBlock.getClass().getSimpleName());
-          }
-          break;
+            break;
 
-        case PredicateRefiner:
-          if (currentBlockType == currentInnerBlockType.ExtendedARGPath) {
+          case PredicateRefiner:
             currentBlock = new PredicateRefinerAdapter((ConfigurableRefinementBlock<Pair<ExtendedARGPath, ExtendedARGPath>>) currentBlock,
                 cpa, null);
             subgraphStatesToReachedState = ((PredicateRefinerAdapter)currentBlock).getInternalMapForStates();
-          } else {
-            throwException("Predicate refiner", currentBlock.getClass().getSimpleName());
-          }
-          break;
+            break;
 
-        case CallstackFilter:
-          if (currentBlockType == currentInnerBlockType.ExtendedARGPath) {
+          case CallstackFilter:
             currentBlock = new CallstackFilter((ConfigurableRefinementBlock<Pair<ExtendedARGPath, ExtendedARGPath>>) currentBlock,
                 config);
-          } else {
-            throwException("Callstack filter", currentBlock.getClass().getSimpleName());
-          }
-          break;
+            break;
 
-        default:
-          throw new InvalidConfigurationException("The type " + RefinementChain.get(i) + " is not supported");
+          case ProbeFilter:
+            currentBlock = new ProbeFilter((ConfigurableRefinementBlock<Pair<ExtendedARGPath, ExtendedARGPath>>) currentBlock,
+                config);
+            break;
+
+          default:
+            throw new InvalidConfigurationException("The type " + RefinementChain.get(i) + " is not supported");
+        }
+      } else {
+        throw new InvalidConfigurationException(currentType + " can not precede the " + currentBlock.getClass().getSimpleName());
       }
     }
     if (currentBlockType == currentInnerBlockType.ReachedSet) {
@@ -160,9 +152,5 @@ public class RefinementBlockFactory {
     } else {
       throw new InvalidConfigurationException("The first block is not take a reached set as parameter");
     }
-  }
-
-  private void throwException(String currentBlock, String previousBlock) throws InvalidConfigurationException {
-    throw new InvalidConfigurationException(currentBlock + " can not precede the " + previousBlock);
   }
 }
