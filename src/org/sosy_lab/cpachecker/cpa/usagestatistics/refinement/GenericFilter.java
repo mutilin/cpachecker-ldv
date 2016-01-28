@@ -46,6 +46,8 @@ WrappedConfigurableRefinementBlock<Pair<ExtendedARGPath, ExtendedARGPath>, Pair<
 
   Timer totalTimer = new Timer();
 
+  int filteredPairs = 0;
+
   private String mainFunction = "ldv_main";
 
   Predicate<ARGState> isFirstCall = new Predicate<ARGState>() {
@@ -93,6 +95,7 @@ WrappedConfigurableRefinementBlock<Pair<ExtendedARGPath, ExtendedARGPath>, Pair<
       if (b) {
         return wrappedRefiner.performRefinement(pInput);
       }
+      filteredPairs++;
       return RefinementResult.createFalse();
     } finally {
       totalTimer.stop();
@@ -108,5 +111,6 @@ WrappedConfigurableRefinementBlock<Pair<ExtendedARGPath, ExtendedARGPath>, Pair<
   public void printStatistics(PrintStream pOut) {
     pOut.println("--GenericFilter--");
     pOut.println("Timer for block:           " + totalTimer);
+    pOut.println("Number of filtered pairs:  " + filteredPairs);
   }
 }

@@ -42,6 +42,8 @@ public class ProbeFilter extends CallstackFilter {
     if (originName != null) {
       if (originName.contains("probe")) {
         return "probe";
+      } else if (originName.contains("disconnect")) {
+        return "disconnect";
       }
     }
     return originName;

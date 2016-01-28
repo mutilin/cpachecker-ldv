@@ -211,11 +211,6 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
     return container;
   }
 
-  /*@Override
-  public boolean isTarget() {
-    return container.refinementRequired() || super.isTarget();
-  }*/
-
   public void saveUnsafesInContainerIfNecessary(AbstractState abstractState) {
     ARGState argState = AbstractStates.extractStateByType(abstractState, ARGState.class);
     PredicateAbstractState state = AbstractStates.extractStateByType(argState, PredicateAbstractState.class);
