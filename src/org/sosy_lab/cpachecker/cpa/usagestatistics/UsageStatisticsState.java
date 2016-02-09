@@ -24,7 +24,6 @@
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.Map;
 
 import org.sosy_lab.cpachecker.core.defaults.AbstractSingleWrapperState;
@@ -44,7 +43,8 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
   /* Boilerplate code to avoid serializing this class */
 
   private static final long serialVersionUID = -898577877284268426L;
-  private final TemporaryUsageStorage recentUsages;
+  private TemporaryUsageStorage recentUsages;
+  private boolean isStorageCloned;
   private final UsageContainer container;
 
   private final Map<AbstractIdentifier, AbstractIdentifier> variableBindingRelation;
@@ -53,15 +53,17 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
     //Only for getInitialState()
     super(pWrappedElement);
     variableBindingRelation = new HashMap<>();
-    recentUsages = new TemporaryUsageStorage(null);
+    recentUsages = new TemporaryUsageStorage();
     container = pContainer;
+    isStorageCloned = true;
   }
 
   private UsageStatisticsState(final AbstractState pWrappedElement, final UsageStatisticsState state) {
     super(pWrappedElement);
     variableBindingRelation = new HashMap<>(state.variableBindingRelation);
-    recentUsages = new TemporaryUsageStorage(state.recentUsages);
+    recentUsages = state.recentUsages;
     container = state.container;
+    isStorageCloned = false;
   }
 
   public boolean containsLinks(final AbstractIdentifier id) {
@@ -87,10 +89,6 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
 
   public boolean containsUsage(final SingleIdentifier id) {
     return recentUsages.containsKey(id);
-  }
-
-  public void removeUsage(final SingleIdentifier id) {
-    recentUsages.remove(id);
   }
 
   public AbstractIdentifier getLinks(final AbstractIdentifier id) {
@@ -187,23 +185,18 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
   }
 
   public void addUsage(final SingleIdentifier id, final UsageInfo usage) {
-    final LinkedList<UsageInfo> uset;
-    if (!recentUsages.containsKey(id)) {
-      uset = new LinkedList<>();
-      recentUsages.put(id, uset);
-    } else {
-      uset = recentUsages.get(id);
+    //Clone it
+    if (!isStorageCloned) {
+      recentUsages = new TemporaryUsageStorage(recentUsages);
+      isStorageCloned = true;
     }
-    uset.add(usage);
-
+    recentUsages.put(id, usage);
   }
 
   public UsageStatisticsState expand(final UsageStatisticsState root, final AbstractState wrappedState) {
     final UsageStatisticsState result = root.clone(wrappedState);
 
-    for (SingleIdentifier id : this.recentUsages.keySet()) {
-      result.recentUsages.put(id, new LinkedList<>(this.recentUsages.get(id)));
-    }
+    result.recentUsages = this.recentUsages;
     return result;
   }
 

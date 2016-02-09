@@ -23,24 +23,52 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
-import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 
-public class TemporaryUsageStorage extends HashMap<SingleIdentifier, LinkedList<UsageInfo>> {
+public class TemporaryUsageStorage extends TreeMap<SingleIdentifier, LinkedList<UsageInfo>> {
   private static final long serialVersionUID = -8932709343923545136L;
   private TemporaryUsageStorage previousStorage;
 
-  public TemporaryUsageStorage(TemporaryUsageStorage previous) {
-    previousStorage = previous;
+  private Set<SingleIdentifier> deeplyCloned = new TreeSet<>();
 
-    if (previous != null) {
-      for (SingleIdentifier id : previous.keySet()) {
-        this.put(id, new LinkedList<>(previous.get(id)));
+  public TemporaryUsageStorage(TemporaryUsageStorage previous) {
+    super(previous);
+    previousStorage = previous;
+  }
+
+  public TemporaryUsageStorage() {
+    previousStorage = null;
+  }
+
+  public boolean put(SingleIdentifier id, UsageInfo info) {
+    LinkedList<UsageInfo> storage;
+    if (deeplyCloned.contains(id)) {
+      //List is already cloned
+      assert this.containsKey(id);
+      storage = this.get(id);
+    } else {
+      deeplyCloned.add(id);
+      if (this.containsKey(id)) {
+        //clone
+        storage = new LinkedList<>(this.get(id));
+      } else {
+        storage = new LinkedList<>();
       }
+      this.put(id, storage);
     }
+    return storage.add(info);
+  }
+
+  @Override
+  public LinkedList<UsageInfo> put(SingleIdentifier id, LinkedList<UsageInfo> list) {
+    deeplyCloned.add(id);
+    return super.put(id, list);
   }
 
   public void cleanUsages() {
@@ -53,5 +81,11 @@ public class TemporaryUsageStorage extends HashMap<SingleIdentifier, LinkedList<
       previous.previousStorage = null;
       previous = tmpStorage;
     }
+  }
+
+  @Override
+  public void clear() {
+    super.clear();
+    deeplyCloned.clear();
   }
 }
