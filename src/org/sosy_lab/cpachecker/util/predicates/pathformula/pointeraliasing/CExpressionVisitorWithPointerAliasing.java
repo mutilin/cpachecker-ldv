@@ -29,7 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
 
-import org.sosy_lab.common.Pair;
+import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.cfa.ast.c.AdaptingCExpressionVisitor;
 import org.sosy_lab.cpachecker.cfa.ast.c.CArraySubscriptExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression;
@@ -53,7 +53,7 @@ import org.sosy_lab.cpachecker.cfa.types.c.CPointerType;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
 import org.sosy_lab.cpachecker.cfa.types.c.CTypes;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCCodeException;
-import org.sosy_lab.cpachecker.util.predicates.interfaces.Formula;
+import org.sosy_lab.solver.api.Formula;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.ErrorConditions;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.SSAMap.SSAMapBuilder;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.ctoformula.Constraints;
@@ -103,15 +103,9 @@ class CExpressionVisitorWithPointerAliasing extends DefaultCExpressionVisitor<Ex
     delegate = new ExpressionToFormulaVisitor(cToFormulaConverter, cToFormulaConverter.fmgr, cfaEdge, function, ssa, constraints) {
       @Override
       protected Formula toFormula(CExpression e) throws UnrecognizedCCodeException {
+        // recursive application of pointer-aliasing.
         return asValueFormula(e.accept(CExpressionVisitorWithPointerAliasing.this),
                               CTypeUtils.simplifyType(e.getExpressionType()));
-      }
-
-      @Override
-      protected Formula makeNondet(String pVarName, CType pType) {
-        // CExpressionVisitorWithPointerAliasing.visit(CFunctionCallExpression)
-        // will treat this as nondet and return Value.nondetValue().
-        return null;
       }
     };
 
@@ -437,6 +431,7 @@ class CExpressionVisitorWithPointerAliasing extends DefaultCExpressionVisitor<Ex
     // First let's handle special cases such as allocations
     if (functionNameExpression instanceof CIdExpression) {
       final String functionName = ((CIdExpression)functionNameExpression).getName();
+
       if (conv.options.isDynamicMemoryFunction(functionName)) {
         DynamicMemoryHandler memoryHandler = new DynamicMemoryHandler(conv, edge, ssa, pts, constraints, errorConditions);
         try {

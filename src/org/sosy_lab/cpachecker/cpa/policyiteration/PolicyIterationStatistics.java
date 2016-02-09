@@ -1,36 +1,46 @@
 package org.sosy_lab.cpachecker.cpa.policyiteration;
 
 import java.io.PrintStream;
+import java.math.BigInteger;
 import java.util.concurrent.TimeUnit;
 
-import org.sosy_lab.common.Pair;
-import org.sosy_lab.common.configuration.Configuration;
-import org.sosy_lab.common.configuration.InvalidConfigurationException;
-import org.sosy_lab.common.configuration.Options;
-import org.sosy_lab.common.time.TimeSpan;
 import org.sosy_lab.common.time.Timer;
-import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 
+import com.google.common.base.Objects;
 import com.google.common.collect.HashMultiset;
 import com.google.common.collect.Multiset;
 
-@Options(prefix="cpa.stator.policy")
 public class PolicyIterationStatistics implements Statistics {
 
-  final Multiset<Pair<CFANode, Template>> templateUpdateCounter
+  final Multiset<TemplateUpdateEvent> templateUpdateCounter
       = HashMultiset.create();
-
-  final Multiset<CFANode> abstractMergeCounter = HashMultiset.create();
+  final Multiset<Integer> abstractMergeCounter = HashMultiset.create();
+  final Multiset<Integer> updateCounter = HashMultiset.create();
 
   private final Timer valueDeterminationTimer = new Timer();
   private final Timer abstractionTimer = new Timer();
   private final Timer checkSATTimer = new Timer();
-  final Timer slicingTimer = new Timer();
+  final Timer polyhedraWideningTimer = new Timer();
+
   final Timer optTimer = new Timer();
   final Timer checkIndependenceTimer = new Timer();
+  final Timer simplifyTimer = new Timer();
+  final Timer congruenceTimer = new Timer();
+  final Timer comparisonTimer = new Timer();
+  final Timer ackermannizationTimer = new Timer();
+
+  private final CFA cfa;
+
+  private BigInteger wideningTemplatesGenerated = BigInteger.ZERO;
+  int latestLocationID = 0;
+
+  public void incWideningTemplatesGenerated() {
+    wideningTemplatesGenerated = wideningTemplatesGenerated.add(BigInteger.ONE);
+  }
 
   public void startCheckSATTimer() {
     checkSATTimer.start();
@@ -60,13 +70,28 @@ public class PolicyIterationStatistics implements Statistics {
     valueDeterminationTimer.start();
   }
 
+  public void startCongruenceTimer() {
+    congruenceTimer.start();
+  }
+
+  public void stopCongruenceTimer() {
+    congruenceTimer.stop();
+  }
+
   public void stopValueDeterminationTimer() {
     valueDeterminationTimer.stop();
   }
 
-  public PolicyIterationStatistics(Configuration config)
-      throws InvalidConfigurationException {
-    config.inject(this, PolicyIterationStatistics.class);
+  public void startPolyhedraWideningTimer() {
+    polyhedraWideningTimer.start();
+  }
+
+  public void stopPolyhedraWideningTimer() {
+    polyhedraWideningTimer.stop();
+  }
+
+  public PolicyIterationStatistics(CFA pCFA) {
+    cfa = pCFA;
   }
 
   @Override
@@ -79,30 +104,34 @@ public class PolicyIterationStatistics implements Statistics {
     printTimer(out, abstractionTimer, "abstraction");
     out.printf("Number of abstractions performed: %d%n",
         abstractionTimer.getNumberOfIntervals());
-    printTimer(out, optTimer, "optimization");
+    printTimer(out, optTimer, "optimization (OPT-SMT)");
     out.printf("Number of optimization queries sent: %d%n",
         optTimer.getNumberOfIntervals());
-    printTimer(out, checkSATTimer, "checking satisfiability");
-    if (slicingTimer.getNumberOfIntervals() > 0) {
-      printTimer(out, slicingTimer, "checking inductiveness in formula slicing");
-    }
-    printTimer(out, checkIndependenceTimer, "checking independence");
-    out.printf("Time spent in %s: %s (Max: %s)%n",
-        "SMT solver",
-        TimeSpan.sum(
-            optTimer.getSumTime(),
-            checkSATTimer.getSumTime()
-        ).formatAs(TimeUnit.SECONDS),
-        optTimer.getMaxTime().formatAs(TimeUnit.SECONDS));
+    printTimer(out, checkSATTimer, "checking bad states (SMT)");
+    out.printf("Number of check-SAT calls sent: %d%n",
+        checkSATTimer.getNumberOfIntervals());
 
-    UpdateStats<?> updateStats =
-        getUpdateStats(PolicyAbstractedState.getUpdateCounter());
+    printTimer(out, comparisonTimer, "comparing abstract states");
+
+    printTimer(out, checkIndependenceTimer, "checking independence");
+    printTimer(out, simplifyTimer, "simplifying formulas");
+    printTimer(out, congruenceTimer, "computing congruence");
+    printTimer(out, polyhedraWideningTimer, "computing polyhedra widening");
+    printTimer(out, ackermannizationTimer, "performing ackermannization on policies");
+
+    out.printf("Number of templates generated through widening: %s%n",
+        wideningTemplatesGenerated);
+
+    UpdateStats<?> updateStats = getUpdateStats(updateCounter);
     UpdateStats<?> templateUpdateStats = getUpdateStats(templateUpdateCounter);
     UpdateStats<?> mergeUpdateStats = getUpdateStats(abstractMergeCounter);
 
     printStats(out, updateStats, "abstractions on a given location");
     printStats(out, templateUpdateStats, "updates for given template on a given location");
     printStats(out, mergeUpdateStats, "merges of abstract states on a given location");
+
+    out.printf("Latest locationID: %d%n", latestLocationID);
+    out.printf("Number of loop heads: %d%n", cfa.getAllLoopHeads().get().size());
   }
 
   private void printStats(PrintStream out, UpdateStats<?> stats, String description) {
@@ -155,13 +184,49 @@ public class PolicyIterationStatistics implements Statistics {
   }
 
   private void printTimer(PrintStream out, Timer t, String name) {
-    out.printf("Time spent in %s: %s (Max: %s), (Avg: %s)%n",
+    out.printf("Time spent in %s: %s (Max: %s), (Avg: %s), (#intervals = %s)%n",
         name, t, t.getMaxTime().formatAs(TimeUnit.SECONDS),
-        t.getAvgTime().formatAs(TimeUnit.SECONDS));
+        t.getAvgTime().formatAs(TimeUnit.SECONDS),
+        t.getNumberOfIntervals());
   }
 
   @Override
   public String getName() {
     return "PolicyIterationCPA";
+  }
+
+  static final class TemplateUpdateEvent {
+    final int locationID;
+    final Template template;
+
+    private TemplateUpdateEvent(int pLocationID, Template pTemplate) {
+      locationID = pLocationID;
+      template = pTemplate;
+    }
+
+    public static TemplateUpdateEvent of(int pLocationID, Template pTemplate) {
+      return new TemplateUpdateEvent(pLocationID, pTemplate);
+    }
+
+
+    @Override
+    public boolean equals(Object o) {
+      if (!(o instanceof TemplateUpdateEvent)) {
+        return false;
+      }
+      TemplateUpdateEvent other = (TemplateUpdateEvent) o;
+      return locationID == other.locationID &&
+          template.equals(other.template);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hashCode(locationID, template);
+    }
+
+    @Override
+    public String toString() {
+      return String.format("%s (loc=%s)", template, locationID);
+    }
   }
 }

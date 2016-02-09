@@ -27,6 +27,7 @@ import java.io.PrintStream;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 
+import org.sosy_lab.common.ShutdownNotifier;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
@@ -35,7 +36,6 @@ import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
-import org.sosy_lab.cpachecker.core.ShutdownNotifier;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.interfaces.pcc.PCCStrategy;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
@@ -48,7 +48,7 @@ public class ProofGenerator {
   @Option(secure=true,
       name = "pcc.strategy",
       description = "Qualified name for class which implements certification strategy, hence proof writing, to be used.")
-  private String pccStrategy = "org.sosy_lab.cpachecker.pcc.strategy.ARGProofCheckerStrategy";
+  private String pccStrategy = "org.sosy_lab.cpachecker.pcc.strategy.arg.ARGProofCheckerStrategy";
 
   private PCCStrategy checkingStrategy;
 
@@ -64,6 +64,11 @@ public class ProofGenerator {
       pOut.println("------------------------------------");
       pOut.println("Time for proof writing: " + writingTimer);
 
+      if (checkingStrategy != null) {
+        for (Statistics stats : checkingStrategy.getAdditionalProofGenerationStatistics()) {
+          stats.printStatistics(pOut, pResult, pReached);
+        }
+      }
     }
 
     @Override
@@ -77,7 +82,7 @@ public class ProofGenerator {
     pConfig.inject(this);
     logger = pLogger;
 
-    checkingStrategy = PCCStrategyBuilder.buildStrategy(pccStrategy, pConfig, pLogger, pShutdownNotifier, null);
+    checkingStrategy = PCCStrategyBuilder.buildStrategy(pccStrategy, pConfig, pLogger, pShutdownNotifier, null, null);
   }
 
   public void generateProof(CPAcheckerResult pResult) {

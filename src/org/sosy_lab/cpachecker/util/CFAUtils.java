@@ -34,13 +34,13 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.SortedSet;
 
+import org.sosy_lab.common.ShutdownNotifier;
 import org.sosy_lab.common.collect.Collections3;
 import org.sosy_lab.cpachecker.cfa.ast.AbstractSimpleDeclaration;
 import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdgeType;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
-import org.sosy_lab.cpachecker.core.ShutdownNotifier;
 import org.sosy_lab.cpachecker.util.CFATraversal.DefaultCFAVisitor;
 import org.sosy_lab.cpachecker.util.CFATraversal.TraversalProcess;
 
@@ -55,7 +55,7 @@ public class CFAUtils {
 
   /**
    * Return an {@link Iterable} that contains all entering edges of a given CFANode,
-   * including the summary edge if the node as one.
+   * including the summary edge if the node has one.
    */
   public static FluentIterable<CFAEdge> allEnteringEdges(final CFANode node) {
     checkNotNull(node);
@@ -245,7 +245,7 @@ public class CFAUtils {
    * Returns a predicate for CFA edges with the given edge type.
    * The predicate is not null safe.
    *
-   * @param pEdgeType the edge type matched on.
+   * @param pType the edge type matched on.
    */
   public static Predicate<CFAEdge> edgeHasType(final CFAEdgeType pType) {
     checkNotNull(pType);
@@ -346,7 +346,7 @@ public class CFAUtils {
 
   /**
    * Searches for backwards edges from a given starting node
-   * @param actNode The node where the search is started
+   * @param rootNode The node where the search is started
    * @return indicates if a backwards edge was found
    */
   static boolean hasBackWardsEdges(CFANode rootNode) {

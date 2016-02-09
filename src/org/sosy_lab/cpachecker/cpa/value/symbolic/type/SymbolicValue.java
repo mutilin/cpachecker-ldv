@@ -26,14 +26,30 @@ package org.sosy_lab.cpachecker.cpa.value.symbolic.type;
 import java.io.Serializable;
 
 import org.sosy_lab.cpachecker.cpa.value.type.Value;
+import org.sosy_lab.cpachecker.util.states.MemoryLocation;
+
+import com.google.common.base.Optional;
 
 /**
  * Marker interface for symbolic values.
- *
+ * <p/>
  * Each class implementing this interface should provide an <code>equals(Object)</code> method
  * that allows checks for equality of symbolic values.
  */
 public interface SymbolicValue extends Value, Serializable {
 
   <T> T accept(SymbolicValueVisitor<T> pVisitor);
+
+  /**
+   * Returns the memory location this symbolic value represents.
+   */
+  Optional<MemoryLocation> getRepresentedLocation();
+
+  SymbolicValue copyForLocation(MemoryLocation pLocation);
+
+  /**
+   * Returns a string representation of this symbolic value with symbolic expressions representing
+   * a certain memory locations replaced with these locations.
+   */
+  String getRepresentation();
 }

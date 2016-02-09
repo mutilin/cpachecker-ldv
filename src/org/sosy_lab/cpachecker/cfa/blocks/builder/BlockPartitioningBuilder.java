@@ -31,6 +31,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
@@ -46,6 +47,10 @@ import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsTransferRelation
 
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
+import org.sosy_lab.cpachecker.util.CFATraversal;
+import org.sosy_lab.cpachecker.util.CFAUtils;
+
+import com.google.common.collect.Iterables;
 
 
 /**
@@ -263,11 +268,8 @@ public class BlockPartitioningBuilder {
   private Set<FunctionEntryNode> collectInnerFunctionCalls(Set<CFANode> pNodes) {
     Set<FunctionEntryNode> result = new HashSet<>();
     for (CFANode node : pNodes) {
-      for (int i = 0; i < node.getNumLeavingEdges(); i++) {
-        CFAEdge e = node.getLeavingEdge(i);
-        if (e instanceof CFunctionCallEdge) {
-          result.add(((CFunctionCallEdge)e).getSuccessor());
-        }
+      for (CFAEdge e : CFAUtils.leavingEdges(node).filter(CFunctionCallEdge.class)) {
+        result.add(((CFunctionCallEdge)e).getSuccessor());
       }
     }
     return result;
@@ -290,8 +292,8 @@ public class BlockPartitioningBuilder {
         //ignore inner function calls
         continue;
       }
-      for (int i = 0; i < node.getNumEnteringEdges(); i++) {
-        CFANode pred = node.getEnteringEdge(i).getPredecessor();
+      for (CFAEdge edge : CFAUtils.enteringEdges(node)) {
+        CFANode pred = edge.getPredecessor();
         if (!pNodes.contains(pred)) {
           //entering edge from "outside" of the given set of nodes
           //-> this is a call-node
@@ -312,23 +314,21 @@ public class BlockPartitioningBuilder {
         continue;
       }
 
-      for (int i = 0; i < node.getNumLeavingEdges(); i++) {
-        CFANode succ = node.getLeavingEdge(i).getSuccessor();
+      for (CFAEdge leavingEdge : CFAUtils.leavingEdges(node)) {
+        CFANode succ = leavingEdge.getSuccessor();
         if (!pNodes.contains(succ)) {
           //leaving edge from inside of the given set of nodes to outside
           //-> this is a either return-node or a function call
-          if (!(node.getLeavingEdge(i) instanceof CFunctionCallEdge)) {
+          if (!(leavingEdge instanceof CFunctionCallEdge)) {
             //-> only add if its not a function call
             result.add(node);
           } else {
             //otherwise check if the summary edge is inside of the block
-            CFANode sumSucc = ((CFunctionCallEdge)node.getLeavingEdge(i)).getSummaryEdge().getSuccessor();
+            CFANode sumSucc = ((CFunctionCallEdge)leavingEdge).getSummaryEdge().getSuccessor();
             if (!pNodes.contains(sumSucc)) {
               //summary edge successor not in nodes set; this is a leaving edge
               //add entering nodes
-              for (int j = 0; j < sumSucc.getNumEnteringEdges(); j++) {
-                result.add(sumSucc.getEnteringEdge(j).getPredecessor());
-              }
+              Iterables.addAll(result, CFAUtils.predecessorsOf(sumSucc));
             }
           }
         }

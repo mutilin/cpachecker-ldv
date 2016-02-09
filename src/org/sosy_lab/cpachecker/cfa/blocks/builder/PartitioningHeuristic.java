@@ -33,6 +33,7 @@ import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.blocks.BlockPartitioning;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsTransferRelation;
+import org.sosy_lab.cpachecker.util.CFAUtils;
 
 
 /**
@@ -76,8 +77,7 @@ public abstract class PartitioningHeuristic {
         }
       }
 
-      for (int i = 0; i < node.getNumLeavingEdges(); i++) {
-        CFANode nextNode = node.getLeavingEdge(i).getSuccessor();
+      for (CFANode nextNode : CFAUtils.successorsOf(node)) {
         if (!seen.contains(nextNode)) {
           stack.push(nextNode);
           seen.add(nextNode);
@@ -89,7 +89,7 @@ public abstract class PartitioningHeuristic {
   }
 
   /**
-   * @param pNode
+   * @param pNode the node to be checked
    * @return <code>true</code>, if for the given node a new <code>Block</code> should be created; <code>false</code> otherwise
    */
   protected abstract boolean shouldBeCached(CFANode pNode);

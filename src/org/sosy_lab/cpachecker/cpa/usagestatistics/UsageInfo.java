@@ -37,6 +37,7 @@ import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsagePoint;
 import org.sosy_lab.cpachecker.util.AbstractStates;
+import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 import com.google.common.base.Predicate;
 
@@ -53,7 +54,9 @@ public class UsageInfo implements Comparable<UsageInfo> {
   private final Access accessType;
   private AbstractState keyState;
   private List<CFAEdge> path;
+  private SingleIdentifier id = null;
   public boolean failureFlag;
+  private boolean reachable;
 
   public UsageInfo(@Nonnull Access atype, @Nonnull LineInfo l, @Nonnull LockStatisticsState lock) {
     line = l;
@@ -61,6 +64,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
     accessType = atype;
     keyState = null;
     failureFlag = false;
+    reachable = true;
   }
 
   public UsageInfo(@Nonnull Access atype,  int l, @Nonnull UsageStatisticsState state) {
@@ -77,6 +81,16 @@ public class UsageInfo implements Comparable<UsageInfo> {
 
   public @Nonnull LineInfo getLine() {
     return line;
+  }
+
+  public @Nonnull SingleIdentifier getId() {
+    return id;
+  }
+
+  public @Nonnull void setId(SingleIdentifier pId) {
+    //Only once
+    assert id == null;
+    id = pId;
   }
 
   public UsagePoint getUsagePoint() {
@@ -133,7 +147,9 @@ public class UsageInfo implements Comparable<UsageInfo> {
   public String toString(){
     StringBuilder sb = new StringBuilder();
 
-    sb.append("Line ");
+    sb.append("Id ");
+    sb.append(id.toString());
+    sb.append(", line ");
     sb.append(line.toString());
     sb.append(" (" + accessType + ")");
     sb.append(", " + locks);
@@ -189,6 +205,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
     /* We can't use key states for ordering, because the treeSets can't understand,
      * that old refined usage with zero key state is the same as new one
      */
+    assert this.id.equals(pO.id);
     return 0;
   }
 
@@ -211,5 +228,23 @@ public class UsageInfo implements Comparable<UsageInfo> {
       }
     }).toList();
     path = edges;
+  }
+
+  public boolean isReachable() {
+    return reachable;
+  }
+
+  public void setAsUnreachable() {
+    reachable = false;
+  }
+
+  @Override
+  public UsageInfo clone() {
+    UsageInfo result = new UsageInfo(accessType, line, locks);
+    result.id = this.id;
+    result.keyState = this.keyState;
+    result.path = this.path;
+    result.failureFlag = this.failureFlag;
+    return result;
   }
 }

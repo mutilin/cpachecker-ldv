@@ -7,6 +7,7 @@ use strict;
 my $visualize_fname;
 my $cilpath;
 my $old_version;
+my $starting_id;
 my $root_html_file = "Unsafes.html";
 
 sub usage{ 
@@ -32,6 +33,7 @@ GetOptions(
         'trace|t=s'=>\$visualize_fname,
         'cil|c=s'=>\$cilpath,
         'old|o'=>\$old_version,
+	'start|st=s'=>\$starting_id,
 ) or usage("Unrecognized options!");
 
 usage("Can't find CPAChecker trace!") unless $visualize_fname;
@@ -199,8 +201,19 @@ print "General statistics is generated\n";
 
 # Now create all html-pages with unsafes
 
+my $should_be_performed = 0;
+if (!defined($starting_id)) {
+  $should_be_performed = 1;
+}
 foreach my $current_fname(sort keys %unsafe_list)
 {
+   	if ($should_be_performed == 0) {
+ 	  if ($current_fname =~ /(.*)\Q$starting_id\E/) {
+	    $should_be_performed = 1;
+	  } else {
+	    next;
+	  }
+        }
 	`etv -c $current_fname -i $cilpath --format "CPAchecker error trace v1.1" -r reqs`;
 	die ("etv failed") if( $? == -1 ) ;
 	open(my $reqs, ">>", "reqs") or die("Can't open file reqs for write");

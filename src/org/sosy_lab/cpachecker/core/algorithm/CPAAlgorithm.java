@@ -33,7 +33,7 @@ import java.util.logging.Level;
 import javax.annotation.Nullable;
 
 import org.sosy_lab.common.Classes;
-import org.sosy_lab.common.Pair;
+import org.sosy_lab.common.ShutdownNotifier;
 import org.sosy_lab.common.configuration.ClassOption;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
@@ -42,7 +42,6 @@ import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
-import org.sosy_lab.cpachecker.core.ShutdownNotifier;
 import org.sosy_lab.cpachecker.core.defaults.MergeSepOperator;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.AlgorithmIterationListener;
@@ -51,18 +50,19 @@ import org.sosy_lab.cpachecker.core.interfaces.ForcedCovering;
 import org.sosy_lab.cpachecker.core.interfaces.MergeOperator;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustment;
-import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustmentResult.Action;
 import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustmentResult;
+import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustmentResult.Action;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
 import org.sosy_lab.cpachecker.core.interfaces.StopOperator;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
-import org.sosy_lab.cpachecker.cpa.arg.ARGMergeJoinPredicatedAnalysis;
+import org.sosy_lab.cpachecker.cpa.arg.ARGMergeJoinCPAEnabledAnalysis;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.USReachedSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsState;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
+import org.sosy_lab.cpachecker.util.Pair;
 
 import com.google.common.base.Functions;
 import com.google.common.base.Optional;
@@ -135,6 +135,11 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
             name="forcedCovering")
     @ClassOption(packagePrefix="org.sosy_lab.cpachecker")
     private Class<? extends ForcedCovering> forcedCoveringClass = null;
+
+    @Option(secure=true, description="Do not report 'False' result, return UNKNOWN instead. "
+        + " Useful for incomplete analysis with no counterexample checking.")
+    private boolean reportFalseAsUnknown = false;
+
     private final ForcedCovering forcedCovering;
 
     private final ConfigurableProgramAnalysis cpa;
@@ -163,7 +168,7 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
     }
 
     public CPAAlgorithm newInstance() {
-      return new CPAAlgorithm(cpa, logger, shutdownNotifier, forcedCovering, iterationListener);
+      return new CPAAlgorithm(cpa, logger, shutdownNotifier, forcedCovering, iterationListener, reportFalseAsUnknown);
     }
   }
 
@@ -193,20 +198,24 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
 
   private final AlgorithmIterationListener  iterationListener;
 
+  private final AlgorithmStatus status;
+
   public CPAAlgorithm(ConfigurableProgramAnalysis cpa, LogManager logger,
       ShutdownNotifier pShutdownNotifier,
       ForcedCovering pForcedCovering,
-      AlgorithmIterationListener pIterationListener) {
+      AlgorithmIterationListener pIterationListener,
+      boolean pIsImprecise) {
 
     this.cpa = cpa;
     this.logger = logger;
     this.shutdownNotifier = pShutdownNotifier;
     this.forcedCovering = pForcedCovering;
     this.iterationListener = pIterationListener;
+    status = AlgorithmStatus.SOUND_AND_PRECISE.withPrecise(!pIsImprecise);
   }
 
   @Override
-  public boolean run(final ReachedSet reachedSet) throws CPAException, InterruptedException {
+  public AlgorithmStatus run(final ReachedSet reachedSet) throws CPAException, InterruptedException {
     stats.totalTimer.start();
     try {
       return run0(reachedSet);
@@ -222,7 +231,7 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
     }
   }
 
-  protected boolean run0(final ReachedSet reachedSet) throws CPAException, InterruptedException {
+  protected AlgorithmStatus run0(final ReachedSet reachedSet) throws CPAException, InterruptedException {
     final TransferRelation transferRelation = cpa.getTransferRelation();
     final MergeOperator mergeOperator = cpa.getMergeOperator();
     final StopOperator stopOperator = cpa.getStopOperator();
@@ -236,7 +245,7 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
 
       // Pick next state using strategy
       // BFS, DFS or top sort according to the configuration
-      int size = reachedSet.getWaitlistSize();
+      int size = reachedSet.getWaitlist().size();
       if (size >= stats.maxWaitlistSize) {
         stats.maxWaitlistSize = size;
       }
@@ -336,7 +345,7 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
               reachedSet.reAddToWaitlist(state);
             }
 
-            return true;
+            return status;
           }
         }
         assert action == Action.CONTINUE : "Enum Action has unhandled values!";
@@ -372,8 +381,8 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
             reachedSet.removeAll(toRemove);
             reachedSet.addAll(toAdd);
 
-            if (mergeOperator instanceof ARGMergeJoinPredicatedAnalysis) {
-              ((ARGMergeJoinPredicatedAnalysis)mergeOperator).cleanUp(reachedSet);
+            if (mergeOperator instanceof ARGMergeJoinCPAEnabledAnalysis) {
+              ((ARGMergeJoinCPAEnabledAnalysis)mergeOperator).cleanUp(reachedSet);
             }
 
           } finally {
@@ -415,7 +424,7 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
         iterationListener.afterAlgorithmIteration(this, reachedSet);
       }
     }
-    return true;
+    return status;
   }
 
   @Override

@@ -31,11 +31,11 @@ import java.net.URLClassLoader;
 import java.util.regex.Pattern;
 
 import org.junit.Test;
+import org.sosy_lab.common.ShutdownNotifier;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.log.TestLogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
-import org.sosy_lab.cpachecker.core.ShutdownNotifier;
 import org.sosy_lab.cpachecker.core.interfaces.CPAFactory;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSetFactory;
@@ -68,7 +68,7 @@ public class PredicateCPATest {
 
   /**
    * This tests that the BDD library is loaded by PredicateCPA if it is necessary
-   * (if this test fails, the {@link #loadBDDLibraryOnlyIfNecessary} test
+   * (if this test fails, the {@link #loadBDDLibraryIfNecessary} test
    * won't work).
    */
   @Test
@@ -85,7 +85,7 @@ public class PredicateCPATest {
     LogManager logger = TestLogManager.getInstance();
 
     try (LoggingClassLoader cl = new LoggingClassLoader(
-          Pattern.compile("org\\.sosy_lab\\.cpachecker\\..*(util|predicate|bdd|BDD).*"),
+          Pattern.compile("(org\\.sosy_lab\\.cpachecker\\..*(util|predicate|bdd|BDD).*)|(org\\.sosy_lab\\.solver\\..*)"),
           ((URLClassLoader)myClassLoader).getURLs(), myClassLoader
         )) {
       Class<?> cpaClass = cl.loadClass(PredicateCPATest.class.getPackage().getName() + ".PredicateCPA");
@@ -94,9 +94,9 @@ public class PredicateCPATest {
 
       factory.setConfiguration(config);
       factory.setLogger(logger);
-      factory.setShutdownNotifier(ShutdownNotifier.create());
+      factory.setShutdownNotifier(ShutdownNotifier.createDummy());
       factory.set(TestDataTools.makeCFA("void main() { }", config), CFA.class);
-      factory.set(new ReachedSetFactory(config, logger), ReachedSetFactory.class);
+      factory.set(new ReachedSetFactory(config), ReachedSetFactory.class);
 
       ConfigurableProgramAnalysis cpa = factory.createInstance();
       if (cpa instanceof AutoCloseable) {

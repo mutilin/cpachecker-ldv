@@ -1,15 +1,16 @@
 package org.sosy_lab.cpachecker.cpa.usagestatistics.storage;
 
-import org.sosy_lab.common.Pair;
+
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsState;
+import org.sosy_lab.cpachecker.util.Pair;
 
 public class RefinedUsagePointSet implements AbstractUsagePointSet {
 
   public static class DoubleRefinedUsagePointSet extends RefinedUsagePointSet {
-    protected final RefinedUsageInfoSet target2;
+    protected final UsageInfo target2;
 
-    private DoubleRefinedUsagePointSet(RefinedUsageInfoSet newSet, RefinedUsageInfoSet newSet2) {
+    private DoubleRefinedUsagePointSet(UsageInfo newSet, UsageInfo newSet2) {
       super(newSet);
       target2 = newSet2;
     }
@@ -21,31 +22,32 @@ public class RefinedUsagePointSet implements AbstractUsagePointSet {
 
     @Override
     public Pair<UsageInfo, UsageInfo> getUnsafePair() {
-      return Pair.of(target.getOneExample(), target2.getOneExample());
+      return Pair.of(target, target2);
     }
 
     @Override
-    public AbstractUsageInfoSet getUsageInfo(UsagePoint point) {
-      AbstractUsageInfoSet result = super.getUsageInfo(point);
+    public UsageInfoSet getUsageInfo(UsagePoint point) {
+      UsageInfoSet result = super.getUsageInfo(point);
       if (result != null) {
         return result;
       }
-      UsagePoint p = target2.getOneExample().getUsagePoint();
+      UsagePoint p = target2.getUsagePoint();
       if (p.equals(point)) {
-        return target2;
+        return new UsageInfoSet(target2);
       }
       return null;
     }
   }
 
-  protected final RefinedUsageInfoSet target;
+  protected final UsageInfo target;
 
-  private RefinedUsagePointSet(RefinedUsageInfoSet newSet) {
+  private RefinedUsagePointSet(UsageInfo newSet) {
     target = newSet;
   }
 
-  public static RefinedUsagePointSet create(RefinedUsageInfoSet newSet, RefinedUsageInfoSet newSet2) {
-    if (newSet.equals(newSet2)) {
+  public static RefinedUsagePointSet create(UsageInfo newSet, UsageInfo newSet2) {
+    //We may clone it, so just == can not help
+    if (newSet.getPath().equals(newSet2.getPath()) && newSet.equals(newSet2)) {
       return new RefinedUsagePointSet(newSet);
     } else {
       return new DoubleRefinedUsagePointSet(newSet, newSet2);
@@ -58,10 +60,10 @@ public class RefinedUsagePointSet implements AbstractUsagePointSet {
   }
 
   @Override
-  public AbstractUsageInfoSet getUsageInfo(UsagePoint point) {
-    UsagePoint p = target.getOneExample().getUsagePoint();
+  public UsageInfoSet getUsageInfo(UsagePoint point) {
+    UsagePoint p = target.getUsagePoint();
     if (p.equals(point)) {
-      return target;
+      return new UsageInfoSet(target);
     }
     return null;
   }
@@ -72,7 +74,7 @@ public class RefinedUsagePointSet implements AbstractUsagePointSet {
   }
 
   public Pair<UsageInfo, UsageInfo> getUnsafePair() {
-    return Pair.of(target.getOneExample(), target.getOneExample());
+    return Pair.of(target, target);
   }
 
   @Override

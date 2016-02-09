@@ -118,7 +118,12 @@ public class StructureFieldIdentifier extends SingleIdentifier {
     if (pO instanceof GlobalVariableIdentifier || pO instanceof LocalVariableIdentifier) {
       return -1;
     } else if (pO instanceof StructureFieldIdentifier){
-      return super.compareTo(pO);
+      int result = super.compareTo(pO);
+      if (result != 0) {
+        return result;
+      } else {
+        return this.fieldType.compareTo(((StructureFieldIdentifier) pO).fieldType);
+      }
     } else {
       return 1;
     }

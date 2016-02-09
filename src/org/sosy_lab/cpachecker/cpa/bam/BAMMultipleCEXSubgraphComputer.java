@@ -32,11 +32,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.Stack;
 
-import org.sosy_lab.common.log.LogManager;
-import org.sosy_lab.cpachecker.cfa.blocks.BlockPartitioning;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
-import org.sosy_lab.cpachecker.core.interfaces.Reducer;
-import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
 import org.sosy_lab.cpachecker.util.AbstractStates;
@@ -47,23 +43,21 @@ public class BAMMultipleCEXSubgraphComputer extends BAMCEXSubgraphComputer{
   private final Map<AbstractState, AbstractState> reducedToExpanded;
   private Set<LinkedList<Integer>> remainingStates = new HashSet<>();
 
-  BAMMultipleCEXSubgraphComputer(BlockPartitioning pPartitioning, Reducer pReducer, BAMCache pBamCache,
-      Map<ARGState, ARGState> pPathStateToReachedState, Map<AbstractState, ReachedSet> pAbstractStateToReachedSet,
-      Map<AbstractState, AbstractState> pExpandedToReducedCache, Map<AbstractState, AbstractState> pReduced,
-      LogManager pLogger) {
-    super(pPartitioning, pReducer, pBamCache, pPathStateToReachedState, pAbstractStateToReachedSet,
-        pExpandedToReducedCache, pLogger);
+  BAMMultipleCEXSubgraphComputer(BAMCPA bamCPA, Map<ARGState, ARGState> pPathStateToReachedState,
+      Map<AbstractState, AbstractState> pReduced) {
+    super(bamCPA, pPathStateToReachedState);
     this.reducedToExpanded = pReduced;
   }
 
 
-  public ARGState findPath(BackwardARGState newTreeTarget, Set<List<Integer>> pProcessedStates) throws InterruptedException, RecursiveAnalysisFailedException {
+  public ARGState findPath(BackwardARGState newTreeTarget, Set<List<Integer>> pProcessedStates) {
 
     Map<ARGState, BackwardARGState> elementsMap = new HashMap<>();
     Stack<ARGState> openElements = new Stack<>();
     ARGState root = null;
 
     //Deep clone to be patient about modification
+    remainingStates.clear();
     for (List<Integer> newList : pProcessedStates) {
       remainingStates.add(new LinkedList<>(newList));
     }
@@ -109,11 +103,11 @@ public class BAMMultipleCEXSubgraphComputer extends BAMCEXSubgraphComputer{
           pathStateToReachedState.put(newParent, parent);
           //and remember to explore the parent later
           openElements.push(parent);
-          if (expandedToReducedCache.containsKey(currentElement)) {
+          if (data.expandedStateToReducedState.containsKey(currentElement)) {
             //this is a summarized call and thus an direct edge could not be found
             //we have the transfer function to handle this case, as our reachSet is wrong
             //(we have to use the cached ones)
-            ARGState targetARGState = (ARGState) expandedToReducedCache.get(currentElement);
+            ARGState targetARGState = (ARGState) data.expandedStateToReducedState.get(currentElement);
             ARGState innerTree =
                 computeCounterexampleSubgraphForBlock(parent, parent.getParents().iterator().next(), targetARGState, newCurrentElement);
             if (innerTree == null) {
@@ -133,7 +127,6 @@ public class BAMMultipleCEXSubgraphComputer extends BAMCEXSubgraphComputer{
               child.addParent(newParent);
             }
             innerTree.removeFromARG();
-            newParent.updateDecreaseId();
           } else {
             //normal edge
             //create an edge from parent to current

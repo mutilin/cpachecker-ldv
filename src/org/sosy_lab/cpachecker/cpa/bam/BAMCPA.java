@@ -23,13 +23,10 @@
  */
 package org.sosy_lab.cpachecker.cpa.bam;
 
-import static com.google.common.base.Preconditions.checkState;
-
 import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
 
 import org.sosy_lab.common.Classes;
+import org.sosy_lab.common.ShutdownNotifier;
 import org.sosy_lab.common.configuration.ClassOption;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.FileOption;
@@ -45,7 +42,6 @@ import org.sosy_lab.cpachecker.cfa.blocks.builder.FunctionPartitioning;
 import org.sosy_lab.cpachecker.cfa.blocks.builder.PartitioningHeuristic;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
-import org.sosy_lab.cpachecker.core.ShutdownNotifier;
 import org.sosy_lab.cpachecker.core.defaults.AbstractSingleWrapperCPA;
 import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractDomain;
@@ -68,6 +64,7 @@ import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateCPA;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsCPA;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
+import org.sosy_lab.cpachecker.exceptions.UnsupportedCCodeException;
 import org.sosy_lab.cpachecker.util.CPAs;
 
 import com.google.common.base.Preconditions;
@@ -92,6 +89,7 @@ public class BAMCPA extends AbstractSingleWrapperCPA implements StatisticsProvid
   private final PartitioningHeuristic heuristic;
   private final CFA cfa;
   private final ProofChecker wrappedProofChecker;
+  private final BAMDataManager data;
 
   @Option(secure=true, description = "Type of partitioning (FunctionAndLoopPartitioning or DelayedFunctionAndLoopPartitioning)\n"
       + "or any class that implements a PartitioningHeuristic")
@@ -101,6 +99,17 @@ public class BAMCPA extends AbstractSingleWrapperCPA implements StatisticsProvid
   @Option(secure=true, description = "export blocks")
   @FileOption(FileOption.Type.OUTPUT_FILE)
   private Path exportBlocksPath = Paths.get("block_cfa.dot");
+
+  @Option(name = "handleRecursiveProcedures", secure = true,
+      description = "BAM allows to analyse recursive procedures. This strongly depends on the underlying CPA. "
+          + "The current support includes only ValueAnalysis and PredicateAnalysis (with tree interpolation enabled).")
+  private boolean handleRecursiveProcedures = false;
+
+  @Option(secure = true,
+      description = "This flag determines which precisions should be updated during refinement. "
+      + "We can choose between the minimum number of states and all states that are necessary "
+      + "to re-explore the program along the error-path.")
+  private boolean doPrecisionRefinementForAllStates = false;
 
   public BAMCPA(ConfigurableProgramAnalysis pCpa, Configuration config, LogManager pLogger,
       ReachedSetFactory pReachedSetFactory, ShutdownNotifier pShutdownNotifier, CFA pCfa) throws InvalidConfigurationException, CPAException {
@@ -121,17 +130,29 @@ public class BAMCPA extends AbstractSingleWrapperCPA implements StatisticsProvid
       this.wrappedProofChecker = null;
     }
     reducer = new TimedReducer(wrappedReducer);
-    final BAMCache cache = new BAMCache(config, reducer);
-    transfer = new BAMTransferRelation(config, logger, this, wrappedProofChecker, cache, pReachedSetFactory, pShutdownNotifier);
+    final BAMCache cache = new BAMCache(config, reducer, logger);
+    data = new BAMDataManager(cache, pReachedSetFactory, pLogger);
+
+    if (handleRecursiveProcedures) {
+
+      if (cfa.getVarClassification().isPresent() && !cfa.getVarClassification().get().getRelevantFields().isEmpty()) {
+        // TODO remove this ugly hack as soon as possible :-)
+        throw new UnsupportedCCodeException("BAM does not support pointer-analysis for recursive programs.", cfa.getMainFunction().getLeavingEdge(0));
+      }
+
+      transfer = new BAMTransferRelationWithFixPointForRecursion(config, logger, this, wrappedProofChecker, data, pShutdownNotifier);
+    } else {
+      transfer = new BAMTransferRelation(config, logger, this, wrappedProofChecker, data, pShutdownNotifier);
+    }
     UsageStatisticsCPA usageCPA = CPAs.retrieveCPA(pCpa, UsageStatisticsCPA.class);
     if (usageCPA != null) {
       usageCPA.getStats().setBAMTransfer(transfer);
     }
-    prec = new BAMPrecisionAdjustment(pCpa.getPrecisionAdjustment(), transfer, logger);
+    prec = new BAMPrecisionAdjustment(pCpa.getPrecisionAdjustment(), data, transfer, logger);
     merge = new BAMMergeOperator(pCpa.getMergeOperator(), transfer);
     stop = new BAMStopOperator(pCpa.getStopOperator(), transfer);
 
-    stats = new BAMCPAStatistics(this, cache, config, logger);
+    stats = new BAMCPAStatistics(this, data, config, logger);
     heuristic = getPartitioningHeuristic();
   }
 
@@ -152,10 +173,6 @@ public class BAMCPA extends AbstractSingleWrapperCPA implements StatisticsProvid
       if (predicateCpa != null) {
         predicateCpa.setPartitioning(blockPartitioning);
       }
-
-      Map<AbstractState, Precision> forwardPrecisionToExpandedPrecision = new HashMap<>();
-      transfer.setForwardPrecisionToExpandedPrecision(forwardPrecisionToExpandedPrecision);
-      prec.setForwardPrecisionToExpandedPrecision(forwardPrecisionToExpandedPrecision);
     }
     return getWrappedCpa().getInitialState(pNode, pPartition);
   }
@@ -206,8 +223,17 @@ public class BAMCPA extends AbstractSingleWrapperCPA implements StatisticsProvid
   }
 
   BlockPartitioning getBlockPartitioning() {
-    checkState(blockPartitioning != null);
+    Preconditions.checkNotNull(blockPartitioning);
     return blockPartitioning;
+  }
+
+  BAMDataManager getData() {
+    Preconditions.checkNotNull(data);
+    return data;
+  }
+
+  LogManager getLogger() {
+    return logger;
   }
 
   @Override
@@ -231,5 +257,9 @@ public class BAMCPA extends AbstractSingleWrapperCPA implements StatisticsProvid
   public boolean isCoveredBy(AbstractState pState, AbstractState pOtherState) throws CPAException, InterruptedException {
     Preconditions.checkNotNull(wrappedProofChecker, "Wrapped CPA has to implement ProofChecker interface");
     return wrappedProofChecker.isCoveredBy(pState, pOtherState);
+  }
+
+  boolean doPrecisionRefinementForAllStates() {
+    return doPrecisionRefinementForAllStates;
   }
 }

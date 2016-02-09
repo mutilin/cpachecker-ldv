@@ -36,16 +36,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
-import org.sosy_lab.cpachecker.cfa.blocks.BlockPartitioning;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
-import org.sosy_lab.cpachecker.core.interfaces.Reducer;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
-import org.sosy_lab.cpachecker.core.reachedset.ReachedSetFactory;
 import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
@@ -71,13 +67,11 @@ public class MultipleARGSubtreeRemover extends ARGSubtreeRemover {
   private Multimap<String, ReachedSet> functionToRootState;
   private BAMTransferRelation transfer;
 
-  public MultipleARGSubtreeRemover(BlockPartitioning partitioning, Reducer reducer,
-      BAMCache bamCache, ReachedSetFactory reachedSetFactory,
-      Map<AbstractState, ReachedSet> abstractStateToReachedSet,
-      Timer removeCachedSubtreeTimer, LogManager logger, Multimap<String, ReachedSet> map,
+  public MultipleARGSubtreeRemover(BAMCPA bamcpa,
+      Timer removeCachedSubtreeTimer, Multimap<String, ReachedSet> map,
       Multimap<AbstractState, AbstractState> map2,
       BAMTransferRelation pTransfer) {
-    super(partitioning, reducer, bamCache, reachedSetFactory, abstractStateToReachedSet, removeCachedSubtreeTimer, logger);
+    super(bamcpa, removeCachedSubtreeTimer);
     functionToRootState = map;
     reducedToExpand = map2;
     transfer = pTransfer;
@@ -193,7 +187,7 @@ public class MultipleARGSubtreeRemover extends ARGSubtreeRemover {
     removeCachedSubtreeTimer.start();
 
     for (ARGState rootState : setsTotallyIntegratedInCache) {
-      cleanReachedSet(abstractStateToReachedSet.get(rootState));
+      cleanReachedSet(data.initialStateToReachedSet.get(rootState));
     }
     for (ReachedSet reachedSet : setsOnlyLocatedInCache) {
       cleanReachedSet(reachedSet);

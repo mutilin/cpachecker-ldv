@@ -25,11 +25,12 @@ package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
 import java.util.LinkedList;
 import java.util.List;
+import java.util.logging.Level;
 
-import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.Configuration;
-import org.sosy_lab.common.configuration.InvalidConfigurationException;
+import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
+import org.sosy_lab.cpachecker.util.Pair;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -68,7 +69,7 @@ public class BinderFunctionInfo {
    */
   public final Pair<LinkerInfo, LinkerInfo> linkInfo;
 
-  BinderFunctionInfo(String nm, Configuration pConfig) throws InvalidConfigurationException {
+  BinderFunctionInfo(String nm, Configuration pConfig, LogManager l) {
     name = nm;
     try {
       parameters = Integer.parseInt(pConfig.getProperty(name + ".parameters"));
@@ -104,7 +105,7 @@ public class BinderFunctionInfo {
       }
       pInfo = ImmutableList.copyOf(tmpInfo);
     } catch (NumberFormatException e) {
-      System.err.println("No information about parameters in " + name + " function");
+      l.log(Level.WARNING, "No information about parameters in " + name + " function");
       throw e;
     }
   }

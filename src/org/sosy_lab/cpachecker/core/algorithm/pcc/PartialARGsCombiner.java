@@ -42,17 +42,15 @@ import java.util.logging.Level;
 
 import javax.annotation.Nullable;
 
-import org.sosy_lab.common.Pair;
+import org.sosy_lab.common.ShutdownNotifier;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.log.LogManagerWithoutDuplicates;
 import org.sosy_lab.common.time.Timer;
-import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
-import org.sosy_lab.cpachecker.core.ShutdownNotifier;
 import org.sosy_lab.cpachecker.core.algorithm.Algorithm;
 import org.sosy_lab.cpachecker.core.defaults.SingletonPrecision;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
@@ -69,10 +67,11 @@ import org.sosy_lab.cpachecker.cpa.automaton.AutomatonState;
 import org.sosy_lab.cpachecker.cpa.automaton.AutomatonStateARGCombiningHelper;
 import org.sosy_lab.cpachecker.cpa.composite.CompositeState;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
+import org.sosy_lab.cpachecker.exceptions.CPAEnabledAnalysisPropertyViolationException;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
-import org.sosy_lab.cpachecker.exceptions.PredicatedAnalysisPropertyViolationException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.CFAUtils;
+import org.sosy_lab.cpachecker.util.Pair;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
@@ -93,7 +92,7 @@ public class PartialARGsCombiner implements Algorithm, StatisticsProvider {
 
 
   public PartialARGsCombiner(Algorithm pAlgorithm, Configuration pConfig, LogManager pLogger,
-      ShutdownNotifier pShutdownNotifier, CFA pCfa) {
+      ShutdownNotifier pShutdownNotifier) {
     restartAlgorithm = pAlgorithm;
     logger = new LogManagerWithoutDuplicates(pLogger);
     shutdown = pShutdownNotifier;
@@ -103,22 +102,23 @@ public class PartialARGsCombiner implements Algorithm, StatisticsProvider {
   }
 
   @Override
-  public boolean run(ReachedSet pReachedSet) throws CPAException, InterruptedException,
-      PredicatedAnalysisPropertyViolationException {
+  public AlgorithmStatus run(ReachedSet pReachedSet) throws CPAException, InterruptedException,
+      CPAEnabledAnalysisPropertyViolationException {
     checkArgument(pReachedSet instanceof ForwardingReachedSet, "PartialARGsCombiner needs ForwardingReachedSet");
 
     HistoryForwardingReachedSet reached = new HistoryForwardingReachedSet(pReachedSet);
 
     logger.log(Level.INFO, "Start inner algorithm to analyze program(s)");
-    boolean sound = false;
+    AlgorithmStatus status = AlgorithmStatus.UNSOUND_AND_PRECISE;
+
     stats.analysisTime.start();
     try {
-      sound = restartAlgorithm.run(reached);
+      status = restartAlgorithm.run(reached);
     } finally {
       stats.analysisTime.stop();
     }
 
-    if (sound) {
+    if (status.isSound()) {
       shutdown.shutdownIfNecessary();
 
       logger.log(Level.INFO, "Program(s) soundly analyzed, start combining ARGs.");
@@ -132,13 +132,13 @@ public class PartialARGsCombiner implements Algorithm, StatisticsProvider {
           if (usedReachedSets.size() == 1) {
             ((ForwardingReachedSet) pReachedSet).setDelegate(reached.getDelegate());
           }
-          return true;
+          return status;
         }
 
         if (from(reached.getDelegate()).anyMatch((IS_TARGET_STATE))) {
           logger.log(Level.INFO, "Error found, do not combine ARGs.");
           ((ForwardingReachedSet) pReachedSet).setDelegate(reached.getDelegate());
-          return false;
+          return status;
         }
 
         logger.log(Level.FINE, "Extract root nodes of ARGs");
@@ -161,9 +161,9 @@ public class PartialARGsCombiner implements Algorithm, StatisticsProvider {
 
         shutdown.shutdownIfNecessary();
 
-        if (!combineARGs(rootNodes, (ForwardingReachedSet) pReachedSet)) {
+        if (!combineARGs(rootNodes, (ForwardingReachedSet) pReachedSet, reached)) {
           logger.log(Level.SEVERE, "Combination of ARGs failed.");
-          return false;
+          return status.withSound(false);
         }
       } finally {
         stats.argCombineTime.stop();
@@ -178,22 +178,23 @@ public class PartialARGsCombiner implements Algorithm, StatisticsProvider {
       if (reached.getDelegate() != pReachedSet) {
         ((ForwardingReachedSet) pReachedSet).setDelegate(reached.getDelegate());
       }
-      return false;
+      return status.withSound(false);
     }
 
-    return true;
+    return status.withSound(true);
   }
 
-  private boolean combineARGs(List<ARGState> roots, ForwardingReachedSet pReachedSet)
+  private boolean combineARGs(List<ARGState> roots, ForwardingReachedSet pReceivedReachedSet,
+      HistoryForwardingReachedSet pForwaredReachedSet)
       throws InterruptedException, CPAException {
-    Pair<Map<String, Integer>, List<AbstractState>> initStates =
+  Pair<Map<String, Integer>, List<AbstractState>> initStates =
       identifyCompositeStateTypesAndTheirInitialInstances(roots);
 
     Map<String, Integer> stateToPos = initStates.getFirst();
     List<AbstractState> initialStates = initStates.getSecond();
 
     try {
-      pReachedSet.setDelegate(new ReachedSetFactory(config, logger).create());
+      pReceivedReachedSet.setDelegate(new ReachedSetFactory(config).create());
     } catch (InvalidConfigurationException e) {
       logger.log(Level.SEVERE, "Creating reached set which should contain combined ARG fails.");
       return false;
@@ -225,8 +226,8 @@ public class PartialARGsCombiner implements Algorithm, StatisticsProvider {
       composedState = toVisit.poll().getSecond();
 
       // add composed state to reached set
-      pReachedSet.add(composedState, SingletonPrecision.getInstance());
-      pReachedSet.removeOnlyFromWaitlist(composedState);
+      pReceivedReachedSet.add(composedState, SingletonPrecision.getInstance());
+      pReceivedReachedSet.removeOnlyFromWaitlist(composedState);
 
       // identify possible successor edges
       locPred = AbstractStates.extractLocation(composedState);
@@ -242,7 +243,7 @@ public class PartialARGsCombiner implements Algorithm, StatisticsProvider {
           successorsForEdge.add(Lists.newArrayList(Iterables.filter(component.getChildren(), edgeSuccessorIdentifier)));
           // check if stopped because no concrete successors exists, then do not
           if (successorsForEdge.get(successorsForEdge.size() - 1).isEmpty()
-              && noConcreteSuccessorExist(component, succEdge)) {
+              && noConcreteSuccessorExist(component, succEdge, pForwaredReachedSet)) {
             continue nextEdge;
           }
         }
@@ -267,8 +268,15 @@ public class PartialARGsCombiner implements Algorithm, StatisticsProvider {
     return true;
   }
 
-  private boolean noConcreteSuccessorExist(final ARGState pPredecessor, final CFAEdge pSuccEdge) {
-    // check if analysis stopped exploration due to true state in automaton --> concrete successors may exist
+  private boolean noConcreteSuccessorExist(final ARGState pPredecessor, final CFAEdge pSuccEdge,
+      HistoryForwardingReachedSet pForwaredReachedSet) {
+    // check if analysis stopped exploration due e.g. time limit
+    for(ReachedSet reached :pForwaredReachedSet.getAllReachedSetsUsedAsDelegates()) {
+      if(reached.getWaitlist().contains(pPredecessor)) {
+        return false;
+      }
+    }
+  // check if analysis stopped exploration due to true state in automaton --> concrete successors may exist
     for (AbstractState state : AbstractStates.asIterable(pPredecessor)) {
       if (state instanceof AutomatonState
           && ((AutomatonState) state).getOwningAutomatonName().equals("AssumptionAutomaton")) {
@@ -335,7 +343,7 @@ public class PartialARGsCombiner implements Algorithm, StatisticsProvider {
     for (int i = 1, j = 0; i < automataStateNames.size(); i++) {
       assert (j < i && j >= 0);
       if (automataStateNames.get(j).equals(automataStateNames.get(i))) {
-        if (j + numRootStates - 1 == i && automatonARGBuilderSupport.considersAutomaton(automataStateNames.get(j))) {
+        if (j + numRootStates - 1 == i ) {
           // automaton states commonly used
           commonAutomataStates.add(automataStateNames.get(j));
         }
@@ -357,7 +365,7 @@ public class PartialARGsCombiner implements Algorithm, StatisticsProvider {
       shutdown.shutdownIfNecessary();
 
       name = getName(innerWrapped);
-      if (automataStateNames.contains(name)) {
+      if (commonAutomataStates.contains(name)) {
         assert (initialState.size() == nextId);
 
         stateToPos.put(name, nextId);

@@ -25,39 +25,31 @@ package org.sosy_lab.cpachecker.cpa.usagestatistics.storage;
 
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
-import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsState;
 
-import com.google.common.collect.ImmutableSortedSet;
-
 public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
   private final TreeSet<UsagePoint> topUsages;
-  private final Map<UsagePoint, UnrefinedUsageInfoSet> unrefinedInformation;
-  private final Map<UsagePoint, RefinedUsageInfoSet> refinedInformation;
+  private final Map<UsagePoint, UsageInfoSet> usageInfoSets;
+  //private final Map<UsagePoint, RefinedUsageInfoSet> refinedInformation;
 
   public UnrefinedUsagePointSet() {
     topUsages = new TreeSet<>();
-    unrefinedInformation = new HashMap<>();
-    refinedInformation = new HashMap<>();
+    usageInfoSets = new HashMap<>();
   }
 
   public void add(UsageInfo newInfo) {
-    UnrefinedUsageInfoSet targetSet;
+    UsageInfoSet targetSet;
     UsagePoint newPoint = newInfo.getUsagePoint();
-    if (refinedInformation.containsKey(newPoint)) {
-      return;
-    }
-    if (unrefinedInformation.containsKey(newPoint)) {
-      targetSet = unrefinedInformation.get(newPoint);
+    if (usageInfoSets.containsKey(newPoint)) {
+      targetSet = usageInfoSets.get(newPoint);
     } else {
-      targetSet = new UnrefinedUsageInfoSet();
-      unrefinedInformation.put(newPoint, targetSet);
+      targetSet = new UsageInfoSet();
+      usageInfoSets.put(newPoint, targetSet);
     }
     add(newPoint);
     targetSet.add(newInfo);
@@ -71,13 +63,7 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
         UsagePoint point = iterator.next();
         if (newPoint.isHigher(point)) {
           iterator.remove();
-          if (!refinedInformation.containsKey(newPoint)) {
-            newPoint.addCoveredUsage(point);
-          }
         } else if (point.isHigher(newPoint)) {
-          if (!refinedInformation.containsKey(point)) {
-            point.addCoveredUsage(newPoint);
-          }
           return;
         }
       }
@@ -86,48 +72,35 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
   }
 
   @Override
-  public AbstractUsageInfoSet getUsageInfo(UsagePoint point) {
-    if (refinedInformation.containsKey(point)) {
-      return refinedInformation.get(point);
-    } else {
-      return unrefinedInformation.get(point);
-    }
+  public UsageInfoSet getUsageInfo(UsagePoint point) {
+    return usageInfoSets.get(point);
   }
 
   @Override
   public int size() {
     int result = 0;
 
-    for (UsagePoint point : refinedInformation.keySet()) {
-      result += refinedInformation.get(point).size();
-    }
-    for (UsagePoint point : unrefinedInformation.keySet()) {
-      result += unrefinedInformation.get(point).size();
+    for (UsagePoint point : usageInfoSets.keySet()) {
+      result += usageInfoSets.get(point).size();
     }
 
     return result;
   }
 
   public void reset() {
-    Iterator<UsagePoint> iterator = topUsages.iterator();
-    while (iterator.hasNext()) {
-      UsagePoint point = iterator.next();
-      if (!refinedInformation.containsKey(point)) {
-        iterator.remove();
-      }
-    }
-    unrefinedInformation.clear();
+    topUsages.clear();
+    usageInfoSets.clear();
   }
 
   @Override
   public void remove(UsageStatisticsState pUstate) {
     //Attention! Use carefully. May not work
-    for (UsagePoint point : new TreeSet<>(unrefinedInformation.keySet())) {
-      UnrefinedUsageInfoSet uset = unrefinedInformation.get(point);
+    for (UsagePoint point : new TreeSet<>(usageInfoSets.keySet())) {
+      UsageInfoSet uset = usageInfoSets.get(point);
       boolean b = uset.remove(pUstate);
       if (b) {
         if (uset.size() == 0) {
-          unrefinedInformation.remove(point);
+          usageInfoSets.remove(point);
         }
         //May be two usages related to the same state. This is abstractState !
         //return;
@@ -144,20 +117,8 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     return topUsages.size();
   }
 
-  public void markAsReachableUsage(UsageInfo uinfo,  List<CFAEdge> path) {
-
-    UsagePoint p = uinfo.getUsagePoint();
-    assert topUsages.contains(p);
-
-    unrefinedInformation.remove(p);
-    topUsages.remove(p);
-    p = p.markAsTrue(path);
-    topUsages.add(p);
-    refinedInformation.put(p, new RefinedUsageInfoSet(uinfo, path));
-  }
-
   public void remove(UsagePoint currentUsagePoint) {
-    unrefinedInformation.remove(currentUsagePoint);
+    usageInfoSets.remove(currentUsagePoint);
     topUsages.remove(currentUsagePoint);
     for (UsagePoint point : currentUsagePoint.getCoveredUsages()) {
       add(point);
@@ -168,7 +129,16 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
     return topUsages;
   }
 
-  ImmutableSortedSet<UsagePoint> getRefinedInformation() {
-    return ImmutableSortedSet.copyOf(refinedInformation.keySet());
+  public UsagePoint next(UsagePoint p) {
+    if (p == null) {
+      //initialization
+      if (topUsages.size() == 0) {
+        return null;
+      } else {
+        return topUsages.first();
+      }
+    } else {
+      return topUsages.higher(p);
+    }
   }
 }

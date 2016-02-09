@@ -46,6 +46,7 @@ import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdgeType;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionCallEdge;
+import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionSummaryEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionSummaryStatementEdge;
 import org.sosy_lab.cpachecker.cfa.postprocessing.global.singleloop.CFASingleLoopTransformation;
@@ -55,7 +56,9 @@ import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.UnsupportedCodeException;
+import org.sosy_lab.cpachecker.util.CFAUtils;
 
+import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableMap;
 
 @Options(prefix="cpa.callstack")
@@ -74,8 +77,15 @@ public class CallstackTransferRelation extends SingleEdgeTransferRelation {
       " Treat function call as a statement (the same as for functions without bodies)")
   protected boolean skipRecursion = false;
 
-  //This is flag, which ABM sets
-  private boolean goByStatementNow = false;
+  /**
+   * This flag might be set by external CPAs (e.g. BAM) to indicate
+   * a recursive context that might not be recognized by the CallstackCPA.
+   * (In case of BAM the operator Reduce splits an indirect recursive call f-g-f
+   * into two calls f-g and g-f, which are both non-recursive.)
+   * A function-call in a recursive context will be skipped,
+   * if the Option 'skipRecursion' is enabled.
+   */
+  private boolean isRecursiveContext = false;
 
   @Option(secure=true, description = "Skip recursion if it happens only by going via a function pointer (this is unsound)." +
       " Imprecise function pointer tracking often lead to false recursions.")
@@ -110,7 +120,7 @@ public class CallstackTransferRelation extends SingleEdgeTransferRelation {
         if (functionNameExp instanceof AIdExpression) {
           String functionName = ((AIdExpression)functionNameExp).getName();
           if (UNSUPPORTED_FUNCTIONS.containsKey(functionName)) {
-            throw new UnsupportedCodeException(UNSUPPORTED_FUNCTIONS.get(functionName),
+            throw new UnsupportedCodeException(functionName,
                 edge, edge.getStatement());
           }
         }
@@ -182,7 +192,7 @@ public class CallstackTransferRelation extends SingleEdgeTransferRelation {
         final CFANode callNode = succ.getEnteringSummaryEdge().getPredecessor();
         final CallstackState returnElement;
 
-        assert calledFunction.equals(e.getCurrentFunction()) || e.getCurrentFunction().equals(CFASingleLoopTransformation.ARTIFICIAL_PROGRAM_COUNTER_FUNCTION_NAME);
+        assert calledFunction.equals(e.getCurrentFunction()) || isWildcardState(e);
 
         if (isWildcardState(e)) {
           returnElement = e;
@@ -219,8 +229,36 @@ public class CallstackTransferRelation extends SingleEdgeTransferRelation {
    * @return {@code true} if the given state should be treated as a wildcard,
    * {@code false} otherwise.
    */
-  protected boolean isWildcardState(CallstackState pState) {
-    return pState.getCurrentFunction().equals(CFASingleLoopTransformation.ARTIFICIAL_PROGRAM_COUNTER_FUNCTION_NAME);
+  protected boolean isWildcardState(final CallstackState pState) {
+    String function = pState.getCurrentFunction();
+
+    // Single loop transformation case
+    if (function.equals(CFASingleLoopTransformation.ARTIFICIAL_PROGRAM_COUNTER_FUNCTION_NAME)) {
+      return true;
+    }
+
+    CFANode callNode = pState.getCallNode();
+
+    // main function "call" case
+    if (callNode instanceof FunctionEntryNode
+        && callNode.getFunctionName().equals(function)) {
+      return false;
+    }
+
+    // Normal function call case
+    if (CFAUtils.successorsOf(pState.getCallNode()).filter(FunctionEntryNode.class).anyMatch(new Predicate<FunctionEntryNode>() {
+
+              @Override
+              public boolean apply(FunctionEntryNode pArg0) {
+                return pArg0.getFunctionName().equals(pState.getCurrentFunction());
+              }
+
+            })) {
+      return false;
+    }
+
+    // Not a function call node -> wildcard state
+    return true;
   }
 
   @Override
@@ -251,7 +289,12 @@ public class CallstackTransferRelation extends SingleEdgeTransferRelation {
     return false;
   }
 
+  /** check, if the current function-call has already appeared in the call-stack. */
   protected boolean hasRecursion(final CallstackState pCurrentState, final String pCalledFunction) {
+    if (isRecursiveContext) { // external CPA has seen recursion
+      return true;
+    }
+    // iterate through the current stack and search for an equal name
     CallstackState e = pCurrentState;
     int counter = 0;
     while (e != null) {
@@ -269,9 +312,7 @@ public class CallstackTransferRelation extends SingleEdgeTransferRelation {
 
   //call edge
   private boolean shouldGoByFunctionCall(CallstackState element, FunctionCallEdge pCallEdge) {
-    if (goByStatementNow) {
-      return false;
-    } else if (!skipRecursion) {
+    if (!skipRecursion) {
       return true;
     }
     return !hasRecursion(element, pCallEdge.getSuccessor().getFunctionName());
@@ -293,7 +334,12 @@ public class CallstackTransferRelation extends SingleEdgeTransferRelation {
         return false;
       }
 
-      FunctionCallEdge callEdge = findOutgoingCallEdge(element.getCallNode());
+      if (e.getPreviousState() == null) {
+        // reached beginning of program or current BAM-block, abort
+        return false;
+      }
+
+      FunctionCallEdge callEdge = findOutgoingCallEdge(e.getCallNode());
       if (callEdge.getRawStatement().startsWith("pointer call(")) {
         return true;
       }
@@ -318,7 +364,12 @@ public class CallstackTransferRelation extends SingleEdgeTransferRelation {
         return false;
       }
 
-      FunctionSummaryEdge summaryEdge = element.getCallNode().getLeavingSummaryEdge();
+      if (e.getPreviousState() == null) {
+        // reached beginning of program or current BAM-block, abort
+        return false;
+      }
+
+      FunctionSummaryEdge summaryEdge = e.getCallNode().getLeavingSummaryEdge();
       if (summaryEdge.getExpression() instanceof AFunctionCallStatement) {
         return true;
       }
@@ -329,9 +380,6 @@ public class CallstackTransferRelation extends SingleEdgeTransferRelation {
   }
 
   protected boolean shouldGoByFunctionSummaryStatement(CallstackState element, CFunctionSummaryStatementEdge sumEdge) {
-    if (goByStatementNow) {
-      return true;
-    }
     String functionName = sumEdge.getFunctionName();
     FunctionCallEdge callEdge = findOutgoingCallEdge(sumEdge.getPredecessor());
     assert functionName.equals(callEdge.getSuccessor().getFunctionName());
@@ -344,14 +392,14 @@ public class CallstackTransferRelation extends SingleEdgeTransferRelation {
         return (FunctionCallEdge)edge;
       }
     }
-    throw new AssertionError("Missing function call edge for function call summary edge");
+    throw new AssertionError("Missing function call edge for function call summary edge after node " + predNode);
   }
 
-  public void setFlag() {
-    goByStatementNow = true;
+  public void enableRecursiveContext() {
+    isRecursiveContext = true;
   }
 
-  public void resetFlag() {
-    goByStatementNow = false;
+  public void disableRecursiveContext() {
+    isRecursiveContext = false;
   }
 }

@@ -34,7 +34,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.logging.Level;
 
-import org.sosy_lab.common.Pair;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.FileOption;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
@@ -56,19 +55,20 @@ import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.arg.ARGUtils;
+import org.sosy_lab.cpachecker.cpa.bam.BAMCEXSubgraphComputer.BackwardARGState;
 import org.sosy_lab.cpachecker.cpa.bam.BAMTransferRelation;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsTransferRelation;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.AbstractUsageInfoSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.AbstractUsagePointSet;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.RefinedUsageInfoSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.RefinedUsagePointSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UnrefinedUsagePointSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UnsafeDetector;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsageContainer;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsageInfoSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsagePoint;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
+import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.identifiers.GlobalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.LocalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
@@ -118,9 +118,10 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   private int totalUnsafesWithFailureUsages = 0;
   private int totalUnsafesWithFailureUsageInPair = 0;
   private int trueUnsafes = 0;
-  private int trueUsagesInTrueUnsafe = 0;
-  private int trueUsagesInAllUnsafes = 0;
-  private int maxTrueUsages = 0;
+  //What is true now?
+  //private int trueUsagesInTrueUnsafe = 0;
+  //private int trueUsagesInAllUnsafes = 0;
+  //private int maxTrueUsages = 0;
  // private final ShutdownNotifier shutdownNotifier;
 
   private UsageContainer container;
@@ -153,9 +154,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     totalUnsafesWithFailureUsages = 0;
     totalUnsafesWithFailureUsageInPair = 0;
     trueUnsafes = 0;
-    trueUsagesInTrueUnsafe = 0;
-    trueUsagesInAllUnsafes = 0;
-    maxTrueUsages = 0;
   }
 
   /*
@@ -174,7 +172,10 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
     if (usage.getKeyState() != null) {
       Set<List<Integer>> emptySet = Collections.emptySet();
-      ARGState root = transfer.findPath((ARGState)usage.getKeyState(), new HashMap<ARGState, ARGState>(), emptySet);
+      BackwardARGState newKeyState = new BackwardARGState((ARGState)usage.getKeyState());
+      HashMap<ARGState, ARGState> tmpCache = new HashMap<>();
+      tmpCache.put(newKeyState, (ARGState)usage.getKeyState());
+      ARGState root = transfer.createBAMMultipleSubgraphComputer(tmpCache).findPath(newKeyState, emptySet);
       ARGPath path = ARGUtils.getRandomPath(root);
       //path is transformed internally
       usage.resetKeyState(path.getInnerEdges());
@@ -200,7 +201,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         callstackDepth--;
       }
       String caption = shouldBeHighlighted(edge);
-      if (caption != null) {
+      if (caption != null/* && !(edge instanceof CFunctionReturnEdge)*/) {
         writer.write("Line 0:     N0 -{/*" + caption + "*/}-> N0\n");
         writer.write("Line 0:     N0 -{highlight}-> N0\n");
       } else if (edge.getLineNumber() == usage.getLine().getLine() && edge.toString().contains(id.getName())) {
@@ -227,14 +228,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     while (pointIterator.hasNext()) {
       UsagePoint point = pointIterator.next();
       totalNumberOfUsagePoints++;
-      AbstractUsageInfoSet uset = l.getUsageInfo(point);
-      if (uset instanceof RefinedUsageInfoSet) {
-        //Refined and contains only one usage, which realizes this point
-        trueUsagesInAllUnsafes++;
-        if (detector.isTrueUnsafe(l)) {
-          trueUsagesInTrueUnsafe++;
-        }
-        if (uset.getOneExample().failureFlag) {
+      UsageInfoSet uset = l.getUsageInfo(point);
+      for (UsageInfo uinfo : uset.getUsages()) {
+        if (uinfo.failureFlag) {
           totalFailureUsages++;
         }
         continue;
@@ -253,13 +249,10 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       totalFailureUsages++;
     }
     totalNumberOfUsagePoints += l.size();
-    trueUsagesInAllUnsafes += l.size();
-    trueUsagesInTrueUnsafe += l.size();
   }
 
   private void countStatistics(AbstractUsagePointSet l) {
     int startFailureNum = totalFailureUsages;
-    int startTrueNum = trueUsagesInTrueUnsafe;
 
     if (l instanceof UnrefinedUsagePointSet) {
       countUsageStatistics((UnrefinedUsagePointSet)l);
@@ -267,10 +260,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       countUsageStatistics((RefinedUsagePointSet)l);
     }
 
-    int d = trueUsagesInTrueUnsafe - startTrueNum;
-    if (d > maxTrueUsages) {
-      maxTrueUsages = d;
-    }
     if (maxNumberOfUsagePoints < l.getNumberOfTopUsagePoints()) {
       maxNumberOfUsagePoints = l.getNumberOfTopUsagePoints();
     }
@@ -282,7 +271,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   private void createVisualization(final SingleIdentifier id, final Writer pWriter, boolean printOnlyTrueUnsafes) throws IOException, CPATransferException, InterruptedException {
     Writer writer = pWriter;
     final AbstractUsagePointSet uinfo = container.getUsages(id);
-    final boolean isTrueUnsafe = detector.isTrueUnsafe(uinfo);
+    final boolean isTrueUnsafe = (uinfo instanceof RefinedUsagePointSet);
 
     if (uinfo == null || uinfo.size() == 0) {
       return;
@@ -381,7 +370,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         return;
       }
       if (printFalseUnsafes) {
-        Set<SingleIdentifier> currentUnsafes = container.getUnsafes();
+        Set<SingleIdentifier> currentUnsafes = container.getAllUnsafes();
         Set<SingleIdentifier> initialUnsafes = container.getInitialUnsafes();
         Set<SingleIdentifier> falseUnsafes = Sets.difference(initialUnsafes, currentUnsafes);
 
@@ -417,10 +406,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         (unsafeSize == 0 ? "0" : (totalNumberOfUsagePoints/unsafeSize))
         + ", max. " + maxNumberOfUsagePoints + ")");
     out.println("Amount of true unsafes:                                    " + trueUnsafes);
-    out.println("Amount of true usages in true unsafes:                     " + trueUsagesInTrueUnsafe + "(avg. " +
-        (trueUnsafes == 0 ? "0" : (trueUsagesInTrueUnsafe/trueUnsafes))
-        + ", max. " + maxTrueUsages + ")");
-    out.println("Amount of true usages in all unsafes:                      " + trueUsagesInAllUnsafes);
     out.println("Amount of unsafes with both failures in pair:              " + totalFailureUnsafes);
     out.println("Amount of unsafes with one failure in pair:                " + totalUnsafesWithFailureUsageInPair);
     out.println("Amount of unsafes with at least once failure in usage list:" + totalUnsafesWithFailureUsages);
