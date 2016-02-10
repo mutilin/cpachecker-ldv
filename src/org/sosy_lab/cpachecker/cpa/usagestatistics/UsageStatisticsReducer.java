@@ -42,7 +42,7 @@ public class UsageStatisticsReducer implements Reducer {
                                           Block pContext, Block outerContext, CFANode pLocation) {
     UsageStatisticsState funElement = (UsageStatisticsState)pExpandedElement;
     AbstractState red = wrappedReducer.getVariableReducedState(funElement.getWrappedState(), pContext, outerContext, pLocation);
-    return funElement.clone(red);
+    return funElement.reduce(red);
 
   }
 

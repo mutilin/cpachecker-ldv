@@ -168,6 +168,7 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
   }
 
   boolean isLessOrEqual(final UsageStatisticsState other) {
+    //If we are here, the wrapped domain return true and the stop depends only on this value
 
     // this element is not less or equal than the other element, if that one contains less elements
     if (this.variableBindingRelation.size() > other.variableBindingRelation.size()) {
@@ -182,6 +183,8 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
       }
     }
 
+    //If we want to stop, we need to clone usages from the covered state (this - is new, other - is old)
+    other.recentUsages.join(this.recentUsages);
     return true;
   }
 
@@ -200,7 +203,6 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
       LinkedList<UsageInfo> newUsages = this.recentUsages.get(id);
       result.recentUsages.addAll(id, newUsages);
     }
-    //result.recentUsages = this.recentUsages;
     return result;
   }
 
@@ -218,7 +220,10 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
     PredicateAbstractState state = AbstractStates.extractStateByType(argState, PredicateAbstractState.class);
     if (state == null || !state.getAbstractionFormula().isFalse() && state.isAbstractionState()) {
       recentUsages.setKeyState(argState);
-      //recentUsages.cleanUsages();
     }
+  }
+
+  public void updateContainerIfNecessary() {
+    container.addNewUsagesIfNecessary(recentUsages);
   }
 }

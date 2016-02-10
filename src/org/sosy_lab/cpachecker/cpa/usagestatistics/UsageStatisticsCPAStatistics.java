@@ -134,9 +134,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
   private final String outputSuffix;
 
-  public UsageStatisticsCPAStatistics(Configuration config, LogManager pLogger,
+  public UsageStatisticsCPAStatistics(Configuration pConfig, LogManager pLogger,
       LockStatisticsTransferRelation lTransfer) throws InvalidConfigurationException{
-    config.inject(this);
+    pConfig.inject(this);
     logger = pLogger;
     lockTransfer = lTransfer;
     //I don't know any normal way to know the output directory
@@ -336,8 +336,12 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   public void printUnsafeRawdata(final ReachedSet reached, boolean printOnlyTrueUnsafes) {
     try {
       printStatisticsTimer.start();
-      UsageStatisticsState firstState = AbstractStates.extractStateByType(reached.getFirstState(), UsageStatisticsState.class);
-      container = firstState.getContainer();
+      ARGState firstState = AbstractStates.extractStateByType(reached.getFirstState(), ARGState.class);
+      //getLastState() returns not the correct last state
+      ARGState lastState = firstState.getChildren().iterator().next();
+      UsageStatisticsState USlastState = AbstractStates.extractStateByType(lastState, UsageStatisticsState.class);
+      USlastState.updateContainerIfNecessary();
+      container = USlastState.getContainer();
       detector = container.getUnsafeDetector();
       Writer writer = null;
       try {

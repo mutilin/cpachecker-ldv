@@ -89,7 +89,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
 
   public @Nonnull void setId(SingleIdentifier pId) {
     //Only once
-    assert id == null;
+    assert id == null || pId == id;
     id = pId;
   }
 
@@ -147,9 +147,12 @@ public class UsageInfo implements Comparable<UsageInfo> {
   public String toString(){
     StringBuilder sb = new StringBuilder();
 
-    sb.append("Id ");
-    sb.append(id.toString());
-    sb.append(", line ");
+    if (id != null) {
+      sb.append("Id ");
+      sb.append(id.toString());
+      sb.append(", ");
+    }
+    sb.append("line ");
     sb.append(line.toString());
     sb.append(" (" + accessType + ")");
     sb.append(", " + locks);

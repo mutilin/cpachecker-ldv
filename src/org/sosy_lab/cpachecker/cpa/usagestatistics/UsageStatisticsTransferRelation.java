@@ -223,7 +223,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       // if edge is a statement edge, e.g. a = b + c
       case StatementEdge: {
         CStatementEdge statementEdge = (CStatementEdge) pCfaEdge;
-        handleStatement(newState, precision, statementEdge.getStatement(), pCfaEdge);
+        handleStatement(newState, precision, statementEdge.getStatement());
         break;
       }
 
@@ -355,7 +355,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
   }
 
   private void handleStatement(final UsageStatisticsState pNewState
-      , final UsageStatisticsPrecision pPrecision, final CStatement pStatement, final CFAEdge pCfaEdge) throws HandleCodeException {
+      , final UsageStatisticsPrecision pPrecision, final CStatement pStatement) throws HandleCodeException {
 
     if (pStatement instanceof CAssignment) {
       // assignment like "a = b" or "a = foo()"
@@ -428,7 +428,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
   }
 
-  private void linkId(final UsageStatisticsState state, final AbstractIdentifier idIn, AbstractIdentifier idFrom) throws HandleCodeException {
+  private void linkId(final UsageStatisticsState state, final AbstractIdentifier idIn, AbstractIdentifier idFrom) {
     if (idIn == null || idFrom == null) {
       return;
     }
@@ -453,7 +453,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
   }
 
   private void visitId(final UsageStatisticsState state, final UsageStatisticsPrecision pPrecision
-      , final AbstractIdentifier id, UsageInfo usage) throws HandleCodeException {
+      , final AbstractIdentifier id, UsageInfo usage) {
 
     //Precise information, using results of shared analysis
     if (! (id instanceof SingleIdentifier)) {

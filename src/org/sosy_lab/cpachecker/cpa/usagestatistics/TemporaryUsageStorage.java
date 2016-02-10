@@ -34,23 +34,19 @@ import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 public class TemporaryUsageStorage extends TreeMap<SingleIdentifier, LinkedList<UsageInfo>> {
   private static final long serialVersionUID = -8932709343923545136L;
-  private TemporaryUsageStorage previousStorage;
 
   private Set<SingleIdentifier> deeplyCloned = new TreeSet<>();
 
-  private Set<UsageInfo> withoutARGState = new TreeSet<>();
-
-  /*static int posCounter = 0;
-  static int listCounterByPut = 0;
-  static int listCounterByGet = 0;*/
+  private Set<UsageInfo> withoutARGState;
 
   public TemporaryUsageStorage(TemporaryUsageStorage previous) {
     super(previous);
-    previousStorage = previous;
+    //Copy states without ARG to set it later
+    withoutARGState = new TreeSet<>(previous.withoutARGState);
   }
 
   public TemporaryUsageStorage() {
-    previousStorage = null;
+    withoutARGState = new TreeSet<>();
   }
 
   public boolean add(SingleIdentifier id, UsageInfo info) {
@@ -58,29 +54,17 @@ public class TemporaryUsageStorage extends TreeMap<SingleIdentifier, LinkedList<
     if (info.getKeyState() == null) {
       withoutARGState.add(info);
     }
-    /*posCounter++;
-    if (posCounter % 1000 == 0) {
-      System.out.println("Usage positions: " + posCounter);
-    }*/
     return storage.add(info);
   }
 
   @Override
   public LinkedList<UsageInfo> put(SingleIdentifier id, LinkedList<UsageInfo> list) {
     deeplyCloned.add(id);
-    /*listCounterByPut++;
-    if (listCounterByPut % 100 == 0) {
-      System.out.println("Sets number by put: " + listCounterByPut);
-    }*/
     return super.put(id, list);
   }
 
   public boolean addAll(SingleIdentifier id, LinkedList<UsageInfo> list) {
     LinkedList<UsageInfo> storage = getStorageForId(id);
-    /*posCounter+=list.size();
-    if (posCounter % 1000 == 0) {
-      System.out.println("Usage positions: " + posCounter);
-    }*/
     return storage.addAll(list);
   }
 
@@ -94,15 +78,10 @@ public class TemporaryUsageStorage extends TreeMap<SingleIdentifier, LinkedList<
       LinkedList<UsageInfo> storage;
       if (this.containsKey(id)) {
         //clone
-        //posCounter+=this.get(id).size();
         storage = new LinkedList<>(this.get(id));
       } else {
         storage = new LinkedList<>();
       }
-      /*listCounterByGet++;
-      if (listCounterByGet % 100 == 0) {
-        System.out.println("Sets number by get: " + listCounterByGet);
-      }*/
       this.put(id, storage);
       return storage;
     }
@@ -115,21 +94,28 @@ public class TemporaryUsageStorage extends TreeMap<SingleIdentifier, LinkedList<
     withoutARGState.clear();
   }
 
-  public void cleanUsages() {
-    super.clear();
-    //We can't use recursion due to stack overflow
-    TemporaryUsageStorage previous = previousStorage, tmpStorage;
-    while (previous != null) {
-      previous.clear();
-      tmpStorage = previous.previousStorage;
-      previous.previousStorage = null;
-      previous = tmpStorage;
-    }
-  }
-
   @Override
   public void clear() {
     super.clear();
     deeplyCloned.clear();
+    withoutARGState.clear();
+  }
+
+  public void join(TemporaryUsageStorage pRecentUsages) {
+    // Used if the state covers the other, thus we need to copy new, only new, usages
+    for (SingleIdentifier id : pRecentUsages.keySet()) {
+      LinkedList<UsageInfo> otherStorage = pRecentUsages.get(id);
+      if (this.containsKey(id)) {
+        LinkedList<UsageInfo> currentStorage = this.get(id);
+        for (UsageInfo uinfo : otherStorage) {
+          if (!currentStorage.contains(uinfo)) {
+            assert uinfo.getKeyState() != null;
+            currentStorage.add(uinfo);
+          }
+        }
+      } else {
+        this.put(id, new LinkedList<>(otherStorage));
+      }
+    }
   }
 }

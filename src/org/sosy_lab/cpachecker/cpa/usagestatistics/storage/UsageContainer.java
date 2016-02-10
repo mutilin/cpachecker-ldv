@@ -36,6 +36,7 @@ import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.TemporaryUsageStorage;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.RefinementResult;
@@ -80,6 +81,21 @@ public class UsageContainer {
     falseUnsafes = pFalseUnsafes;
     logger = pLogger;
     detector = pDetector;
+  }
+
+  public void addNewUsagesIfNecessary(TemporaryUsageStorage storage) {
+    if (unsafeUsages == -1) {
+      Timer tmpTimer = new Timer();
+      tmpTimer.start();
+      for (SingleIdentifier id : storage.keySet()) {
+        for (UsageInfo info : storage.get(id)) {
+          add(id, info);
+        }
+      }
+      tmpTimer.stop();
+      System.out.println("Timer for container init: " + tmpTimer);
+      getUnsafesIfNecessary();
+    }
   }
 
   public void add(final SingleIdentifier id, final UsageInfo usage) {
