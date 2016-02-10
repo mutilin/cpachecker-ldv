@@ -24,6 +24,7 @@
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.Map;
 
 import org.sosy_lab.cpachecker.core.defaults.AbstractSingleWrapperState;
@@ -50,7 +51,7 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
   private final Map<AbstractIdentifier, AbstractIdentifier> variableBindingRelation;
 
   public UsageStatisticsState(final AbstractState pWrappedElement, final UsageContainer pContainer) {
-    //Only for getInitialState()
+    //Only for getInitialState() and reduce
     super(pWrappedElement);
     variableBindingRelation = new HashMap<>();
     recentUsages = new TemporaryUsageStorage();
@@ -190,13 +191,21 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
       recentUsages = new TemporaryUsageStorage(recentUsages);
       isStorageCloned = true;
     }
-    recentUsages.put(id, usage);
+    recentUsages.add(id, usage);
   }
 
   public UsageStatisticsState expand(final UsageStatisticsState root, final AbstractState wrappedState) {
     final UsageStatisticsState result = root.clone(wrappedState);
+    for (SingleIdentifier id : this.recentUsages.keySet()) {
+      LinkedList<UsageInfo> newUsages = this.recentUsages.get(id);
+      result.recentUsages.addAll(id, newUsages);
+    }
+    //result.recentUsages = this.recentUsages;
+    return result;
+  }
 
-    result.recentUsages = this.recentUsages;
+  public UsageStatisticsState reduce(final AbstractState wrappedState) {
+    UsageStatisticsState result = new UsageStatisticsState(wrappedState, this.container);
     return result;
   }
 
@@ -208,16 +217,8 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
     ARGState argState = AbstractStates.extractStateByType(abstractState, ARGState.class);
     PredicateAbstractState state = AbstractStates.extractStateByType(argState, PredicateAbstractState.class);
     if (state == null || !state.getAbstractionFormula().isFalse() && state.isAbstractionState()) {
-      for (SingleIdentifier id : recentUsages.keySet()) {
-        for (UsageInfo uinfo : recentUsages.get(id)) {
-          if (uinfo.getKeyState() == null) {
-            //We can add the same usage at merge points. Let the final key state be the first one.
-            uinfo.setKeyState(argState);
-            container.add(id, uinfo);
-          }
-        }
-      }
-      recentUsages.cleanUsages();
+      recentUsages.setKeyState(argState);
+      //recentUsages.cleanUsages();
     }
   }
 }

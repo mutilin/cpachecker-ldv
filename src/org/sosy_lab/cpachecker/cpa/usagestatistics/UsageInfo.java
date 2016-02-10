@@ -205,7 +205,10 @@ public class UsageInfo implements Comparable<UsageInfo> {
     /* We can't use key states for ordering, because the treeSets can't understand,
      * that old refined usage with zero key state is the same as new one
      */
-    assert this.id.equals(pO.id);
+    if (this.id != null && pO.id != null) {
+      //Not while adding in container
+      assert this.id.equals(pO.id);
+    }
     return 0;
   }
 

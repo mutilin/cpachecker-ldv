@@ -28,6 +28,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
+import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 
@@ -36,6 +37,12 @@ public class TemporaryUsageStorage extends TreeMap<SingleIdentifier, LinkedList<
   private TemporaryUsageStorage previousStorage;
 
   private Set<SingleIdentifier> deeplyCloned = new TreeSet<>();
+
+  private Set<UsageInfo> withoutARGState = new TreeSet<>();
+
+  /*static int posCounter = 0;
+  static int listCounterByPut = 0;
+  static int listCounterByGet = 0;*/
 
   public TemporaryUsageStorage(TemporaryUsageStorage previous) {
     super(previous);
@@ -46,29 +53,66 @@ public class TemporaryUsageStorage extends TreeMap<SingleIdentifier, LinkedList<
     previousStorage = null;
   }
 
-  public boolean put(SingleIdentifier id, UsageInfo info) {
-    LinkedList<UsageInfo> storage;
-    if (deeplyCloned.contains(id)) {
-      //List is already cloned
-      assert this.containsKey(id);
-      storage = this.get(id);
-    } else {
-      deeplyCloned.add(id);
-      if (this.containsKey(id)) {
-        //clone
-        storage = new LinkedList<>(this.get(id));
-      } else {
-        storage = new LinkedList<>();
-      }
-      this.put(id, storage);
+  public boolean add(SingleIdentifier id, UsageInfo info) {
+    LinkedList<UsageInfo> storage = getStorageForId(id);
+    if (info.getKeyState() == null) {
+      withoutARGState.add(info);
     }
+    /*posCounter++;
+    if (posCounter % 1000 == 0) {
+      System.out.println("Usage positions: " + posCounter);
+    }*/
     return storage.add(info);
   }
 
   @Override
   public LinkedList<UsageInfo> put(SingleIdentifier id, LinkedList<UsageInfo> list) {
     deeplyCloned.add(id);
+    /*listCounterByPut++;
+    if (listCounterByPut % 100 == 0) {
+      System.out.println("Sets number by put: " + listCounterByPut);
+    }*/
     return super.put(id, list);
+  }
+
+  public boolean addAll(SingleIdentifier id, LinkedList<UsageInfo> list) {
+    LinkedList<UsageInfo> storage = getStorageForId(id);
+    /*posCounter+=list.size();
+    if (posCounter % 1000 == 0) {
+      System.out.println("Usage positions: " + posCounter);
+    }*/
+    return storage.addAll(list);
+  }
+
+  private LinkedList<UsageInfo> getStorageForId(SingleIdentifier id) {
+    if (deeplyCloned.contains(id)) {
+      //List is already cloned
+      assert this.containsKey(id);
+      return this.get(id);
+    } else {
+      deeplyCloned.add(id);
+      LinkedList<UsageInfo> storage;
+      if (this.containsKey(id)) {
+        //clone
+        //posCounter+=this.get(id).size();
+        storage = new LinkedList<>(this.get(id));
+      } else {
+        storage = new LinkedList<>();
+      }
+      /*listCounterByGet++;
+      if (listCounterByGet % 100 == 0) {
+        System.out.println("Sets number by get: " + listCounterByGet);
+      }*/
+      this.put(id, storage);
+      return storage;
+    }
+  }
+
+  public void setKeyState(ARGState state) {
+    for (UsageInfo uinfo : withoutARGState) {
+      uinfo.setKeyState(state);
+    }
+    withoutARGState.clear();
   }
 
   public void cleanUsages() {
