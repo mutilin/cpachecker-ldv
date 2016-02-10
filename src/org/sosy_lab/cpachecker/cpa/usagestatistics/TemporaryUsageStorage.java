@@ -31,28 +31,30 @@ import java.util.TreeSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
+import com.google.common.collect.LinkedListMultimap;
+
 
 public class TemporaryUsageStorage extends TreeMap<SingleIdentifier, LinkedList<UsageInfo>> {
   private static final long serialVersionUID = -8932709343923545136L;
 
   private Set<SingleIdentifier> deeplyCloned = new TreeSet<>();
 
-  private Set<UsageInfo> withoutARGState;
+  private LinkedListMultimap<SingleIdentifier, UsageInfo> withoutARGState;
 
   public TemporaryUsageStorage(TemporaryUsageStorage previous) {
     super(previous);
     //Copy states without ARG to set it later
-    withoutARGState = new TreeSet<>(previous.withoutARGState);
+    withoutARGState = LinkedListMultimap.create(previous.withoutARGState);
   }
 
   public TemporaryUsageStorage() {
-    withoutARGState = new TreeSet<>();
+    withoutARGState = LinkedListMultimap.create();
   }
 
   public boolean add(SingleIdentifier id, UsageInfo info) {
     LinkedList<UsageInfo> storage = getStorageForId(id);
     if (info.getKeyState() == null) {
-      withoutARGState.add(info);
+      withoutARGState.put(id, info);
     }
     return storage.add(info);
   }
@@ -88,7 +90,7 @@ public class TemporaryUsageStorage extends TreeMap<SingleIdentifier, LinkedList<
   }
 
   public void setKeyState(ARGState state) {
-    for (UsageInfo uinfo : withoutARGState) {
+    for (UsageInfo uinfo : withoutARGState.values()) {
       uinfo.setKeyState(state);
     }
     withoutARGState.clear();
@@ -109,7 +111,9 @@ public class TemporaryUsageStorage extends TreeMap<SingleIdentifier, LinkedList<
         LinkedList<UsageInfo> currentStorage = this.get(id);
         for (UsageInfo uinfo : otherStorage) {
           if (!currentStorage.contains(uinfo)) {
-            assert uinfo.getKeyState() != null;
+            //Key state here might be null, the next step (in algorithm) we set it,
+            //and the information is updated in this state
+            //assert uinfo.getKeyState() != null;
             currentStorage.add(uinfo);
           }
         }
