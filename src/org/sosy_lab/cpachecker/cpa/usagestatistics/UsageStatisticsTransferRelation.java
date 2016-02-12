@@ -164,6 +164,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       }
       if (functionName != null && abortfunctions != null && abortfunctions.contains(functionName)) {
         logger.log(Level.FINEST, currentEdge + " is abort edge, analysis was stopped");
+        //oldState.forceUpdateContainer();
         statistics.transferRelationTimer.stop();
         return Collections.emptySet();
       }

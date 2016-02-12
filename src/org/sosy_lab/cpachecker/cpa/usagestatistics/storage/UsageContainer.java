@@ -26,6 +26,7 @@ package org.sosy_lab.cpachecker.cpa.usagestatistics.storage;
 import java.io.PrintStream;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
@@ -85,16 +86,27 @@ public class UsageContainer {
 
   public void addNewUsagesIfNecessary(TemporaryUsageStorage storage) {
     if (unsafeUsages == -1) {
-      Timer tmpTimer = new Timer();
-      tmpTimer.start();
-      for (SingleIdentifier id : storage.keySet()) {
-        for (UsageInfo info : storage.get(id)) {
+      copyUsages(storage);
+      getUnsafesIfNecessary();
+    }
+  }
+
+  public void forceAddNewUsages(TemporaryUsageStorage storage) {
+    //This is a case of 'abort'-functions
+    assert (unsafeUsages == -1);
+    copyUsages(storage);
+  }
+
+  private void copyUsages(TemporaryUsageStorage storage) {
+    for (SingleIdentifier id : storage.keySet()) {
+      LinkedList<UsageInfo> list = storage.get(id);
+      for (UsageInfo info : list) {
+        if (info.getKeyState() == null) {
+          //Means that it is stored near the abort function
+        } else {
           add(id, info);
         }
       }
-      tmpTimer.stop();
-      System.out.println("Timer for container init: " + tmpTimer);
-      getUnsafesIfNecessary();
     }
   }
 

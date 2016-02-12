@@ -24,7 +24,6 @@
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.Map;
 
 import org.sosy_lab.cpachecker.core.defaults.AbstractSingleWrapperState;
@@ -46,7 +45,8 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
   private static final long serialVersionUID = -898577877284268426L;
   private TemporaryUsageStorage recentUsages;
   private boolean isStorageCloned;
-  private final UsageContainer container;
+  private final UsageContainer globalContainer;
+  private final TemporaryUsageStorage functionContainer;
 
   private final Map<AbstractIdentifier, AbstractIdentifier> variableBindingRelation;
 
@@ -55,16 +55,18 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
     super(pWrappedElement);
     variableBindingRelation = new HashMap<>();
     recentUsages = new TemporaryUsageStorage();
-    container = pContainer;
+    globalContainer = pContainer;
     isStorageCloned = true;
+    functionContainer = new TemporaryUsageStorage();
   }
 
   private UsageStatisticsState(final AbstractState pWrappedElement, final UsageStatisticsState state) {
     super(pWrappedElement);
     variableBindingRelation = new HashMap<>(state.variableBindingRelation);
     recentUsages = state.recentUsages;
-    container = state.container;
+    globalContainer = state.globalContainer;
     isStorageCloned = false;
+    functionContainer = state.functionContainer;
   }
 
   public boolean containsLinks(final AbstractIdentifier id) {
@@ -199,20 +201,22 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
 
   public UsageStatisticsState expand(final UsageStatisticsState root, final AbstractState wrappedState) {
     final UsageStatisticsState result = root.clone(wrappedState);
-    for (SingleIdentifier id : this.recentUsages.keySet()) {
+    /*for (SingleIdentifier id : this.recentUsages.keySet()) {
       LinkedList<UsageInfo> newUsages = this.recentUsages.get(id);
       result.recentUsages.addAll(id, newUsages);
-    }
+    }*/
+    //Now it is only join
+    result.functionContainer.join(this.functionContainer);
     return result;
   }
 
   public UsageStatisticsState reduce(final AbstractState wrappedState) {
-    UsageStatisticsState result = new UsageStatisticsState(wrappedState, this.container);
+    UsageStatisticsState result = new UsageStatisticsState(wrappedState, this.globalContainer);
     return result;
   }
 
   public UsageContainer getContainer() {
-    return container;
+    return globalContainer;
   }
 
   public void saveUnsafesInContainerIfNecessary(AbstractState abstractState) {
@@ -220,10 +224,20 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
     PredicateAbstractState state = AbstractStates.extractStateByType(argState, PredicateAbstractState.class);
     if (state == null || !state.getAbstractionFormula().isFalse() && state.isAbstractionState()) {
       recentUsages.setKeyState(argState);
+      functionContainer.join(recentUsages);
+      recentUsages.clear();
     }
   }
 
   public void updateContainerIfNecessary() {
-    container.addNewUsagesIfNecessary(recentUsages);
+    globalContainer.addNewUsagesIfNecessary(functionContainer);
   }
+
+  /*public void forceUpdateContainer() {
+    globalContainer.forceAddNewUsages(recentUsages);
+  }*/
+
+  /*public void setAsCoveredBy(UsageStatisticsState cover) {
+    other.recentUsages.join(this.recentUsages);
+  }*/
 }

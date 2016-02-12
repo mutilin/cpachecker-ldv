@@ -89,7 +89,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
 
   public @Nonnull void setId(SingleIdentifier pId) {
     //Only once
-    assert id == null || pId == id;
+    assert id == null || id.equals(pId) : "Old id " + id + ", new one - " + pId;
     id = pId;
   }
 

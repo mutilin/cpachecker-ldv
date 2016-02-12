@@ -33,7 +33,6 @@ import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 import com.google.common.collect.LinkedListMultimap;
 
-
 public class TemporaryUsageStorage extends TreeMap<SingleIdentifier, LinkedList<UsageInfo>> {
   private static final long serialVersionUID = -8932709343923545136L;
 
@@ -41,14 +40,18 @@ public class TemporaryUsageStorage extends TreeMap<SingleIdentifier, LinkedList<
 
   private LinkedListMultimap<SingleIdentifier, UsageInfo> withoutARGState;
 
+  private final TemporaryUsageStorage previousStorage;
+
   public TemporaryUsageStorage(TemporaryUsageStorage previous) {
     super(previous);
     //Copy states without ARG to set it later
     withoutARGState = LinkedListMultimap.create(previous.withoutARGState);
+    previousStorage = previous;
   }
 
   public TemporaryUsageStorage() {
     withoutARGState = LinkedListMultimap.create();
+    previousStorage = null;
   }
 
   public boolean add(SingleIdentifier id, UsageInfo info) {
@@ -98,6 +101,16 @@ public class TemporaryUsageStorage extends TreeMap<SingleIdentifier, LinkedList<
 
   @Override
   public void clear() {
+    clearSets();
+    TemporaryUsageStorage previous = previousStorage;
+    //We cannot use recursion, due to large callstack and stack overflow exception
+    while (previous != null) {
+      previous.clearSets();
+      previous = previous.previousStorage;
+    }
+  }
+
+  private void clearSets() {
     super.clear();
     deeplyCloned.clear();
     withoutARGState.clear();
