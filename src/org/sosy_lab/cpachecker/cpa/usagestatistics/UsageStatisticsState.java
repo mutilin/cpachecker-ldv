@@ -201,10 +201,6 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
 
   public UsageStatisticsState expand(final UsageStatisticsState root, final AbstractState wrappedState) {
     final UsageStatisticsState result = root.clone(wrappedState);
-    /*for (SingleIdentifier id : this.recentUsages.keySet()) {
-      LinkedList<UsageInfo> newUsages = this.recentUsages.get(id);
-      result.recentUsages.addAll(id, newUsages);
-    }*/
     //Now it is only join
     result.functionContainer.join(this.functionContainer);
     return result;
@@ -232,12 +228,4 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
   public void updateContainerIfNecessary() {
     globalContainer.addNewUsagesIfNecessary(functionContainer);
   }
-
-  /*public void forceUpdateContainer() {
-    globalContainer.forceAddNewUsages(recentUsages);
-  }*/
-
-  /*public void setAsCoveredBy(UsageStatisticsState cover) {
-    other.recentUsages.join(this.recentUsages);
-  }*/
 }
