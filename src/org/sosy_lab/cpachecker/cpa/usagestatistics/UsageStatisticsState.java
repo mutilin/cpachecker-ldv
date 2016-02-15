@@ -26,10 +26,13 @@ package org.sosy_lab.cpachecker.cpa.usagestatistics;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.core.defaults.AbstractSingleWrapperState;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Targetable;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsReducer;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsageContainer;
 import org.sosy_lab.cpachecker.util.AbstractStates;
@@ -185,8 +188,6 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
       }
     }
 
-    //If we want to stop, we need to clone usages from the covered state (this - is new, other - is old)
-    other.recentUsages.join(this.recentUsages);
     return true;
   }
 
@@ -199,10 +200,21 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
     recentUsages.add(id, usage);
   }
 
-  public UsageStatisticsState expand(final UsageStatisticsState root, final AbstractState wrappedState) {
+  public UsageStatisticsState expand(final UsageStatisticsState root, final AbstractState wrappedState,
+      Block pReducedContext, Block outerSubtree, LockStatisticsReducer reducer) {
     final UsageStatisticsState result = root.clone(wrappedState);
     //Now it is only join
-    result.functionContainer.join(this.functionContainer);
+    LockStatisticsState rootLockState = AbstractStates.extractStateByType(root, LockStatisticsState.class);
+    //LockStatisticsState expandedLockState = AbstractStates.extractStateByType(wrappedState, LockStatisticsState.class);
+    LockStatisticsState reducedLockState = (LockStatisticsState) reducer.getVariableReducedState(rootLockState, pReducedContext, outerSubtree, AbstractStates.extractLocation(root));
+
+    TemporaryUsageStorage expandedStorage;
+    if (rootLockState.getLockIdentifiers().equals(reducedLockState.getLockIdentifiers())) {
+      expandedStorage = this.functionContainer;
+    } else {
+      expandedStorage = functionContainer.expand(reducer,
+        rootLockState, pReducedContext, outerSubtree);}
+    result.functionContainer.join(expandedStorage);
     return result;
   }
 

@@ -28,7 +28,10 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
+import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsReducer;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 import com.google.common.collect.LinkedListMultimap;
@@ -134,5 +137,20 @@ public class TemporaryUsageStorage extends TreeMap<SingleIdentifier, LinkedList<
         this.put(id, new LinkedList<>(otherStorage));
       }
     }
+  }
+
+  public TemporaryUsageStorage expand(LockStatisticsReducer lockReducer, LockStatisticsState rootState,
+      Block pReducedContext, Block outerSubtree) {
+    TemporaryUsageStorage result = new TemporaryUsageStorage();
+    for (SingleIdentifier id : keySet()) {
+      LinkedList<UsageInfo> storage = get(id);
+      for (UsageInfo uinfo : storage) {
+        LockStatisticsState expandedState =
+            (LockStatisticsState) lockReducer.getVariableExpandedState(rootState, pReducedContext,
+            outerSubtree, uinfo.getLockState());
+        result.add(id, uinfo.expand(expandedState));
+      }
+    }
+    return result;
   }
 }

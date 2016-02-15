@@ -253,4 +253,13 @@ public class UsageInfo implements Comparable<UsageInfo> {
     result.failureFlag = this.failureFlag;
     return result;
   }
+
+  public UsageInfo expand(LockStatisticsState expandedState) {
+    UsageInfo result = new UsageInfo(this.accessType, this.line, expandedState);
+    result.id = this.id;
+    result.keyState = this.keyState;
+    result.path = this.path;
+    result.failureFlag = this.failureFlag;
+    return result;
+  }
 }
