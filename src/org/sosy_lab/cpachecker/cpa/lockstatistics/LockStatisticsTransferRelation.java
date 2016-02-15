@@ -60,6 +60,16 @@ import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState.LockStatisticsStateBuilder;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.effects.AbstractLockEffect;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.effects.AcquireLockEffect;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.effects.CheckLockEffect;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.effects.LockEffect;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.effects.ReleaseLockEffect;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.effects.ResetLockEffect;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.effects.RestoreAllLockEffect;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.effects.RestoreLockEffect;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.effects.SaveStateLockEffect;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.effects.SetLockEffect;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCCodeException;
 import org.sosy_lab.cpachecker.util.Pair;
@@ -71,11 +81,11 @@ import com.google.common.base.Predicate;
 public class LockStatisticsTransferRelation implements TransferRelation
 {
 
-  private abstract class Effect {
+  public abstract class Effect {
     public abstract void effect(LockStatisticsStateBuilder builder, LockIdentifier id);
   }
 
-  private class AcquireEffect extends Effect {
+  public class AcquireEffect extends Effect {
     @Override
     public void effect(LockStatisticsStateBuilder pBuilder, LockIdentifier pId) {
       LockInfo lock = findLockByName(pId.getName());
@@ -86,47 +96,47 @@ public class LockStatisticsTransferRelation implements TransferRelation
     }
   }
 
-  private class ReleaseEffect extends Effect {
+  public class ReleaseEffect extends Effect {
     @Override
     public void effect(LockStatisticsStateBuilder pBuilder, LockIdentifier pId) {
       pBuilder.free(pId);
     }
   }
 
-  private class ResetEffect extends Effect {
+  public class ResetEffect extends Effect {
     @Override
     public void effect(LockStatisticsStateBuilder pBuilder, LockIdentifier pId) {
       pBuilder.reset(pId);
     }
   }
 
-  private class RestoreEffect extends Effect {
+  public class RestoreEffect extends Effect {
     @Override
     public void effect(LockStatisticsStateBuilder pBuilder, LockIdentifier pId) {
       pBuilder.restore(pId);
     }
   }
 
-  private class RestoreAllEffect extends Effect {
+  public class RestoreAllEffect extends Effect {
     @Override
     public void effect(LockStatisticsStateBuilder pBuilder, LockIdentifier pId) {
       pBuilder.restoreAll();
     }
   }
 
-  private class SaveStateEffect extends Effect {
+  public class SaveStateEffect extends Effect {
     @Override
     public void effect(LockStatisticsStateBuilder pBuilder, LockIdentifier pId) {
       pBuilder.setRestoreState();
     }
   }
 
-  private class DummyEffect extends Effect {
+  public class DummyEffect extends Effect {
     @Override
     public void effect(LockStatisticsStateBuilder pBuilder, LockIdentifier pId) {}
   }
 
-  private class SETEffect extends Effect {
+  public class SETEffect extends Effect {
     final int p;
 
     public SETEffect(int t) {
@@ -144,7 +154,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
     }
   }
 
-  private class CHECKEffect extends Effect {
+  public class CHECKEffect extends Effect {
     final boolean isTruth;
     final int p;
 
@@ -162,17 +172,6 @@ public class LockStatisticsTransferRelation implements TransferRelation
       }
     }
   }
-
-  //There ones have no parameters
-  private final Effect ACQUIRE = new AcquireEffect();
-  private final Effect RELEASE = new ReleaseEffect();
-  private final Effect RESET = new ResetEffect();
-  private final Effect SAVESTATE = new SaveStateEffect();
-  private final Effect RESTORE = new RestoreEffect();
-  private final Effect RESTOREALL = new RestoreAllEffect();
-
-  //This one is without parameter and will be replaced by ParameterEffect after processing
-  private final Effect SET = new DummyEffect();
 
   @Option(name="lockreset",
       description="function to reset state")
@@ -201,12 +200,12 @@ public class LockStatisticsTransferRelation implements TransferRelation
     LockStatisticsState lockStatisticsElement     = (LockStatisticsState)element;
 
     //Firstly, determine operations with locks
-    List<Pair<LockIdentifier, Effect>> toProcess = determineOperations(cfaEdge);
+    List<AbstractLockEffect> toProcess = determineOperations(cfaEdge);
 
     final LockStatisticsStateBuilder builder = lockStatisticsElement.builder();
 
-    for (Pair<LockIdentifier, Effect> pair : toProcess) {
-      pair.getSecond().effect(builder, pair.getFirst());
+    for (AbstractLockEffect e : toProcess) {
+      e.effect(builder);
     }
 
     LockStatisticsState successor = builder.build();
@@ -221,17 +220,17 @@ public class LockStatisticsTransferRelation implements TransferRelation
   public Set<LockIdentifier> getAffectedLocks(CFAEdge cfaEdge) {
     try {
       return from(determineOperations(cfaEdge))
-      .filter(new Predicate<Pair<LockIdentifier, Effect>>() {
+      .filter(new Predicate<AbstractLockEffect>() {
         @Override
-        public boolean apply(@Nullable Pair<LockIdentifier, Effect> pInput) {
-          return pInput.getFirst() != null;
+        public boolean apply(@Nullable AbstractLockEffect pInput) {
+          return pInput instanceof LockEffect;
         }
       })
-      .transform(new Function<Pair<LockIdentifier, Effect>, LockIdentifier>() {
+      .transform(new Function<AbstractLockEffect, LockIdentifier>() {
         @Override
         @Nullable
-        public LockIdentifier apply(@Nullable Pair<LockIdentifier, Effect> pInput) {
-          return pInput.getFirst();
+        public LockIdentifier apply(@Nullable AbstractLockEffect pInput) {
+          return ((LockEffect)pInput).getAffectedLock();
         }
       }).toSet();
     } catch (UnrecognizedCCodeException e) {
@@ -240,8 +239,8 @@ public class LockStatisticsTransferRelation implements TransferRelation
     }
   }
 
-  private List<Pair<LockIdentifier, Effect>> determineOperations(CFAEdge cfaEdge) throws UnrecognizedCCodeException {
-    List<Pair<LockIdentifier, Effect>> toProcess;
+  private List<AbstractLockEffect> determineOperations(CFAEdge cfaEdge) throws UnrecognizedCCodeException {
+    List<AbstractLockEffect> toProcess;
     switch (cfaEdge.getEdgeType()) {
 
       case FunctionCallEdge:
@@ -267,9 +266,9 @@ public class LockStatisticsTransferRelation implements TransferRelation
     return null;
   }
 
-  private List<Pair<LockIdentifier, Effect>> handleSimpleEdge(CFAEdge cfaEdge) throws UnrecognizedCCodeException {
+  private List<AbstractLockEffect> handleSimpleEdge(CFAEdge cfaEdge) throws UnrecognizedCCodeException {
 
-    List<Pair<LockIdentifier, Effect>> result;
+    List<AbstractLockEffect> result;
 
     switch(cfaEdge.getEdgeType()) {
       case StatementEdge:
@@ -301,7 +300,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
     return Collections.emptyList();
   }
 
-  private List<Pair<LockIdentifier, Effect>> handleAssumption(CAssumeEdge cfaEdge) {
+  private List<AbstractLockEffect> handleAssumption(CAssumeEdge cfaEdge) {
     CExpression assumption = cfaEdge.getExpression();
 
     if (assumption instanceof CBinaryExpression) {
@@ -311,8 +310,8 @@ public class LockStatisticsTransferRelation implements TransferRelation
           LockIdentifier id = LockIdentifier.of(lockInfo.lockName);
           if ((((CBinaryExpression) assumption).getOperand2() instanceof CIntegerLiteralExpression)) {
             int level = ((CIntegerLiteralExpression)(((CBinaryExpression) assumption).getOperand2())).getValue().intValue();
-            Effect e = new CHECKEffect(level, cfaEdge.getTruthAssumption());
-            return Collections.singletonList(Pair.of(id, e));
+            AbstractLockEffect e = CheckLockEffect.createEffectForId(level, cfaEdge.getTruthAssumption(), id);
+            return Collections.singletonList(e);
           }
         }
       }
@@ -320,20 +319,20 @@ public class LockStatisticsTransferRelation implements TransferRelation
     return Collections.emptyList();
   }
 
-  private List<Pair<LockIdentifier, Effect>> convertAnnotationToEffect(Map<String, String> map, Effect e) {
-    List<Pair<LockIdentifier, Effect>> result = new LinkedList<>();
+  private List<AbstractLockEffect> convertAnnotationToLockEffect(Map<String, String> map, LockEffect e) {
+    List<AbstractLockEffect> result = new LinkedList<>();
 
     for (String lockName : map.keySet()) {
-      result.add(Pair.of(LockIdentifier.of(lockName, map.get(lockName)), e));
+      result.add(e.cloneWithTarget(LockIdentifier.of(lockName, map.get(lockName))));
     }
     return result;
   }
 
-  private List<Pair<LockIdentifier, Effect>> handleFunctionReturnEdge(CFunctionReturnEdge cfaEdge) {
+  private List<AbstractLockEffect> handleFunctionReturnEdge(CFunctionReturnEdge cfaEdge) {
     //CFANode tmpNode = cfaEdge.getSummaryEdge().getPredecessor();
     String fName = cfaEdge.getSummaryEdge().getExpression().getFunctionCallExpression().getFunctionNameExpression().toASTString();
     if (annotatedfunctions != null && annotatedfunctions.containsKey(fName)) {
-      List<Pair<LockIdentifier, Effect>> result = new LinkedList<>();
+      List<AbstractLockEffect> result = new LinkedList<>();
 
       AnnotationInfo currentAnnotation = annotatedfunctions.get(fName);
       if (currentAnnotation.restoreLocks.size() == 0
@@ -341,19 +340,24 @@ public class LockStatisticsTransferRelation implements TransferRelation
           && currentAnnotation.resetLocks.size() == 0
           && currentAnnotation.captureLocks.size() == 0) {
         //Not specified annotations are considered to be totally restoring
-        return Collections.singletonList(Pair.of((LockIdentifier)null, RESTOREALL));
+        AbstractLockEffect restoreAll = RestoreAllLockEffect.getInstance();
+        return Collections.singletonList(restoreAll);
       } else {
         if (currentAnnotation.restoreLocks.size() > 0) {
-          result.addAll(convertAnnotationToEffect(currentAnnotation.restoreLocks, RESTORE));
+          result.addAll(convertAnnotationToLockEffect(currentAnnotation.restoreLocks, RestoreLockEffect.getInstance()));
         }
         if (currentAnnotation.freeLocks.size() > 0) {
-          result.addAll(convertAnnotationToEffect(currentAnnotation.freeLocks, RELEASE));
+          result.addAll(convertAnnotationToLockEffect(currentAnnotation.freeLocks, ReleaseLockEffect.getInstance()));
         }
         if (currentAnnotation.resetLocks.size() > 0) {
-          result.addAll(convertAnnotationToEffect(currentAnnotation.resetLocks, RESET));
+          result.addAll(convertAnnotationToLockEffect(currentAnnotation.resetLocks, ResetLockEffect.getInstance()));
         }
         if (currentAnnotation.captureLocks.size() > 0) {
-          result.addAll(convertAnnotationToEffect(currentAnnotation.captureLocks, ACQUIRE));
+          for (String lockName : currentAnnotation.captureLocks.keySet()) {
+            LockIdentifier tagerId = LockIdentifier.of(lockName, currentAnnotation.captureLocks.get(lockName));
+            LockInfo lock = findLockByName(tagerId.getName());
+            result.add(AcquireLockEffect.createEffectForId(tagerId, lock.maxLock));
+          }
         }
         return result;
       }
@@ -362,32 +366,36 @@ public class LockStatisticsTransferRelation implements TransferRelation
   }
 
 
-  private List<Pair<LockIdentifier, Effect>> handleFunctionCallExpression(CFunctionCallExpression function) {
+  private List<AbstractLockEffect> handleFunctionCallExpression(CFunctionCallExpression function) {
     String functionName = function.getFunctionNameExpression().toASTString();
-    Pair<Set<LockInfo>, Effect> locksWithEffect = findLockByFunction(functionName);
+    Pair<Set<LockInfo>, LockEffect> locksWithEffect = findLockByFunction(functionName);
     Set<LockInfo> changedLocks = locksWithEffect.getFirst();
-    Effect e = locksWithEffect.getSecond();
+    LockEffect e = locksWithEffect.getSecond();
 
-    List<Pair<LockIdentifier, Effect>> result = new LinkedList<>();
+    List<AbstractLockEffect> result = new LinkedList<>();
     int p;
     for (LockInfo lock : changedLocks) {
-      if (e == ACQUIRE) {
+      if (e == AcquireLockEffect.getInstance()) {
         p = lock.LockFunctions.get(functionName);
-      } else if (e == RELEASE) {
+      } else if (e == ReleaseLockEffect.getInstance()) {
         p = lock.UnlockFunctions.get(functionName);
-      } else if (e == RESET) {
+      } else if (e == ResetLockEffect.getInstance()) {
         p = lock.ResetFunctions.get(functionName);
       } else {
         //Other ones can be only global
         p = 0;
-        assert (e == SET);
+        assert (e == SetLockEffect.getInstance());
         CExpression expression = function.getParameterExpressions().get(0);
         //Replace it by parametrical one
         if (expression instanceof CIntegerLiteralExpression) {
-          e = new SETEffect(((CIntegerLiteralExpression)expression).getValue().intValue());
+          int newValue = ((CIntegerLiteralExpression)expression).getValue().intValue();
+          if (lock.maxLock < newValue) {
+            newValue = lock.maxLock;
+          }
+          e = SetLockEffect.createEffectForId(newValue, LockIdentifier.of(lock.lockName));
         } else {
           //We can not process not integers
-          return Collections.emptyList();
+          continue;
         }
       }
       LockIdentifier id;
@@ -397,12 +405,17 @@ public class LockStatisticsTransferRelation implements TransferRelation
       } else {
         id = LockIdentifier.of(lock.lockName);
       }
-      result.add(Pair.of(id, e));
+      if (e == AcquireLockEffect.getInstance()) {
+        e = AcquireLockEffect.createEffectForId(id, lock.maxLock);
+      } else {
+        e = e.cloneWithTarget(id);
+      }
+      result.add(e);
     }
     return result;
   }
 
-  private List<Pair<LockIdentifier, Effect>> handleStatement(CStatement statement) {
+  private List<AbstractLockEffect> handleStatement(CStatement statement) {
 
     if (statement instanceof CAssignment) {
       /*
@@ -423,8 +436,8 @@ public class LockStatisticsTransferRelation implements TransferRelation
         if (lock != null) {
           if (rightSide instanceof CIntegerLiteralExpression) {
             int level = ((CIntegerLiteralExpression)rightSide).getValue().intValue();
-            Effect e = new SETEffect(level);
-            return Collections.singletonList(Pair.of(LockIdentifier.of(lock.lockName), e));
+            AbstractLockEffect e = SetLockEffect.createEffectForId(level, LockIdentifier.of(lock.lockName));
+            return Collections.singletonList(e);
           } else {
             return Collections.emptyList();
           }
@@ -442,30 +455,31 @@ public class LockStatisticsTransferRelation implements TransferRelation
     return Collections.emptyList();
   }
 
-  private List<Pair<LockIdentifier, Effect>> handleFunctionCall(CFunctionCallEdge callEdge) {
-    List<Pair<LockIdentifier, Effect>> result = new LinkedList<>();
+  private List<AbstractLockEffect> handleFunctionCall(CFunctionCallEdge callEdge) {
+    List<AbstractLockEffect> result = new LinkedList<>();
     if (annotatedfunctions != null && annotatedfunctions.containsKey(callEdge.getSuccessor().getFunctionName())) {
-      result.add(Pair.of((LockIdentifier)null, SAVESTATE));
+      AbstractLockEffect saveState = SaveStateLockEffect.getInstance();
+      result.add(saveState);
     }
     result.addAll(handleFunctionCallExpression(callEdge.getSummaryEdge().getExpression().getFunctionCallExpression()));
     return result;
   }
 
-  private Pair<Set<LockInfo>, Effect> findLockByFunction(String functionName) {
+  private Pair<Set<LockInfo>, LockEffect> findLockByFunction(String functionName) {
     /* Now it is supposed that one function has the same effects on different locks
      */
     Set<LockInfo> changedLocks = new HashSet<>();
-    Effect e = null;
+    LockEffect e = null;
     for (LockInfo lock : lockDescription) {
-      Effect tmp = null;
+      LockEffect tmp = null;
       if (lock.LockFunctions.containsKey(functionName)) {
-        tmp = ACQUIRE;
+        tmp = AcquireLockEffect.getInstance();
       } else if (lock.UnlockFunctions.containsKey(functionName)) {
-        tmp = RELEASE;
+        tmp = ReleaseLockEffect.getInstance();
       } else if (lock.ResetFunctions != null && lock.ResetFunctions.containsKey(functionName)) {
-        tmp = RESET;
+        tmp = ResetLockEffect.getInstance();
       } else if (lock.setLevel != null && lock.setLevel.equals(functionName)) {
-        tmp = SET;
+        tmp = SetLockEffect.getInstance();
       }
       if (tmp != null){
         assert (e == null || e == tmp);

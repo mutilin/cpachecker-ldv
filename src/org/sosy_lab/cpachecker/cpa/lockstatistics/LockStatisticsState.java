@@ -356,4 +356,8 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
   private LockStatisticsState getParentLink() {
     return this;
   }
+
+  /*public List<Pair<LockIdentifier, Effect>> getDifference(){
+
+  }*/
 }
