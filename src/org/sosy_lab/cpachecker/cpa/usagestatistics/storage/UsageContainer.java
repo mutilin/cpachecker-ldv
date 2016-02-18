@@ -26,9 +26,9 @@ package org.sosy_lab.cpachecker.cpa.usagestatistics.storage;
 import java.io.PrintStream;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.Set;
 import java.util.SortedMap;
+import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.logging.Level;
@@ -99,7 +99,7 @@ public class UsageContainer {
 
   private void copyUsages(TemporaryUsageStorage storage) {
     for (SingleIdentifier id : storage.keySet()) {
-      LinkedList<UsageInfo> list = storage.get(id);
+      SortedSet<UsageInfo> list = storage.get(id);
       for (UsageInfo info : list) {
         if (info.getKeyState() == null) {
           //Means that it is stored near the abort function

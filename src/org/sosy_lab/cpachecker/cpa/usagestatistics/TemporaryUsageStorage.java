@@ -23,20 +23,21 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
-import java.util.LinkedList;
+import java.util.List;
 import java.util.Set;
+import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
-import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsReducer;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState.LockStatisticsStateBuilder;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.effects.LockEffect;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 import com.google.common.collect.LinkedListMultimap;
 
-public class TemporaryUsageStorage extends TreeMap<SingleIdentifier, LinkedList<UsageInfo>> {
+public class TemporaryUsageStorage extends TreeMap<SingleIdentifier, SortedSet<UsageInfo>> {
   private static final long serialVersionUID = -8932709343923545136L;
 
   private Set<SingleIdentifier> deeplyCloned = new TreeSet<>();
@@ -58,7 +59,7 @@ public class TemporaryUsageStorage extends TreeMap<SingleIdentifier, LinkedList<
   }
 
   public boolean add(SingleIdentifier id, UsageInfo info) {
-    LinkedList<UsageInfo> storage = getStorageForId(id);
+    SortedSet<UsageInfo> storage = getStorageForId(id);
     if (info.getKeyState() == null) {
       withoutARGState.put(id, info);
     }
@@ -66,29 +67,29 @@ public class TemporaryUsageStorage extends TreeMap<SingleIdentifier, LinkedList<
   }
 
   @Override
-  public LinkedList<UsageInfo> put(SingleIdentifier id, LinkedList<UsageInfo> list) {
+  public SortedSet<UsageInfo> put(SingleIdentifier id, SortedSet<UsageInfo> list) {
     deeplyCloned.add(id);
     return super.put(id, list);
   }
 
-  public boolean addAll(SingleIdentifier id, LinkedList<UsageInfo> list) {
-    LinkedList<UsageInfo> storage = getStorageForId(id);
+  public boolean addAll(SingleIdentifier id, SortedSet<UsageInfo> list) {
+    SortedSet<UsageInfo> storage = getStorageForId(id);
     return storage.addAll(list);
   }
 
-  private LinkedList<UsageInfo> getStorageForId(SingleIdentifier id) {
+  private SortedSet<UsageInfo> getStorageForId(SingleIdentifier id) {
     if (deeplyCloned.contains(id)) {
       //List is already cloned
       assert this.containsKey(id);
       return this.get(id);
     } else {
       deeplyCloned.add(id);
-      LinkedList<UsageInfo> storage;
+      SortedSet<UsageInfo> storage;
       if (this.containsKey(id)) {
         //clone
-        storage = new LinkedList<>(this.get(id));
+        storage = new TreeSet<>(this.get(id));
       } else {
-        storage = new LinkedList<>();
+        storage = new TreeSet<>();
       }
       this.put(id, storage);
       return storage;
@@ -122,33 +123,36 @@ public class TemporaryUsageStorage extends TreeMap<SingleIdentifier, LinkedList<
   public void join(TemporaryUsageStorage pRecentUsages) {
     // Used if the state covers the other, thus we need to copy new, only new, usages
     for (SingleIdentifier id : pRecentUsages.keySet()) {
-      LinkedList<UsageInfo> otherStorage = pRecentUsages.get(id);
+      SortedSet<UsageInfo> otherStorage = pRecentUsages.get(id);
       if (this.containsKey(id)) {
-        LinkedList<UsageInfo> currentStorage = this.get(id);
-        for (UsageInfo uinfo : otherStorage) {
+        SortedSet<UsageInfo> currentStorage = this.get(id);
+        currentStorage.addAll(otherStorage);
+       /* for (UsageInfo uinfo : otherStorage) {
           if (!currentStorage.contains(uinfo)) {
             //Key state here might be null, the next step (in algorithm) we set it,
             //and the information is updated in this state
             //assert uinfo.getKeyState() != null;
             currentStorage.add(uinfo);
           }
-        }
+        }*/
       } else {
-        this.put(id, new LinkedList<>(otherStorage));
+        this.put(id, new TreeSet<>(otherStorage));
       }
     }
   }
 
-  public TemporaryUsageStorage expand(LockStatisticsReducer lockReducer, LockStatisticsState rootState,
-      Block pReducedContext, Block outerSubtree) {
+  public TemporaryUsageStorage expand(List<LockEffect> effects) {
     TemporaryUsageStorage result = new TemporaryUsageStorage();
     for (SingleIdentifier id : keySet()) {
-      LinkedList<UsageInfo> storage = get(id);
+      SortedSet<UsageInfo> storage = get(id);
       for (UsageInfo uinfo : storage) {
-        LockStatisticsState expandedState =
-            (LockStatisticsState) lockReducer.getVariableExpandedState(rootState, pReducedContext,
-            outerSubtree, uinfo.getLockState());
-        result.add(id, uinfo.expand(expandedState));
+        LockStatisticsStateBuilder builder = uinfo.getLockState().builder();
+        for (LockEffect effect : effects) {
+          effect.effect(builder);
+        }
+        LockStatisticsState expandedState2 = builder.build();
+
+        result.add(id, uinfo.expand(expandedState2));
       }
     }
     return result;

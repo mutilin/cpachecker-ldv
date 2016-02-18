@@ -24,8 +24,10 @@
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
+import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.core.defaults.AbstractSingleWrapperState;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
@@ -33,6 +35,7 @@ import org.sosy_lab.cpachecker.core.interfaces.Targetable;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsReducer;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.effects.LockEffect;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsageContainer;
 import org.sosy_lab.cpachecker.util.AbstractStates;
@@ -200,21 +203,28 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
     recentUsages.add(id, usage);
   }
 
+  public static Timer tmpTimer1 = new Timer();
+  public static Timer tmpTimer2 = new Timer();
+
   public UsageStatisticsState expand(final UsageStatisticsState root, final AbstractState wrappedState,
       Block pReducedContext, Block outerSubtree, LockStatisticsReducer reducer) {
+    tmpTimer1.start();
     final UsageStatisticsState result = root.clone(wrappedState);
     //Now it is only join
     LockStatisticsState rootLockState = AbstractStates.extractStateByType(root, LockStatisticsState.class);
-    //LockStatisticsState expandedLockState = AbstractStates.extractStateByType(wrappedState, LockStatisticsState.class);
     LockStatisticsState reducedLockState = (LockStatisticsState) reducer.getVariableReducedState(rootLockState, pReducedContext, outerSubtree, AbstractStates.extractLocation(root));
+    List<LockEffect> difference = reducedLockState.getDifference(rootLockState);
 
     TemporaryUsageStorage expandedStorage;
     if (rootLockState.getLockIdentifiers().equals(reducedLockState.getLockIdentifiers())) {
       expandedStorage = this.functionContainer;
     } else {
-      expandedStorage = functionContainer.expand(reducer,
-        rootLockState, pReducedContext, outerSubtree);}
+      expandedStorage = functionContainer.expand(difference);
+    }
+    tmpTimer1.stop();
+    tmpTimer2.start();
     result.functionContainer.join(expandedStorage);
+    tmpTimer2.stop();
     return result;
   }
 

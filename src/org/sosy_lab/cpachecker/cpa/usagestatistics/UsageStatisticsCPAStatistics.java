@@ -418,6 +418,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     out.println("Time for transfer relation:         " + transferRelationTimer);
     out.println("Time for reseting unsafes:          " + container.resetTimer);
     out.println("Time for printing statistics:       " + printStatisticsTimer);
+    out.println("Time for expanding:                 " + UsageStatisticsState.tmpTimer1);
+    out.println("Time for joining:                   " + UsageStatisticsState.tmpTimer2);
+
   }
 
   private void printCountStatistics(final Writer writer, final Iterator<SingleIdentifier> idIterator) throws IOException {
