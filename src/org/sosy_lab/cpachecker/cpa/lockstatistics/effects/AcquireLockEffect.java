@@ -23,6 +23,9 @@
  */
 package org.sosy_lab.cpachecker.cpa.lockstatistics.effects;
 
+import java.util.SortedMap;
+import java.util.TreeMap;
+
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState.LockStatisticsStateBuilder;
 
@@ -32,6 +35,8 @@ import com.google.common.base.Preconditions;
 public class AcquireLockEffect extends LockEffect {
 
   private final static AcquireLockEffect instance = new AcquireLockEffect();
+
+  private final static SortedMap<LockIdentifier, AcquireLockEffect> AcquireLockEffectMap = new TreeMap<>();
 
   private final int maxRecursiveCounter;
 
@@ -58,7 +63,24 @@ public class AcquireLockEffect extends LockEffect {
   }
 
   public static AcquireLockEffect createEffectForId(LockIdentifier id, int counter) {
-    return new AcquireLockEffect(id, counter);
+    AcquireLockEffect result;
+    if (AcquireLockEffectMap.containsKey(id)) {
+      result = AcquireLockEffectMap.get(id);
+      Preconditions.checkArgument(result.maxRecursiveCounter == counter, "Recursive counter differs for " + id);
+    } else {
+      result = new AcquireLockEffect(id, counter);
+      AcquireLockEffectMap.put(id, result);
+    }
+    return result;
+  }
+
+  public static AcquireLockEffect createEffectForId(LockIdentifier id) {
+    if (AcquireLockEffectMap.containsKey(id)) {
+      return AcquireLockEffectMap.get(id);
+    } else {
+      //Means that the lock is set ('lock = 1'), not store it
+      return new AcquireLockEffect(id, Integer.MAX_VALUE);
+    }
   }
 
   @Override
