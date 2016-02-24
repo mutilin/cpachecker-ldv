@@ -120,28 +120,41 @@ public class TemporaryUsageStorage extends TreeMap<SingleIdentifier, SortedSet<U
     withoutARGState.clear();
   }
 
-  public void join(TemporaryUsageStorage pRecentUsages) {
+  public void join(TemporaryUsageStorage pRecentUsages, List<LockEffect> effects) {
     // Used if the state covers the other, thus we need to copy new, only new, usages
+
     for (SingleIdentifier id : pRecentUsages.keySet()) {
       SortedSet<UsageInfo> otherStorage = pRecentUsages.get(id);
-      if (this.containsKey(id)) {
-        SortedSet<UsageInfo> currentStorage = this.get(id);
-        currentStorage.addAll(otherStorage);
-       /* for (UsageInfo uinfo : otherStorage) {
-          if (!currentStorage.contains(uinfo)) {
-            //Key state here might be null, the next step (in algorithm) we set it,
-            //and the information is updated in this state
-            //assert uinfo.getKeyState() != null;
-            currentStorage.add(uinfo);
-          }
-        }*/
+      if (effects.isEmpty()) {
+        if (this.containsKey(id)) {
+          SortedSet<UsageInfo> currentStorage = this.get(id);
+          currentStorage.addAll(otherStorage);
+        } else {
+          this.put(id, new TreeSet<>(otherStorage));
+        }
       } else {
-        this.put(id, new TreeSet<>(otherStorage));
+        LockStatisticsState previousState = null, currentState;
+        LockStatisticsState previousExpandedState = null, expandedState;
+        for (UsageInfo uinfo : otherStorage) {
+          currentState = uinfo.getLockState();
+          if (previousState != null && previousState.equals(currentState)) {
+            expandedState = previousExpandedState;
+          } else {
+            LockStatisticsStateBuilder builder = currentState.builder();
+            for (LockEffect effect : effects) {
+              effect.effect(builder);
+            }
+            expandedState = builder.build();
+            previousState = currentState;
+            previousExpandedState = expandedState;
+          }
+          add(id, uinfo.expand(expandedState));
+        }
       }
     }
   }
 
-  public TemporaryUsageStorage expand(List<LockEffect> effects) {
+  /*public TemporaryUsageStorage expand(List<LockEffect> effects) {
     TemporaryUsageStorage result = new TemporaryUsageStorage();
     for (SingleIdentifier id : keySet()) {
       SortedSet<UsageInfo> storage = get(id);
@@ -156,5 +169,5 @@ public class TemporaryUsageStorage extends TreeMap<SingleIdentifier, SortedSet<U
       }
     }
     return result;
-  }
+  }*/
 }

@@ -23,6 +23,7 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -215,15 +216,15 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
     LockStatisticsState reducedLockState = (LockStatisticsState) reducer.getVariableReducedState(rootLockState, pReducedContext, outerSubtree, AbstractStates.extractLocation(root));
     List<LockEffect> difference = reducedLockState.getDifference(rootLockState);
 
-    TemporaryUsageStorage expandedStorage;
-    if (rootLockState.getLockIdentifiers().equals(reducedLockState.getLockIdentifiers())) {
+    /*TemporaryUsageStorage expandedStorage;
+    if (difference.isEmpty()) {
       expandedStorage = this.functionContainer;
     } else {
       expandedStorage = functionContainer.expand(difference);
-    }
+    }*/
     tmpTimer1.stop();
     tmpTimer2.start();
-    result.functionContainer.join(expandedStorage);
+    result.functionContainer.join(functionContainer, difference);
     tmpTimer2.stop();
     return result;
   }
@@ -242,7 +243,8 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
     PredicateAbstractState state = AbstractStates.extractStateByType(argState, PredicateAbstractState.class);
     if (state == null || !state.getAbstractionFormula().isFalse() && state.isAbstractionState()) {
       recentUsages.setKeyState(argState);
-      functionContainer.join(recentUsages);
+      List<LockEffect> emptyList = Collections.emptyList();
+      functionContainer.join(recentUsages, emptyList);
       recentUsages.clear();
     }
   }
