@@ -301,8 +301,6 @@ public class LocalTransferRelation implements TransferRelation {
       DataType type = pSuccessor.getType(pairId.getFirst());
       newState.set(pairId.getSecond(), type);
     }
-    // else, something like 'f(..)'. Now we can't do anything
-    //TODO Do something!
     return newState;
   }
 
@@ -315,16 +313,17 @@ public class LocalTransferRelation implements TransferRelation {
     int dereference;
     for (int i = 0; i < arguments.size(); i++) {
       if (i >= paramNames.size()) {
-        //function with unknown parameter size: printf(char* a, ...);
+        //function with unknown parameter size: printf(char* a, ...)
+        //assign what we can
         break;
       }
       currentArgument = arguments.get(i);
       dereference = findDereference(parameterTypes.get(i).getType());
       AbstractIdentifier previousId;
 
-      for (int j = 1, previousDeref = 1; j <= dereference; j++, previousDeref++) {
+      for (int j = 1; j <= dereference; j++) {
         LocalVariableIdentifier id = new GeneralLocalVariableIdentifier(paramNames.get(i), j);
-        previousId = createId(currentArgument, previousDeref);
+        previousId = createId(currentArgument, j);
         result.add(Pair.of(previousId, id));
       }
     }
