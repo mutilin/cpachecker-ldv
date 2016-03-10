@@ -237,7 +237,7 @@ public class StructureIdentifier extends SingleIdentifier{
       if (ownerContainer == null) {
         return null;
       } else {
-        if (ownerContainer instanceof SingleIdentifier) {
+        if (ownerContainer instanceof GlobalVariableIdentifier || ownerContainer instanceof LocalVariableIdentifier) {
           return ((SingleIdentifier)ownerContainer).getGeneralId();
         } else {
           return ownerContainer;
