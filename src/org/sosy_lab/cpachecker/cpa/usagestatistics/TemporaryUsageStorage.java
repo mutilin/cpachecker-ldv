@@ -23,12 +23,15 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
+import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState.LockStatisticsStateBuilder;
@@ -45,6 +48,9 @@ public class TemporaryUsageStorage extends TreeMap<SingleIdentifier, SortedSet<U
   private LinkedListMultimap<SingleIdentifier, UsageInfo> withoutARGState;
 
   private final TemporaryUsageStorage previousStorage;
+
+  public static int totalUsages = 0;
+  public static int expandedUsages = 0;
 
   public TemporaryUsageStorage(TemporaryUsageStorage previous) {
     super(previous);
@@ -120,54 +126,60 @@ public class TemporaryUsageStorage extends TreeMap<SingleIdentifier, SortedSet<U
     withoutARGState.clear();
   }
 
-  public void join(TemporaryUsageStorage pRecentUsages, List<LockEffect> effects) {
-    // Used if the state covers the other, thus we need to copy new, only new, usages
+  public static Timer effectTimer = new Timer();
+  public static Timer copyTimer = new Timer();
+  public static int emptyJoin = 0;
+  public static int effectJoin = 0;
+  public static int hitTimes = 0;
+  public static int missTimes = 0;
 
+  public void join(TemporaryUsageStorage pRecentUsages, List<LockEffect> effects) {
+
+    if (effects.isEmpty()) {
+      emptyJoin++;
+    } else {
+      effectJoin++;
+    }
+
+    Map<LockStatisticsState, LockStatisticsState> reduceToExpand = new HashMap<>();
     for (SingleIdentifier id : pRecentUsages.keySet()) {
       SortedSet<UsageInfo> otherStorage = pRecentUsages.get(id);
+      totalUsages += otherStorage.size();
       if (effects.isEmpty()) {
+        copyTimer.start();
         if (this.containsKey(id)) {
-          SortedSet<UsageInfo> currentStorage = this.get(id);
+          SortedSet<UsageInfo> currentStorage = this.getStorageForId(id);
           currentStorage.addAll(otherStorage);
+          hitTimes++;
         } else {
-          this.put(id, new TreeSet<>(otherStorage));
+          //Not deeply cloned
+          super.put(id, otherStorage);
+          missTimes++;
         }
+        copyTimer.stop();
       } else {
-        LockStatisticsState previousState = null, currentState;
-        LockStatisticsState previousExpandedState = null, expandedState;
+        effectTimer.start();
+        LockStatisticsState currentState;
+        LockStatisticsState expandedState;
+        SortedSet<UsageInfo> result = new TreeSet<>();
         for (UsageInfo uinfo : otherStorage) {
           currentState = uinfo.getLockState();
-          if (previousState != null && previousState.equals(currentState)) {
-            expandedState = previousExpandedState;
+          if (reduceToExpand.containsKey(currentState)) {
+            expandedState = reduceToExpand.get(currentState);
           } else {
+            expandedUsages++;
             LockStatisticsStateBuilder builder = currentState.builder();
             for (LockEffect effect : effects) {
               effect.effect(builder);
             }
             expandedState = builder.build();
-            previousState = currentState;
-            previousExpandedState = expandedState;
+            reduceToExpand.put(currentState, expandedState);
           }
-          add(id, uinfo.expand(expandedState));
+          result.add(uinfo.expand(expandedState));
         }
+        addAll(id, result);
+        effectTimer.stop();
       }
     }
   }
-
-  /*public TemporaryUsageStorage expand(List<LockEffect> effects) {
-    TemporaryUsageStorage result = new TemporaryUsageStorage();
-    for (SingleIdentifier id : keySet()) {
-      SortedSet<UsageInfo> storage = get(id);
-      for (UsageInfo uinfo : storage) {
-        LockStatisticsStateBuilder builder = uinfo.getLockState().builder();
-        for (LockEffect effect : effects) {
-          effect.effect(builder);
-        }
-        LockStatisticsState expandedState2 = builder.build();
-
-        result.add(id, uinfo.expand(expandedState2));
-      }
-    }
-    return result;
-  }*/
 }

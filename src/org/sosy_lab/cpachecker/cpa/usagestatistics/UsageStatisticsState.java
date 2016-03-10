@@ -206,6 +206,7 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
 
   public static Timer tmpTimer1 = new Timer();
   public static Timer tmpTimer2 = new Timer();
+  public static Timer tmpTimer3 = new Timer();
 
   public UsageStatisticsState expand(final UsageStatisticsState root, final AbstractState wrappedState,
       Block pReducedContext, Block outerSubtree, LockStatisticsReducer reducer) {
@@ -216,12 +217,6 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
     LockStatisticsState reducedLockState = (LockStatisticsState) reducer.getVariableReducedState(rootLockState, pReducedContext, outerSubtree, AbstractStates.extractLocation(root));
     List<LockEffect> difference = reducedLockState.getDifference(rootLockState);
 
-    /*TemporaryUsageStorage expandedStorage;
-    if (difference.isEmpty()) {
-      expandedStorage = this.functionContainer;
-    } else {
-      expandedStorage = functionContainer.expand(difference);
-    }*/
     tmpTimer1.stop();
     tmpTimer2.start();
     result.functionContainer.join(functionContainer, difference);
@@ -244,7 +239,9 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
     if (state == null || !state.getAbstractionFormula().isFalse() && state.isAbstractionState()) {
       recentUsages.setKeyState(argState);
       List<LockEffect> emptyList = Collections.emptyList();
+      tmpTimer3.start();
       functionContainer.join(recentUsages, emptyList);
+      tmpTimer3.stop();
       recentUsages.clear();
     }
   }

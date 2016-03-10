@@ -201,7 +201,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         callstackDepth--;
       }
       String caption = shouldBeHighlighted(edge);
-      if (caption != null/* && !(edge instanceof CFunctionReturnEdge)*/) {
+      if (caption != null && !(edge instanceof CFunctionReturnEdge)) {
         writer.write("Line 0:     N0 -{/*" + caption + "*/}-> N0\n");
         writer.write("Line 0:     N0 -{highlight}-> N0\n");
       } else if (edge.getLineNumber() == usage.getLine().getLine() && edge.toString().contains(id.getName())) {
@@ -420,6 +420,15 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     out.println("Time for printing statistics:       " + printStatisticsTimer);
     out.println("Time for expanding:                 " + UsageStatisticsState.tmpTimer1);
     out.println("Time for joining:                   " + UsageStatisticsState.tmpTimer2);
+    out.println("Time for joining2:                  " + UsageStatisticsState.tmpTimer3);
+    out.println("Time for effect:                    " + TemporaryUsageStorage.effectTimer);
+    out.println("Time for copy:                      " + TemporaryUsageStorage.copyTimer);
+    out.println("Number of empty joins:              " + TemporaryUsageStorage.emptyJoin);
+    out.println("Number of effect joins:             " + TemporaryUsageStorage.effectJoin);
+    out.println("Number of hit joins:                " + TemporaryUsageStorage.hitTimes);
+    out.println("Number of miss joins:               " + TemporaryUsageStorage.missTimes);
+    out.println("Number of expanding querries:       " + TemporaryUsageStorage.totalUsages);
+    out.println("Number of executed querries:        " + TemporaryUsageStorage.expandedUsages);
 
   }
 
