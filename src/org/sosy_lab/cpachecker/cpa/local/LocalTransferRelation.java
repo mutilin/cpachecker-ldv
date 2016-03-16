@@ -24,7 +24,6 @@
 package org.sosy_lab.cpachecker.cpa.local;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -49,7 +48,7 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CVariableDeclaration;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
-import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionEntryNode;
@@ -61,13 +60,12 @@ import org.sosy_lab.cpachecker.cfa.types.c.CArrayType;
 import org.sosy_lab.cpachecker.cfa.types.c.CPointerType;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
 import org.sosy_lab.cpachecker.cfa.types.c.CTypedefType;
+import org.sosy_lab.cpachecker.core.defaults.ForwardingTransferRelation;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
-import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.cpa.local.LocalState.DataType;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
-import org.sosy_lab.cpachecker.exceptions.UnrecognizedCFAEdgeException;
 import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.ConstantIdentifier;
@@ -82,7 +80,7 @@ import com.google.common.base.Optional;
 import com.google.common.collect.Sets;
 
 @Options(prefix="cpa.local")
-public class LocalTransferRelation implements TransferRelation {
+public class LocalTransferRelation extends ForwardingTransferRelation<LocalState, LocalState, Precision> {
 
   @Option(name="allocatefunctions", description = "functions, which allocate new free memory")
   private Set<String> allocate;
@@ -102,75 +100,6 @@ public class LocalTransferRelation implements TransferRelation {
     parseAllocatedFunctions(config);
     idCreator = new IdentifierCreator();
   }
-  @Override
-  public Collection<? extends AbstractState> getAbstractSuccessorsForEdge(AbstractState pState, Precision pPrecision,
-      CFAEdge pCfaEdge) throws CPATransferException, InterruptedException {
-
-    LocalState LocalElement = (LocalState) pState;
-    LocalState successor;
-    switch(pCfaEdge.getEdgeType()) {
-
-      case FunctionCallEdge: {
-        successor = createNewScopeInState(LocalElement, (CFunctionCallEdge)pCfaEdge);
-        break;
-      }
-
-      case FunctionReturnEdge: {
-        successor = handleReturnEdge(LocalElement, (CFunctionReturnEdge)pCfaEdge);
-        break;
-      }
-
-      case MultiEdge: {
-        successor = LocalElement;
-        for (CFAEdge simpleEdge : ((MultiEdge)pCfaEdge).getEdges()) {
-          successor = handleSimpleEdge(successor, simpleEdge);
-        }
-        break;
-      }
-
-      default:
-        successor = handleSimpleEdge(LocalElement, pCfaEdge);
-    }
-
-    if (successor == null) {
-      return Collections.emptySet();
-    } else {
-      return Collections.singleton(successor);
-    }
-  }
-
-  private LocalState handleSimpleEdge(LocalState pState, CFAEdge pCfaEdge) throws HandleCodeException, UnrecognizedCFAEdgeException {
-    LocalState newState = pState.clone();
-    switch(pCfaEdge.getEdgeType()) {
-      case DeclarationEdge: {
-        CDeclarationEdge declEdge = (CDeclarationEdge) pCfaEdge;
-        handleDeclaration(newState, declEdge);
-        break;
-      }
-
-      // if edge is a statement edge, e.g. a = b + c
-      case StatementEdge: {
-        CStatementEdge statementEdge = (CStatementEdge) pCfaEdge;
-        handleStatement(newState, statementEdge.getStatement());
-        break;
-      }
-
-      case ReturnStatementEdge: {
-        handleReturnStatementEdge(newState, (CReturnStatementEdge)pCfaEdge);
-        break;
-      }
-
-      case AssumeEdge:
-      case BlankEdge:
-      case CallToReturnEdge: {
-        break;
-      }
-
-      default:
-        throw new UnrecognizedCFAEdgeException(pCfaEdge);
-    }
-    return newState;
-  }
 
   private void parseAllocatedFunctions(Configuration config) {
     String num;
@@ -187,22 +116,34 @@ public class LocalTransferRelation implements TransferRelation {
     }
   }
 
-  private void handleReturnStatementEdge(LocalState pSuccessor, CReturnStatementEdge pCfaEdge) throws HandleCodeException {
-    Optional<CExpression> returnExpression = pCfaEdge.getExpression();
+  @Override
+  protected LocalState handleAssumption(CAssumeEdge cfaEdge, CExpression expression, boolean truthAssumption) {
+    return state.clone();
+  }
+
+  @Override
+  protected LocalState handleReturnStatementEdge(CReturnStatementEdge cfaEdge) throws HandleCodeException {
+    //TODO is it necessary to clone every time?
+    //Guess, it is possible to return the same state (we add only in cloned states)
+    LocalState newState = state.clone();
+    Optional<CExpression> returnExpression = cfaEdge.getExpression();
     if (returnExpression.isPresent()) {
       int dereference = findDereference(returnExpression.get().getExpressionType());
       if (dereference > 0) {
         AbstractIdentifier returnId = createId(returnExpression.get(), dereference);
-        DataType type = pSuccessor.getType(returnId);
-        pSuccessor.set(ReturnIdentifier.getInstance(), type);
+        DataType type = newState.getType(returnId);
+        newState.set(ReturnIdentifier.getInstance(), type);
       }
     }
+    return newState;
   }
 
-  private LocalState handleReturnEdge(LocalState pSuccessor, CFunctionReturnEdge pCfaEdge) throws HandleCodeException {
-    CFunctionCall exprOnSummary     = pCfaEdge.getSummaryEdge().getExpression();
-    DataType returnType             = pSuccessor.getType(ReturnIdentifier.getInstance());
-    LocalState newElement           = pSuccessor.getPreviousState().clone();
+  @Override
+  protected LocalState handleFunctionReturnEdge(CFunctionReturnEdge cfaEdge,
+      CFunctionSummaryEdge fnkCall, CFunctionCall summaryExpr, String callerFunctionName) throws HandleCodeException {
+    CFunctionCall exprOnSummary     = cfaEdge.getSummaryEdge().getExpression();
+    DataType returnType             = state.getType(ReturnIdentifier.getInstance());
+    LocalState newElement           = state.getPreviousState().clone();
 
     if (exprOnSummary instanceof CFunctionCallAssignmentStatement) {
       CFunctionCallAssignmentStatement assignExp = ((CFunctionCallAssignmentStatement)exprOnSummary);
@@ -245,13 +186,13 @@ public class LocalTransferRelation implements TransferRelation {
         // Other cases will be handled if they appear
         CExpression targetParam = parameters.get(0);
         AbstractIdentifier paramId = createId(targetParam, dereference);
-        newElement.set(returnId, pSuccessor.getType(paramId));
+        newElement.set(returnId, state.getType(paramId));
       } else {
         newElement.set(returnId, returnType);
       }
     }
     //Update the outer parameters:
-    CFunctionSummaryEdge sEdge = pCfaEdge.getSummaryEdge();
+    CFunctionSummaryEdge sEdge = cfaEdge.getSummaryEdge();
     CFunctionEntryNode entry = sEdge.getFunctionEntry();
     String funcName = entry.getFunctionName();
     boolean isAllocatedFunction = (allocate == null ? false : allocate.contains(funcName));
@@ -264,7 +205,7 @@ public class LocalTransferRelation implements TransferRelation {
           extractIdentifiers(arguments, paramNames, parameterTypes);
 
       for (Pair<AbstractIdentifier, LocalVariableIdentifier> pairId : toProcess) {
-        DataType newType = pSuccessor.getType(pairId.getSecond());
+        DataType newType = state.getType(pairId.getSecond());
         newElement.set(pairId.getFirst(), newType);
       }
     }
@@ -285,20 +226,20 @@ public class LocalTransferRelation implements TransferRelation {
     }
   }
 
-  private LocalState createNewScopeInState(LocalState pSuccessor, CFunctionCallEdge callEdge) throws HandleCodeException {
-    LocalState newState = new LocalState(pSuccessor);
+  @Override
+  protected LocalState handleFunctionCallEdge(CFunctionCallEdge cfaEdge,
+      List<CExpression> arguments, List<CParameterDeclaration> parameterTypes,
+      String calledFunctionName) throws HandleCodeException {
+    LocalState newState = new LocalState(state);
 
-    CFunctionEntryNode functionEntryNode = callEdge.getSuccessor();
+    CFunctionEntryNode functionEntryNode = cfaEdge.getSuccessor();
     List<String> paramNames = functionEntryNode.getFunctionParameterNames();
-    List<CExpression> arguments = callEdge.getArguments();
-    List<CParameterDeclaration> parameterTypes = functionEntryNode.getFunctionDefinition().getParameters();
-
 
     List<Pair<AbstractIdentifier, LocalVariableIdentifier>> toProcess =
         extractIdentifiers(arguments, paramNames, parameterTypes);
 
     for (Pair<AbstractIdentifier, LocalVariableIdentifier> pairId : toProcess) {
-      DataType type = pSuccessor.getType(pairId.getFirst());
+      DataType type = state.getType(pairId.getFirst());
       newState.set(pairId.getSecond(), type);
     }
     return newState;
@@ -330,14 +271,16 @@ public class LocalTransferRelation implements TransferRelation {
     return result;
   }
 
-  private void handleStatement(LocalState pSuccessor, CStatement pStatement) throws HandleCodeException {
-    if (pStatement instanceof CAssignment) {
+  @Override
+  protected LocalState handleStatementEdge(CStatementEdge cfaEdge, CStatement statement) throws HandleCodeException {
+    LocalState newState = state.clone();
+    if (statement instanceof CAssignment) {
       // assignment like "a = b" or "a = foo()"
-      CAssignment assignment = (CAssignment)pStatement;
+      CAssignment assignment = (CAssignment)statement;
       CExpression left = assignment.getLeftHandSide();
-      assign(pSuccessor, left, assignment.getRightHandSide());
-
+      assign(newState, left, assignment.getRightHandSide());
     }
+    return newState;
   }
 
   public static int findDereference(CType type) {
@@ -433,41 +376,30 @@ public class LocalTransferRelation implements TransferRelation {
     }
   }
 
-  private void handleDeclaration(LocalState pSuccessor, CDeclarationEdge declEdge) throws HandleCodeException {
-    if (declEdge.getDeclaration().getClass() != CVariableDeclaration.class) {
-      return;
-    }
+  @Override
+  protected LocalState handleDeclarationEdge(CDeclarationEdge declEdge, CDeclaration decl) throws HandleCodeException {
+    LocalState newState = state.clone();
 
-    CDeclaration decl = declEdge.getDeclaration();
     if (decl instanceof CVariableDeclaration) {
-
       CInitializer init = ((CVariableDeclaration)decl).getInitializer();
       if (init != null && init instanceof CInitializerExpression) {
-        assign(pSuccessor, new CIdExpression(((CVariableDeclaration)decl).getFileLocation(), decl),
+        assign(newState, new CIdExpression(((CVariableDeclaration)decl).getFileLocation(), decl),
             ((CInitializerExpression)init).getExpression());
       } else {
         if (findDereference(decl.getType()) > 0 && !decl.isGlobal()
             && (declEdge.getSuccessor().getFunctionName().equals("ldv_main") || decl.getType() instanceof CArrayType)) {
           //we don't save global variables
-          pSuccessor.set(new GeneralLocalVariableIdentifier(decl.getName(), findDereference(decl.getType())), DataType.LOCAL);
+          newState.set(new GeneralLocalVariableIdentifier(decl.getName(), findDereference(decl.getType())), DataType.LOCAL);
         }
       }
     }
+    return newState;
   }
 
   @Override
   public Collection<? extends AbstractState> strengthen(AbstractState pState, List<AbstractState> pOtherStates,
       CFAEdge pCfaEdge, Precision pPrecision) throws CPATransferException, InterruptedException {
     return null;
-  }
-  @Override
-  public Collection<? extends AbstractState> getAbstractSuccessors(AbstractState pState, Precision pPrecision)
-      throws CPATransferException, InterruptedException {
-    throw new UnsupportedOperationException(
-        "The " + this.getClass().getSimpleName()
-        + " expects to be called with a CFA edge supplied"
-        + " and does not support configuration where it needs to"
-        + " return abstract states for any CFA edge.");
   }
 
 }
