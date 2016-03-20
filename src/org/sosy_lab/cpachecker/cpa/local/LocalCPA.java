@@ -56,7 +56,6 @@ import org.sosy_lab.cpachecker.core.interfaces.StateSpacePartition;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
 import org.sosy_lab.cpachecker.core.interfaces.StopOperator;
-import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.core.interfaces.pcc.ProofChecker;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
@@ -67,7 +66,7 @@ public class LocalCPA implements ConfigurableProgramAnalysisWithBAM, StatisticsP
     private LocalDomain abstractDomain;
     private MergeOperator mergeOperator;
     private StopOperator stopOperator;
-    private TransferRelation transferRelation;
+    private LocalTransferRelation transferRelation;
     private Statistics statistics;
     private final Reducer reducer;
 
@@ -135,7 +134,7 @@ public class LocalCPA implements ConfigurableProgramAnalysisWithBAM, StatisticsP
     }
 
     @Override
-    public TransferRelation getTransferRelation() {
+    public LocalTransferRelation getTransferRelation() {
       return transferRelation;
     }
 
