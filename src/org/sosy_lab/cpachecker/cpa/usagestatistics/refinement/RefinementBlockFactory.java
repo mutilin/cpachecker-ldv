@@ -37,6 +37,7 @@ import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.bam.BAMCPA;
 import org.sosy_lab.cpachecker.cpa.bam.BAMTransferRelation;
+import org.sosy_lab.cpachecker.cpa.local.LocalTransferRelation;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsCPA;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsageInfoSet;
@@ -54,7 +55,8 @@ public class RefinementBlockFactory {
     PathIterator(currentInnerBlockType.ExtendedARGPath),
     PredicateRefiner(currentInnerBlockType.ExtendedARGPath),
     CallstackFilter(currentInnerBlockType.ExtendedARGPath),
-    ProbeFilter(currentInnerBlockType.ExtendedARGPath);
+    ProbeFilter(currentInnerBlockType.ExtendedARGPath),
+    SharedRefiner(currentInnerBlockType.ExtendedARGPath);
 
     public final currentInnerBlockType innerType;
 
@@ -138,6 +140,15 @@ public class RefinementBlockFactory {
           case ProbeFilter:
             currentBlock = new ProbeFilter((ConfigurableRefinementBlock<Pair<ExtendedARGPath, ExtendedARGPath>>) currentBlock,
                 config);
+            break;
+
+          case SharedRefiner:
+            //LocalCPA CPAForSharedRefiner = CPAs.retrieveCPA(cpa, LocalCPA.class);
+            //assert(CPAForSharedRefiner != null);
+            LocalTransferRelation RelationForSharedRefiner = new LocalTransferRelation(config);
+
+            currentBlock = new SharedRefiner((ConfigurableRefinementBlock<Pair<ExtendedARGPath, ExtendedARGPath>>) currentBlock, RelationForSharedRefiner);
+
             break;
 
           default:
