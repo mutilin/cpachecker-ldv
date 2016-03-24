@@ -89,9 +89,9 @@ public class SharedRefiner extends GenericSinglePathRefiner {
 
   @Override
   public void printAdditionalStatistics(PrintStream pOut) {
-    System.out.println("--Shared Refiner--");
-    System.out.println("Number of cases with empty successors: " + counter);
-    System.out.println("Number of false results: " + numOfFalseResults);
+    pOut.println("--Shared Refiner--");
+    pOut.println("Number of cases with empty successors: " + counter);
+    pOut.println("Number of false results: " + numOfFalseResults);
   }
 
 }
