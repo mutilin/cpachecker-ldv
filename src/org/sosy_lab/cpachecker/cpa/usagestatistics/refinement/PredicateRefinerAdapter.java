@@ -185,14 +185,12 @@ public class PredicateRefinerAdapter extends GenericSinglePathRefiner {
   }
 
   @Override
-  public void printStatistics(PrintStream pOut) {
+  public void printAdditionalStatistics(PrintStream pOut) {
     pOut.println("--PredicateRefinerAdapter--");
     pOut.println("Number of refined paths:          " + numberOfrefinedPaths);
     pOut.println("Solver failures:                  " + solverFailures);
     pOut.println("Number of repeated paths:         " + numberOfrepeatedPaths);
     pOut.println("Size of false cache:              " + falseCache.size());
-    super.printStatistics(pOut);
-    wrappedRefiner.printStatistics(pOut);
   }
 
   Map<ARGState, ARGState> getInternalMapForStates() {

@@ -23,6 +23,7 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics.refinement;
 
+import java.io.PrintStream;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
@@ -38,7 +39,12 @@ import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 public class SharedRefiner extends GenericSinglePathRefiner {
 
-  LocalTransferRelation transferRelation;
+  private LocalTransferRelation transferRelation;
+
+  //Debug counter
+  private int counter = 0;
+
+  private int numOfFalseResults = 0;
 
   public SharedRefiner(ConfigurableRefinementBlock<Pair<ExtendedARGPath, ExtendedARGPath>> pWrapper, LocalTransferRelation RelationForSharedRefiner) {
     super(pWrapper);
@@ -64,6 +70,7 @@ public class SharedRefiner extends GenericSinglePathRefiner {
             emptyPrecision, edge);
       } else {
         //Strange situation
+        counter++;
         break;
       }
     }
@@ -73,12 +80,18 @@ public class SharedRefiner extends GenericSinglePathRefiner {
     SingleIdentifier usageId = pPath.getUsageInfo().getId();
     if (finalState.getType(usageId) == LocalState.DataType.LOCAL) {
       result = RefinementResult.createFalse();
+      numOfFalseResults++;
     } else{
       result = RefinementResult.createTrue();
     }
     return result;
   }
 
-
+  @Override
+  public void printAdditionalStatistics(PrintStream pOut) {
+    System.out.println("--Shared Refiner--");
+    System.out.println("Number of cases with empty successors: " + counter);
+    System.out.println("Number of false results: " + numOfFalseResults);
+  }
 
 }

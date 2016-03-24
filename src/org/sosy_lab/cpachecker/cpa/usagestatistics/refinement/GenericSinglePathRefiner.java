@@ -99,11 +99,16 @@ public abstract class GenericSinglePathRefiner extends
   }
 
   @Override
-  public void printStatistics(PrintStream pOut) {
+  public final void printStatistics(PrintStream pOut) {
+    pOut.println("--GenericSinglePathRefiner--");
     pOut.println("Timer for block:           " + totalTimer);
     pOut.println("Number of calls:           " + numberOfRefinements);
+    printAdditionalStatistics(pOut);
     wrappedRefiner.printStatistics(pOut);
   }
+
+  //ForOverride
+  public void printAdditionalStatistics(PrintStream pOut) {}
 
   protected abstract RefinementResult call(ExtendedARGPath path) throws CPAException, InterruptedException;
 }
