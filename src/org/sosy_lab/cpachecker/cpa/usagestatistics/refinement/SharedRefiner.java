@@ -71,7 +71,7 @@ public class SharedRefiner extends GenericSinglePathRefiner {
       } else {
         //Strange situation
         counter++;
-        break;
+        return RefinementResult.createTrue();
       }
     }
     Iterator<LocalState> sharedIterator= successors.iterator();
