@@ -33,6 +33,7 @@ import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.core.defaults.SingletonPrecision;
 import org.sosy_lab.cpachecker.cpa.local.LocalState;
 import org.sosy_lab.cpachecker.cpa.local.LocalTransferRelation;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
@@ -55,34 +56,39 @@ public class SharedRefiner extends GenericSinglePathRefiner {
   @Override
   protected RefinementResult call(ExtendedARGPath pPath) throws CPAException, InterruptedException {
     // TODO Auto-generated method stub
-    RefinementResult result;
+    RefinementResult result = RefinementResult.createUnknown();
     List<CFAEdge> edges  = pPath.getFullPath();
     SingletonPrecision emptyPrecision = SingletonPrecision.getInstance();
     LocalState initialState = new LocalState(null);
 
     Collection<LocalState> successors = Collections.singleton(initialState);
+    UsageInfo sharedUsage = pPath.getUsageInfo();
     for (CFAEdge edge : edges) {
       assert(successors.size() <= 1);
       Iterator<LocalState> sharedIterator= successors.iterator();
-      //TODO Important! Final state is not a state of usage. Think about.
-      if ( sharedIterator.hasNext()) {
-        successors = transferRelation.getAbstractSuccessorsForEdge(sharedIterator.next(),
-            emptyPrecision, edge);
+      if (sharedUsage.getLine().getLine() == edge.getLineNumber()) {
+        LocalState usageState = sharedIterator.next();
+        assert (usageState != null);
+        SingleIdentifier usageId = pPath.getUsageInfo().getId();
+        if (usageState.getType(usageId) == LocalState.DataType.LOCAL) {
+          result = RefinementResult.createFalse();
+          numOfFalseResults++;
+        } else {
+          result = RefinementResult.createTrue();
+        }
+        break;
       } else {
-        //Strange situation
-        counter++;
-        return RefinementResult.createTrue();
+        //TODO Important! Final state is not a state of usage. Think about.
+        if ( sharedIterator.hasNext()) {
+          successors = transferRelation.getAbstractSuccessorsForEdge(sharedIterator.next(),
+              emptyPrecision, edge);
+        } else {
+          //Strange situation
+          counter++;
+          result = RefinementResult.createUnknown();
+          break;
+        }
       }
-    }
-    Iterator<LocalState> sharedIterator= successors.iterator();
-    LocalState finalState = sharedIterator.next();
-    assert (finalState != null);
-    SingleIdentifier usageId = pPath.getUsageInfo().getId();
-    if (finalState.getType(usageId) == LocalState.DataType.LOCAL) {
-      result = RefinementResult.createFalse();
-      numOfFalseResults++;
-    } else{
-      result = RefinementResult.createTrue();
     }
     return result;
   }
