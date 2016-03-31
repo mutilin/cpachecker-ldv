@@ -108,9 +108,13 @@ WrappedConfigurableRefinementBlock<Pair<ExtendedARGPath, ExtendedARGPath>, Pair<
   protected abstract P getPathCore(ExtendedARGPath path);
 
   @Override
-  public void printStatistics(PrintStream pOut) {
+  public final void printStatistics(PrintStream pOut) {
     pOut.println("--GenericFilter--");
     pOut.println("Timer for block:           " + totalTimer);
     pOut.println("Number of filtered pairs:  " + filteredPairs);
+    printAdditionalStatistics(pOut);
+    wrappedRefiner.printStatistics(pOut);
   }
+
+  public void printAdditionalStatistics(PrintStream pOut) {}
 }

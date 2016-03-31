@@ -98,6 +98,14 @@ public class SharedRefiner extends GenericSinglePathRefiner {
     pOut.println("--Shared Refiner--");
     pOut.println("Number of cases with empty successors: " + counter);
     pOut.println("Number of false results: " + numOfFalseResults);
-  }
+  }/*
+  @Override
+  public final void printAdditionalStatistics(PrintStream pOut) {
+    pOut.println("--GenericSinglePathRefiner--");
+    pOut.println("Timer for block:           " + totalTimer);
+    pOut.println("Number of calls:           " + numberOfRefinements);
+    //printAdditionalStatistics(pOut);
+    //wrappedRefiner.printStatistics(pOut);
+  }*/
 
 }
