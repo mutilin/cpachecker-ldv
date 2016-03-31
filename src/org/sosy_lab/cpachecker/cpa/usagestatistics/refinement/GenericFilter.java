@@ -107,6 +107,8 @@ WrappedConfigurableRefinementBlock<Pair<ExtendedARGPath, ExtendedARGPath>, Pair<
 
   protected abstract P getPathCore(ExtendedARGPath path);
 
+  protected void printAdditionalStatistics(PrintStream pOut) {}
+
   @Override
   public final void printStatistics(PrintStream pOut) {
     pOut.println("--GenericFilter--");
@@ -115,6 +117,4 @@ WrappedConfigurableRefinementBlock<Pair<ExtendedARGPath, ExtendedARGPath>, Pair<
     printAdditionalStatistics(pOut);
     wrappedRefiner.printStatistics(pOut);
   }
-
-  public void printAdditionalStatistics(PrintStream pOut) {}
 }
