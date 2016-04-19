@@ -37,19 +37,23 @@ import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
+import org.sosy_lab.cpachecker.util.statistics.StatInt;
+import org.sosy_lab.cpachecker.util.statistics.StatKind;
 
 public class SharedRefiner extends GenericSinglePathRefiner {
 
   private LocalTransferRelation transferRelation;
 
+
   //Debug counter
   private int counter = 0;
-
+  private final StatInt totalFalseConditions = new StatInt(StatKind.COUNT, "Number of false conditions that were detected by SharedRefiner");
   private int numOfFalseResults = 0;
 
   public SharedRefiner(ConfigurableRefinementBlock<Pair<ExtendedARGPath, ExtendedARGPath>> pWrapper, LocalTransferRelation RelationForSharedRefiner) {
     super(pWrapper);
     transferRelation = RelationForSharedRefiner;
+
     // TODO Auto-generated constructor stub
   }
 
@@ -63,24 +67,33 @@ public class SharedRefiner extends GenericSinglePathRefiner {
 
     Collection<LocalState> successors = Collections.singleton(initialState);
     UsageInfo sharedUsage = pPath.getUsageInfo();
+    SingleIdentifier usageId = pPath.getUsageInfo().getId();
+
+
+
+
     for (CFAEdge edge : edges) {
       assert(successors.size() <= 1);
       Iterator<LocalState> sharedIterator= successors.iterator();
       if (sharedUsage.getLine().getLine() == edge.getLineNumber()) {
+        System.out.println(edge.getLineNumber());
         LocalState usageState = sharedIterator.next();
         assert (usageState != null);
-        SingleIdentifier usageId = pPath.getUsageInfo().getId();
+
         if (usageState.getType(usageId) == LocalState.DataType.LOCAL) {
           result = RefinementResult.createFalse();
           numOfFalseResults++;
         } else {
+
           result = RefinementResult.createTrue();
         }
         break;
       } else {
         //TODO Important! Final state is not a state of usage. Think about.
         if ( sharedIterator.hasNext()) {
-          successors = transferRelation.getAbstractSuccessorsForEdge(sharedIterator.next(),
+          LocalState usageState = sharedIterator.next();
+
+          successors = transferRelation.getAbstractSuccessorsForEdge(usageState,
               emptyPrecision, edge);
         } else {
           //Strange situation
@@ -90,11 +103,17 @@ public class SharedRefiner extends GenericSinglePathRefiner {
         }
       }
     }
+
+    totalFalseConditions.setNextValue(numOfFalseResults);
     return result;
   }
 
+
+
+
   @Override
   public void printAdditionalStatistics(PrintStream pOut) {
+    System.out.println(totalFalseConditions.toString());
     pOut.println("--Shared Refiner--");
     pOut.println("Number of cases with empty successors: " + counter);
     pOut.println("Number of false results: " + numOfFalseResults);
