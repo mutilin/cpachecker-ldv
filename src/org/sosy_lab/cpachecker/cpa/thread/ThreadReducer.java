@@ -34,6 +34,7 @@ import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.location.LocationState;
+import org.sosy_lab.cpachecker.cpa.thread.ThreadState.ThreadStateBuilder;
 
 
 public class ThreadReducer implements Reducer {
@@ -52,10 +53,11 @@ public class ThreadReducer implements Reducer {
     ThreadState expState = (ThreadState)pExpandedState;
     LocationState expLocation = expState.getLocationState();
     CallstackState expCallstackState = expState.getCallstackState();
+    ThreadStateBuilder builder = expState.getBuilder();
     LocationState redLocation = (LocationState)lReducer.getVariableReducedState(expLocation, pContext, pOuterContext, pCallNode);
     CallstackState redCallstack = (CallstackState)cReducer.getVariableReducedState(expCallstackState, pContext, pOuterContext, pCallNode);
-    ThreadState redState = new ThreadState(redLocation, redCallstack, expState.getThreadSet(), expState.getRemovedSet());
-    return redState;
+    builder.setWrappedStates(redLocation, redCallstack);
+    return builder.build();
   }
 
   @Override
@@ -67,10 +69,11 @@ public class ThreadReducer implements Reducer {
     ThreadState redState = (ThreadState)pReducedState;
     LocationState redLocation = redState.getLocationState();
     CallstackState redCallstack = redState.getCallstackState();
+    ThreadStateBuilder builder = redState.getBuilder();
     LocationState expLocation = (LocationState)lReducer.getVariableExpandedState(rootLocation, pReducedContext, pOuterContext, redLocation);
     CallstackState expCallstack = (CallstackState)cReducer.getVariableExpandedState(rootCallstack, pReducedContext, pOuterContext, redCallstack);
-    ThreadState expState = new ThreadState(expLocation, expCallstack, redState.getThreadSet(), redState.getRemovedSet());
-    return expState;
+    builder.setWrappedStates(expLocation, expCallstack);
+    return builder.build();
   }
 
   @Override
@@ -122,7 +125,7 @@ public class ThreadReducer implements Reducer {
 
   @Override
   public Object getHashCodeForState(AbstractState pStateKey) {
-    return null;
+    return getHashCodeForState(pStateKey, null);
   }
 
 }

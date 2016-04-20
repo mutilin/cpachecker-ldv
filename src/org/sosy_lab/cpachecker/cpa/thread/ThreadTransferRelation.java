@@ -81,17 +81,16 @@ public class ThreadTransferRelation extends SingleEdgeTransferRelation {
       handleFunctionCall((CFunctionCallEdge)pCfaEdge, builder);
     } else if (pCfaEdge instanceof CFunctionSummaryStatementEdge) {
       String functionName = ((CFunctionSummaryStatementEdge)pCfaEdge).getFunctionName();
-      if (functionName.equals(CREATE) || functionName.equals(CREATE_SELF_PARALLEL)) {
+      if (isThreadCreateFunction(functionName)) {
         List<CExpression> args = ((CFunctionSummaryStatementEdge)pCfaEdge).getFunctionCall().
             getFunctionCallExpression().getParameterExpressions();
-        String createdFunctionName = args.get(0).toString();
-        builder.addToThreadSet(new ThreadLabel(createdFunctionName, LabelStatus.PARENT_THREAD));
+        builder.addToThreadSet(new ThreadLabel(getThreadIdentifier(args), LabelStatus.PARENT_THREAD));
         resetCallstacksFlag = true;
         ((CallstackTransferRelation)callstackTransfer).enableRecursiveContext();
       }
     } else if (pCfaEdge.getEdgeType() == CFAEdgeType.FunctionReturnEdge) {
-      if (((CFunctionReturnEdge)pCfaEdge).getFunctionEntry().getFunctionName().equals(CREATE) ||
-          ((CFunctionReturnEdge)pCfaEdge).getFunctionEntry().getFunctionName().equals(CREATE_SELF_PARALLEL) ) {
+      String functionName = ((CFunctionReturnEdge)pCfaEdge).getFunctionEntry().getFunctionName();
+      if (isThreadCreateFunction(functionName)) {
         return Collections.emptySet();
       }
     }
@@ -120,16 +119,22 @@ public class ThreadTransferRelation extends SingleEdgeTransferRelation {
       ThreadStateBuilder builder) {
     String functionName = pCfaEdge.getSuccessor().getFunctionName();
 
-   if (functionName.equals(CREATE) || functionName.equals(CREATE_SELF_PARALLEL)) {
+   if (isThreadCreateFunction(functionName)) {
       List<CExpression> args = pCfaEdge.getArguments();
-      String createdFunctionName = args.get(0).toString();
       LabelStatus status = functionName.equals(CREATE) ? LabelStatus.CREATED_THREAD : LabelStatus.SELF_PARALLEL_THREAD;
-      builder.addToThreadSet(new ThreadLabel(createdFunctionName, status));
+      builder.addToThreadSet(new ThreadLabel(getThreadIdentifier(args), status));
     } else if (functionName.equals(JOIN) || functionName.equals(JOIN_SELF_PARALLEL)) {
       List<CExpression> args = pCfaEdge.getArguments();
-      String joinedFunctionName = args.get(0).toString();
-      builder.removeFromThreadSet(new ThreadLabel(joinedFunctionName, LabelStatus.PARENT_THREAD));
+      builder.removeFromThreadSet(new ThreadLabel(getThreadIdentifier(args), LabelStatus.PARENT_THREAD));
     }
+  }
+
+  private boolean isThreadCreateFunction(String functionName) {
+    return functionName.equals(CREATE) || functionName.equals(CREATE_SELF_PARALLEL);
+  }
+
+  private String getThreadIdentifier(List<CExpression> args) {
+    return args.get(0).toString();
   }
 
   @Override
