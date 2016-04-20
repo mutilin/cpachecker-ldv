@@ -25,19 +25,26 @@ package org.sosy_lab.cpachecker.cpa.thread;
 
 
 public class ThreadLabel implements Comparable<ThreadLabel> {
-  private final String threadName;
-  private final boolean labelFlag;
 
-  public ThreadLabel(String name, boolean flag) {
+  public enum LabelStatus {
+    PARENT_THREAD,
+    CREATED_THREAD,
+    SELF_PARALLEL_THREAD;
+  }
+
+  private final String threadName;
+  private final LabelStatus status;
+
+  public ThreadLabel(String name, LabelStatus flag) {
     threadName = name;
-    labelFlag = flag;
+    status = flag;
   }
 
   @Override
   public int hashCode() {
     final int prime = 31;
     int result = 1;
-    result = prime * result + (labelFlag ? 1231 : 1237);
+    result = prime * result + status.hashCode();
     result = prime * result + ((threadName == null) ? 0 : threadName.hashCode());
     return result;
   }
@@ -54,7 +61,7 @@ public class ThreadLabel implements Comparable<ThreadLabel> {
       return false;
     }
     ThreadLabel other = (ThreadLabel) obj;
-    if (labelFlag != other.labelFlag) {
+    if (status != other.status) {
       return false;
     }
     if (threadName == null) {
@@ -73,13 +80,12 @@ public class ThreadLabel implements Comparable<ThreadLabel> {
     if (result != 0) {
       return result;
     } else {
-      return this.labelFlag == pO.labelFlag ? 0 :
-                  this.labelFlag ? 1 : -1;
+      return status.compareTo(status);
     }
   }
 
   public boolean isCompatibleWith(ThreadLabel other) {
-    if (labelFlag == other.labelFlag) {
+    if (status != LabelStatus.SELF_PARALLEL_THREAD && status == other.status) {
       return false;
     }
     if (threadName == null) {
@@ -92,8 +98,16 @@ public class ThreadLabel implements Comparable<ThreadLabel> {
     return true;
   }
 
+  public String getName() {
+    return threadName;
+  }
+
+  public LabelStatus getStatus() {
+    return status;
+  }
+
   @Override
   public String toString() {
-    return threadName + ":" + labelFlag;
+    return threadName + ":" + status;
   }
 }

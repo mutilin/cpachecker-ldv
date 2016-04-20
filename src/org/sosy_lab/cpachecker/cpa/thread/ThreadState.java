@@ -25,8 +25,8 @@ package org.sosy_lab.cpachecker.cpa.thread;
 
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
-import java.util.Set;
 
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
@@ -36,23 +36,61 @@ import org.sosy_lab.cpachecker.core.interfaces.AbstractWrapperState;
 import org.sosy_lab.cpachecker.core.interfaces.Partitionable;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.location.LocationState;
+import org.sosy_lab.cpachecker.cpa.thread.ThreadLabel.LabelStatus;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 
 
 public class ThreadState implements AbstractState, AbstractStateWithLocations, Partitionable,
     AbstractWrapperState, Comparable<ThreadState> {
 
+  public class ThreadStateBuilder {
+    private LocationState loc;
+    private CallstackState cs;
+    private List<ThreadLabel> tSet;
+    private List<ThreadLabel> rSet;
+
+    public ThreadStateBuilder(ThreadState state) {
+      tSet = new LinkedList<>(state.threadSet);
+      rSet = new LinkedList<>(state.removedSet);
+    }
+
+    public void setWrappedStates(LocationState l, CallstackState c) {
+      loc = l;
+      cs = c;
+    }
+
+    public void addToThreadSet(ThreadLabel label) {
+      if (!tSet.isEmpty() && tSet.get(tSet.size() - 1).getStatus() == LabelStatus.SELF_PARALLEL_THREAD) {
+        //Can add only the same status
+        tSet.add(new ThreadLabel(label.getName(), LabelStatus.SELF_PARALLEL_THREAD));
+      } else {
+        tSet.add(label);
+      }
+    }
+
+    public void removeFromThreadSet(ThreadLabel label) {
+      assert tSet.get(tSet.size() -1 ).equals(label);
+      tSet.remove(label);
+    }
+
+    public ThreadState build() {
+      //May be called several times per one builder
+      return new ThreadState(loc, cs, tSet, rSet);
+    }
+  }
+
   private final LocationState location;
   private final CallstackState callstack;
-  private final Set<ThreadLabel> threadSet;
-  private final Set<ThreadLabel> removedSet;
+  private final ImmutableList<ThreadLabel> threadSet;
+  private final ImmutableList<ThreadLabel> removedSet;
 
-  public ThreadState(LocationState l, CallstackState c, Set<ThreadLabel> Tset, Set<ThreadLabel> Rset) {
+  public ThreadState(LocationState l, CallstackState c, List<ThreadLabel> Tset, List<ThreadLabel> Rset) {
     location = l;
     callstack = c;
-    threadSet = Tset;
-    removedSet = Rset;
+    threadSet = ImmutableList.copyOf(Tset);
+    removedSet = Rset == null ? null : ImmutableList.copyOf(Rset);
   }
 
   @Override
@@ -135,11 +173,11 @@ public class ThreadState implements AbstractState, AbstractStateWithLocations, P
     return states;
   }
 
-  public Set<ThreadLabel> getThreadSet() {
+  public List<ThreadLabel> getThreadSet() {
     return threadSet;
   }
 
-  public Set<ThreadLabel> getRemovedSet() {
+  public List<ThreadLabel> getRemovedSet() {
     return removedSet;
   }
 
@@ -191,6 +229,10 @@ public class ThreadState implements AbstractState, AbstractStateWithLocations, P
 
   public ThreadState prepareToStore() {
     return new StoredThreadState(this);
+  }
+
+  public ThreadStateBuilder getBuilder() {
+    return new ThreadStateBuilder(this);
   }
 
   @Override
