@@ -193,6 +193,11 @@ public class ThreadState implements AbstractState, AbstractStateWithLocations, P
     return new StoredThreadState(this);
   }
 
+  @Override
+  public String toString() {
+    return threadSet.toString();
+  }
+
   public class StoredThreadState extends ThreadState {
     StoredThreadState(ThreadState origin) {
       super(null, null, origin.threadSet, null);

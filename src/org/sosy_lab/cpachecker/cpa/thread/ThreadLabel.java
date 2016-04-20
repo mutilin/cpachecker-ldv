@@ -91,4 +91,9 @@ public class ThreadLabel implements Comparable<ThreadLabel> {
     }
     return true;
   }
+
+  @Override
+  public String toString() {
+    return threadName + ":" + labelFlag;
+  }
 }

@@ -24,22 +24,28 @@
 package org.sosy_lab.cpachecker.cpa.thread;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 
 import javax.annotation.Nullable;
 
 import org.sosy_lab.common.configuration.Configuration;
+import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdgeType;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionReturnEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionSummaryStatementEdge;
 import org.sosy_lab.cpachecker.core.defaults.SingleEdgeTransferRelation;
 import org.sosy_lab.cpachecker.core.defaults.SingletonPrecision;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
+import org.sosy_lab.cpachecker.cpa.callstack.CallstackTransferRelation;
 import org.sosy_lab.cpachecker.cpa.location.LocationState;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.Pair;
@@ -49,8 +55,10 @@ public class ThreadTransferRelation extends SingleEdgeTransferRelation {
   private final TransferRelation locationTransfer;
   private final TransferRelation callstackTransfer;
 
-  private static String CREATE = "ldv_create";
-  private static String JOIN = "ldv_join";
+  private static String CREATE = "ldv_thread_create";
+  private static String JOIN = "ldv_thread_join";
+
+  private boolean resetCallstacksFlag;
 
   public ThreadTransferRelation(TransferRelation l,
       TransferRelation c, Configuration pConfiguration) {
@@ -65,19 +73,35 @@ public class ThreadTransferRelation extends SingleEdgeTransferRelation {
     ThreadState tState = (ThreadState)pState;
     LocationState oldLocationState = tState.getLocationState();
     CallstackState oldCallstackState = tState.getCallstackState();
+
+    Set<ThreadLabel> Tset = tState.getThreadSet();
+    Set<ThreadLabel> Rset = tState.getRemovedSet();
+    if (pCfaEdge.getEdgeType() == CFAEdgeType.FunctionCallEdge) {
+      Pair<Set<ThreadLabel>, Set<ThreadLabel>> newSets = handleFunctionCall((CFunctionCallEdge)pCfaEdge, Tset, Rset);
+      Tset = newSets.getFirst();
+      Rset = newSets.getSecond();
+    } else if (pCfaEdge instanceof CFunctionSummaryStatementEdge) {
+      String functionName = ((CFunctionSummaryStatementEdge)pCfaEdge).getFunctionName();
+      if (functionName.equals(CREATE)) {
+        Tset = new TreeSet<>(Tset);
+        List<CExpression> args = ((CFunctionSummaryStatementEdge)pCfaEdge).getFunctionCall().
+            getFunctionCallExpression().getParameterExpressions();
+        String createdFunctionName = args.get(0).toString();
+        Tset.add(new ThreadLabel(createdFunctionName, false));
+        resetCallstacksFlag = true;
+        ((CallstackTransferRelation)callstackTransfer).enableRecursiveContext();
+      }
+    } else if (pCfaEdge.getEdgeType() == CFAEdgeType.FunctionReturnEdge) {
+      if (((CFunctionReturnEdge)pCfaEdge).getFunctionEntry().getFunctionName().equals(CREATE)) {
+        return Collections.emptySet();
+      }
+    }
+
     Collection<? extends AbstractState> newLocationStates = locationTransfer.getAbstractSuccessorsForEdge(oldLocationState,
         SingletonPrecision.getInstance(), pCfaEdge);
     Collection<? extends AbstractState> newCallstackStates = callstackTransfer.getAbstractSuccessorsForEdge(oldCallstackState,
         SingletonPrecision.getInstance(), pCfaEdge);
 
-    Set<ThreadLabel> Tset = tState.getThreadSet();
-    Set<ThreadLabel> Rset = tState.getRemovedSet();
-    if (pCfaEdge.getEdgeType() == CFAEdgeType.FunctionCallEdge) {
-      Pair<Set<ThreadLabel>, Set<ThreadLabel>> newSets = handleFunctionCall((CFunctionCallEdge)pCfaEdge,
-          Tset, Rset);
-      Tset = newSets.getFirst();
-      Rset = newSets.getSecond();
-    }
 
     Set<ThreadState> resultStates = new HashSet<>();
     for (AbstractState lState : newLocationStates) {
@@ -85,14 +109,31 @@ public class ThreadTransferRelation extends SingleEdgeTransferRelation {
         resultStates.add(new ThreadState((LocationState)lState, (CallstackState)cState, Tset, Rset));
       }
     }
+    if (resetCallstacksFlag) {
+      ((CallstackTransferRelation)callstackTransfer).disableRecursiveContext();
+      resetCallstacksFlag = false;
+    }
     return resultStates;
   }
 
   private Pair<Set<ThreadLabel>, Set<ThreadLabel>> handleFunctionCall(CFunctionCallEdge pCfaEdge,
       Set<ThreadLabel> pTset, Set<ThreadLabel> pRset) {
     String functionName = pCfaEdge.getSuccessor().getFunctionName();
+
     if (!functionName.equals(CREATE) && !functionName.equals(JOIN)) {
       return Pair.of(pTset, pRset);
+    } else if (functionName.equals(CREATE)) {
+      Set<ThreadLabel> newSet = new TreeSet<>(pTset);
+      List<CExpression> args = pCfaEdge.getArguments();
+      String createdFunctionName = args.get(0).toString();
+      newSet.add(new ThreadLabel(createdFunctionName, true));
+      return Pair.of(newSet, pRset);
+    } else if (functionName.equals(JOIN)) {
+      Set<ThreadLabel> newSet = new TreeSet<>(pTset);
+      List<CExpression> args = pCfaEdge.getArguments();
+      String joinedFunctionName = args.get(0).toString();
+      assert newSet.remove(new ThreadLabel(joinedFunctionName, false)) : "Can not find the label " + joinedFunctionName;
+      return Pair.of(newSet, pRset);
     }
     return null;
   }
