@@ -24,8 +24,6 @@
 package org.sosy_lab.cpachecker.cpa.usagestatistics.storage;
 
 import java.util.Collections;
-import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -34,9 +32,7 @@ import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
 import org.sosy_lab.cpachecker.util.Pair;
 
 import com.google.common.collect.ImmutableSortedSet;
@@ -95,7 +91,7 @@ public class UnsafeDetector {
   }
 
   private boolean isUnsafe(SortedSet<UsagePoint> points) {
-    if (points.size() >= 1) {
+    /*if (points.size() >= 1) {
       Iterator<UsagePoint> iterator = points.iterator();
       UsagePoint point = iterator.next();
 
@@ -132,13 +128,25 @@ public class UnsafeDetector {
               return true;
             }
           } else {
-            /* There can be a situation
-             * (l1, l2, write), (l1, read), (l2, read)
-             * Thus, we should process writes and reads differently
-             */
+            // There can be a situation
+            // (l1, l2, write), (l1, read), (l2, read)
+            // Thus, we should process writes and reads differently
+            //
             if (Sets.intersection(lockSet, point.locks).isEmpty()) {
               return true;
             }
+          }
+        }
+      }
+    }*/
+    for (UsagePoint point1 : points) {
+      for (UsagePoint point2 : points.tailSet(point1)) {
+        if (Sets.intersection(point1.locks, point2.locks).isEmpty()) {
+          if (ignoreEmptyLockset && point1.locks.isEmpty() && point2.locks.isEmpty()) {
+            continue;
+          }
+          if (point1.threadInfo != null && point1.threadInfo.isCompatibleWith(point2.threadInfo)) {
+            return true;
           }
         }
       }

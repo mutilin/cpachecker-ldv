@@ -24,6 +24,7 @@
 package org.sosy_lab.cpachecker.cpa.thread;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
@@ -36,8 +37,11 @@ import org.sosy_lab.cpachecker.core.interfaces.Partitionable;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.location.LocationState;
 
+import com.google.common.base.Preconditions;
 
-public class ThreadState implements AbstractState, AbstractStateWithLocations, Partitionable, AbstractWrapperState {
+
+public class ThreadState implements AbstractState, AbstractStateWithLocations, Partitionable,
+    AbstractWrapperState, Comparable<ThreadState> {
 
   private final LocationState location;
   private final CallstackState callstack;
@@ -145,5 +149,53 @@ public class ThreadState implements AbstractState, AbstractStateWithLocations, P
 
   public CallstackState getCallstackState() {
     return callstack;
+  }
+
+  @Override
+  public int compareTo(ThreadState other) {
+    int result = 0;
+
+    result = other.threadSet.size() - this.threadSet.size(); //decreasing queue
+
+    if (result != 0) {
+      return result;
+    }
+
+    Iterator<ThreadLabel> iterator1 = threadSet.iterator();
+    Iterator<ThreadLabel> iterator2 = other.threadSet.iterator();
+    //Sizes are equal
+    while (iterator1.hasNext()) {
+      ThreadLabel label1 = iterator1.next();
+      ThreadLabel label2 = iterator2.next();
+      result = label1.compareTo(label2);
+      if (result != 0) {
+        return result;
+      }
+    }
+    //Use compare only for StoredThreadState
+    Preconditions.checkArgument(location == null && callstack == null);
+    return 0;
+  }
+
+
+  public boolean isCompatibleWith(ThreadState other) {
+    for (ThreadLabel label : threadSet) {
+      for (ThreadLabel oLabel : other.threadSet) {
+        if (label.isCompatibleWith(oLabel)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  public ThreadState prepareToStore() {
+    return new StoredThreadState(this);
+  }
+
+  public class StoredThreadState extends ThreadState {
+    StoredThreadState(ThreadState origin) {
+      super(null, null, origin.threadSet, null);
+    }
   }
 }
