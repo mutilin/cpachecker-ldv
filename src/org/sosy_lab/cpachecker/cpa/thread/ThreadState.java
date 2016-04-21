@@ -70,9 +70,22 @@ public class ThreadState implements AbstractState, AbstractStateWithLocations, P
       }
     }
 
-    public void removeFromThreadSet(ThreadLabel label) {
-      assert tSet.get(tSet.size() -1 ).equals(label);
-      tSet.remove(label);
+    public boolean removeFromThreadSet(ThreadLabel label) {
+      //assert tSet.get(tSet.size() -1 ).equals(label) : "try to remove " + label + ", the last was " + tSet.get(tSet.size() -1 );
+      if (tSet.isEmpty()) {
+        return false;
+      }
+      ThreadLabel lastLabel = tSet.get(tSet.size() - 1);
+      if (lastLabel.equals(label)) {
+        return tSet.remove(label);
+      } else if (lastLabel.getName().equals(label.getName())) {
+        //We may have force self-parallel thread here
+        assert lastLabel.getStatus().equals(LabelStatus.SELF_PARALLEL_THREAD);
+        return tSet.remove(lastLabel);
+      } else {
+        //Try to join non-created thread
+        return false;
+      }
     }
 
     public ThreadState build() {
