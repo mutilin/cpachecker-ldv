@@ -36,6 +36,7 @@ import org.sosy_lab.cpachecker.core.interfaces.AbstractWrapperState;
 import org.sosy_lab.cpachecker.core.interfaces.Partitionable;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.location.LocationState;
+import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -60,7 +61,13 @@ public class ThreadState implements AbstractState, AbstractStateWithLocations, P
       cs = c;
     }
 
-    public void addToThreadSet(ThreadLabel label) {
+    public void addToThreadSet(ThreadLabel label) throws HandleCodeException {
+      for (ThreadLabel created : tSet) {
+        if (created.getName().equals(label.getName())) {
+          //Not supported yet
+          throw new HandleCodeException("Can not create thread " + label.getName() + ", it was already created");
+        }
+      }
       if (!tSet.isEmpty() && tSet.get(tSet.size() - 1).isSelfParallel()) {
         //Can add only the same status
         label = label.toSelfParallelLabel();

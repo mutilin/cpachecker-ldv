@@ -49,6 +49,7 @@ import org.sosy_lab.cpachecker.cpa.location.LocationState;
 import org.sosy_lab.cpachecker.cpa.thread.ThreadLabel.LabelStatus;
 import org.sosy_lab.cpachecker.cpa.thread.ThreadState.ThreadStateBuilder;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
+import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 
 
 public class ThreadTransferRelation extends SingleEdgeTransferRelation {
@@ -78,9 +79,13 @@ public class ThreadTransferRelation extends SingleEdgeTransferRelation {
 
     ThreadStateBuilder builder = tState.getBuilder();
     if (pCfaEdge.getEdgeType() == CFAEdgeType.FunctionCallEdge) {
-      if (!handleFunctionCall((CFunctionCallEdge)pCfaEdge, builder)) {
-        //Try to join non-created thread
-        return Collections.emptySet();
+      try {
+        if (!handleFunctionCall((CFunctionCallEdge)pCfaEdge, builder)) {
+          //Try to join non-created thread
+          return Collections.emptySet();
+        }
+      } catch (HandleCodeException e) {
+        throw new CPATransferException(e.getMessage());
       }
     } else if (pCfaEdge instanceof CFunctionSummaryStatementEdge) {
       String functionName = ((CFunctionSummaryStatementEdge)pCfaEdge).getFunctionName();
@@ -119,7 +124,7 @@ public class ThreadTransferRelation extends SingleEdgeTransferRelation {
   }
 
   private boolean handleFunctionCall(CFunctionCallEdge pCfaEdge,
-      ThreadStateBuilder builder) {
+      ThreadStateBuilder builder) throws HandleCodeException {
     String functionName = pCfaEdge.getSuccessor().getFunctionName();
 
     boolean success = true;
