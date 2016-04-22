@@ -238,8 +238,16 @@ public class LocalTransferRelation extends ForwardingTransferRelation<LocalState
     List<Pair<AbstractIdentifier, LocalVariableIdentifier>> toProcess =
         extractIdentifiers(arguments, paramNames, parameterTypes);
 
+    //TODO Make it with config
+    boolean isThreadCreate = calledFunctionName.equals("ldv_thread_create") ||
+        calledFunctionName.equals("ldv_thread_create_N");
+
     for (Pair<AbstractIdentifier, LocalVariableIdentifier> pairId : toProcess) {
       DataType type = state.getType(pairId.getFirst());
+      if (isThreadCreate && pairId.getSecond().getDereference() > 0) {
+        //Data became shared after thread creation
+        type = DataType.GLOBAL;
+      }
       newState.set(pairId.getSecond(), type);
     }
     return newState;
