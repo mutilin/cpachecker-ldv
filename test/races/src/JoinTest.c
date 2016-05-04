@@ -12,9 +12,6 @@ struct ldv_thread {
 int safe;
 int unsafe;
 
-struct thread *ldv_thread_create(void *(*start_routine) (void *), void *arg) {
-    (*start_routine)(arg);
-}
 
 int ldv_thread_join(void *(*start_routine) (void *), pthread_t *thread) {
     //??
@@ -31,8 +28,8 @@ int f() {
 
 int ldv_main() {
     int *a;
-	ldv_thread_create(control_function, a);
+	ldv_thread_create(a, control_function);
     unsafe = 0;
-    ldv_thread_join(control_function, a);
+    ldv_thread_join(a, control_function);
     safe = 1;
 }

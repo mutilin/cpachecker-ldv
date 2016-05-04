@@ -3776,10 +3776,6 @@ struct ldv_thread {
     pthread_t **threads;
 };
 
-struct ldv_thread *ldv_thread_create(void (*start_routine) (void *), void *arg) {
-    (*start_routine)(arg);
-}
-
 int ldv_thread_join(void (*start_routine) (void *), struct ldv_thread *thread) {
     //??
 }
@@ -3797,7 +3793,7 @@ int module_init() {
    ldv_assert(pdev==1);
    if(__VERIFIER_nondet_int()) {
 
-      thread = ldv_thread_create(thread1, ((void *)0));
+      ldv_thread_create(&thread, thread1, ((void *)0));
 
 
 
@@ -3815,7 +3811,7 @@ void module_exit() {
 
    pdev = 4;
    ldv_assert(pdev==4);
-   ldv_thread_join(thread1, thread);
+   ldv_thread_join(thread, thread1);
    pthread_mutex_destroy(&mutex);
 
    pdev = 5;

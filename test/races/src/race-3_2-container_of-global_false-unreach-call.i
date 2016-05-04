@@ -3797,10 +3797,6 @@ struct ldv_thread {
     pthread_t **threads;
 };
 
-struct ldv_thread *ldv_thread_create_N(void (*start_routine) (void *), void *arg, int n) {
-    (*start_routine)(arg);
-}
-
 int ldv_thread_join_N(void (*start_routine) (void *), struct ldv_thread *thread) {
     //??
 }
@@ -3833,7 +3829,7 @@ int my_drv_probe(struct my_data *data) {
  my_dev = &data->dev;
 
 
- thread = ldv_thread_create_N(my_callback, ((void *)0), 2);
+ ldv_thread_create_N(thread, my_callback, ((void *)0), 2);
  return 0;
 
 exit:
@@ -3843,7 +3839,7 @@ exit:
 
 void my_drv_disconnect(struct my_data *data) {
  void *status;
- ldv_thread_join_N(my_callback, thread);
+ ldv_thread_join_N(thread, my_callback);
  pthread_mutex_destroy(&data->lock);
 }
 
