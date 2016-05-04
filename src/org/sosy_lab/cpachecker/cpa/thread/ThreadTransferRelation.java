@@ -33,6 +33,9 @@ import javax.annotation.Nullable;
 
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCall;
+import org.sosy_lab.cpachecker.cfa.ast.c.CThreadCreateStatement;
+import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdgeType;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
@@ -56,9 +59,7 @@ public class ThreadTransferRelation extends SingleEdgeTransferRelation {
   private final TransferRelation locationTransfer;
   private final TransferRelation callstackTransfer;
 
-  private static String CREATE = "ldv_thread_create";
   private static String JOIN = "ldv_thread_join";
-  private static String CREATE_SELF_PARALLEL = "ldv_thread_create_N";
   private static String JOIN_SELF_PARALLEL = "ldv_thread_join_N";
 
   private boolean resetCallstacksFlag;
@@ -88,17 +89,16 @@ public class ThreadTransferRelation extends SingleEdgeTransferRelation {
         throw new CPATransferException(e.getMessage());
       }
     } else if (pCfaEdge instanceof CFunctionSummaryStatementEdge) {
-      String functionName = ((CFunctionSummaryStatementEdge)pCfaEdge).getFunctionName();
-      if (isThreadCreateFunction(functionName)) {
-        List<CExpression> args = ((CFunctionSummaryStatementEdge)pCfaEdge).getFunctionCall().
-            getFunctionCallExpression().getParameterExpressions();
-        builder.addToThreadSet(new ThreadLabel(getThreadIdentifier(args), LabelStatus.PARENT_THREAD));
+      CFunctionCall functionCall = ((CFunctionSummaryStatementEdge)pCfaEdge).getFunctionCall();
+      if (isThreadCreateFunction(functionCall)) {
+        String functionName = ((CFunctionSummaryStatementEdge)pCfaEdge).getFunctionName();
+        builder.addToThreadSet(new ThreadLabel(functionName, LabelStatus.PARENT_THREAD));
         resetCallstacksFlag = true;
         ((CallstackTransferRelation)callstackTransfer).enableRecursiveContext();
       }
     } else if (pCfaEdge.getEdgeType() == CFAEdgeType.FunctionReturnEdge) {
-      String functionName = ((CFunctionReturnEdge)pCfaEdge).getFunctionEntry().getFunctionName();
-      if (isThreadCreateFunction(functionName)) {
+      CFunctionCall functionCall = ((CFunctionReturnEdge)pCfaEdge).getSummaryEdge().getExpression();
+      if (isThreadCreateFunction(functionCall)) {
         return Collections.emptySet();
       }
     }
@@ -128,23 +128,21 @@ public class ThreadTransferRelation extends SingleEdgeTransferRelation {
     String functionName = pCfaEdge.getSuccessor().getFunctionName();
 
     boolean success = true;
-    if (isThreadCreateFunction(functionName)) {
-      List<CExpression> args = pCfaEdge.getArguments();
-      LabelStatus status = functionName.equals(CREATE) ? LabelStatus.CREATED_THREAD : LabelStatus.SELF_PARALLEL_THREAD;
-      builder.addToThreadSet(new ThreadLabel(getThreadIdentifier(args), status));
+    CFunctionCall fCall = pCfaEdge.getSummaryEdge().getExpression();
+    if (isThreadCreateFunction(fCall)) {
+      LabelStatus status =  ((CThreadCreateStatement)fCall).isSelfParallel() ? LabelStatus.SELF_PARALLEL_THREAD : LabelStatus.CREATED_THREAD;
+      builder.addToThreadSet(new ThreadLabel(functionName, status));
     } else if (functionName.equals(JOIN) || functionName.equals(JOIN_SELF_PARALLEL)) {
       List<CExpression> args = pCfaEdge.getArguments();
-      success = builder.removeFromThreadSet(new ThreadLabel(getThreadIdentifier(args), LabelStatus.PARENT_THREAD));
+      functionName = ((CUnaryExpression)args.get(1)).getOperand().toASTString();
+      success = builder.removeFromThreadSet(new ThreadLabel(functionName, LabelStatus.PARENT_THREAD));
     }
     return success;
   }
 
-  private boolean isThreadCreateFunction(String functionName) {
-    return functionName.equals(CREATE) || functionName.equals(CREATE_SELF_PARALLEL);
-  }
-
-  private String getThreadIdentifier(List<CExpression> args) {
-    return args.get(0).toString();
+  private boolean isThreadCreateFunction(CFunctionCall statement) {
+    return (statement instanceof CThreadCreateStatement);
+    //return functionName.equals(CREATE) || functionName.equals(CREATE_SELF_PARALLEL);
   }
 
   @Override
