@@ -79,28 +79,29 @@ public class ThreadTransferRelation extends SingleEdgeTransferRelation {
     CallstackState oldCallstackState = tState.getCallstackState();
 
     ThreadStateBuilder builder = tState.getBuilder();
-    if (pCfaEdge.getEdgeType() == CFAEdgeType.FunctionCallEdge) {
-      try {
-        if (!handleFunctionCall((CFunctionCallEdge)pCfaEdge, builder)) {
-          //Try to join non-created thread
+    try {
+      if (pCfaEdge.getEdgeType() == CFAEdgeType.FunctionCallEdge) {
+          if (!handleFunctionCall((CFunctionCallEdge)pCfaEdge, builder)) {
+            //Try to join non-created thread
+            return Collections.emptySet();
+          }
+      } else if (pCfaEdge instanceof CFunctionSummaryStatementEdge) {
+        CFunctionCall functionCall = ((CFunctionSummaryStatementEdge)pCfaEdge).getFunctionCall();
+        if (isThreadCreateFunction(functionCall)) {
+          String functionName = ((CFunctionSummaryStatementEdge)pCfaEdge).getFunctionName();
+          builder.addToThreadSet(new ThreadLabel(functionName, LabelStatus.PARENT_THREAD));
+          resetCallstacksFlag = true;
+          ((CallstackTransferRelation)callstackTransfer).enableRecursiveContext();
+        }
+      } else if (pCfaEdge.getEdgeType() == CFAEdgeType.FunctionReturnEdge) {
+        CFunctionCall functionCall = ((CFunctionReturnEdge)pCfaEdge).getSummaryEdge().getExpression();
+        if (isThreadCreateFunction(functionCall)) {
           return Collections.emptySet();
         }
-      } catch (HandleCodeException e) {
-        throw new CPATransferException(e.getMessage());
       }
-    } else if (pCfaEdge instanceof CFunctionSummaryStatementEdge) {
-      CFunctionCall functionCall = ((CFunctionSummaryStatementEdge)pCfaEdge).getFunctionCall();
-      if (isThreadCreateFunction(functionCall)) {
-        String functionName = ((CFunctionSummaryStatementEdge)pCfaEdge).getFunctionName();
-        builder.addToThreadSet(new ThreadLabel(functionName, LabelStatus.PARENT_THREAD));
-        resetCallstacksFlag = true;
-        ((CallstackTransferRelation)callstackTransfer).enableRecursiveContext();
-      }
-    } else if (pCfaEdge.getEdgeType() == CFAEdgeType.FunctionReturnEdge) {
-      CFunctionCall functionCall = ((CFunctionReturnEdge)pCfaEdge).getSummaryEdge().getExpression();
-      if (isThreadCreateFunction(functionCall)) {
-        return Collections.emptySet();
-      }
+    } catch (HandleCodeException e) {
+      //throw new CPATransferException(e.getMessage());
+      return Collections.emptySet();
     }
 
     Collection<? extends AbstractState> newLocationStates = locationTransfer.getAbstractSuccessorsForEdge(oldLocationState,

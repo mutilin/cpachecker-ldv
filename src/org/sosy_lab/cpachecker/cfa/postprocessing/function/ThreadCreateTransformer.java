@@ -110,7 +110,7 @@ public class ThreadCreateTransformer {
       CFunctionCallExpression fCall = threadVisitor.threadCreates.get(edge);
       List<CExpression> args = fCall.getParameterExpressions();
       CExpression newThreadFunction = args.get(1);
-      List<CExpression> pParameters = Lists.newArrayList(args.get(0));
+      List<CExpression> pParameters = Lists.newArrayList(args.get(2));
       CIdExpression newThreadNameExpression = getFunctionName(newThreadFunction);
       String newThreadName = newThreadNameExpression.getName();
       CFunctionEntryNode entryNode = (CFunctionEntryNode) cfa.getFunctionHead(newThreadName);
