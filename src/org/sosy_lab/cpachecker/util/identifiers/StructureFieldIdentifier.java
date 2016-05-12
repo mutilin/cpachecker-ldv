@@ -23,19 +23,16 @@
  */
 package org.sosy_lab.cpachecker.util.identifiers;
 
-import java.util.Map;
-
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
-import org.sosy_lab.cpachecker.cpa.local.LocalState.DataType;
 
 
 
-public class StructureFieldIdentifier extends SingleIdentifier {
+public class StructureFieldIdentifier extends StructureIdentifier {
   protected String fieldType;
 
-  public StructureFieldIdentifier(String pNm, String fTp, CType pTp, int dereference) {
-    super(pNm, pTp, dereference);
-    fieldType = fTp;
+  public StructureFieldIdentifier(String pNm, /*String fTp,*/ CType pTp, int dereference, AbstractIdentifier own) {
+    super(pNm, pTp, dereference, own);
+    fieldType = type.toASTString("");
   }
 
   @Override
@@ -61,7 +58,7 @@ public class StructureFieldIdentifier extends SingleIdentifier {
   public int hashCode() {
     final int prime = 31;
     int result = super.hashCode();
-    result = prime * result + ((fieldType == null) ? 0 : fieldType.hashCode());
+    result = prime * result + ((type == null) ? 0 : type.hashCode());
     return result;
   }
 
@@ -77,11 +74,11 @@ public class StructureFieldIdentifier extends SingleIdentifier {
       return false;
     }
     StructureFieldIdentifier other = (StructureFieldIdentifier) obj;
-    if (fieldType == null) {
-      if (other.fieldType != null) {
+    if (type == null) {
+      if (other.type != null) {
         return false;
       }
-    } else if (!fieldType.equals(other.fieldType)) {
+    } else if (!type.equals(other.type)) {
       return false;
     }
     return true;
@@ -89,19 +86,14 @@ public class StructureFieldIdentifier extends SingleIdentifier {
 
   @Override
   public StructureFieldIdentifier clone() {
-    return new StructureFieldIdentifier(name, fieldType, type, dereference);
+    return new StructureFieldIdentifier(name, /*fieldType,*/ type, dereference, owner);
   }
 
   @Override
   public SingleIdentifier clearDereference() {
-    return new StructureFieldIdentifier(name, fieldType, type, 0);
+    return new StructureFieldIdentifier(name, /*fieldType,*/ type, 0, owner);
   }
 
-  @Override
-  public boolean isGlobal() {
-    //It isn't correct, but this method shouldn't be used in this class
-    return false;
-  }
 
   @Override
   public String toLog() {
@@ -129,8 +121,4 @@ public class StructureFieldIdentifier extends SingleIdentifier {
     }
   }
 
-  @Override
-  public DataType getType(Map<? extends AbstractIdentifier, DataType> pLocalInfo) {
-    return null;
-  }
 }

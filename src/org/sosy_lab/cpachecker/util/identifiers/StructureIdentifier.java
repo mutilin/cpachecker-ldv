@@ -217,9 +217,9 @@ public class StructureIdentifier extends SingleIdentifier{
 
   public StructureFieldIdentifier toStructureFieldIdentifier() {
     if (owner instanceof SingleIdentifier) {
-      return new StructureFieldIdentifier(name, type.toASTString(""), ((SingleIdentifier)owner).type, dereference);
+      return new StructureFieldIdentifier(name, /*type.toASTString(""),*/ ((SingleIdentifier)owner).type, dereference, owner);
     } else {
-      return new StructureFieldIdentifier(name, type.toASTString(""), type, dereference);
+      return new StructureFieldIdentifier(name, /*type.toASTString(""),*/ type, dereference, owner);
     }
   }
 
