@@ -37,6 +37,7 @@ import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsagePoint;
 import org.sosy_lab.cpachecker.util.AbstractStates;
+import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 import com.google.common.base.Predicate;
@@ -58,17 +59,23 @@ public class UsageInfo implements Comparable<UsageInfo> {
   public boolean failureFlag;
   private boolean reachable;
 
-  public UsageInfo(@Nonnull Access atype, @Nonnull LineInfo l, @Nonnull LockStatisticsState lock) {
+  public UsageInfo(@Nonnull Access atype, @Nonnull LineInfo l, @Nonnull LockStatisticsState lock, AbstractIdentifier ident) {
     line = l;
     locks = lock;
     accessType = atype;
     keyState = null;
     failureFlag = false;
     reachable = true;
+    if (ident instanceof SingleIdentifier)
+    {
+      id = (SingleIdentifier)ident;
+    } else {
+      id = null;
+    }
   }
 
-  public UsageInfo(@Nonnull Access atype,  int l, @Nonnull UsageStatisticsState state) {
-    this(atype, new LineInfo(l, AbstractStates.extractLocation(state)), AbstractStates.extractStateByType(state, LockStatisticsState.class));
+  public UsageInfo(@Nonnull Access atype,  int l, @Nonnull UsageStatisticsState state, AbstractIdentifier ident) {
+    this(atype, new LineInfo(l, AbstractStates.extractLocation(state)), AbstractStates.extractStateByType(state, LockStatisticsState.class), ident);
   }
 
   public @Nonnull LockStatisticsState getLockState() {
@@ -84,13 +91,14 @@ public class UsageInfo implements Comparable<UsageInfo> {
   }
 
   public @Nonnull SingleIdentifier getId() {
+    assert(id != null);
     return id;
   }
 
   public @Nonnull void setId(SingleIdentifier pId) {
     //Only once
-    assert id == null;
-    id = pId;
+   // assert id.equals(pId);
+
   }
 
   public UsagePoint getUsagePoint() {
@@ -240,7 +248,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
 
   @Override
   public UsageInfo clone() {
-    UsageInfo result = new UsageInfo(accessType, line, locks);
+    UsageInfo result = new UsageInfo(accessType, line, locks, id);
     result.id = this.id;
     result.keyState = this.keyState;
     result.path = this.path;

@@ -316,7 +316,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       String funcName = AbstractStates.extractStateByType(pNewState, CallstackState.class).getCurrentFunction();
 
       AbstractIdentifier id = IdentifierCreator.createIdentifier(decl, funcName, 0);
-      UsageInfo usage = new UsageInfo(Access.WRITE, declEdge.getLineNumber(), pNewState);
+      UsageInfo usage = new UsageInfo(Access.WRITE, declEdge.getLineNumber(), pNewState, id);
       visitId(pNewState, pPrecision, id, usage);
     }
   }
@@ -343,7 +343,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
         creator.setDereference(currentInfo.pInfo.get(i).dereference);
         id = params.get(i).accept(creator);
         UsageInfo usage = new UsageInfo(currentInfo.pInfo.get(i).access,
-            fcExpression.getFileLocation().getStartingLineNumber(), pNewState);
+            fcExpression.getFileLocation().getStartingLineNumber(), pNewState, id);
         visitId(pNewState, pPrecision, id, usage);
       }
 
@@ -446,7 +446,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     expression.accept(handler);
 
     for (Pair<AbstractIdentifier, Access> pair : handler.result) {
-      UsageInfo usage = new UsageInfo(pair.getSecond(), expression.getFileLocation().getStartingLineNumber(), state);
+      UsageInfo usage = new UsageInfo(pair.getSecond(), expression.getFileLocation().getStartingLineNumber(), state, pair.getFirst());
       visitId(state, pPrecision, pair.getFirst(), usage);
     }
 
@@ -489,6 +489,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     if (singleId instanceof StructureIdentifier) {
       singleId = ((StructureIdentifier)singleId).toStructureFieldIdentifier();
     }
+
     logger.log(Level.FINER, "Add id " + singleId + " to unsafe statistics");
     LockStatisticsState lockState = AbstractStates.extractStateByType(state, LockStatisticsState.class);
     logger.log(Level.FINEST, "Its locks are: " + lockState);
