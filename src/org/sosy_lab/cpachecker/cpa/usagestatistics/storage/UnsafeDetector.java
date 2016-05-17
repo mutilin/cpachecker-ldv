@@ -180,7 +180,7 @@ public class UnsafeDetector {
       if (ignoreEmptyLockset && point1.locks.isEmpty() && point2.locks.isEmpty()) {
         return false;
       }
-      if (point1.threadInfo != null && point1.threadInfo.isCompatibleWith(point2.threadInfo)) {
+      if ((point1.threadInfo == null && point2.threadInfo == null) || point1.threadInfo.isCompatibleWith(point2.threadInfo)) {
         return true;
       }
     }
