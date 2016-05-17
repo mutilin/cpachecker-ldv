@@ -382,7 +382,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
     Writer w;
     try {
-      File name = new File("output/witness." + globalCounter++ + ".graphml");
+      File name = new File("output/witness." + pId.getName() + ".graphml");
       w = Files.openOutputFile(Paths.get(name.getAbsolutePath()));
       GraphMlBuilder builder = new GraphMlBuilder(w);
 
