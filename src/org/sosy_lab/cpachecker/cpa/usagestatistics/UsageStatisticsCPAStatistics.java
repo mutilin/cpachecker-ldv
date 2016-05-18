@@ -420,45 +420,8 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         currentId = nextId;
         nextId = getId();
 
-        result = builder.createEdgeElement(currentId, nextId);
+        result = prepareElement(builder, currentId, nextId, pEdge, defaultSourcefileName, "0");
 
-        if (pEdge.getSuccessor() instanceof FunctionEntryNode) {
-          FunctionEntryNode in = (FunctionEntryNode) pEdge.getSuccessor();
-          builder.addDataElementChild(result, KeyDef.FUNCTIONENTRY, in.getFunctionName());
-
-        }
-        if (pEdge.getSuccessor() instanceof FunctionExitNode) {
-          FunctionExitNode out = (FunctionExitNode) pEdge.getSuccessor();
-          builder.addDataElementChild(result, KeyDef.FUNCTIONEXIT, out.getFunctionName());
-        }
-
-        if (pEdge instanceof AssumeEdge) {
-          AssumeEdge a = (AssumeEdge) pEdge;
-          AssumeCase assumeCase = a.getTruthAssumption() ? AssumeCase.THEN : AssumeCase.ELSE;
-          builder.addDataElementChild(result, KeyDef.CONTROLCASE, assumeCase.toString());
-        }
-
-        Set<FileLocation> locations = SourceLocationMapper.getFileLocationsFromCfaEdge(pEdge);
-        if (locations.size() > 0) {
-          FileLocation l = locations.iterator().next();
-          if (!l.getFileName().equals(defaultSourcefileName)) {
-            builder.addDataElementChild(result, KeyDef.ORIGINFILE, l.getFileName());
-          } else {
-            builder.addDataElementChild(result, KeyDef.ORIGINFILE, defaultSourcefileName);
-          }
-          builder.addDataElementChild(result, KeyDef.ORIGINLINE, Integer.toString(l.getStartingLineInOrigin()));
-          builder.addDataElementChild(result, KeyDef.OFFSET, Integer.toString(l.getNodeOffset()));
-        }
-
-        if (!pEdge.getRawStatement().trim().isEmpty()) {
-          builder.addDataElementChild(result, KeyDef.SOURCECODE, pEdge.getRawStatement());
-        }
-
-        builder.addDataElementChild(result, KeyDef.THREADIDENTIFIER, "0");
-
-        builder.appendToAppendable(result);
-
-        result = builder.createNodeElement(nextId, NodeType.ONPATH);
         builder.appendToAppendable(result);
       }
 
@@ -468,51 +431,14 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         currentId = nextId;
         nextId = getId();
 
-        result = builder.createEdgeElement(currentId, nextId);
+        result = prepareElement(builder, currentId, nextId, pEdge, defaultSourcefileName, "1");
 
-        if (pEdge.getSuccessor() instanceof FunctionEntryNode) {
-          FunctionEntryNode in = (FunctionEntryNode) pEdge.getSuccessor();
-          builder.addDataElementChild(result, KeyDef.FUNCTIONENTRY, in.getFunctionName());
-
+        if (!iterator.hasNext()) {
+          builder.addDataElementChild(result, NodeFlag.ISVIOLATION.key, "true");
         }
-        if (pEdge.getSuccessor() instanceof FunctionExitNode) {
-          FunctionExitNode out = (FunctionExitNode) pEdge.getSuccessor();
-          builder.addDataElementChild(result, KeyDef.FUNCTIONEXIT, out.getFunctionName());
-        }
-
-        if (pEdge instanceof AssumeEdge) {
-          AssumeEdge a = (AssumeEdge) pEdge;
-          AssumeCase assumeCase = a.getTruthAssumption() ? AssumeCase.THEN : AssumeCase.ELSE;
-          builder.addDataElementChild(result, KeyDef.CONTROLCASE, assumeCase.toString());
-        }
-
-        Set<FileLocation> locations = SourceLocationMapper.getFileLocationsFromCfaEdge(pEdge);
-        if (locations.size() > 0) {
-          FileLocation l = locations.iterator().next();
-          if (!l.getFileName().equals(defaultSourcefileName)) {
-            builder.addDataElementChild(result, KeyDef.ORIGINFILE, l.getFileName());
-            builder.addDataElementChild(result, KeyDef.ORIGINFILE, l.getFileName());
-          }
-          builder.addDataElementChild(result, KeyDef.ORIGINLINE, Integer.toString(l.getStartingLineInOrigin()));
-          builder.addDataElementChild(result, KeyDef.OFFSET, Integer.toString(l.getNodeOffset()));
-        }
-
-        if (!pEdge.getRawStatement().trim().isEmpty()) {
-          builder.addDataElementChild(result, KeyDef.SOURCECODE, pEdge.getRawStatement());
-        }
-
-        builder.addDataElementChild(result, KeyDef.THREADIDENTIFIER, "1");
 
         builder.appendToAppendable(result);
-
-        result = builder.createNodeElement(nextId, NodeType.ONPATH);
-        if (iterator.hasNext()) {
-          builder.appendToAppendable(result);
-        }
       }
-
-      builder.addDataElementChild(result, NodeFlag.ISVIOLATION.key, "true");
-      builder.appendToAppendable(result);
 
       builder.appendFooter();
       w.close();
@@ -529,8 +455,47 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     return "A" + idCounter++;
   }
 
-  private Element appendPath(List<CFAEdge> edges) {
-    return null;
+  private Element prepareElement(GraphMlBuilder builder, String currentId, String nextId, CFAEdge pEdge,
+      String defaultSourcefileName, String ThreadNum) {
+    Element result = builder.createEdgeElement(currentId, nextId);
+
+    if (pEdge.getSuccessor() instanceof FunctionEntryNode) {
+      FunctionEntryNode in = (FunctionEntryNode) pEdge.getSuccessor();
+      builder.addDataElementChild(result, KeyDef.FUNCTIONENTRY, in.getFunctionName());
+
+    }
+    if (pEdge.getSuccessor() instanceof FunctionExitNode) {
+      FunctionExitNode out = (FunctionExitNode) pEdge.getSuccessor();
+      builder.addDataElementChild(result, KeyDef.FUNCTIONEXIT, out.getFunctionName());
+    }
+
+    if (pEdge instanceof AssumeEdge) {
+      AssumeEdge a = (AssumeEdge) pEdge;
+      AssumeCase assumeCase = a.getTruthAssumption() ? AssumeCase.THEN : AssumeCase.ELSE;
+      builder.addDataElementChild(result, KeyDef.CONTROLCASE, assumeCase.toString());
+    }
+
+    Set<FileLocation> locations = SourceLocationMapper.getFileLocationsFromCfaEdge(pEdge);
+    if (locations.size() > 0) {
+      FileLocation l = locations.iterator().next();
+      if (!l.getFileName().equals(defaultSourcefileName)) {
+        builder.addDataElementChild(result, KeyDef.ORIGINFILE, l.getFileName());
+      } else {
+        builder.addDataElementChild(result, KeyDef.ORIGINFILE, defaultSourcefileName);
+      }
+      builder.addDataElementChild(result, KeyDef.ORIGINLINE, Integer.toString(l.getStartingLineInOrigin()));
+      builder.addDataElementChild(result, KeyDef.OFFSET, Integer.toString(l.getNodeOffset()));
+    }
+
+    if (!pEdge.getRawStatement().trim().isEmpty()) {
+      builder.addDataElementChild(result, KeyDef.SOURCECODE, pEdge.getRawStatement());
+    }
+
+    builder.addDataElementChild(result, KeyDef.THREADIDENTIFIER, ThreadNum);
+
+    builder.appendToAppendable(result);
+
+    return builder.createNodeElement(nextId, NodeType.ONPATH);
   }
 
   public void printUnsafeRawdata(final ReachedSet reached, boolean printOnlyTrueUnsafes) {
