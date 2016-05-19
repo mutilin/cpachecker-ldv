@@ -93,7 +93,7 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
     if (pCpa instanceof ConfigurableProgramAnalysisWithBAM) {
       Reducer wrappedReducer = ((ConfigurableProgramAnalysisWithBAM)pCpa).getReducer();
       if (wrappedReducer != null) {
-        reducer = new UsageStatisticsReducer(wrappedReducer);
+        reducer = new UsageStatisticsReducer(wrappedReducer, LockCPA.getReducer());
       } else {
         reducer = null;
       }

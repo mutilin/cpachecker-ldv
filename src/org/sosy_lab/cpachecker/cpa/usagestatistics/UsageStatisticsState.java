@@ -23,13 +23,20 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
+import org.sosy_lab.common.time.Timer;
+import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.core.defaults.AbstractSingleWrapperState;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Targetable;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsReducer;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.effects.LockEffect;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsageContainer;
 import org.sosy_lab.cpachecker.util.AbstractStates;
@@ -45,25 +52,28 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
   private static final long serialVersionUID = -898577877284268426L;
   private TemporaryUsageStorage recentUsages;
   private boolean isStorageCloned;
-  private final UsageContainer container;
+  private final UsageContainer globalContainer;
+  private final TemporaryUsageStorage functionContainer;
 
   private final Map<AbstractIdentifier, AbstractIdentifier> variableBindingRelation;
 
   public UsageStatisticsState(final AbstractState pWrappedElement, final UsageContainer pContainer) {
-    //Only for getInitialState()
+    //Only for getInitialState() and reduce
     super(pWrappedElement);
     variableBindingRelation = new HashMap<>();
     recentUsages = new TemporaryUsageStorage();
-    container = pContainer;
+    globalContainer = pContainer;
     isStorageCloned = true;
+    functionContainer = new TemporaryUsageStorage();
   }
 
   private UsageStatisticsState(final AbstractState pWrappedElement, final UsageStatisticsState state) {
     super(pWrappedElement);
     variableBindingRelation = new HashMap<>(state.variableBindingRelation);
     recentUsages = state.recentUsages;
-    container = state.container;
+    globalContainer = state.globalContainer;
     isStorageCloned = false;
+    functionContainer = state.functionContainer;
   }
 
   public boolean containsLinks(final AbstractIdentifier id) {
@@ -167,6 +177,7 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
   }
 
   boolean isLessOrEqual(final UsageStatisticsState other) {
+    //If we are here, the wrapped domain return true and the stop depends only on this value
 
     // this element is not less or equal than the other element, if that one contains less elements
     if (this.variableBindingRelation.size() > other.variableBindingRelation.size()) {
@@ -190,34 +201,52 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
       recentUsages = new TemporaryUsageStorage(recentUsages);
       isStorageCloned = true;
     }
-    recentUsages.put(id, usage);
+    recentUsages.add(id, usage);
   }
 
-  public UsageStatisticsState expand(final UsageStatisticsState root, final AbstractState wrappedState) {
-    final UsageStatisticsState result = root.clone(wrappedState);
+  public static Timer tmpTimer1 = new Timer();
+  public static Timer tmpTimer2 = new Timer();
+  public static Timer tmpTimer3 = new Timer();
 
-    result.recentUsages = this.recentUsages;
+  public UsageStatisticsState expand(final UsageStatisticsState root, final AbstractState wrappedState,
+      Block pReducedContext, Block outerSubtree, LockStatisticsReducer reducer) {
+    tmpTimer1.start();
+    final UsageStatisticsState result = root.clone(wrappedState);
+    //Now it is only join
+    LockStatisticsState rootLockState = AbstractStates.extractStateByType(root, LockStatisticsState.class);
+    LockStatisticsState reducedLockState = (LockStatisticsState) reducer.getVariableReducedState(rootLockState, pReducedContext, outerSubtree, AbstractStates.extractLocation(root));
+    List<LockEffect> difference = reducedLockState.getDifference(rootLockState);
+
+    tmpTimer1.stop();
+    tmpTimer2.start();
+    result.functionContainer.join(functionContainer, difference);
+    tmpTimer2.stop();
+    return result;
+  }
+
+  public UsageStatisticsState reduce(final AbstractState wrappedState) {
+    UsageStatisticsState result = new UsageStatisticsState(wrappedState, this.globalContainer);
     return result;
   }
 
   public UsageContainer getContainer() {
-    return container;
+    return globalContainer;
   }
 
   public void saveUnsafesInContainerIfNecessary(AbstractState abstractState) {
     ARGState argState = AbstractStates.extractStateByType(abstractState, ARGState.class);
     PredicateAbstractState state = AbstractStates.extractStateByType(argState, PredicateAbstractState.class);
     if (state == null || !state.getAbstractionFormula().isFalse() && state.isAbstractionState()) {
-      for (SingleIdentifier id : recentUsages.keySet()) {
-        for (UsageInfo uinfo : recentUsages.get(id)) {
-          if (uinfo.getKeyState() == null) {
-            //We can add the same usage at merge points. Let the final key state be the first one.
-            uinfo.setKeyState(argState);
-            container.add(id, uinfo);
-          }
-        }
-      }
-      recentUsages.cleanUsages();
+      recentUsages.setKeyState(argState);
+      List<LockEffect> emptyList = Collections.emptyList();
+      tmpTimer3.start();
+      functionContainer.join(recentUsages, emptyList);
+      tmpTimer3.stop();
+      recentUsages.clear();
     }
+  }
+
+  public void updateContainerIfNecessary() {
+    globalContainer.addNewUsagesIfNecessary(functionContainer);
   }
 }

@@ -33,7 +33,6 @@ import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.CPAFactory;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysisWithBAM;
-import org.sosy_lab.cpachecker.core.interfaces.Reducer;
 import org.sosy_lab.cpachecker.core.interfaces.StateSpacePartition;
 
 @Options(prefix="cpa.lockstatistics")
@@ -57,7 +56,7 @@ public class LockStatisticsCPA extends AbstractCPA implements ConfigurableProgra
   }
 
   @Override
-  public Reducer getReducer() {
+  public LockStatisticsReducer getReducer() {
     return reducer;
   }
 }

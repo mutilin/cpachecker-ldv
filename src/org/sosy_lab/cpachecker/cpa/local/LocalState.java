@@ -134,8 +134,13 @@ public class LocalState implements AbstractState {
     }
     LocalState joinedPreviousState = null;
     if ((this.previousState != null && pState2.previousState == null)
-        && (this.previousState == null && pState2.previousState != null) ) {
-      System.err.println("Panic! Merging states, but one of them has previous and another hasn't");
+        || (this.previousState == null && pState2.previousState != null) ) {
+      //One of them was already reduced and one not yet
+      if (this.previousState == null) {
+        return this;
+      } else {
+        return pState2;
+      }
     } else if (this.previousState != null && pState2.previousState != null
         && !this.previousState.equals(pState2.previousState)) {
       //it can be, when we join states, called from different functions

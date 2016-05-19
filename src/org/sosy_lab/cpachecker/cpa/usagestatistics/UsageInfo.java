@@ -97,8 +97,8 @@ public class UsageInfo implements Comparable<UsageInfo> {
 
   public @Nonnull void setId(SingleIdentifier pId) {
     //Only once
-   // assert id.equals(pId);
-
+    assert id == null || id.equals(pId) : "Old id " + id + ", new one - " + pId;
+    id = pId;
   }
 
   public UsagePoint getUsagePoint() {
@@ -155,9 +155,12 @@ public class UsageInfo implements Comparable<UsageInfo> {
   public String toString(){
     StringBuilder sb = new StringBuilder();
 
-    sb.append("Id ");
-    sb.append(id.toString());
-    sb.append(", line ");
+    if (id != null) {
+      sb.append("Id ");
+      sb.append(id.toString());
+      sb.append(", ");
+    }
+    sb.append("line ");
     sb.append(line.toString());
     sb.append(" (" + accessType + ")");
     sb.append(", " + locks);
@@ -213,7 +216,10 @@ public class UsageInfo implements Comparable<UsageInfo> {
     /* We can't use key states for ordering, because the treeSets can't understand,
      * that old refined usage with zero key state is the same as new one
      */
-    assert this.id.equals(pO.id);
+    if (this.id != null && pO.id != null) {
+      //Not while adding in container
+      assert this.id.equals(pO.id);
+    }
     return 0;
   }
 
@@ -249,6 +255,15 @@ public class UsageInfo implements Comparable<UsageInfo> {
   @Override
   public UsageInfo clone() {
     UsageInfo result = new UsageInfo(accessType, line, locks, id);
+    result.id = this.id;
+    result.keyState = this.keyState;
+    result.path = this.path;
+    result.failureFlag = this.failureFlag;
+    return result;
+  }
+
+  public UsageInfo expand(LockStatisticsState expandedState) {
+    UsageInfo result = new UsageInfo(this.accessType, this.line, expandedState);
     result.id = this.id;
     result.keyState = this.keyState;
     result.path = this.path;

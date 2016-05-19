@@ -26,13 +26,19 @@ package org.sosy_lab.cpachecker.cpa.lockstatistics;
 import java.io.Serializable;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.SortedSet;
+import java.util.TreeSet;
 
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier.LockType;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.effects.AcquireLockEffect;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.effects.LockEffect;
+import org.sosy_lab.cpachecker.cpa.lockstatistics.effects.ReleaseLockEffect;
 
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
@@ -117,7 +123,7 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
       mutableLocks = mutableToRestore.locks;
     }
 
-    LockStatisticsState build() {
+    public LockStatisticsState build() {
       if (isFalseState) {
         return null;
       }
@@ -143,17 +149,19 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
       mutableToRestore = null;
     }
 
-    public void reduce(Set<LockIdentifier> usedLocks) {
+    /*public void reduce(Set<LockIdentifier> usedLocks) {
       for (LockIdentifier id : new HashSet<>(mutableLocks.keySet())) {
         if (!usedLocks.contains(id)) {
           mutableLocks.remove(id);
         }
       }
-    }
+    }*/
 
-    public void reduceLocks(Set<String> exceptLocks) {
+    public void reduceLocks(Set<String> exceptLocks, Set<LockIdentifier> usedLocks) {
       for (LockIdentifier lock : new HashSet<>(mutableLocks.keySet())) {
-        if (!exceptLocks.contains(lock.getName())) {
+        if (usedLocks != null && !usedLocks.contains(lock)) {
+          mutableLocks.remove(lock);
+        } else if (!exceptLocks.contains(lock.getName())) {
           mutableLocks.remove(lock);
           add(lock);
         }
@@ -164,17 +172,19 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
       mutableToRestore = rootState.toRestore;
     }
 
-    public void expand(LockStatisticsState rootState, Set<LockIdentifier> usedLocks) {
+    /*public void expand(LockStatisticsState rootState, Set<LockIdentifier> usedLocks) {
       for (LockIdentifier lock : rootState.locks.keySet()) {
         if (!usedLocks.contains(lock)) {
           mutableLocks.put(lock, rootState.locks.get(lock));
         }
       }
-    }
+    }*/
 
-    public void expandLocks(LockStatisticsState pRootState, Set<String> pRestrictedLocks) {
+    public void expandLocks(LockStatisticsState pRootState, Set<String> pRestrictedLocks, Set<LockIdentifier> usedLocks) {
       for (LockIdentifier lock : pRootState.locks.keySet()) {
-        if (!pRestrictedLocks.contains(lock.getName())) {
+        if (usedLocks != null && !usedLocks.contains(lock)) {
+          mutableLocks.put(lock, pRootState.locks.get(lock));
+        } else if (!pRestrictedLocks.contains(lock.getName())) {
           Integer size = mutableLocks.get(lock);
           Integer rootSize = pRootState.locks.get(lock);
           //null is also correct (it shows, that we've found new lock)
@@ -349,11 +359,41 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
     return !Sets.intersection(locks.keySet(), pLocks.locks.keySet()).isEmpty();
   }
 
-  LockStatisticsStateBuilder builder() {
+  public LockStatisticsStateBuilder builder() {
     return new LockStatisticsStateBuilder(this);
   }
 
   private LockStatisticsState getParentLink() {
     return this;
+  }
+
+  public List<LockEffect> getDifference(LockStatisticsState other) {
+    //Return the effect, which shows, what should we do to transform from this state to the other
+
+    List<LockEffect> result = new LinkedList<>();
+    Set<LockIdentifier> processedLocks = new TreeSet<>();
+
+    for (LockIdentifier lockId : locks.keySet()) {
+      int thisCounter = locks.get(lockId);
+      int otherCounter = other.locks.containsKey(lockId) ? other.locks.get(lockId) : 0;
+      if (thisCounter > otherCounter) {
+        for (int i = 0; i < thisCounter - otherCounter; i++) {
+          result.add(ReleaseLockEffect.createEffectForId(lockId));
+        }
+      } else if (thisCounter < otherCounter) {
+        for (int i = 0; i <  otherCounter - thisCounter; i++) {
+          result.add(AcquireLockEffect.createEffectForId(lockId));
+        }
+      }
+      processedLocks.add(lockId);
+    }
+    for (LockIdentifier lockId : other.locks.keySet()) {
+      if (!processedLocks.contains(lockId)) {
+        for (int i = 0; i <  other.locks.get(lockId); i++) {
+          result.add(AcquireLockEffect.createEffectForId(lockId));
+        }
+      }
+    }
+    return result;
   }
 }

@@ -28,6 +28,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
 import java.util.SortedMap;
+import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.logging.Level;
@@ -36,6 +37,7 @@ import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.TemporaryUsageStorage;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.RefinementResult;
@@ -80,6 +82,32 @@ public class UsageContainer {
     falseUnsafes = pFalseUnsafes;
     logger = pLogger;
     detector = pDetector;
+  }
+
+  public void addNewUsagesIfNecessary(TemporaryUsageStorage storage) {
+    if (unsafeUsages == -1) {
+      copyUsages(storage);
+      getUnsafesIfNecessary();
+    }
+  }
+
+  public void forceAddNewUsages(TemporaryUsageStorage storage) {
+    //This is a case of 'abort'-functions
+    assert (unsafeUsages == -1);
+    copyUsages(storage);
+  }
+
+  private void copyUsages(TemporaryUsageStorage storage) {
+    for (SingleIdentifier id : storage.keySet()) {
+      SortedSet<UsageInfo> list = storage.get(id);
+      for (UsageInfo info : list) {
+        if (info.getKeyState() == null) {
+          //Means that it is stored near the abort function
+        } else {
+          add(id, info);
+        }
+      }
+    }
   }
 
   public void add(final SingleIdentifier id, final UsageInfo usage) {

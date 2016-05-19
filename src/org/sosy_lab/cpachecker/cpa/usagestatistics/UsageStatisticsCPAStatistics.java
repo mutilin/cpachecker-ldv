@@ -134,9 +134,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
   private final String outputSuffix;
 
-  public UsageStatisticsCPAStatistics(Configuration config, LogManager pLogger,
+  public UsageStatisticsCPAStatistics(Configuration pConfig, LogManager pLogger,
       LockStatisticsTransferRelation lTransfer) throws InvalidConfigurationException{
-    config.inject(this);
+    pConfig.inject(this);
     logger = pLogger;
     lockTransfer = lTransfer;
     //I don't know any normal way to know the output directory
@@ -201,7 +201,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         callstackDepth--;
       }
       String caption = shouldBeHighlighted(edge);
-      if (caption != null/* && !(edge instanceof CFunctionReturnEdge)*/) {
+      if (caption != null && !(edge instanceof CFunctionReturnEdge)) {
         writer.write("Line 0:     N0 -{/*" + caption + "*/}-> N0\n");
         writer.write("Line 0:     N0 -{highlight}-> N0\n");
       } else if (edge.getLineNumber() == usage.getLine().getLine() && edge.toString().contains(id.getName())) {
@@ -336,8 +336,12 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   public void printUnsafeRawdata(final ReachedSet reached, boolean printOnlyTrueUnsafes) {
     try {
       printStatisticsTimer.start();
-      UsageStatisticsState firstState = AbstractStates.extractStateByType(reached.getFirstState(), UsageStatisticsState.class);
-      container = firstState.getContainer();
+      ARGState firstState = AbstractStates.extractStateByType(reached.getFirstState(), ARGState.class);
+      //getLastState() returns not the correct last state
+      ARGState lastState = firstState.getChildren().iterator().next();
+      UsageStatisticsState USlastState = AbstractStates.extractStateByType(lastState, UsageStatisticsState.class);
+      USlastState.updateContainerIfNecessary();
+      container = USlastState.getContainer();
       detector = container.getUnsafeDetector();
       Writer writer = null;
       try {
@@ -414,6 +418,18 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     out.println("Time for transfer relation:         " + transferRelationTimer);
     out.println("Time for reseting unsafes:          " + container.resetTimer);
     out.println("Time for printing statistics:       " + printStatisticsTimer);
+    out.println("Time for expanding:                 " + UsageStatisticsState.tmpTimer1);
+    out.println("Time for joining:                   " + UsageStatisticsState.tmpTimer2);
+    out.println("Time for joining2:                  " + UsageStatisticsState.tmpTimer3);
+    out.println("Time for effect:                    " + TemporaryUsageStorage.effectTimer);
+    out.println("Time for copy:                      " + TemporaryUsageStorage.copyTimer);
+    out.println("Number of empty joins:              " + TemporaryUsageStorage.emptyJoin);
+    out.println("Number of effect joins:             " + TemporaryUsageStorage.effectJoin);
+    out.println("Number of hit joins:                " + TemporaryUsageStorage.hitTimes);
+    out.println("Number of miss joins:               " + TemporaryUsageStorage.missTimes);
+    out.println("Number of expanding querries:       " + TemporaryUsageStorage.totalUsages);
+    out.println("Number of executed querries:        " + TemporaryUsageStorage.expandedUsages);
+
   }
 
   private void printCountStatistics(final Writer writer, final Iterator<SingleIdentifier> idIterator) throws IOException {

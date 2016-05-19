@@ -71,11 +71,14 @@ public class LockStatisticsReducer implements Reducer {
     LockStatisticsState lockState = (LockStatisticsState) pExpandedElement;
     LockStatisticsStateBuilder builder = lockState.builder();
     builder.reduce();
-    if (reduceUselessLocks) {
-      builder.reduce(pContext.getCapturedLocks());
-    }
     if (aggressiveReduction) {
-      builder.reduceLocks(from(pContext.getCapturedLocks()).transform(GETNAME).toSet());
+      Set<LockIdentifier> uselessLocks;
+      if (reduceUselessLocks) {
+        uselessLocks = pContext.getCapturedLocks();
+      } else {
+        uselessLocks = null;
+      }
+      builder.reduceLocks(from(pContext.getCapturedLocks()).transform(GETNAME).toSet(), uselessLocks);
     }
     return builder.build();
   }
@@ -88,11 +91,14 @@ public class LockStatisticsReducer implements Reducer {
     LockStatisticsState rootState = (LockStatisticsState) pRootElement;
     LockStatisticsStateBuilder builder = reducedState.builder();
     builder.expand(rootState);
-    if (reduceUselessLocks) {
-      builder.expand(rootState, pReducedContext.getCapturedLocks());
-    }
     if (aggressiveReduction) {
-      builder.expandLocks(rootState, (from(pReducedContext.getCapturedLocks()).transform(GETNAME).toSet()));
+      Set<LockIdentifier> uselessLocks;
+      if (reduceUselessLocks) {
+        uselessLocks = pReducedContext.getCapturedLocks();
+      } else {
+        uselessLocks = null;
+      }
+      builder.expandLocks(rootState, (from(pReducedContext.getCapturedLocks()).transform(GETNAME).toSet()), uselessLocks);
     }
     return builder.build();
   }

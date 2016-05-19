@@ -103,7 +103,11 @@ public class IdentifierIterator extends WrappedConfigurableRefinementBlock<Reach
 
   @Override
   public RefinementResult performRefinement(ReachedSet pReached) throws CPAException, InterruptedException {
-    UsageContainer container = AbstractStates.extractStateByType(pReached.getFirstState(), UsageStatisticsState.class).getContainer();
+    ARGState firstState = AbstractStates.extractStateByType(pReached.getFirstState(), ARGState.class);
+    ARGState lastState = firstState.getChildren().iterator().next();
+    UsageStatisticsState USlastState = AbstractStates.extractStateByType(lastState, UsageStatisticsState.class);
+    USlastState.updateContainerIfNecessary();
+    UsageContainer container = USlastState.getContainer();
     BAMPredicateCPA bamcpa = CPAs.retrieveCPA(cpa, BAMPredicateCPA.class);
     assert bamcpa != null;
 
@@ -136,9 +140,6 @@ public class IdentifierIterator extends WrappedConfigurableRefinementBlock<Reach
 
       AbstractUsagePointSet pointSet = container.getUsages(currentId);
       if (pointSet instanceof UnrefinedUsagePointSet) {
-        if (currentId.getName().equals("code")) {
-          System.out.println("this");
-        }
         RefinementResult result = wrappedRefiner.performRefinement(currentId);
         refinementFinish |= result.isFalse();
 
@@ -186,7 +187,6 @@ public class IdentifierIterator extends WrappedConfigurableRefinementBlock<Reach
     if (refinementFinish) {
       bamcpa.clearAllCaches();
       ARGState.clearIdGenerator();
-      ARGState firstState = (ARGState) pReached.getFirstState();
       CFANode firstNode = AbstractStates.extractLocation(firstState);
       Precision precision = pReached.getPrecision(firstState);
       if (totalARGCleaning) {

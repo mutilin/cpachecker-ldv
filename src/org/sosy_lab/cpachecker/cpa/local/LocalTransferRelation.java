@@ -25,6 +25,7 @@ package org.sosy_lab.cpachecker.cpa.local;
 
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -65,6 +66,7 @@ import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.cpa.local.LocalState.DataType;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
+import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.ConstantIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.GeneralLocalVariableIdentifier;
@@ -189,6 +191,24 @@ public class LocalTransferRelation extends ForwardingTransferRelation<LocalState
         newElement.set(returnId, returnType);
       }
     }
+    //Update the outer parameters:
+    CFunctionSummaryEdge sEdge = cfaEdge.getSummaryEdge();
+    CFunctionEntryNode entry = sEdge.getFunctionEntry();
+    String funcName = entry.getFunctionName();
+    boolean isAllocatedFunction = (allocate == null ? false : allocate.contains(funcName));
+    if (!isAllocatedFunction) {
+      List<String> paramNames = entry.getFunctionParameterNames();
+      List<CExpression> arguments = sEdge.getExpression().getFunctionCallExpression().getParameterExpressions();
+      List<CParameterDeclaration> parameterTypes = entry.getFunctionDefinition().getParameters();
+
+      List<Pair<AbstractIdentifier, LocalVariableIdentifier>> toProcess =
+          extractIdentifiers(arguments, paramNames, parameterTypes);
+
+      for (Pair<AbstractIdentifier, LocalVariableIdentifier> pairId : toProcess) {
+        DataType newType = state.getType(pairId.getSecond());
+        newElement.set(pairId.getFirst(), newType);
+      }
+    }
     return newElement;
   }
 
@@ -215,25 +235,40 @@ public class LocalTransferRelation extends ForwardingTransferRelation<LocalState
     CFunctionEntryNode functionEntryNode = cfaEdge.getSuccessor();
     List<String> paramNames = functionEntryNode.getFunctionParameterNames();
 
-    if (paramNames.size() == arguments.size()) {
-      CExpression currentArgument;
-      int dereference;
-      for (int i = 0; i < arguments.size(); i++) {
-        currentArgument = arguments.get(i);
-        dereference = findDereference(parameterTypes.get(i).getType());
-        AbstractIdentifier previousId;
+    List<Pair<AbstractIdentifier, LocalVariableIdentifier>> toProcess =
+        extractIdentifiers(arguments, paramNames, parameterTypes);
 
-        for (int j = 1, previousDeref = 1; j <= dereference; j++, previousDeref++) {
-          LocalVariableIdentifier id = new GeneralLocalVariableIdentifier(paramNames.get(i), j);
-          previousId = createId(currentArgument, previousDeref);
-          DataType type = state.getType(previousId);
-          newState.set(id, type);
-        }
+    for (Pair<AbstractIdentifier, LocalVariableIdentifier> pairId : toProcess) {
+      DataType type = state.getType(pairId.getFirst());
+      newState.set(pairId.getSecond(), type);
+    }
+    return newState;
+  }
+
+  private List<Pair<AbstractIdentifier, LocalVariableIdentifier>> extractIdentifiers(
+      List<CExpression> arguments,
+      List<String> paramNames, List<CParameterDeclaration> parameterTypes) throws HandleCodeException {
+
+    List<Pair<AbstractIdentifier, LocalVariableIdentifier>> result = new LinkedList<>();
+    CExpression currentArgument;
+    int dereference;
+    for (int i = 0; i < arguments.size(); i++) {
+      if (i >= paramNames.size()) {
+        //function with unknown parameter size: printf(char* a, ...)
+        //assign what we can
+        break;
+      }
+      currentArgument = arguments.get(i);
+      dereference = findDereference(parameterTypes.get(i).getType());
+      AbstractIdentifier previousId;
+
+      for (int j = 1; j <= dereference; j++) {
+        LocalVariableIdentifier id = new GeneralLocalVariableIdentifier(paramNames.get(i), j);
+        previousId = createId(currentArgument, j);
+        result.add(Pair.of(previousId, id));
       }
     }
-    // else, something like 'f(..)'. Now we can't do anything
-    //TODO Do something!
-    return newState;
+    return result;
   }
 
   @Override
