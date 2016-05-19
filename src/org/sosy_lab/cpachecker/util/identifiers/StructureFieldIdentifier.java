@@ -32,7 +32,11 @@ public class StructureFieldIdentifier extends StructureIdentifier {
 
   public StructureFieldIdentifier(String pNm, /*String fTp,*/ CType pTp, int dereference, AbstractIdentifier own) {
     super(pNm, pTp, dereference, own);
-    fieldType = type.toASTString("");
+    if ( type != null ){
+      fieldType = type.toASTString("");
+    } else {
+      fieldType = "";
+    }
   }
 
   @Override
@@ -102,7 +106,7 @@ public class StructureFieldIdentifier extends StructureIdentifier {
 
   @Override
   public GeneralIdentifier getGeneralId() {
-    return new GeneralStructureFieldIdentifier(name, fieldType, type, dereference);
+    return new GeneralStructureFieldIdentifier(name, /*fieldType,*/ type, dereference, owner);
   }
 
   @Override

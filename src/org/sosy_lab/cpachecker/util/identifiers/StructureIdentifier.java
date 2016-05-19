@@ -212,7 +212,7 @@ public class StructureIdentifier extends SingleIdentifier{
 
   @Override
   public GeneralIdentifier getGeneralId() {
-    return new GeneralStructureFieldIdentifier(name, type.toASTString(""), type, dereference);
+    return new GeneralStructureFieldIdentifier(name, /*type.toASTString(""),*/ type, dereference, owner);
   }
 
   public StructureFieldIdentifier toStructureFieldIdentifier() {

@@ -30,13 +30,12 @@ import org.sosy_lab.cpachecker.cfa.types.c.CType;
 public class GeneralStructureFieldIdentifier extends StructureFieldIdentifier implements GeneralIdentifier {
 
   public GeneralStructureFieldIdentifier(String pNm, int pDereference) {
-    super(pNm, "", null, pDereference);
+    super(pNm, /*"",*/ null, pDereference, null);
   }
 
-  public GeneralStructureFieldIdentifier(String pNm, String fType, CType type, int pDereference) {
-    super(pNm, fType, type, pDereference);
-    if (type == null)
-      System.err.println("Creating GeneralStructureFieldIdentifier with null field");
+  public GeneralStructureFieldIdentifier(String pNm, /*String fType,*/ CType type, int pDereference, AbstractIdentifier own) {
+    super(pNm, /*fType,*/ type, pDereference, own);
+    assert ( type != null): "Creating GeneralStructureFieldIdentifier with null field" ;
   }
   @Override
   public int hashCode() {
@@ -49,25 +48,31 @@ public class GeneralStructureFieldIdentifier extends StructureFieldIdentifier im
 
   @Override
   public boolean equals(Object obj) {
-    if (this == obj)
+    if (this == obj) {
       return true;
-    if (obj == null)
+    }
+    if (obj == null) {
       return false;
-    if (getClass() != obj.getClass())
+    }
+    if (getClass() != obj.getClass()) {
       return false;
+    }
     SingleIdentifier other = (SingleIdentifier) obj;
-    if (dereference != other.dereference)
+    if (dereference != other.dereference) {
       return false;
+    }
     if (name == null) {
-      if (other.name != null)
+      if (other.name != null) {
         return false;
-    } else if (!name.equals(other.name))
+      }
+    } else if (!name.equals(other.name)) {
       return false;
+    }
     return true;
   }
 
   @Override
   public GeneralStructureFieldIdentifier clone() {
-    return new GeneralStructureFieldIdentifier(name, fieldType, type, dereference);
+    return new GeneralStructureFieldIdentifier(name,/* fieldType,*/ type, dereference, owner);
   }
 }
