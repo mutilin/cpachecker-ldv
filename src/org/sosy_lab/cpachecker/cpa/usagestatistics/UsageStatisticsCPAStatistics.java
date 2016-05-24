@@ -420,7 +420,8 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         currentId = nextId;
         nextId = getId();
 
-        result = prepareElement(builder, currentId, nextId, pEdge, defaultSourcefileName, "0");
+        boolean isWarning = (pEdge.getLineNumber() == firstUsage.getLine().getLine() && pEdge.toString().contains(pId.getName()));
+        result = prepareElement(builder, currentId, nextId, pEdge, defaultSourcefileName, "0", isWarning);
 
         builder.appendToAppendable(result);
       }
@@ -431,7 +432,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         currentId = nextId;
         nextId = getId();
 
-        result = prepareElement(builder, currentId, nextId, pEdge, defaultSourcefileName, "1");
+        boolean isWarning = (pEdge.getLineNumber() == secondUsage.getLine().getLine() && pEdge.toString().contains(pId.getName()));
+
+        result = prepareElement(builder, currentId, nextId, pEdge, defaultSourcefileName, "1", isWarning);
 
         if (!iterator.hasNext()) {
           builder.addDataElementChild(result, NodeFlag.ISVIOLATION.key, "true");
@@ -456,7 +459,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   }
 
   private Element prepareElement(GraphMlBuilder builder, String currentId, String nextId, CFAEdge pEdge,
-      String defaultSourcefileName, String ThreadNum) {
+      String defaultSourcefileName, String ThreadNum, boolean addWarning) {
     Element result = builder.createEdgeElement(currentId, nextId);
 
     if (pEdge.getSuccessor() instanceof FunctionEntryNode) {
@@ -492,6 +495,10 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
 
     builder.addDataElementChild(result, KeyDef.THREADIDENTIFIER, ThreadNum);
+
+    if (addWarning) {
+      builder.addDataElementChild(result, KeyDef.WARNING, "Target usage");
+    }
 
     builder.appendToAppendable(result);
 
