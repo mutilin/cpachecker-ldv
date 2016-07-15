@@ -32,6 +32,7 @@ import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.core.defaults.AbstractSingleWrapperState;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
+import org.sosy_lab.cpachecker.core.interfaces.Exitable;
 import org.sosy_lab.cpachecker.core.interfaces.Targetable;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsReducer;
@@ -211,7 +212,10 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
   public UsageStatisticsState expand(final UsageStatisticsState root, final AbstractState wrappedState,
       Block pReducedContext, Block outerSubtree, LockStatisticsReducer reducer) {
     tmpTimer1.start();
-    final UsageStatisticsState result = root.clone(wrappedState);
+    UsageStatisticsState result = root.clone(wrappedState);
+    if (this instanceof Exitable) {
+      result = result.asExitable();
+    }
     //Now it is only join
     LockStatisticsState rootLockState = AbstractStates.extractStateByType(root, LockStatisticsState.class);
     LockStatisticsState reducedLockState = (LockStatisticsState) reducer.getVariableReducedState(rootLockState, pReducedContext, outerSubtree, AbstractStates.extractLocation(root));
@@ -249,4 +253,36 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
   public void updateContainerIfNecessary() {
     globalContainer.addNewUsagesIfNecessary(functionContainer);
   }
+
+  public UsageStatisticsState asExitable() {
+    return new UsageStatisticsExitableState(this);
+  }
+
+  public class UsageStatisticsExitableState extends UsageStatisticsState implements Exitable {
+
+    private static final long serialVersionUID = 1957118246209506994L;
+
+    private UsageStatisticsExitableState(AbstractState pWrappedElement, UsageStatisticsState state) {
+      super(pWrappedElement, state);
+    }
+
+    private UsageStatisticsExitableState(AbstractState pWrappedElement, UsageContainer container) {
+      super(pWrappedElement, container);
+    }
+
+    public UsageStatisticsExitableState(UsageStatisticsState state) {
+      this(state.getWrappedState(), state);
+    }
+
+    @Override
+    public UsageStatisticsExitableState clone(final AbstractState wrapped) {
+      return new UsageStatisticsExitableState(wrapped, this);
+    }
+
+    @Override
+    public UsageStatisticsExitableState reduce(final AbstractState wrapped) {
+      return new UsageStatisticsExitableState(wrapped, getContainer());
+    }
+  }
+
 }

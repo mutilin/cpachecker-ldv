@@ -24,7 +24,6 @@
 package org.sosy_lab.cpachecker.cpa.thread;
 
 import java.util.ArrayList;
-import java.util.LinkedList;
 import java.util.List;
 
 import org.sosy_lab.common.configuration.Configuration;
@@ -108,11 +107,8 @@ public class ThreadCPA implements ConfigurableProgramAnalysis, WrapperCPA, Confi
   @Override
   public AbstractState getInitialState(CFANode pNode, StateSpacePartition pPartition) {
     Preconditions.checkNotNull(pNode);
-    List<ThreadLabel> emptySet = new LinkedList<>();
-    ThreadState ts = new ThreadState((LocationState)locationCPA.getInitialState(pNode, pPartition),
-                                    (CallstackState)callstackCPA.getInitialState(pNode, pPartition),
-                                    emptySet, emptySet);
-    return ts;
+    return ThreadState.emptyState((LocationState)locationCPA.getInitialState(pNode, pPartition),
+                                    (CallstackState)callstackCPA.getInitialState(pNode, pPartition));
   }
 
   @Override

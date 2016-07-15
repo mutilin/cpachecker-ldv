@@ -36,7 +36,7 @@ import org.sosy_lab.cpachecker.core.interfaces.AbstractWrapperState;
 import org.sosy_lab.cpachecker.core.interfaces.Partitionable;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.location.LocationState;
-import org.sosy_lab.cpachecker.cpa.thread.ThreadLabel.LabelStatus;
+import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -51,7 +51,7 @@ public class ThreadState implements AbstractState, AbstractStateWithLocations, P
     private List<ThreadLabel> tSet;
     private List<ThreadLabel> rSet;
 
-    public ThreadStateBuilder(ThreadState state) {
+    private ThreadStateBuilder(ThreadState state) {
       tSet = new LinkedList<>(state.threadSet);
       rSet = new LinkedList<>(state.removedSet);
     }
@@ -61,18 +61,36 @@ public class ThreadState implements AbstractState, AbstractStateWithLocations, P
       cs = c;
     }
 
-    public void addToThreadSet(ThreadLabel label) {
-      if (!tSet.isEmpty() && tSet.get(tSet.size() - 1).getStatus() == LabelStatus.SELF_PARALLEL_THREAD) {
-        //Can add only the same status
-        tSet.add(new ThreadLabel(label.getName(), LabelStatus.SELF_PARALLEL_THREAD));
-      } else {
-        tSet.add(label);
+    public void addToThreadSet(ThreadLabel label) throws HandleCodeException {
+      for (ThreadLabel created : tSet) {
+        if (created.getName().equals(label.getName())) {
+          //Not supported yet
+          throw new HandleCodeException("Can not create thread " + label.getName() + ", it was already created");
+        }
       }
+      if (!tSet.isEmpty() && tSet.get(tSet.size() - 1).isSelfParallel()) {
+        //Can add only the same status
+        label = label.toSelfParallelLabel();
+      }
+      tSet.add(label);
     }
 
-    public void removeFromThreadSet(ThreadLabel label) {
-      assert tSet.get(tSet.size() -1 ).equals(label);
-      tSet.remove(label);
+    public boolean removeFromThreadSet(ThreadLabel label) {
+      //assert tSet.get(tSet.size() -1 ).equals(label) : "try to remove " + label + ", the last was " + tSet.get(tSet.size() -1 );
+      if (tSet.isEmpty()) {
+        return false;
+      }
+      ThreadLabel lastLabel = tSet.get(tSet.size() - 1);
+      if (lastLabel.equals(label)) {
+        return tSet.remove(label);
+      } else if (lastLabel.getName().equals(label.getName())) {
+        //We may have force self-parallel thread here
+        assert lastLabel.isSelfParallel();
+        return tSet.remove(lastLabel);
+      } else {
+        //Try to join non-created thread
+        return false;
+      }
     }
 
     public ThreadState build() {
@@ -86,7 +104,7 @@ public class ThreadState implements AbstractState, AbstractStateWithLocations, P
   private final ImmutableList<ThreadLabel> threadSet;
   private final ImmutableList<ThreadLabel> removedSet;
 
-  public ThreadState(LocationState l, CallstackState c, List<ThreadLabel> Tset, List<ThreadLabel> Rset) {
+  private ThreadState(LocationState l, CallstackState c, List<ThreadLabel> Tset, List<ThreadLabel> Rset) {
     location = l;
     callstack = c;
     threadSet = ImmutableList.copyOf(Tset);
@@ -233,6 +251,11 @@ public class ThreadState implements AbstractState, AbstractStateWithLocations, P
 
   public ThreadStateBuilder getBuilder() {
     return new ThreadStateBuilder(this);
+  }
+
+  public static ThreadState emptyState(LocationState l, CallstackState c) {
+    List<ThreadLabel> emptySet = new LinkedList<>();
+    return new ThreadState(l, c, emptySet, emptySet);
   }
 
   @Override

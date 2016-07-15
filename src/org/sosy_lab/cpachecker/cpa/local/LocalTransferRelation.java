@@ -46,6 +46,7 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CInitializerExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CParameterDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
+import org.sosy_lab.cpachecker.cfa.ast.c.CThreadCreateStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CVariableDeclaration;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
@@ -238,8 +239,15 @@ public class LocalTransferRelation extends ForwardingTransferRelation<LocalState
     List<Pair<AbstractIdentifier, LocalVariableIdentifier>> toProcess =
         extractIdentifiers(arguments, paramNames, parameterTypes);
 
+    //TODO Make it with config
+    boolean isThreadCreate = cfaEdge.getSummaryEdge().getExpression() instanceof CThreadCreateStatement;
+
     for (Pair<AbstractIdentifier, LocalVariableIdentifier> pairId : toProcess) {
       DataType type = state.getType(pairId.getFirst());
+      if (isThreadCreate && pairId.getSecond().getDereference() > 0) {
+        //Data became shared after thread creation
+        type = DataType.GLOBAL;
+      }
       newState.set(pairId.getSecond(), type);
     }
     return newState;
