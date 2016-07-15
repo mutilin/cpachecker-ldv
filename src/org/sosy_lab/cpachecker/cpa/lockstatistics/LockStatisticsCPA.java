@@ -36,7 +36,6 @@ import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysisWithBA
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
 import org.sosy_lab.cpachecker.core.interfaces.StateSpacePartition;
 
-@Options(prefix="cpa.lockstatistics")
 public class LockStatisticsCPA extends AbstractCPA implements ConfigurableProgramAnalysisWithBAM{
 
   public static CPAFactory factory() {

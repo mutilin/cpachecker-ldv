@@ -74,6 +74,7 @@ import com.google.common.collect.LinkedListMultimap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
 
+@Options
 public class BAMTransferRelation implements TransferRelation {
 
   @Options

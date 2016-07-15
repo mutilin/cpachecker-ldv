@@ -54,7 +54,6 @@ import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsCPA;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsTransferRelation;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsageContainer;
 import org.sosy_lab.cpachecker.util.CPAs;
-@Options(prefix="cpa.usagestatistics")
 public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements ConfigurableProgramAnalysisWithBAM {
 
   private final UsageStatisticsDomain abstractDomain;
@@ -79,7 +78,7 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
   private UsageStatisticsCPA(ConfigurableProgramAnalysis pCpa, CFA pCfa, LogManager pLogger,
       Configuration pConfig) throws InvalidConfigurationException {
     super(pCpa);
-    pConfig.inject(this);
+    //pConfig.inject(this);
     this.cfa = pCfa;
     this.abstractDomain = new UsageStatisticsDomain(pCpa.getAbstractDomain());
     this.mergeOperator = initializeMergeOperator();
