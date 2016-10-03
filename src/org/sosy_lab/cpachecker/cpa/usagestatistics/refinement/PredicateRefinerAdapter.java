@@ -45,6 +45,8 @@ import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateRefiner;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicatePrecision;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsPredicateRefiner;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
+import org.sosy_lab.cpachecker.exceptions.RefinementFailedException;
+import org.sosy_lab.cpachecker.exceptions.RefinementFailedException.Reason;
 import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.Precisions;
 
@@ -64,6 +66,7 @@ public class PredicateRefinerAdapter extends GenericSinglePathRefiner {
   private int solverFailures = 0;
   private int numberOfrepeatedPaths = 0;
   private int numberOfrefinedPaths = 0;
+  private int numberOfBAMupdates = 0;
 
   public PredicateRefinerAdapter(ConfigurableRefinementBlock<Pair<ExtendedARGPath, ExtendedARGPath>> wrapper,
       ConfigurableProgramAnalysis pCpa, ReachedSet pReached) throws InvalidConfigurationException {
@@ -97,12 +100,21 @@ public class PredicateRefinerAdapter extends GenericSinglePathRefiner {
         PredicatePrecision previousPreds = falseCache.get(edgeSet);
         Precision currentPrecision = refiner.getCurrentPrecision();
         PredicatePrecision currentPreds = Precisions.extractPrecisionByType(currentPrecision, PredicatePrecision.class);
+
         if (previousPreds.calculateDifferenceTo(currentPreds) == 0) {
-          //All old interpolants are present => we are looped
-          numberOfrepeatedPaths++;
-          logger.log(Level.WARNING, "Path is repeated");
-          pInput.getUsageInfo().failureFlag = true;
-          result = RefinementResult.createUnknown();
+          try {
+            result = performPredicateRefinement(pInput);
+            logger.log(Level.WARNING, "Path is repeated, but BAM Refiner was successfully updated");
+            //BAM can refine with updated predicate refiner, congratulate him.
+            numberOfBAMupdates++;
+          } catch (RefinementFailedException e) {
+            assert e.getReason() == Reason.RepeatedCounterexample;
+            //All old interpolants are present => we are looped
+            numberOfrepeatedPaths++;
+            logger.log(Level.WARNING, "Path is repeated, BAM is looped");
+            pInput.getUsageInfo().failureFlag = true;
+            result = RefinementResult.createUnknown();
+          }
         } else {
           //rerefine it to obtain new states
           logger.log(Level.WARNING, "Path is repeated, but predicates are missed");
@@ -190,6 +202,7 @@ public class PredicateRefinerAdapter extends GenericSinglePathRefiner {
     pOut.println("Number of refined paths:          " + numberOfrefinedPaths);
     pOut.println("Solver failures:                  " + solverFailures);
     pOut.println("Number of repeated paths:         " + numberOfrepeatedPaths);
+    pOut.println("Number of BAM updates:            " + numberOfBAMupdates);
     pOut.println("Size of false cache:              " + falseCache.size());
   }
 

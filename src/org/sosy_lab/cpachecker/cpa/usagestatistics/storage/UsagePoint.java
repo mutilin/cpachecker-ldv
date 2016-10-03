@@ -7,6 +7,7 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier;
+import org.sosy_lab.cpachecker.cpa.thread.ThreadState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
 
@@ -15,23 +16,26 @@ import com.google.common.collect.ImmutableSortedSet;
 public class UsagePoint implements Comparable<UsagePoint> {
   public final ImmutableSortedSet<LockIdentifier> locks;
   public final Access access;
+  //May be null
+  public final ThreadState threadInfo;
   //This usage is used to distinct usage points with empty lock sets with write access from each other
   public final UsageInfo keyUsage;
   private final Set<UsagePoint> coveredUsages;
 
-  private UsagePoint(SortedSet<LockIdentifier> pLocks, Access pAccess, UsageInfo pInfo) {
+  private UsagePoint(SortedSet<LockIdentifier> pLocks, Access pAccess, UsageInfo pInfo, ThreadState tInfo) {
     locks = ImmutableSortedSet.copyOf(pLocks);
     access = pAccess;
     coveredUsages = new HashSet<>();
     keyUsage = pInfo;
+    threadInfo = tInfo;
   }
 
-  public UsagePoint(SortedSet<LockIdentifier> pLocks, Access pAccess) {
-    this(pLocks, pAccess, null);
+  public UsagePoint(SortedSet<LockIdentifier> pLocks, Access pAccess, ThreadState info) {
+    this(pLocks, pAccess, null, info);
   }
 
   public UsagePoint(UsageInfo pInfo) {
-    this(new TreeSet<LockIdentifier>(), Access.WRITE, pInfo);
+    this(new TreeSet<LockIdentifier>(), Access.WRITE, pInfo, pInfo.getThreadInfo());
   }
 
   public boolean addCoveredUsage(UsagePoint newChild) {
@@ -59,6 +63,7 @@ public class UsagePoint implements Comparable<UsagePoint> {
     result = prime * result + ((locks == null) ? 0 : locks.hashCode());
     //This is for distinction usages with empty sets of locks
     result = prime * result + ((keyUsage == null) ? 0 : keyUsage.hashCode());
+    result = prime * result + ((threadInfo == null) ? 0 : threadInfo.hashCode());
     return result;
   }
 
@@ -82,6 +87,13 @@ public class UsagePoint implements Comparable<UsagePoint> {
         return false;
       }
     } else if (!locks.equals(other.locks)) {
+      return false;
+    }
+    if (threadInfo == null) {
+      if (other.threadInfo != null) {
+        return false;
+      }
+    } else if (!threadInfo.equals(other.threadInfo)) {
       return false;
     }
     //This is for distinction usages with empty sets of locks
@@ -110,6 +122,12 @@ public class UsagePoint implements Comparable<UsagePoint> {
     Iterator<LockIdentifier> lockIterator2 = o.locks.iterator();
     while (lockIterator.hasNext()) {
       result = lockIterator.next().compareTo(lockIterator2.next());
+      if (result != 0) {
+        return result;
+      }
+    }
+    if (threadInfo != null) {
+      result = threadInfo.compareTo(o.threadInfo);
       if (result != 0) {
         return result;
       }

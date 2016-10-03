@@ -23,23 +23,17 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics.storage;
 
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Set;
 import java.util.SortedSet;
-import java.util.TreeSet;
 
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
 import org.sosy_lab.cpachecker.util.Pair;
 
-import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Sets;
 
 @Options(prefix="cpa.usagestatistics.unsafedetector")
@@ -95,7 +89,7 @@ public class UnsafeDetector {
   }
 
   private boolean isUnsafe(SortedSet<UsagePoint> points) {
-    if (points.size() >= 1) {
+    /*if (points.size() >= 1) {
       Iterator<UsagePoint> iterator = points.iterator();
       UsagePoint point = iterator.next();
 
@@ -132,14 +126,21 @@ public class UnsafeDetector {
               return true;
             }
           } else {
-            /* There can be a situation
-             * (l1, l2, write), (l1, read), (l2, read)
-             * Thus, we should process writes and reads differently
-             */
+            // There can be a situation
+            // (l1, l2, write), (l1, read), (l2, read)
+            // Thus, we should process writes and reads differently
+            //
             if (Sets.intersection(lockSet, point.locks).isEmpty()) {
               return true;
             }
           }
+        }
+      }
+    }*/
+    for (UsagePoint point1 : points) {
+      for (UsagePoint point2 : points.tailSet(point1)) {
+        if (isUnsafePair(point1, point2)) {
+          return true;
         }
       }
     }
@@ -156,9 +157,7 @@ public class UnsafeDetector {
            */
           continue;
         }
-        UsagePoint[] pair = {point1, point2};
-        ImmutableSortedSet<UsagePoint> unsafePair = ImmutableSortedSet.copyOf(pair);
-        if (isUnsafe(unsafePair)) {
+        if (isUnsafePair(point1, point2)) {
           return Pair.of(point1, point2);
         }
       }
@@ -166,8 +165,7 @@ public class UnsafeDetector {
     //Now we find an unsafe only from one usage
     if (!ignoreEmptyLockset) {
       for (UsagePoint point1 : set) {
-        ImmutableSortedSet<UsagePoint> unsafePair = ImmutableSortedSet.copyOf(Collections.singleton(point1));
-        if (isUnsafe(unsafePair)) {
+        if (isUnsafePair(point1, point1)) {
           return Pair.of(point1, point1);
         }
       }
@@ -176,10 +174,16 @@ public class UnsafeDetector {
     return null;
   }
 
-  public boolean isUnsafePair(UsagePoint pPoint1, UsagePoint pPoint2) {
-    SortedSet<UsagePoint> points = new TreeSet<>();
-    points.add(pPoint1);
-    points.add(pPoint2);
-    return isUnsafe(points);
+  public boolean isUnsafePair(UsagePoint point1, UsagePoint point2) {
+    if (Sets.intersection(point1.locks, point2.locks).isEmpty() &&
+        (point1.access == Access.WRITE || point2.access == Access.WRITE)) {
+      if (ignoreEmptyLockset && point1.locks.isEmpty() && point2.locks.isEmpty()) {
+        return false;
+      }
+      if ((point1.threadInfo == null && point2.threadInfo == null) || point1.threadInfo.isCompatibleWith(point2.threadInfo)) {
+        return true;
+      }
+    }
+    return false;
   }
  }

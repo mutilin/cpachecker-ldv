@@ -35,6 +35,7 @@ import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
+import org.sosy_lab.cpachecker.cpa.thread.ThreadState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsagePoint;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
@@ -56,10 +57,11 @@ public class UsageInfo implements Comparable<UsageInfo> {
   private AbstractState keyState;
   private List<CFAEdge> path;
   private SingleIdentifier id = null;
+  private final ThreadState threadInfo;
   public boolean failureFlag;
   private boolean reachable;
 
-  public UsageInfo(@Nonnull Access atype, @Nonnull LineInfo l, @Nonnull LockStatisticsState lock, AbstractIdentifier ident) {
+  public UsageInfo(@Nonnull Access atype, @Nonnull LineInfo l, @Nonnull LockStatisticsState lock, AbstractIdentifier ident, ThreadState tState) {
     line = l;
     locks = lock;
     accessType = atype;
@@ -72,10 +74,11 @@ public class UsageInfo implements Comparable<UsageInfo> {
     } else {
       id = null;
     }
+    threadInfo = tState == null ? null : tState.prepareToStore();
   }
 
   public UsageInfo(@Nonnull Access atype,  int l, @Nonnull UsageStatisticsState state, AbstractIdentifier ident) {
-    this(atype, new LineInfo(l, AbstractStates.extractLocation(state)), AbstractStates.extractStateByType(state, LockStatisticsState.class), ident);
+    this(atype, new LineInfo(l, AbstractStates.extractLocation(state)), AbstractStates.extractStateByType(state, LockStatisticsState.class), ident, AbstractStates.extractStateByType(state, ThreadState.class));
   }
 
   public @Nonnull LockStatisticsState getLockState() {
@@ -103,7 +106,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
 
   public UsagePoint getUsagePoint() {
     if (this.locks != null && (this.locks.getSize() > 0 || this.accessType == Access.READ)) {
-      return new UsagePoint(locks.getLockIdentifiers(), accessType);
+      return new UsagePoint(locks.getLockIdentifiers(), accessType, threadInfo);
     } else {
       return new UsagePoint(this);
     }
@@ -116,6 +119,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
     result = prime * result + ((accessType == null) ? 0 : accessType.hashCode());
     result = prime * result + ((line == null) ? 0 : line.hashCode());
     result = prime * result + ((locks == null) ? 0 : locks.hashCode());
+    result = prime * result + ((threadInfo == null) ? 0 : threadInfo.hashCode());
     return result;
   }
 
@@ -139,6 +143,13 @@ public class UsageInfo implements Comparable<UsageInfo> {
         return false;
       }
     } else if (!line.equals(other.line)) {
+      return false;
+    }
+    if (threadInfo == null) {
+      if (other.threadInfo != null) {
+        return false;
+      }
+    } else if (!threadInfo.equals(other.threadInfo)) {
       return false;
     }
     if (locks == null) {
@@ -181,6 +192,10 @@ public class UsageInfo implements Comparable<UsageInfo> {
     return keyState;
   }
 
+  public ThreadState getThreadInfo() {
+    return threadInfo;
+  }
+
   public List<CFAEdge> getPath() {
     assert path != null;
     return path;
@@ -212,6 +227,12 @@ public class UsageInfo implements Comparable<UsageInfo> {
     result = this.accessType.compareTo(pO.accessType);
     if (result != 0) {
       return result;
+    }
+    if (threadInfo != null) {
+      result = this.threadInfo.compareTo(pO.threadInfo);
+      if (result != 0) {
+        return result;
+      }
     }
     /* We can't use key states for ordering, because the treeSets can't understand,
      * that old refined usage with zero key state is the same as new one
@@ -254,7 +275,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
 
   @Override
   public UsageInfo clone() {
-    UsageInfo result = new UsageInfo(accessType, line, locks, id);
+    UsageInfo result = new UsageInfo(accessType, line, locks, id, threadInfo);
     result.id = this.id;
     result.keyState = this.keyState;
     result.path = this.path;
@@ -263,7 +284,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
   }
 
   public UsageInfo expand(LockStatisticsState expandedState) {
-    UsageInfo result = new UsageInfo(this.accessType, this.line, expandedState);
+    UsageInfo result = new UsageInfo(this.accessType, this.line, expandedState, id, threadInfo);
     result.id = this.id;
     result.keyState = this.keyState;
     result.path = this.path;

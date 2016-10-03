@@ -22,6 +22,7 @@
  *    http://cpachecker.sosy-lab.org
  */
 package org.sosy_lab.cpachecker.cpa.bam;
+import static com.google.common.collect.FluentIterable.from;
 import static org.sosy_lab.cpachecker.util.AbstractStates.*;
 
 import java.util.ArrayList;
@@ -35,6 +36,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.Stack;
 import java.util.logging.Level;
+
+import javax.annotation.Nullable;
 
 import org.sosy_lab.common.ShutdownNotifier;
 import org.sosy_lab.common.configuration.Configuration;
@@ -59,6 +62,7 @@ import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackCPA;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackTransferRelation;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsState.UsageStatisticsExitableState;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
@@ -68,12 +72,14 @@ import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.Triple;
 
 import com.google.common.base.Preconditions;
+import com.google.common.base.Predicate;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.LinkedListMultimap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
 
+@Options
 public class BAMTransferRelation implements TransferRelation {
 
   @Options
@@ -506,6 +512,16 @@ public class BAMTransferRelation implements TransferRelation {
         if (((ARGState)returnState).getChildren().isEmpty()) {
           returnStates.add(returnState);
         }
+      }
+      Set<AbstractState> exitableStates = from(reached).filter(new Predicate<AbstractState> () {
+        @Override
+        public boolean apply(@Nullable AbstractState pInput) {
+          return AbstractStates.extractStateByType(pInput, UsageStatisticsExitableState.class) != null;
+        }
+
+      }).toSet();
+      for (AbstractState returnState : exitableStates) {
+        returnStates.add(returnState);
       }
     }
 

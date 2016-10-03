@@ -66,8 +66,10 @@ import org.sosy_lab.cpachecker.core.interfaces.Property;
 import org.sosy_lab.cpachecker.core.interfaces.StateSpacePartition;
 import org.sosy_lab.cpachecker.core.interfaces.Targetable;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsState;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.ParserException;
+import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.LoopStructure;
 import org.sosy_lab.cpachecker.util.LoopStructure.Loop;
 import org.sosy_lab.cpachecker.util.automaton.TargetLocationProvider;
@@ -430,6 +432,14 @@ public class CPAchecker {
     if (!isSound) {
       logger.log(Level.WARNING, "Analysis incomplete: no errors found, but not everything could be checked.");
       return Result.UNKNOWN;
+    }
+
+    UsageStatisticsState state = AbstractStates.extractStateByType(reached.getLastState(), UsageStatisticsState.class);
+    if (state != null) {
+      state.updateContainerIfNecessary();
+      if (state.getContainer().getUnsafeSize() > 0) {
+        return Result.FALSE;
+      }
     }
 
     return Result.TRUE;
