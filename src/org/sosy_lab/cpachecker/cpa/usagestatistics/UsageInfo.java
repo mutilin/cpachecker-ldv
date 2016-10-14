@@ -99,9 +99,9 @@ public class UsageInfo implements Comparable<UsageInfo> {
   }
 
   public @Nonnull void setId(SingleIdentifier pId) {
-    //Only once
-    assert id == null || id.equals(pId) : "Old id " + id + ", new one - " + pId;
-    id = pId;
+    //Now it is set while creation
+    assert id == null || id.getName().equals(pId.getName()) : "Old id " + id + ", new one - " + pId;
+    //id = pId;
   }
 
   public UsagePoint getUsagePoint() {
