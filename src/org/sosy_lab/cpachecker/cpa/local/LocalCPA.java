@@ -31,42 +31,19 @@ import java.util.Set;
 
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
-import org.sosy_lab.common.configuration.Option;
-import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.log.LogManager;
-import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.core.defaults.AbstractCPA;
 import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
-import org.sosy_lab.cpachecker.core.defaults.MergeJoinOperator;
-import org.sosy_lab.cpachecker.core.defaults.MergeSepOperator;
-import org.sosy_lab.cpachecker.core.defaults.SingletonPrecision;
-import org.sosy_lab.cpachecker.core.defaults.StaticPrecisionAdjustment;
-import org.sosy_lab.cpachecker.core.defaults.StopJoinOperator;
-import org.sosy_lab.cpachecker.core.defaults.StopNeverOperator;
-import org.sosy_lab.cpachecker.core.defaults.StopSepOperator;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractDomain;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.CPAFactory;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysisWithBAM;
-import org.sosy_lab.cpachecker.core.interfaces.MergeOperator;
-import org.sosy_lab.cpachecker.core.interfaces.Precision;
-import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustment;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
 import org.sosy_lab.cpachecker.core.interfaces.StateSpacePartition;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
-import org.sosy_lab.cpachecker.core.interfaces.StopOperator;
-import org.sosy_lab.cpachecker.core.interfaces.pcc.ProofChecker;
-import org.sosy_lab.cpachecker.exceptions.CPAException;
-import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 
-
-@Options(prefix="cpa.local")
-public class LocalCPA implements ConfigurableProgramAnalysisWithBAM, StatisticsProvider, ProofChecker {
-    private LocalDomain abstractDomain;
-    private MergeOperator mergeOperator;
-    private StopOperator stopOperator;
-    private LocalTransferRelation transferRelation;
+public class LocalCPA extends AbstractCPA implements ConfigurableProgramAnalysisWithBAM, StatisticsProvider {
     private Statistics statistics;
     private final Reducer reducer;
 
@@ -76,23 +53,10 @@ public class LocalCPA implements ConfigurableProgramAnalysisWithBAM, StatisticsP
       return AutomaticCPAFactory.forType(LocalCPA.class);
     }
 
-    @Option(name="merge", toUppercase=true, values={"SEP", "JOIN"},
-        description="which merge operator to use for LocalCPA")
-    private String mergeType = "JOIN";
-
-    @Option(name="stop", toUppercase=true, values={"SEP", "JOIN", "NEVER"},
-        description="which stop operator to use for LocalCPA")
-    private String stopType = "SEP";
-
     private LocalCPA(LogManager pLogger, Configuration pConfig) throws InvalidConfigurationException {
-      pConfig.inject(this);
-      this.abstractDomain = new LocalDomain();
-      this.mergeOperator = initializeMergeOperator();
-      this.stopOperator = initializeStopOperator();
+      super("join", "sep", new LocalDomain(), new LocalTransferRelation(pConfig));
       statistics = new LocalStatistics(pConfig, pLogger);
       reducer = new LocalReducer();
-      this.transferRelation = new LocalTransferRelation(pConfig);
-      // @Option is not allowed on static members
       String localVars = pConfig.getProperty("cpa.local.localvariables");
       if (localVars != null) {
         localVariables = new HashSet<>(Arrays.asList(localVars.split(", ")));
@@ -101,66 +65,9 @@ public class LocalCPA implements ConfigurableProgramAnalysisWithBAM, StatisticsP
       }
     }
 
-    private MergeOperator initializeMergeOperator() {
-      if(mergeType.equals("SEP")) {
-        return MergeSepOperator.getInstance();
-      }
-
-      else if(mergeType.equals("JOIN")) {
-        return new MergeJoinOperator(abstractDomain);
-      }
-
-      return null;
-    }
-
-    private StopOperator initializeStopOperator() {
-      if(stopType.equals("SEP")) {
-        return new StopSepOperator(abstractDomain);
-      }
-
-      else if(stopType.equals("JOIN")) {
-        return new StopJoinOperator(abstractDomain);
-      }
-
-      else if(stopType.equals("NEVER")) {
-        return new StopNeverOperator();
-      }
-      return null;
-    }
-
-    @Override
-    public AbstractDomain getAbstractDomain() {
-      return abstractDomain;
-    }
-
-    @Override
-    public LocalTransferRelation getTransferRelation() {
-      return transferRelation;
-    }
-
-    @Override
-    public MergeOperator getMergeOperator() {
-      return mergeOperator;
-    }
-
-    @Override
-    public StopOperator getStopOperator() {
-      return stopOperator;
-    }
-
-    @Override
-    public PrecisionAdjustment getPrecisionAdjustment() {
-      return StaticPrecisionAdjustment.getInstance();
-    }
-
     @Override
     public AbstractState getInitialState(CFANode pNode, StateSpacePartition p) {
       return new LocalState(null);
-    }
-
-    @Override
-    public Precision getInitialPrecision(CFANode pNode, StateSpacePartition p) {
-      return SingletonPrecision.getInstance();
     }
 
     @Override
@@ -171,20 +78,5 @@ public class LocalCPA implements ConfigurableProgramAnalysisWithBAM, StatisticsP
     @Override
     public void collectStatistics(Collection<Statistics> pStatsCollection) {
       pStatsCollection.add(statistics);
-    }
-
-    @Override
-    public boolean areAbstractSuccessors(AbstractState pState, CFAEdge pCfaEdge,
-        Collection<? extends AbstractState> pSuccessors) throws CPATransferException, InterruptedException {
-      Collection<? extends AbstractState> result = transferRelation.getAbstractSuccessorsForEdge(pState, SingletonPrecision.getInstance(), pCfaEdge);
-      return result.equals(pSuccessors);
-    }
-
-    @Override
-    public boolean isCoveredBy(AbstractState pState, AbstractState pOtherState) throws CPAException,
-        InterruptedException {
-      LocalState firstState = (LocalState) pState;
-      LocalState secondState = (LocalState) pOtherState;
-      return firstState.isLessOrEqual(secondState);
     }
 }
