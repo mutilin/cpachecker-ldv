@@ -23,25 +23,22 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
-import static com.google.common.collect.FluentIterable.from;
-
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
-import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
-import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractWrapperState;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
-import org.sosy_lab.cpachecker.cpa.thread.ThreadState;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsagePoint;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
-import com.google.common.base.Predicate;
+import com.google.common.base.Preconditions;
 
 
 public class UsageInfo implements Comparable<UsageInfo> {
@@ -52,37 +49,45 @@ public class UsageInfo implements Comparable<UsageInfo> {
   }
 
   private final LineInfo line;
-  private final LockStatisticsState locks;
   private final Access accessType;
   private AbstractState keyState;
   private List<CFAEdge> path;
   private SingleIdentifier id = null;
-  private final ThreadState threadInfo;
+  //Can not be immutable due to reduce/expand - lock states are modified (may be smth else)
+  private final Map<Class<? extends CompatibleState>, CompatibleState> compatibleStates = new LinkedHashMap<>();
   public boolean failureFlag;
   private boolean reachable;
 
-  public UsageInfo(@Nonnull Access atype, @Nonnull LineInfo l, @Nonnull LockStatisticsState lock, AbstractIdentifier ident, ThreadState tState) {
+  private UsageInfo(@Nonnull Access atype, @Nonnull LineInfo l, AbstractIdentifier ident) {
     line = l;
-    locks = lock;
     accessType = atype;
     keyState = null;
     failureFlag = false;
     reachable = true;
-    if (ident instanceof SingleIdentifier)
-    {
-      id = (SingleIdentifier)ident;
-    } else {
-      id = null;
-    }
-    threadInfo = tState == null ? null : tState.prepareToStore();
+    Preconditions.checkArgument(ident instanceof SingleIdentifier,
+        "Attempt to create a usage for %s, the construction is not supported", ident);
+    id = (SingleIdentifier)ident;
   }
 
   public UsageInfo(@Nonnull Access atype,  int l, @Nonnull UsageStatisticsState state, AbstractIdentifier ident) {
-    this(atype, new LineInfo(l, AbstractStates.extractLocation(state)), AbstractStates.extractStateByType(state, LockStatisticsState.class), ident, AbstractStates.extractStateByType(state, ThreadState.class));
+    this(atype, new LineInfo(l, AbstractStates.extractLocation(state)), ident);
+    addCompatibleParts(state);
   }
 
-  public @Nonnull LockStatisticsState getLockState() {
-    return locks;
+  private void addCompatibleParts(AbstractState state) {
+    if (state instanceof CompatibleState) {
+      CompatibleState cState = (CompatibleState) state;
+      compatibleStates.put(cState.getClass(), cState.prepareToStore());
+    }
+    if (state instanceof AbstractWrapperState) {
+      for (AbstractState child : ((AbstractWrapperState)state).getWrappedStates()) {
+        addCompatibleParts(child);
+      }
+    }
+  }
+
+  public CompatibleState getState(Class<? extends CompatibleState> pClass) {
+    return compatibleStates.get(pClass);
   }
 
   public @Nonnull Access getAccess() {
@@ -104,22 +109,13 @@ public class UsageInfo implements Comparable<UsageInfo> {
     //id = pId;
   }
 
-  public UsagePoint getUsagePoint() {
-    if (this.locks != null && (this.locks.getSize() > 0 || this.accessType == Access.READ)) {
-      return new UsagePoint(locks.getLockIdentifiers(), accessType, threadInfo);
-    } else {
-      return new UsagePoint(this);
-    }
-  }
-
   @Override
   public int hashCode() {
     final int prime = 31;
     int result = 1;
     result = prime * result + ((accessType == null) ? 0 : accessType.hashCode());
     result = prime * result + ((line == null) ? 0 : line.hashCode());
-    result = prime * result + ((locks == null) ? 0 : locks.hashCode());
-    result = prime * result + ((threadInfo == null) ? 0 : threadInfo.hashCode());
+    result = prime * result + ((compatibleStates == null) ? 0 : compatibleStates.hashCode());
     return result;
   }
 
@@ -145,18 +141,11 @@ public class UsageInfo implements Comparable<UsageInfo> {
     } else if (!line.equals(other.line)) {
       return false;
     }
-    if (threadInfo == null) {
-      if (other.threadInfo != null) {
+    if (compatibleStates == null) {
+      if (other.compatibleStates != null) {
         return false;
       }
-    } else if (!threadInfo.equals(other.threadInfo)) {
-      return false;
-    }
-    if (locks == null) {
-      if (other.locks != null) {
-        return false;
-      }
-    } else if (!locks.equals(other.locks)) {
+    } else if (!compatibleStates.equals(other.compatibleStates)) {
       return false;
     }
     return true;
@@ -174,7 +163,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
     sb.append("line ");
     sb.append(line.toString());
     sb.append(" (" + accessType + ")");
-    sb.append(", " + locks);
+    sb.append(", " + compatibleStates.get(LockStatisticsState.class));
 
     return sb.toString();
   }
@@ -192,10 +181,6 @@ public class UsageInfo implements Comparable<UsageInfo> {
     return keyState;
   }
 
-  public ThreadState getThreadInfo() {
-    return threadInfo;
-  }
-
   public List<CFAEdge> getPath() {
     assert path != null;
     return path;
@@ -208,13 +193,22 @@ public class UsageInfo implements Comparable<UsageInfo> {
     if (this == pO) {
       return 0;
     }
-    if (this.locks != null) {
-      result = this.locks.compareTo(pO.locks);
-      if (result != 0) {
-        //Usages without locks are more convenient to analyze
-        return -result;
+    Set<Class<? extends CompatibleState>> currentStateTypes = compatibleStates.keySet();
+    Set<Class<? extends CompatibleState>> otherStateTypes = pO.compatibleStates.keySet();
+    Preconditions.checkArgument(currentStateTypes.equals(otherStateTypes),
+        "Different compatible states in usages are not supported");
+    for (Class<? extends CompatibleState> pClass : currentStateTypes) {
+      //May be sorted not in the convenient order: Locks last
+      CompatibleState currentState = this.getState(pClass);
+      if (currentState != null) {
+        result = currentState.compareTo(pO.getState(pClass));
+        if (result != 0) {
+          //Usages without locks are more convenient to analyze
+          return -result;
+        }
       }
     }
+
     result = this.line.getLine() - pO.line.getLine();
     if (result != 0) {
       return result;
@@ -228,12 +222,6 @@ public class UsageInfo implements Comparable<UsageInfo> {
     if (result != 0) {
       return result;
     }
-    if (threadInfo != null) {
-      result = this.threadInfo.compareTo(pO.threadInfo);
-      if (result != 0) {
-        return result;
-      }
-    }
     /* We can't use key states for ordering, because the treeSets can't understand,
      * that old refined usage with zero key state is the same as new one
      */
@@ -245,24 +233,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
   }
 
   private void setPath(List<CFAEdge> p) {
-    List<CFAEdge> edges = p;
-    edges = from(edges).filter(new Predicate<CFAEdge>() {
-      @Override
-      public boolean apply(@Nullable CFAEdge pInput) {
-        if (pInput instanceof CDeclarationEdge) {
-          if (((CDeclarationEdge)pInput).getDeclaration().isGlobal() ||
-              pInput.getSuccessor().getFunctionName().equals("ldv_main")) {
-            return false;
-          }
-        } else if (pInput.getSuccessor().getFunctionName().equals("ldv_main")
-            && pInput instanceof CAssumeEdge) {
-          //Remove infinite switch, it's too long
-          return false;
-        }
-        return true;
-      }
-    }).toList();
-    path = edges;
+    path = p;
   }
 
   public boolean isReachable() {
@@ -275,8 +246,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
 
   @Override
   public UsageInfo clone() {
-    UsageInfo result = new UsageInfo(accessType, line, locks, id, threadInfo);
-    result.id = this.id;
+    UsageInfo result = new UsageInfo(accessType, line, id);
     result.keyState = this.keyState;
     result.path = this.path;
     result.failureFlag = this.failureFlag;
@@ -284,11 +254,8 @@ public class UsageInfo implements Comparable<UsageInfo> {
   }
 
   public UsageInfo expand(LockStatisticsState expandedState) {
-    UsageInfo result = new UsageInfo(this.accessType, this.line, expandedState, id, threadInfo);
-    result.id = this.id;
-    result.keyState = this.keyState;
-    result.path = this.path;
-    result.failureFlag = this.failureFlag;
+    UsageInfo result = clone();
+    compatibleStates.put(LockStatisticsState.class, expandedState);
     return result;
   }
 }

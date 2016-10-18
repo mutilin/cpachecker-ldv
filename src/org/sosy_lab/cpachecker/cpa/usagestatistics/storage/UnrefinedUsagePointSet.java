@@ -44,7 +44,7 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
 
   public void add(UsageInfo newInfo) {
     UsageInfoSet targetSet;
-    UsagePoint newPoint = newInfo.getUsagePoint();
+    UsagePoint newPoint = UsagePoint.createUsagePoint(newInfo);
     if (usageInfoSets.containsKey(newPoint)) {
       targetSet = usageInfoSets.get(newPoint);
     } else {
@@ -61,9 +61,9 @@ public class UnrefinedUsagePointSet implements AbstractUsagePointSet {
       Iterator<UsagePoint> iterator = topUsages.iterator();
       while (iterator.hasNext()) {
         UsagePoint point = iterator.next();
-        if (newPoint.isHigher(point)) {
+        if (newPoint.covers(point)) {
           iterator.remove();
-        } else if (point.isHigher(newPoint)) {
+        } else if (point.covers(newPoint)) {
           return;
         }
       }

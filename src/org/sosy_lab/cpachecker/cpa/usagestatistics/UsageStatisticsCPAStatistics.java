@@ -182,7 +182,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
    * one of them must be 'write'
    */
   private void createVisualization(final SingleIdentifier id, final UsageInfo usage, final Writer writer) throws IOException, CPATransferException, InterruptedException {
-    LockStatisticsState Locks = usage.getLockState();
+    LockStatisticsState Locks = (LockStatisticsState) usage.getState(LockStatisticsState.class);
 
     writer.append("Line 0:     N0 -{/*_____________________*/}-> N0\n");
     if (Locks != null) {

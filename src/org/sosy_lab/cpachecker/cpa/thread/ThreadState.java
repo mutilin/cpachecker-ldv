@@ -36,6 +36,7 @@ import org.sosy_lab.cpachecker.core.interfaces.AbstractWrapperState;
 import org.sosy_lab.cpachecker.core.interfaces.Partitionable;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.location.LocationState;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.CompatibleState;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 
 import com.google.common.base.Preconditions;
@@ -43,7 +44,7 @@ import com.google.common.collect.ImmutableList;
 
 
 public class ThreadState implements AbstractState, AbstractStateWithLocations, Partitionable,
-    AbstractWrapperState, Comparable<ThreadState> {
+    AbstractWrapperState, CompatibleState {
 
   public class ThreadStateBuilder {
     private LocationState loc;
@@ -208,7 +209,8 @@ public class ThreadState implements AbstractState, AbstractStateWithLocations, P
   }
 
   @Override
-  public int compareTo(ThreadState other) {
+  public int compareTo(CompatibleState pOther) {
+    ThreadState other = (ThreadState) pOther;
     int result = 0;
 
     result = other.threadSet.size() - this.threadSet.size(); //decreasing queue
@@ -233,8 +235,10 @@ public class ThreadState implements AbstractState, AbstractStateWithLocations, P
     return 0;
   }
 
-
-  public boolean isCompatibleWith(ThreadState other) {
+  @Override
+  public boolean isCompatibleWith(CompatibleState state) {
+    Preconditions.checkArgument(state instanceof ThreadState);
+    ThreadState other = (ThreadState) state;
     for (ThreadLabel label : threadSet) {
       for (ThreadLabel oLabel : other.threadSet) {
         if (label.isCompatibleWith(oLabel)) {
@@ -245,6 +249,7 @@ public class ThreadState implements AbstractState, AbstractStateWithLocations, P
     return false;
   }
 
+  @Override
   public ThreadState prepareToStore() {
     return new StoredThreadState(this);
   }

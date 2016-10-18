@@ -39,11 +39,13 @@ import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier.LockType;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.effects.AcquireLockEffect;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.effects.LockEffect;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.effects.ReleaseLockEffect;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.CompatibleState;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 
-public class LockStatisticsState implements Comparable<LockStatisticsState>, AbstractState, Serializable {
+public class LockStatisticsState implements AbstractState, Serializable, CompatibleState {
 
   public class LockStatisticsStateBuilder {
     private SortedMap<LockIdentifier, Integer> mutableLocks;
@@ -324,11 +326,12 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
   /**
    * This method find the difference between two states in some metric.
    * It is useful for comparators. lock1.diff(lock2) <=> lock1 - lock2.
-   * @param other The other LockStatisticsState
+   * @param pOther The other LockStatisticsState
    * @return Difference between two states
    */
   @Override
-  public int compareTo(LockStatisticsState other) {
+  public int compareTo(CompatibleState pOther) {
+    LockStatisticsState other = (LockStatisticsState) pOther;
     int result = 0;
 
     result = other.getSize() - this.getSize(); //decreasing queue
@@ -355,7 +358,10 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
     return 0;
   }
 
-  public boolean intersects(LockStatisticsState pLocks) {
+  @Override
+  public boolean isCompatibleWith(CompatibleState state) {
+    Preconditions.checkArgument(state.getClass() == LockStatisticsState.class);
+    LockStatisticsState pLocks = (LockStatisticsState) state;
     return !Sets.intersection(locks.keySet(), pLocks.locks.keySet()).isEmpty();
   }
 
@@ -395,5 +401,10 @@ public class LockStatisticsState implements Comparable<LockStatisticsState>, Abs
       }
     }
     return result;
+  }
+
+  @Override
+  public CompatibleState prepareToStore() {
+    return this;
   }
 }

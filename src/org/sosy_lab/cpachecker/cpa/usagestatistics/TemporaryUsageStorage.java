@@ -163,7 +163,7 @@ public class TemporaryUsageStorage extends TreeMap<SingleIdentifier, SortedSet<U
         LockStatisticsState expandedState;
         SortedSet<UsageInfo> result = new TreeSet<>();
         for (UsageInfo uinfo : otherStorage) {
-          currentState = uinfo.getLockState();
+          currentState = (LockStatisticsState) uinfo.getState(LockStatisticsState.class);
           if (reduceToExpand.containsKey(currentState)) {
             expandedState = reduceToExpand.get(currentState);
           } else {
