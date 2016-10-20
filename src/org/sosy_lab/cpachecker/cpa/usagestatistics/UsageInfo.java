@@ -24,6 +24,7 @@
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
 import java.util.LinkedHashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -88,6 +89,10 @@ public class UsageInfo implements Comparable<UsageInfo> {
 
   public CompatibleState getState(Class<? extends CompatibleState> pClass) {
     return compatibleStates.get(pClass);
+  }
+
+  public List<CompatibleState> getAllCompatibleStates() {
+    return new LinkedList<>(compatibleStates.values());
   }
 
   public @Nonnull Access getAccess() {
@@ -255,6 +260,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
 
   public UsageInfo expand(LockStatisticsState expandedState) {
     UsageInfo result = clone();
+
     compatibleStates.put(LockStatisticsState.class, expandedState);
     return result;
   }

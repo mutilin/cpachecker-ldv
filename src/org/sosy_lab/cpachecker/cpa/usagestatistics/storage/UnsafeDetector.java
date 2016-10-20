@@ -34,8 +34,6 @@ import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
 import org.sosy_lab.cpachecker.util.Pair;
 
-import com.google.common.collect.Sets;
-
 @Options(prefix="cpa.usagestatistics.unsafedetector")
 public class UnsafeDetector {
   @Option(name="ignoreEmptyLockset", description="ignore unsafes only with empty callstacks")
@@ -175,14 +173,12 @@ public class UnsafeDetector {
   }
 
   public boolean isUnsafePair(UsagePoint point1, UsagePoint point2) {
-    if (Sets.intersection(point1.locks, point2.locks).isEmpty() &&
+    if (point1.isCompatible(point2) &&
         (point1.access == Access.WRITE || point2.access == Access.WRITE)) {
-      if (ignoreEmptyLockset && point1.locks.isEmpty() && point2.locks.isEmpty()) {
+      if (ignoreEmptyLockset && point1.isEmpty() && point2.isEmpty()) {
         return false;
       }
-      if ((point1.threadInfo == null && point2.threadInfo == null) || point1.threadInfo.isCompatibleWith(point2.threadInfo)) {
-        return true;
-      }
+      return true;
     }
     return false;
   }

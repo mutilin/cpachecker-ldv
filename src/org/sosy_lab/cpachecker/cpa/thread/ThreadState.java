@@ -37,6 +37,7 @@ import org.sosy_lab.cpachecker.core.interfaces.Partitionable;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.location.LocationState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.CompatibleState;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageTreeNode;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 
 import com.google.common.base.Preconditions;
@@ -44,7 +45,7 @@ import com.google.common.collect.ImmutableList;
 
 
 public class ThreadState implements AbstractState, AbstractStateWithLocations, Partitionable,
-    AbstractWrapperState, CompatibleState {
+    AbstractWrapperState, UsageTreeNode {
 
   public class ThreadStateBuilder {
     private LocationState loc;
@@ -272,5 +273,20 @@ public class ThreadState implements AbstractState, AbstractStateWithLocations, P
     StoredThreadState(ThreadState origin) {
       super(null, null, origin.threadSet, null);
     }
+  }
+
+  @Override
+  public UsageTreeNode getTreeNode() {
+    return this;
+  }
+
+  @Override
+  public boolean cover(UsageTreeNode pNode) {
+    return true;
+  }
+
+  @Override
+  public boolean isEmpty() {
+    return true;
   }
 }

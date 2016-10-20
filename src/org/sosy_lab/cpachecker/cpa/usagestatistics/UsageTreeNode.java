@@ -24,9 +24,8 @@
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
 
-public interface CompatibleState extends Comparable<CompatibleState>{
+public interface UsageTreeNode extends CompatibleState {
 
-  public boolean isCompatibleWith(CompatibleState state);
-  public CompatibleState prepareToStore();
-  public UsageTreeNode getTreeNode();
+  public boolean cover(UsageTreeNode node);
+  public boolean isEmpty();
 }

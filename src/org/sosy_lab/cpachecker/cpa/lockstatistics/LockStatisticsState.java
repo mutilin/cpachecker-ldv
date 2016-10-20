@@ -31,7 +31,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
-import java.util.SortedSet;
 import java.util.TreeSet;
 
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
@@ -40,12 +39,67 @@ import org.sosy_lab.cpachecker.cpa.lockstatistics.effects.AcquireLockEffect;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.effects.LockEffect;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.effects.ReleaseLockEffect;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.CompatibleState;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageTreeNode;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 
 public class LockStatisticsState implements AbstractState, Serializable, CompatibleState {
+
+  public static class LockTreeNode extends TreeSet<LockIdentifier> implements UsageTreeNode{
+
+    private static final long serialVersionUID = 5757759799394605077L;
+
+    public LockTreeNode(Set<LockIdentifier> locks) {
+      super(locks);
+    }
+    @Override
+    public boolean isCompatibleWith(CompatibleState pState) {
+      Preconditions.checkArgument(pState instanceof LockTreeNode);
+      return Sets.intersection(this, (LockTreeNode)pState).isEmpty();
+    }
+
+    @Override
+    public CompatibleState prepareToStore() {
+      return this;
+    }
+
+    @Override
+    public UsageTreeNode getTreeNode() {
+      return this;
+    }
+
+    @Override
+    public int compareTo(CompatibleState pArg0) {
+      Preconditions.checkArgument(pArg0 instanceof LockTreeNode);
+      LockTreeNode o = (LockTreeNode) pArg0;
+      int result = size() - o.size();
+      if (result != 0) {
+        return result;
+      }
+      Iterator<LockIdentifier> lockIterator = iterator();
+      Iterator<LockIdentifier> lockIterator2 = o.iterator();
+      while (lockIterator.hasNext()) {
+        result = lockIterator.next().compareTo(lockIterator2.next());
+        if (result != 0) {
+          return result;
+        }
+      }
+      return 0;
+    }
+
+    @Override
+    public boolean cover(UsageTreeNode pNode) {
+      Preconditions.checkArgument(pNode instanceof LockTreeNode);
+      LockTreeNode o = (LockTreeNode) pNode;
+      if (o.containsAll(this)) {
+        return true;
+      }
+      return false;
+    }
+
+  }
 
   public class LockStatisticsStateBuilder {
     private SortedMap<LockIdentifier, Integer> mutableLocks;
@@ -151,14 +205,6 @@ public class LockStatisticsState implements AbstractState, Serializable, Compati
       mutableToRestore = null;
     }
 
-    /*public void reduce(Set<LockIdentifier> usedLocks) {
-      for (LockIdentifier id : new HashSet<>(mutableLocks.keySet())) {
-        if (!usedLocks.contains(id)) {
-          mutableLocks.remove(id);
-        }
-      }
-    }*/
-
     public void reduceLocks(Set<String> exceptLocks, Set<LockIdentifier> usedLocks) {
       for (LockIdentifier lock : new HashSet<>(mutableLocks.keySet())) {
         if (usedLocks != null && !usedLocks.contains(lock)) {
@@ -173,14 +219,6 @@ public class LockStatisticsState implements AbstractState, Serializable, Compati
     public void expand(LockStatisticsState rootState) {
       mutableToRestore = rootState.toRestore;
     }
-
-    /*public void expand(LockStatisticsState rootState, Set<LockIdentifier> usedLocks) {
-      for (LockIdentifier lock : rootState.locks.keySet()) {
-        if (!usedLocks.contains(lock)) {
-          mutableLocks.put(lock, rootState.locks.get(lock));
-        }
-      }
-    }*/
 
     public void expandLocks(LockStatisticsState pRootState, Set<String> pRestrictedLocks, Set<LockIdentifier> usedLocks) {
       for (LockIdentifier lock : pRootState.locks.keySet()) {
@@ -238,10 +276,6 @@ public class LockStatisticsState implements AbstractState, Serializable, Compati
   public Map<LockIdentifier, Integer> getHashCodeForState() {
     //Special hash for BAM, in other cases use iterator
     return locks;
-  }
-
-  public SortedSet<LockIdentifier> getLockIdentifiers() {
-    return Sets.newTreeSet(locks.keySet());
   }
 
   @Override
@@ -406,5 +440,10 @@ public class LockStatisticsState implements AbstractState, Serializable, Compati
   @Override
   public CompatibleState prepareToStore() {
     return this;
+  }
+
+  @Override
+  public UsageTreeNode getTreeNode() {
+    return new LockTreeNode(locks.keySet());
   }
 }

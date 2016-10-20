@@ -1,18 +1,16 @@
 package org.sosy_lab.cpachecker.cpa.usagestatistics.storage;
 
-import java.util.HashSet;
-import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Set;
-import java.util.SortedSet;
+import java.util.TreeSet;
 
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
-import org.sosy_lab.cpachecker.cpa.thread.ThreadState;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.CompatibleState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageTreeNode;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableSortedSet;
 
 public class UsagePoint implements Comparable<UsagePoint> {
 
@@ -20,8 +18,8 @@ public class UsagePoint implements Comparable<UsagePoint> {
     //This usage is used to distinct usage points with empty lock sets with write access from each other
     public final UsageInfo keyUsage;
 
-    private UsagePointWithEmptyLockSet(SortedSet<LockIdentifier> pLocks, Access pAccess, UsageInfo pInfo, ThreadState tInfo) {
-      super(pLocks, pAccess, tInfo);
+    private UsagePointWithEmptyLockSet(List<UsageTreeNode> nodes, Access pAccess, UsageInfo pInfo) {
+      super(nodes, pAccess);
       assert pInfo != null;
       keyUsage = pInfo;
     }
@@ -80,28 +78,31 @@ public class UsagePoint implements Comparable<UsagePoint> {
     }
   }
 
-  public final ImmutableSortedSet<LockIdentifier> locks;
   public final Access access;
-  //May be null
-  public final ThreadState threadInfo;
+  private final List<UsageTreeNode> compatibleNodes;
   private final Set<UsagePoint> coveredUsages;
 
-  private UsagePoint(SortedSet<LockIdentifier> pLocks, Access pAccess, ThreadState tInfo) {
-    locks = ImmutableSortedSet.copyOf(pLocks);
+  private UsagePoint(List<UsageTreeNode> nodes, Access pAccess) {
+    //locks = ImmutableSortedSet.copyOf(states);
     access = pAccess;
-    coveredUsages = new HashSet<>();
-    threadInfo = tInfo;
+    coveredUsages = new TreeSet<>();
+    compatibleNodes = nodes;
   }
 
   public static UsagePoint createUsagePoint(UsageInfo info) {
-    SortedSet<LockIdentifier> locks = ((LockStatisticsState)info.getState(LockStatisticsState.class)).getLockIdentifiers();
-    ThreadState threadInfo = (ThreadState) info.getState(ThreadState.class);
-    Access accessType = info.getAccess();
+    List<CompatibleState> states = info.getAllCompatibleStates();
+    List<UsageTreeNode> nodes = new LinkedList<>();
 
-    if (locks != null && (locks.size() > 0 || accessType == Access.READ)) {
-      return new UsagePoint(locks, accessType, threadInfo);
+    Access accessType = info.getAccess();
+    boolean isEmpty = true;
+    for (CompatibleState state : states) {
+      UsageTreeNode constructedNode = state.getTreeNode();
+      isEmpty &= constructedNode.isEmpty();
+    }
+    if (!isEmpty || accessType == Access.READ) {
+      return new UsagePoint(nodes, accessType);
     } else {
-      return new UsagePointWithEmptyLockSet(locks, accessType, info, threadInfo);
+      return new UsagePointWithEmptyLockSet(nodes, accessType, info);
     }
 
   }
@@ -128,8 +129,7 @@ public class UsagePoint implements Comparable<UsagePoint> {
     final int prime = 31;
     int result = 1;
     result = prime * result + ((access == null) ? 0 : access.hashCode());
-    result = prime * result + ((locks == null) ? 0 : locks.hashCode());
-    result = prime * result + ((threadInfo == null) ? 0 : threadInfo.hashCode());
+    result = prime * result + ((compatibleNodes == null) ? 0 : compatibleNodes.hashCode());
     return result;
   }
 
@@ -148,18 +148,11 @@ public class UsagePoint implements Comparable<UsagePoint> {
     if (access != other.access) {
       return false;
     }
-    if (locks == null) {
-      if (other.locks != null) {
+    if (compatibleNodes == null) {
+      if (other.compatibleNodes != null) {
         return false;
       }
-    } else if (!locks.equals(other.locks)) {
-      return false;
-    }
-    if (threadInfo == null) {
-      if (other.threadInfo != null) {
-        return false;
-      }
-    } else if (!threadInfo.equals(other.threadInfo)) {
+    } else if (!compatibleNodes.equals(other.compatibleNodes)) {
       return false;
     }
     return true;
@@ -172,20 +165,11 @@ public class UsagePoint implements Comparable<UsagePoint> {
     if (result != 0) {
       return result;
     }
-    result = locks.size() - o.locks.size();
-    if (result != 0) {
-      return result;
-    }
-    Iterator<LockIdentifier> lockIterator = locks.iterator();
-    Iterator<LockIdentifier> lockIterator2 = o.locks.iterator();
-    while (lockIterator.hasNext()) {
-      result = lockIterator.next().compareTo(lockIterator2.next());
-      if (result != 0) {
-        return result;
-      }
-    }
-    if (threadInfo != null) {
-      result = threadInfo.compareTo(o.threadInfo);
+    Preconditions.checkArgument(compatibleNodes.size() == o.compatibleNodes.size());
+    for (int i = 0; i < compatibleNodes.size(); i++) {
+      UsageTreeNode currentNode = compatibleNodes.get(i);
+      UsageTreeNode otherNode = o.compatibleNodes.get(i);
+      result = currentNode.compareTo(otherNode);
       if (result != 0) {
         return result;
       }
@@ -196,15 +180,44 @@ public class UsagePoint implements Comparable<UsagePoint> {
   //TODO CompareTo? with enums
   public boolean covers(UsagePoint o) {
     // access 'write' is higher than 'read', but only for nonempty locksets
-    if (o.locks.containsAll(locks) && access.compareTo(o.access) <= 0) {
-      return true;
+    if (access.compareTo(o.access) > 0) {
+      return false;
     }
-    return false;
+    Preconditions.checkArgument(compatibleNodes.size() == o.compatibleNodes.size());
+    for (int i = 0; i < compatibleNodes.size(); i++) {
+      UsageTreeNode currentNode = compatibleNodes.get(i);
+      UsageTreeNode otherNode = o.compatibleNodes.get(i);
+      if(!currentNode.cover(otherNode)) {
+        return false;
+      }
+    }
+    return true;
   }
 
-  @Override
+  public boolean isCompatible(UsagePoint other) {
+    Preconditions.checkArgument(compatibleNodes.size() == other.compatibleNodes.size());
+    for (int i = 0; i < compatibleNodes.size(); i++) {
+      UsageTreeNode currentNode = compatibleNodes.get(i);
+      UsageTreeNode otherNode = other.compatibleNodes.get(i);
+      if(!currentNode.isCompatibleWith(otherNode)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  public boolean isEmpty() {
+    for (UsageTreeNode currentNode : compatibleNodes) {
+      if (!currentNode.isEmpty()) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /*@Override
   public String toString() {
     String result = "(" + locks.toString() + ", " + access;
     return result + ")";
-  }
+  }*/
 }
