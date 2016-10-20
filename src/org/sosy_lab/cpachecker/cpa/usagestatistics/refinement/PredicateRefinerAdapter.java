@@ -45,8 +45,6 @@ import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateRefiner;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicatePrecision;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsPredicateRefiner;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
-import org.sosy_lab.cpachecker.exceptions.RefinementFailedException;
-import org.sosy_lab.cpachecker.exceptions.RefinementFailedException.Reason;
 import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.Precisions;
 
@@ -62,6 +60,7 @@ public class PredicateRefinerAdapter extends GenericSinglePathRefiner {
   //private final Multimap<SingleIdentifier, Set<CFAEdge>> idCached = LinkedHashMultimap.create();
   private final Set<Set<CFAEdge>> trueCache = new HashSet<>();
 
+  private final Set<Set<CFAEdge>> potentialLoopTraces = new HashSet<>();
   //Statistics
   private int solverFailures = 0;
   private int numberOfrepeatedPaths = 0;
@@ -102,18 +101,19 @@ public class PredicateRefinerAdapter extends GenericSinglePathRefiner {
         PredicatePrecision currentPreds = Precisions.extractPrecisionByType(currentPrecision, PredicatePrecision.class);
 
         if (previousPreds.calculateDifferenceTo(currentPreds) == 0) {
-          try {
-            result = performPredicateRefinement(pInput);
-            logger.log(Level.WARNING, "Path is repeated, but BAM Refiner was successfully updated");
-            //BAM can refine with updated predicate refiner, congratulate him.
-            numberOfBAMupdates++;
-          } catch (RefinementFailedException e) {
-            assert e.getReason() == Reason.RepeatedCounterexample;
-            //All old interpolants are present => we are looped
+          if (potentialLoopTraces.contains(edgeSet)) {
+            //Second time, we obtain it
             numberOfrepeatedPaths++;
             logger.log(Level.WARNING, "Path is repeated, BAM is looped");
             pInput.getUsageInfo().failureFlag = true;
             result = RefinementResult.createUnknown();
+            potentialLoopTraces.remove(edgeSet);
+          } else {
+            result = performPredicateRefinement(pInput);
+            logger.log(Level.WARNING, "Path is repeated, hope BAM can handle it itself");
+            //BAM can refine with updated predicate refiner, congratulate him.
+            numberOfBAMupdates++;
+            potentialLoopTraces.add(edgeSet);
           }
         } else {
           //rerefine it to obtain new states

@@ -102,7 +102,11 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
     return recentUsages.containsKey(id);
   }
 
-  public AbstractIdentifier getLinks(final AbstractIdentifier id) {
+  public AbstractIdentifier getLinksIfNecessary(final AbstractIdentifier id) {
+
+    if (!containsLinks(id)) {
+      return id;
+    }
     /* Special get!
      * If we get **b, having (*b, c), we give *c
      */
@@ -114,7 +118,7 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
         int currentD = tmpId.getDereference();
         tmpId.setDereference(currentD + id.getDereference() - d);
         if (this.containsLinks(tmpId)) {
-          tmpId = getLinks(tmpId);
+          tmpId = getLinksIfNecessary(tmpId);
         }
         return tmpId;
       }
