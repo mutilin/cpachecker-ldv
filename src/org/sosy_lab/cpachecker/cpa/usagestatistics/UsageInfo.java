@@ -231,8 +231,12 @@ public class UsageInfo implements Comparable<UsageInfo> {
      * that old refined usage with zero key state is the same as new one
      */
     if (this.id != null && pO.id != null) {
-      //Not while adding in container
-      assert this.id.equals(pO.id);
+      //Identifiers may not be equal here:
+      // if (a.b > c.b)
+      // FieldIdentifiers are the same (when we add to container),
+      // but full identifiers (here) are not equal
+      // TODO should we distinguish them?
+
     }
     return 0;
   }
