@@ -32,6 +32,7 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CCastExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CCharLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CComplexCastExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpressionVisitor;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFieldReference;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFloatLiteralExpression;
@@ -53,19 +54,20 @@ public class ExpressionHandler implements CExpressionVisitor<Void, HandleCodeExc
   public List<Pair<AbstractIdentifier, Access>> result;
   protected Access accessMode;
   protected String function;
-  IdentifierCreator creator = new IdentifierCreator();
+  private IdentifierCreator creator = new IdentifierCreator();
+  private UsageStatisticsState currentState;
 
-  public void setMode(String funcName, Access mode) {
+  public void setMode(String funcName, Access mode, UsageStatisticsState state) {
     result = new LinkedList<>();
     function = funcName;
     accessMode = mode;
     creator.clear(function);
+    currentState = state;
   }
 
   @Override
   public Void visit(CArraySubscriptExpression expression) throws HandleCodeException {
-    AbstractIdentifier id = expression.accept(creator);
-    result.add(Pair.of(id, accessMode));
+    addNewId(expression);
     accessMode = Access.READ;
     expression.getArrayExpression().accept(this);
     return null;
@@ -91,9 +93,7 @@ public class ExpressionHandler implements CExpressionVisitor<Void, HandleCodeExc
 
   @Override
   public Void visit(CFieldReference expression) throws HandleCodeException {
-    creator.clearDereference();
-    AbstractIdentifier fieldId = expression.accept(creator);
-    result.add(Pair.of(fieldId, accessMode));
+    addNewId(expression);
     if (expression.isPointerDereference()) {
       accessMode = Access.READ;
     }
@@ -103,9 +103,7 @@ public class ExpressionHandler implements CExpressionVisitor<Void, HandleCodeExc
 
   @Override
   public Void visit(CIdExpression expression) throws HandleCodeException {
-    creator.clearDereference();
-    AbstractIdentifier id = expression.accept(creator);
-    result.add(Pair.of(id, accessMode));
+    addNewId(expression);
     return null;
   }
 
@@ -127,9 +125,7 @@ public class ExpressionHandler implements CExpressionVisitor<Void, HandleCodeExc
   @Override
   public Void visit(CUnaryExpression expression) throws HandleCodeException {
     if (expression.getOperator() == CUnaryExpression.UnaryOperator.AMPER) {
-      creator.clearDereference();
-      AbstractIdentifier id = expression.accept(creator);
-      result.add(Pair.of(id, accessMode));
+      addNewId(expression);
       return null;
     }
     //In all other unary operation we only read the operand
@@ -141,9 +137,7 @@ public class ExpressionHandler implements CExpressionVisitor<Void, HandleCodeExc
   @Override
   public Void visit(CPointerExpression pPointerExpression) throws HandleCodeException {
     //write: *s =
-    creator.clearDereference();
-    AbstractIdentifier id = pPointerExpression.accept(creator);
-    result.add(Pair.of(id, accessMode));
+    addNewId(pPointerExpression);
     accessMode = Access.READ;
     pPointerExpression.getOperand().accept(this);
     return null;
@@ -161,5 +155,11 @@ public class ExpressionHandler implements CExpressionVisitor<Void, HandleCodeExc
   @Override
   public Void visit(CAddressOfLabelExpression pAddressOfLabelExpression) throws HandleCodeException { return null; }
 
+  private void addNewId(CExpression e) throws HandleCodeException {
+    creator.clearDereference();
+    AbstractIdentifier id = e.accept(creator);
+    id = currentState.getLinksIfNecessary(id);
+    result.add(Pair.of(id, accessMode));
+  }
 }
 

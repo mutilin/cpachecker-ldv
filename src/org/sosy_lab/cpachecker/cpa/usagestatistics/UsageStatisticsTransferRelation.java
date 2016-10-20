@@ -321,6 +321,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       String funcName = AbstractStates.extractStateByType(newState, CallstackState.class).getCurrentFunction();
 
       AbstractIdentifier id = IdentifierCreator.createIdentifier(decl, funcName, 0);
+      id = newState.getLinksIfNecessary(id);
       UsageInfo usage = new UsageInfo(Access.WRITE, declEdge.getLineNumber(), newState, id);
       visitId(newState, pPrecision, id, usage);
     }
@@ -346,6 +347,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       for (int i = 0; i < params.size(); i++) {
         creator.setDereference(currentInfo.pInfo.get(i).dereference);
         id = params.get(i).accept(creator);
+        id = newState.getLinksIfNecessary(id);
         UsageInfo usage = new UsageInfo(currentInfo.pInfo.get(i).access,
             fcExpression.getFileLocation().getStartingLineNumber(), newState, id);
         visitId(newState, pPrecision, id, usage);
@@ -438,7 +440,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       return;
     }
     if (state.containsLinks(idFrom)) {
-      idFrom = state.getLinks(idFrom);
+      idFrom = state.getLinksIfNecessary(idFrom);
     }
     logger.log(Level.FINEST, "Link " + idIn + " and " + idFrom);
     state.put(idIn, idFrom);
@@ -447,7 +449,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
   private void visitStatement(final UsageStatisticsState state, final UsageStatisticsPrecision pPrecision
       , final CExpression expression, final Access access) throws HandleCodeException {
     String functionName = AbstractStates.extractStateByType(state, CallstackState.class).getCurrentFunction();
-    handler.setMode(functionName, access);
+    handler.setMode(functionName, access, state);
     expression.accept(handler);
 
     for (Pair<AbstractIdentifier, Access> pair : handler.result) {
@@ -475,9 +477,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       return;
     }
 
-    if (state.containsLinks(singleId)) {
-      singleId = (SingleIdentifier) state.getLinks(id);
-    }
+    singleId = (SingleIdentifier) state.getLinksIfNecessary(id);
 
     if (varSkipper.shouldBeSkipped(singleId, usage)) {
       return;
