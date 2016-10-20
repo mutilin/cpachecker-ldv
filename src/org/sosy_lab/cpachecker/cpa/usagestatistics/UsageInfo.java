@@ -49,30 +49,46 @@ public class UsageInfo implements Comparable<UsageInfo> {
     READ;
   }
 
+  private final static UsageInfo UNSUPPORTED_USAGE = new UsageInfo();
+
   private final LineInfo line;
   private final Access accessType;
   private AbstractState keyState;
   private List<CFAEdge> path;
-  private SingleIdentifier id = null;
+  private final SingleIdentifier id;
   //Can not be immutable due to reduce/expand - lock states are modified (may be smth else)
   private final Map<Class<? extends CompatibleState>, CompatibleState> compatibleStates = new LinkedHashMap<>();
   public boolean failureFlag;
   private boolean reachable;
 
-  private UsageInfo(@Nonnull Access atype, @Nonnull LineInfo l, AbstractIdentifier ident) {
+  private UsageInfo() {
+    //Only for unsupported usage
+    line = null;
+    accessType = Access.WRITE;
+    keyState = null;
+    failureFlag = false;
+    reachable = false;
+    id = null;
+  }
+
+  private UsageInfo(@Nonnull Access atype, @Nonnull LineInfo l, SingleIdentifier ident) {
     line = l;
     accessType = atype;
     keyState = null;
     failureFlag = false;
     reachable = true;
-    Preconditions.checkArgument(ident instanceof SingleIdentifier,
-        "Attempt to create a usage for %s, the construction is not supported", ident);
-    id = (SingleIdentifier)ident;
+    id = ident;
   }
 
-  public UsageInfo(@Nonnull Access atype,  int l, @Nonnull UsageStatisticsState state, AbstractIdentifier ident) {
-    this(atype, new LineInfo(l, AbstractStates.extractLocation(state)), ident);
-    addCompatibleParts(state);
+  public static UsageInfo createUsageInfo(@Nonnull Access atype,  int l,
+      @Nonnull UsageStatisticsState state, AbstractIdentifier ident) {
+    if (ident instanceof SingleIdentifier) {
+      UsageInfo result = new UsageInfo(atype, new LineInfo(l, AbstractStates.extractLocation(state)), (SingleIdentifier)ident);
+      result.addCompatibleParts(state);
+      return result;
+    } else {
+      return UNSUPPORTED_USAGE;
+    }
   }
 
   private void addCompatibleParts(AbstractState state) {
@@ -106,6 +122,10 @@ public class UsageInfo implements Comparable<UsageInfo> {
   public @Nonnull SingleIdentifier getId() {
     assert(id != null);
     return id;
+  }
+
+  public boolean isSupported() {
+    return this != UNSUPPORTED_USAGE;
   }
 
   public @Nonnull void setId(SingleIdentifier pId) {

@@ -321,8 +321,8 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       String funcName = AbstractStates.extractStateByType(newState, CallstackState.class).getCurrentFunction();
 
       AbstractIdentifier id = IdentifierCreator.createIdentifier(decl, funcName, 0);
-      UsageInfo usage = new UsageInfo(Access.WRITE, declEdge.getLineNumber(), newState, id);
-      visitId(newState, pPrecision, id, usage);
+      UsageInfo usage = UsageInfo.createUsageInfo(Access.WRITE, declEdge.getLineNumber(), newState, id);
+      visitId(newState, pPrecision, usage);
     }
   }
 
@@ -346,9 +346,9 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
       for (int i = 0; i < params.size(); i++) {
         creator.setDereference(currentInfo.pInfo.get(i).dereference);
         id = params.get(i).accept(creator);
-        UsageInfo usage = new UsageInfo(currentInfo.pInfo.get(i).access,
+        UsageInfo usage = UsageInfo.createUsageInfo(currentInfo.pInfo.get(i).access,
             fcExpression.getFileLocation().getStartingLineNumber(), newState, id);
-        visitId(newState, pPrecision, id, usage);
+        visitId(newState, pPrecision, usage);
       }
 
     } else if (abortfunctions.contains(functionCallName)) {
@@ -451,21 +451,21 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     expression.accept(handler);
 
     for (Pair<AbstractIdentifier, Access> pair : handler.result) {
-      UsageInfo usage = new UsageInfo(pair.getSecond(), expression.getFileLocation().getStartingLineNumber(), state, pair.getFirst());
-      visitId(state, pPrecision, pair.getFirst(), usage);
+      UsageInfo usage = UsageInfo.createUsageInfo(pair.getSecond(), expression.getFileLocation().getStartingLineNumber(), state, pair.getFirst());
+      visitId(state, pPrecision, usage);
     }
 
   }
 
   private void visitId(final UsageStatisticsState state, final UsageStatisticsPrecision pPrecision
-      , final AbstractIdentifier id, UsageInfo usage) {
+      , UsageInfo usage) {
 
     //Precise information, using results of shared analysis
-    if (! (id instanceof SingleIdentifier)) {
+    if (!usage.isSupported()) {
       return;
     }
 
-    SingleIdentifier singleId = (SingleIdentifier) id;
+    SingleIdentifier singleId = usage.getId();
 
     CFANode node = AbstractStates.extractLocation(state);
     Map<GeneralIdentifier, DataType> localInfo = pPrecision.get(node);
@@ -476,7 +476,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     }
 
     if (state.containsLinks(singleId)) {
-      singleId = (SingleIdentifier) state.getLinks(id);
+      singleId = (SingleIdentifier) state.getLinks(singleId);
     }
 
     if (varSkipper.shouldBeSkipped(singleId, usage)) {
