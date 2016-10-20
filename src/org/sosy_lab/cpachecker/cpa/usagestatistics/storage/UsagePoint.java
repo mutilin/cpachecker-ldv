@@ -98,6 +98,7 @@ public class UsagePoint implements Comparable<UsagePoint> {
     for (CompatibleState state : states) {
       UsageTreeNode constructedNode = state.getTreeNode();
       isEmpty &= constructedNode.isEmpty();
+      nodes.add(constructedNode);
     }
     if (!isEmpty || accessType == Access.READ) {
       return new UsagePoint(nodes, accessType);
