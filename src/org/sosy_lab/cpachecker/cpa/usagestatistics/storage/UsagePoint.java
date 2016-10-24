@@ -71,6 +71,11 @@ public class UsagePoint implements Comparable<UsagePoint> {
     }
 
     @Override
+    public boolean isEmpty() {
+      return true;
+    }
+
+    @Override
     public String toString() {
       String result = super.toString();
       result += ", " + keyUsage.getLine();
@@ -208,12 +213,8 @@ public class UsagePoint implements Comparable<UsagePoint> {
   }
 
   public boolean isEmpty() {
-    for (UsageTreeNode currentNode : compatibleNodes) {
-      if (!currentNode.isEmpty()) {
-        return false;
-      }
-    }
-    return true;
+    //The empty points are the special class
+    return false;
   }
 
   /*@Override
