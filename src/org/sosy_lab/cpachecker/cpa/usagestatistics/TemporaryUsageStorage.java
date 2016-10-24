@@ -33,9 +33,9 @@ import java.util.TreeSet;
 
 import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState.LockStatisticsStateBuilder;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.effects.LockEffect;
+import org.sosy_lab.cpachecker.cpa.lock.LockStatisticsState;
+import org.sosy_lab.cpachecker.cpa.lock.LockStatisticsState.LockStatisticsStateBuilder;
+import org.sosy_lab.cpachecker.cpa.lock.effects.LockEffect;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 import com.google.common.collect.LinkedListMultimap;

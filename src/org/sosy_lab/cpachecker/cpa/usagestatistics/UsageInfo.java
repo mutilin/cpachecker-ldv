@@ -34,7 +34,7 @@ import javax.annotation.Nonnull;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractWrapperState;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
+import org.sosy_lab.cpachecker.cpa.lock.LockStatisticsState;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
@@ -278,6 +278,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
     result.keyState = this.keyState;
     result.path = this.path;
     result.isLooped = this.isLooped;
+    result.isReachable = this.isReachable;
     return result;
   }
 

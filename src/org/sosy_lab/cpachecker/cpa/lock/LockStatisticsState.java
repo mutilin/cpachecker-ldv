@@ -21,7 +21,7 @@
  *  CPAchecker web page:
  *    http://cpachecker.sosy-lab.org
  */
-package org.sosy_lab.cpachecker.cpa.lockstatistics;
+package org.sosy_lab.cpachecker.cpa.lock;
 
 import java.io.Serializable;
 import java.util.HashSet;
@@ -34,10 +34,10 @@ import java.util.SortedMap;
 import java.util.TreeSet;
 
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier.LockType;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.effects.AcquireLockEffect;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.effects.LockEffect;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.effects.ReleaseLockEffect;
+import org.sosy_lab.cpachecker.cpa.lock.LockIdentifier.LockType;
+import org.sosy_lab.cpachecker.cpa.lock.effects.AcquireLockEffect;
+import org.sosy_lab.cpachecker.cpa.lock.effects.LockEffect;
+import org.sosy_lab.cpachecker.cpa.lock.effects.ReleaseLockEffect;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.CompatibleState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageTreeNode;
 

@@ -27,7 +27,7 @@ import java.util.Collections;
 import java.util.Set;
 
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier;
+import org.sosy_lab.cpachecker.cpa.lock.LockIdentifier;
 
 import com.google.common.collect.ImmutableSet;
 

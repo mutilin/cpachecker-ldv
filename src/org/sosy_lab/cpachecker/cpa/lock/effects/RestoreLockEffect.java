@@ -21,23 +21,42 @@
  *  CPAchecker web page:
  *    http://cpachecker.sosy-lab.org
  */
-package org.sosy_lab.cpachecker.cpa.lockstatistics.effects;
+package org.sosy_lab.cpachecker.cpa.lock.effects;
 
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState.LockStatisticsStateBuilder;
+import org.sosy_lab.cpachecker.cpa.lock.LockIdentifier;
+import org.sosy_lab.cpachecker.cpa.lock.LockStatisticsState.LockStatisticsStateBuilder;
+
+import com.google.common.base.Preconditions;
 
 
-public class SaveStateLockEffect implements AbstractLockEffect {
+public class RestoreLockEffect extends LockEffect {
 
-  private final static SaveStateLockEffect instance = new SaveStateLockEffect();
+  private final static RestoreLockEffect instance = new RestoreLockEffect();
 
-  private SaveStateLockEffect() {}
+  private RestoreLockEffect(LockIdentifier id) {
+    super(id);
+  }
+
+  private RestoreLockEffect() {
+    this(null);
+  }
 
   @Override
   public void effect(LockStatisticsStateBuilder pBuilder) {
-    pBuilder.setRestoreState();
+    Preconditions.checkArgument(target != null, "Lock identifier must be set");
+    pBuilder.restore(target);
   }
 
-  public static SaveStateLockEffect getInstance() {
+  public static RestoreLockEffect getInstance() {
     return instance;
+  }
+
+  public static RestoreLockEffect createEffectForId(LockIdentifier id) {
+    return new RestoreLockEffect(id);
+  }
+
+  @Override
+  public RestoreLockEffect cloneWithTarget(LockIdentifier id) {
+    return createEffectForId(id);
   }
 }

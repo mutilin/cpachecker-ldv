@@ -21,11 +21,23 @@
  *  CPAchecker web page:
  *    http://cpachecker.sosy-lab.org
  */
-package org.sosy_lab.cpachecker.cpa.lockstatistics.effects;
+package org.sosy_lab.cpachecker.cpa.lock.effects;
 
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState.LockStatisticsStateBuilder;
+import org.sosy_lab.cpachecker.cpa.lock.LockIdentifier;
 
 
-public interface AbstractLockEffect {
-  public void effect(LockStatisticsStateBuilder builder);
+
+public abstract class LockEffect implements AbstractLockEffect {
+
+  protected final LockIdentifier target;
+
+  protected LockEffect(LockIdentifier id) {
+    target = id;
+  }
+
+  public abstract LockEffect cloneWithTarget(LockIdentifier id);
+
+  public LockIdentifier getAffectedLock() {
+    return target;
+  }
 }

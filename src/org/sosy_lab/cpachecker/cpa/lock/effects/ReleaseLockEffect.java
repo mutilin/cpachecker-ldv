@@ -21,26 +21,42 @@
  *  CPAchecker web page:
  *    http://cpachecker.sosy-lab.org
  */
-package org.sosy_lab.cpachecker.cpa.lockstatistics.effects;
+package org.sosy_lab.cpachecker.cpa.lock.effects;
 
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState.LockStatisticsStateBuilder;
+import org.sosy_lab.cpachecker.cpa.lock.LockIdentifier;
+import org.sosy_lab.cpachecker.cpa.lock.LockStatisticsState.LockStatisticsStateBuilder;
 
 import com.google.common.base.Preconditions;
 
 
-public class DummyLockEffect implements AbstractLockEffect {
+public class ReleaseLockEffect extends LockEffect {
 
-  private final static DummyLockEffect instance = new DummyLockEffect();
+  private final static ReleaseLockEffect instance = new ReleaseLockEffect();
 
-  private DummyLockEffect() {}
+  private ReleaseLockEffect(LockIdentifier id) {
+    super(id);
+  }
+
+  private ReleaseLockEffect() {
+    this(null);
+  }
 
   @Override
   public void effect(LockStatisticsStateBuilder pBuilder) {
-    Preconditions.checkArgument(false, "DummyEffect can not effect anything");
+    Preconditions.checkArgument(target != null, "Lock identifier must be set");
+    pBuilder.free(target);
   }
 
-  public static DummyLockEffect getInstance() {
+  public static ReleaseLockEffect getInstance() {
     return instance;
   }
 
+  public static ReleaseLockEffect createEffectForId(LockIdentifier id) {
+    return new ReleaseLockEffect(id);
+  }
+
+  @Override
+  public ReleaseLockEffect cloneWithTarget(LockIdentifier id) {
+    return createEffectForId(id);
+  }
 }

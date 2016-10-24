@@ -21,7 +21,7 @@
  *  CPAchecker web page:
  *    http://cpachecker.sosy-lab.org
  */
-package org.sosy_lab.cpachecker.cpa.lockstatistics;
+package org.sosy_lab.cpachecker.cpa.lock;
 
 import static com.google.common.collect.FluentIterable.from;
 
@@ -59,17 +59,17 @@ import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState.LockStatisticsStateBuilder;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.effects.AbstractLockEffect;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.effects.AcquireLockEffect;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.effects.CheckLockEffect;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.effects.LockEffect;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.effects.ReleaseLockEffect;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.effects.ResetLockEffect;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.effects.RestoreAllLockEffect;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.effects.RestoreLockEffect;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.effects.SaveStateLockEffect;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.effects.SetLockEffect;
+import org.sosy_lab.cpachecker.cpa.lock.LockStatisticsState.LockStatisticsStateBuilder;
+import org.sosy_lab.cpachecker.cpa.lock.effects.AbstractLockEffect;
+import org.sosy_lab.cpachecker.cpa.lock.effects.AcquireLockEffect;
+import org.sosy_lab.cpachecker.cpa.lock.effects.CheckLockEffect;
+import org.sosy_lab.cpachecker.cpa.lock.effects.LockEffect;
+import org.sosy_lab.cpachecker.cpa.lock.effects.ReleaseLockEffect;
+import org.sosy_lab.cpachecker.cpa.lock.effects.ResetLockEffect;
+import org.sosy_lab.cpachecker.cpa.lock.effects.RestoreAllLockEffect;
+import org.sosy_lab.cpachecker.cpa.lock.effects.RestoreLockEffect;
+import org.sosy_lab.cpachecker.cpa.lock.effects.SaveStateLockEffect;
+import org.sosy_lab.cpachecker.cpa.lock.effects.SetLockEffect;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCCodeException;
 import org.sosy_lab.cpachecker.util.Pair;
