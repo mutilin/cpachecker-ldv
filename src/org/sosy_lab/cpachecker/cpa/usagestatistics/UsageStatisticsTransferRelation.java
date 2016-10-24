@@ -67,7 +67,7 @@ import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackTransferRelation;
 import org.sosy_lab.cpachecker.cpa.local.LocalState.DataType;
-import org.sosy_lab.cpachecker.cpa.lock.LockStatisticsState;
+import org.sosy_lab.cpachecker.cpa.lock.LockState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.BinderFunctionInfo.LinkerInfo;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo.Access;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
@@ -494,7 +494,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     }
 
     logger.log(Level.FINER, "Add id " + singleId + " to unsafe statistics");
-    LockStatisticsState lockState = AbstractStates.extractStateByType(state, LockStatisticsState.class);
+    LockState lockState = AbstractStates.extractStateByType(state, LockState.class);
     logger.log(Level.FINEST, "Its locks are: " + lockState);
 
     state.addUsage(singleId, usage);

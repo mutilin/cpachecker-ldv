@@ -50,8 +50,8 @@ import org.sosy_lab.cpachecker.core.interfaces.StopOperator;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackCPA;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackTransferRelation;
-import org.sosy_lab.cpachecker.cpa.lock.LockStatisticsCPA;
-import org.sosy_lab.cpachecker.cpa.lock.LockStatisticsTransferRelation;
+import org.sosy_lab.cpachecker.cpa.lock.LockCPA;
+import org.sosy_lab.cpachecker.cpa.lock.LockTransferRelation;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsageContainer;
 import org.sosy_lab.cpachecker.util.CPAs;
 public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements ConfigurableProgramAnalysisWithBAM {
@@ -84,9 +84,9 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
     this.mergeOperator = initializeMergeOperator();
     this.stopOperator = initializeStopOperator();
 
-    LockStatisticsCPA LockCPA = (CPAs.retrieveCPA(this, LockStatisticsCPA.class));
+    LockCPA LockCPA = (CPAs.retrieveCPA(this, LockCPA.class));
     this.statistics = new UsageStatisticsCPAStatistics(pConfig, pLogger,
-        LockCPA != null ? (LockStatisticsTransferRelation) LockCPA.getTransferRelation() : null);
+        LockCPA != null ? (LockTransferRelation) LockCPA.getTransferRelation() : null);
     this.container = new UsageContainer(pConfig, pLogger);
     this.precisionAdjustment = new UsageStatisticsPrecisionAdjustment(pCpa.getPrecisionAdjustment());
     if (pCpa instanceof ConfigurableProgramAnalysisWithBAM) {

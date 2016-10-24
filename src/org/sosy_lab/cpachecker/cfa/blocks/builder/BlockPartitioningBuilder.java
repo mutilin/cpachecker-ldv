@@ -43,7 +43,7 @@ import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
 import org.sosy_lab.cpachecker.cpa.lock.LockIdentifier;
-import org.sosy_lab.cpachecker.cpa.lock.LockStatisticsTransferRelation;
+import org.sosy_lab.cpachecker.cpa.lock.LockTransferRelation;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
@@ -65,9 +65,9 @@ public class BlockPartitioningBuilder {
   protected final Map<CFANode, Set<FunctionEntryNode>> innerFunctionCallsMap = new HashMap<>();
   protected final Map<CFANode, Set<CFANode>> blockNodesMap = new HashMap<>();
 
-  private final LockStatisticsTransferRelation ltransfer;
+  private final LockTransferRelation ltransfer;
 
-  public BlockPartitioningBuilder(LockStatisticsTransferRelation t) {
+  public BlockPartitioningBuilder(LockTransferRelation t) {
     ltransfer = t;
   }
 

@@ -58,8 +58,8 @@ import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
 import org.sosy_lab.cpachecker.core.interfaces.StopOperator;
 import org.sosy_lab.cpachecker.core.interfaces.pcc.ProofChecker;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSetFactory;
-import org.sosy_lab.cpachecker.cpa.lock.LockStatisticsCPA;
-import org.sosy_lab.cpachecker.cpa.lock.LockStatisticsTransferRelation;
+import org.sosy_lab.cpachecker.cpa.lock.LockCPA;
+import org.sosy_lab.cpachecker.cpa.lock.LockTransferRelation;
 import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateCPA;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsCPA;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
@@ -159,8 +159,8 @@ public class BAMCPA extends AbstractSingleWrapperCPA implements StatisticsProvid
   @Override
   public AbstractState getInitialState(CFANode pNode, StateSpacePartition pPartition) {
     if (blockPartitioning == null) {
-      LockStatisticsCPA cpa = retrieveWrappedCpa(LockStatisticsCPA.class);
-      blockPartitioning = heuristic.buildPartitioning(pNode, cpa == null ? null : (LockStatisticsTransferRelation)cpa.getTransferRelation());
+      LockCPA cpa = retrieveWrappedCpa(LockCPA.class);
+      blockPartitioning = heuristic.buildPartitioning(pNode, cpa == null ? null : (LockTransferRelation)cpa.getTransferRelation());
 
       /*if (exportBlocksPath != null) {
         BlockToDotWriter writer = new BlockToDotWriter(blockPartitioning);

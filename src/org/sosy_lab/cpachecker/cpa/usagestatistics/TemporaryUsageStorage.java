@@ -33,8 +33,8 @@ import java.util.TreeSet;
 
 import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
-import org.sosy_lab.cpachecker.cpa.lock.LockStatisticsState;
-import org.sosy_lab.cpachecker.cpa.lock.LockStatisticsState.LockStatisticsStateBuilder;
+import org.sosy_lab.cpachecker.cpa.lock.LockState;
+import org.sosy_lab.cpachecker.cpa.lock.LockState.LockStatisticsStateBuilder;
 import org.sosy_lab.cpachecker.cpa.lock.effects.LockEffect;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
@@ -141,7 +141,7 @@ public class TemporaryUsageStorage extends TreeMap<SingleIdentifier, SortedSet<U
       effectJoin++;
     }
 
-    Map<LockStatisticsState, LockStatisticsState> reduceToExpand = new HashMap<>();
+    Map<LockState, LockState> reduceToExpand = new HashMap<>();
     for (SingleIdentifier id : pRecentUsages.keySet()) {
       SortedSet<UsageInfo> otherStorage = pRecentUsages.get(id);
       totalUsages += otherStorage.size();
@@ -159,11 +159,11 @@ public class TemporaryUsageStorage extends TreeMap<SingleIdentifier, SortedSet<U
         copyTimer.stop();
       } else {
         effectTimer.start();
-        LockStatisticsState currentState;
-        LockStatisticsState expandedState;
+        LockState currentState;
+        LockState expandedState;
         SortedSet<UsageInfo> result = new TreeSet<>();
         for (UsageInfo uinfo : otherStorage) {
-          currentState = (LockStatisticsState) uinfo.getState(LockStatisticsState.class);
+          currentState = (LockState) uinfo.getState(LockState.class);
           if (reduceToExpand.containsKey(currentState)) {
             expandedState = reduceToExpand.get(currentState);
           } else {

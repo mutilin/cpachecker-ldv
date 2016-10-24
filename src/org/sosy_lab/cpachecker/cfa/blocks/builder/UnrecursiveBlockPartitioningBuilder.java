@@ -29,7 +29,7 @@ import java.util.Collection;
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.blocks.BlockPartitioning;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
-import org.sosy_lab.cpachecker.cpa.lock.LockStatisticsTransferRelation;
+import org.sosy_lab.cpachecker.cpa.lock.LockTransferRelation;
 
 import com.google.common.collect.ImmutableSet;
 
@@ -37,7 +37,7 @@ import com.google.common.collect.ImmutableSet;
 
 public class UnrecursiveBlockPartitioningBuilder extends BlockPartitioningBuilder {
 
-  public UnrecursiveBlockPartitioningBuilder(LockStatisticsTransferRelation l) {
+  public UnrecursiveBlockPartitioningBuilder(LockTransferRelation l) {
     super(l);
   }
 

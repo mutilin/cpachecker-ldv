@@ -27,7 +27,7 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 
 import org.sosy_lab.cpachecker.cpa.lock.LockIdentifier;
-import org.sosy_lab.cpachecker.cpa.lock.LockStatisticsState.LockStatisticsStateBuilder;
+import org.sosy_lab.cpachecker.cpa.lock.LockState.LockStatisticsStateBuilder;
 
 import com.google.common.base.Preconditions;
 

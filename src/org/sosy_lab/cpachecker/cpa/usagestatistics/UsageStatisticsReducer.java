@@ -29,13 +29,13 @@ import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
-import org.sosy_lab.cpachecker.cpa.lock.LockStatisticsReducer;
+import org.sosy_lab.cpachecker.cpa.lock.LockReducer;
 
 public class UsageStatisticsReducer implements Reducer {
   private final Reducer wrappedReducer;
-  private final LockStatisticsReducer lockReducer;
+  private final LockReducer lockReducer;
 
-  public UsageStatisticsReducer(Reducer pWrappedReducer, LockStatisticsReducer lReducer) {
+  public UsageStatisticsReducer(Reducer pWrappedReducer, LockReducer lReducer) {
     wrappedReducer = pWrappedReducer;
     lockReducer = lReducer;
   }

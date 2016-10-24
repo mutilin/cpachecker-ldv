@@ -67,8 +67,8 @@ import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.arg.ARGUtils;
 import org.sosy_lab.cpachecker.cpa.bam.BAMCEXSubgraphComputer.BackwardARGState;
-import org.sosy_lab.cpachecker.cpa.lock.LockStatisticsState;
-import org.sosy_lab.cpachecker.cpa.lock.LockStatisticsTransferRelation;
+import org.sosy_lab.cpachecker.cpa.lock.LockState;
+import org.sosy_lab.cpachecker.cpa.lock.LockTransferRelation;
 import org.sosy_lab.cpachecker.cpa.bam.BAMMultipleCEXSubgraphComputer;
 import org.sosy_lab.cpachecker.cpa.bam.BAMTransferRelation;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.AbstractUsagePointSet;
@@ -147,7 +147,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   private UsageContainer container;
   private BAMTransferRelation transfer;
   private UnsafeDetector detector;
-  private final LockStatisticsTransferRelation lockTransfer;
+  private final LockTransferRelation lockTransfer;
 
   public final Timer transferRelationTimer = new Timer();
   public final Timer printStatisticsTimer = new Timer();
@@ -155,7 +155,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   private final String outputSuffix;
 
   public UsageStatisticsCPAStatistics(Configuration pConfig, LogManager pLogger,
-      LockStatisticsTransferRelation lTransfer) throws InvalidConfigurationException{
+      LockTransferRelation lTransfer) throws InvalidConfigurationException{
     pConfig.inject(this);
     logger = pLogger;
     lockTransfer = lTransfer;
@@ -181,7 +181,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
    * one of them must be 'write'
    */
   private void createVisualization(final SingleIdentifier id, final UsageInfo usage, final Writer writer) throws IOException {
-    LockStatisticsState Locks = (LockStatisticsState) usage.getState(LockStatisticsState.class);
+    LockState Locks = (LockState) usage.getState(LockState.class);
 
     writer.append("Line 0:     N0 -{/*_____________________*/}-> N0\n");
     if (Locks != null) {

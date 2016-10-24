@@ -34,7 +34,7 @@ import javax.annotation.Nonnull;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractWrapperState;
-import org.sosy_lab.cpachecker.cpa.lock.LockStatisticsState;
+import org.sosy_lab.cpachecker.cpa.lock.LockState;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
@@ -196,7 +196,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
     sb.append("line ");
     sb.append(line.toString());
     sb.append(" (" + accessType + ")");
-    sb.append(", " + compatibleStates.get(LockStatisticsState.class));
+    sb.append(", " + compatibleStates.get(LockState.class));
 
     return sb.toString();
   }
@@ -282,10 +282,10 @@ public class UsageInfo implements Comparable<UsageInfo> {
     return result;
   }
 
-  public UsageInfo expand(LockStatisticsState expandedState) {
+  public UsageInfo expand(LockState expandedState) {
     UsageInfo result = clone();
 
-    compatibleStates.put(LockStatisticsState.class, expandedState);
+    compatibleStates.put(LockState.class, expandedState);
     return result;
   }
 }

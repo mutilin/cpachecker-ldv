@@ -35,8 +35,8 @@ import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Exitable;
 import org.sosy_lab.cpachecker.core.interfaces.Targetable;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
-import org.sosy_lab.cpachecker.cpa.lock.LockStatisticsReducer;
-import org.sosy_lab.cpachecker.cpa.lock.LockStatisticsState;
+import org.sosy_lab.cpachecker.cpa.lock.LockReducer;
+import org.sosy_lab.cpachecker.cpa.lock.LockState;
 import org.sosy_lab.cpachecker.cpa.lock.effects.LockEffect;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsageContainer;
@@ -214,15 +214,15 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
   public static Timer tmpTimer3 = new Timer();
 
   public UsageStatisticsState expand(final UsageStatisticsState root, final AbstractState wrappedState,
-      Block pReducedContext, Block outerSubtree, LockStatisticsReducer reducer) {
+      Block pReducedContext, Block outerSubtree, LockReducer reducer) {
     tmpTimer1.start();
     UsageStatisticsState result = root.clone(wrappedState);
     if (this instanceof Exitable) {
       result = result.asExitable();
     }
     //Now it is only join
-    LockStatisticsState rootLockState = AbstractStates.extractStateByType(root, LockStatisticsState.class);
-    LockStatisticsState reducedLockState = (LockStatisticsState) reducer.getVariableReducedState(rootLockState, pReducedContext, outerSubtree, AbstractStates.extractLocation(root));
+    LockState rootLockState = AbstractStates.extractStateByType(root, LockState.class);
+    LockState reducedLockState = (LockState) reducer.getVariableReducedState(rootLockState, pReducedContext, outerSubtree, AbstractStates.extractLocation(root));
     List<LockEffect> difference = reducedLockState.getDifference(rootLockState);
 
     tmpTimer1.stop();

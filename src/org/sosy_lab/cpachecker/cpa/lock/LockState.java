@@ -45,7 +45,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 
-public class LockStatisticsState implements AbstractState, Serializable, CompatibleState {
+public class LockState implements AbstractState, Serializable, CompatibleState {
 
   public static class LockTreeNode extends TreeSet<LockIdentifier> implements UsageTreeNode{
 
@@ -103,11 +103,11 @@ public class LockStatisticsState implements AbstractState, Serializable, Compati
 
   public class LockStatisticsStateBuilder {
     private SortedMap<LockIdentifier, Integer> mutableLocks;
-    private LockStatisticsState mutableToRestore;
+    private LockState mutableToRestore;
     private boolean isRestored;
     private boolean isFalseState;
 
-    public LockStatisticsStateBuilder(LockStatisticsState state) {
+    public LockStatisticsStateBuilder(LockState state) {
       mutableLocks = Maps.newTreeMap(state.locks);
       mutableToRestore = state.toRestore;
       isRestored = false;
@@ -179,7 +179,7 @@ public class LockStatisticsState implements AbstractState, Serializable, Compati
       mutableLocks = mutableToRestore.locks;
     }
 
-    public LockStatisticsState build() {
+    public LockState build() {
       if (isFalseState) {
         return null;
       }
@@ -189,11 +189,11 @@ public class LockStatisticsState implements AbstractState, Serializable, Compati
       if (locks.equals(mutableLocks) && mutableToRestore == toRestore) {
         return getParentLink();
       } else {
-        return new LockStatisticsState(mutableLocks, mutableToRestore);
+        return new LockState(mutableLocks, mutableToRestore);
       }
     }
 
-    public LockStatisticsState getOldState() {
+    public LockState getOldState() {
       return getParentLink();
     }
 
@@ -216,11 +216,11 @@ public class LockStatisticsState implements AbstractState, Serializable, Compati
       }
     }
 
-    public void expand(LockStatisticsState rootState) {
+    public void expand(LockState rootState) {
       mutableToRestore = rootState.toRestore;
     }
 
-    public void expandLocks(LockStatisticsState pRootState, Set<String> pRestrictedLocks, Set<LockIdentifier> usedLocks) {
+    public void expandLocks(LockState pRootState, Set<String> pRestrictedLocks, Set<LockIdentifier> usedLocks) {
       for (LockIdentifier lock : pRootState.locks.keySet()) {
         if (usedLocks != null && !usedLocks.contains(lock)) {
           mutableLocks.put(lock, pRootState.locks.get(lock));
@@ -256,15 +256,15 @@ public class LockStatisticsState implements AbstractState, Serializable, Compati
   private static final long serialVersionUID = -3152134511524554357L;
 
   private final SortedMap<LockIdentifier, Integer> locks;
-  private final LockStatisticsState toRestore;
+  private final LockState toRestore;
   //if we need restore state, we save it here
   //Used for function annotations like annotate.function_name.restore
-  public LockStatisticsState() {
+  public LockState() {
     locks = Maps.newTreeMap();
     toRestore = null;
   }
 
-  private LockStatisticsState(SortedMap<LockIdentifier, Integer> gLocks, LockStatisticsState state) {
+  private LockState(SortedMap<LockIdentifier, Integer> gLocks, LockState state) {
     this.locks  = Maps.newTreeMap(gLocks);
     toRestore = state;
   }
@@ -322,7 +322,7 @@ public class LockStatisticsState implements AbstractState, Serializable, Compati
     if (getClass() != obj.getClass()) {
       return false;
     }
-    LockStatisticsState other = (LockStatisticsState) obj;
+    LockState other = (LockState) obj;
     if (locks == null) {
       if (other.locks != null) {
         return false;
@@ -346,7 +346,7 @@ public class LockStatisticsState implements AbstractState, Serializable, Compati
    * @param other the other element
    * @return true, if this element is less or equal than the other element, based on the order imposed by the lattice
    */
-  public boolean isLessOrEqual(LockStatisticsState other) {
+  public boolean isLessOrEqual(LockState other) {
     //State is less, if it has the same locks as the other and may be some more
 
     for (LockIdentifier lock : other.locks.keySet()) {
@@ -365,7 +365,7 @@ public class LockStatisticsState implements AbstractState, Serializable, Compati
    */
   @Override
   public int compareTo(CompatibleState pOther) {
-    LockStatisticsState other = (LockStatisticsState) pOther;
+    LockState other = (LockState) pOther;
     int result = 0;
 
     result = other.getSize() - this.getSize(); //decreasing queue
@@ -394,8 +394,8 @@ public class LockStatisticsState implements AbstractState, Serializable, Compati
 
   @Override
   public boolean isCompatibleWith(CompatibleState state) {
-    Preconditions.checkArgument(state.getClass() == LockStatisticsState.class);
-    LockStatisticsState pLocks = (LockStatisticsState) state;
+    Preconditions.checkArgument(state.getClass() == LockState.class);
+    LockState pLocks = (LockState) state;
     return !Sets.intersection(locks.keySet(), pLocks.locks.keySet()).isEmpty();
   }
 
@@ -403,11 +403,11 @@ public class LockStatisticsState implements AbstractState, Serializable, Compati
     return new LockStatisticsStateBuilder(this);
   }
 
-  private LockStatisticsState getParentLink() {
+  private LockState getParentLink() {
     return this;
   }
 
-  public List<LockEffect> getDifference(LockStatisticsState other) {
+  public List<LockEffect> getDifference(LockState other) {
     //Return the effect, which shows, what should we do to transform from this state to the other
 
     List<LockEffect> result = new LinkedList<>();

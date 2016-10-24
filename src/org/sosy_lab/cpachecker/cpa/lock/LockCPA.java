@@ -34,27 +34,27 @@ import org.sosy_lab.cpachecker.core.interfaces.CPAFactory;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysisWithBAM;
 import org.sosy_lab.cpachecker.core.interfaces.StateSpacePartition;
 
-public class LockStatisticsCPA extends AbstractCPA implements ConfigurableProgramAnalysisWithBAM{
+public class LockCPA extends AbstractCPA implements ConfigurableProgramAnalysisWithBAM{
 
   public static CPAFactory factory() {
-    return AutomaticCPAFactory.forType(LockStatisticsCPA.class);
+    return AutomaticCPAFactory.forType(LockCPA.class);
   }
 
-  private final LockStatisticsReducer reducer;
+  private final LockReducer reducer;
 
-  private LockStatisticsCPA (Configuration config, LogManager logger) throws InvalidConfigurationException {
-    super("sep", "sep", new LockStatisticsDomain(), new LockStatisticsTransferRelation(config, logger));
-    LockStatisticsTransferRelation transfer = (LockStatisticsTransferRelation) getTransferRelation();
-    reducer             = new LockStatisticsReducer(config, transfer.annotatedfunctions, transfer.lockDescription);
+  private LockCPA (Configuration config, LogManager logger) throws InvalidConfigurationException {
+    super("sep", "sep", new LockDomain(), new LockTransferRelation(config, logger));
+    LockTransferRelation transfer = (LockTransferRelation) getTransferRelation();
+    reducer             = new LockReducer(config, transfer.annotatedfunctions, transfer.lockDescription);
   }
 
   @Override
   public AbstractState getInitialState(CFANode node, StateSpacePartition pPartition) {
-    return new LockStatisticsState();
+    return new LockState();
   }
 
   @Override
-  public LockStatisticsReducer getReducer() {
+  public LockReducer getReducer() {
     return reducer;
   }
 }

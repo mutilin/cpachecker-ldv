@@ -59,7 +59,7 @@ import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
-import org.sosy_lab.cpachecker.cpa.lock.LockStatisticsState.LockStatisticsStateBuilder;
+import org.sosy_lab.cpachecker.cpa.lock.LockState.LockStatisticsStateBuilder;
 import org.sosy_lab.cpachecker.cpa.lock.effects.AbstractLockEffect;
 import org.sosy_lab.cpachecker.cpa.lock.effects.AcquireLockEffect;
 import org.sosy_lab.cpachecker.cpa.lock.effects.CheckLockEffect;
@@ -78,7 +78,7 @@ import com.google.common.base.Function;
 import com.google.common.base.Predicate;
 
 @Options(prefix="cpa.lockStatistics")
-public class LockStatisticsTransferRelation implements TransferRelation
+public class LockTransferRelation implements TransferRelation
 {
 
   @Option(name="lockreset",
@@ -91,7 +91,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
   private final LogManager logger;
 
   int i = 0;
-  public LockStatisticsTransferRelation(Configuration config, LogManager logger) throws InvalidConfigurationException {
+  public LockTransferRelation(Configuration config, LogManager logger) throws InvalidConfigurationException {
     config.inject(this);
     this.logger = logger;
 
@@ -102,10 +102,10 @@ public class LockStatisticsTransferRelation implements TransferRelation
   }
 
   @Override
-  public Collection<LockStatisticsState> getAbstractSuccessorsForEdge(AbstractState element, Precision pPrecision
+  public Collection<LockState> getAbstractSuccessorsForEdge(AbstractState element, Precision pPrecision
       , CFAEdge cfaEdge) throws UnrecognizedCCodeException {
 
-    LockStatisticsState lockStatisticsElement     = (LockStatisticsState)element;
+    LockState lockStatisticsElement     = (LockState)element;
 
     //Firstly, determine operations with locks
     List<AbstractLockEffect> toProcess = determineOperations(cfaEdge);
@@ -116,7 +116,7 @@ public class LockStatisticsTransferRelation implements TransferRelation
       e.effect(builder);
     }
 
-    LockStatisticsState successor = builder.build();
+    LockState successor = builder.build();
 
     if (successor != null) {
       return Collections.singleton(successor);

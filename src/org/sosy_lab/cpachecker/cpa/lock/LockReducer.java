@@ -40,12 +40,12 @@ import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
-import org.sosy_lab.cpachecker.cpa.lock.LockStatisticsState.LockStatisticsStateBuilder;
+import org.sosy_lab.cpachecker.cpa.lock.LockState.LockStatisticsStateBuilder;
 
 import com.google.common.base.Function;
 
 @Options(prefix="cpa.lockstatistics")
-public class LockStatisticsReducer implements Reducer {
+public class LockReducer implements Reducer {
 
   @Option(description="reduce recursive locks to a single access")
   private boolean aggressiveReduction = false;
@@ -62,13 +62,13 @@ public class LockStatisticsReducer implements Reducer {
       }
     };
 
-  public LockStatisticsReducer(Configuration config, Map<String, AnnotationInfo> annotations, Set<LockInfo> locks) throws InvalidConfigurationException {
+  public LockReducer(Configuration config, Map<String, AnnotationInfo> annotations, Set<LockInfo> locks) throws InvalidConfigurationException {
     config.inject(this);
   }
 
   @Override
   public AbstractState getVariableReducedState(AbstractState pExpandedElement, Block pContext, Block outerContext, CFANode pCallNode) {
-    LockStatisticsState lockState = (LockStatisticsState) pExpandedElement;
+    LockState lockState = (LockState) pExpandedElement;
     LockStatisticsStateBuilder builder = lockState.builder();
     builder.reduce();
     if (aggressiveReduction) {
@@ -87,8 +87,8 @@ public class LockStatisticsReducer implements Reducer {
   public AbstractState getVariableExpandedState(AbstractState pRootElement, Block pReducedContext, Block outerSubtree,
       AbstractState pReducedElement) {
 
-    LockStatisticsState reducedState = (LockStatisticsState)pReducedElement;
-    LockStatisticsState rootState = (LockStatisticsState) pRootElement;
+    LockState reducedState = (LockState)pReducedElement;
+    LockState rootState = (LockState) pRootElement;
     LockStatisticsStateBuilder builder = reducedState.builder();
     builder.expand(rootState);
     if (aggressiveReduction) {
@@ -121,7 +121,7 @@ public class LockStatisticsReducer implements Reducer {
 
   @Override
   public Object getHashCodeForState(AbstractState pElementKey) {
-    LockStatisticsState elementKey = (LockStatisticsState)pElementKey;
+    LockState elementKey = (LockState)pElementKey;
 
     return elementKey.getHashCodeForState();
   }
