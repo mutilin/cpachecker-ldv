@@ -26,7 +26,7 @@ package org.sosy_lab.cpachecker.cpa.usagestatistics;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 
 
-public class LineInfo {
+public class LineInfo implements Comparable<LineInfo> {
   private final int line;
   private final CFANode node;
 
@@ -80,6 +80,20 @@ public class LineInfo {
       return false;
     }
     return true;
+  }
+
+  @Override
+  public int compareTo(LineInfo pO) {
+    int result = line - pO.line;
+    if (result != 0) {
+      return result;
+    }
+    //Some nodes can be from one line, but different nodes
+    result = node.getNodeNumber() - pO.node.getNodeNumber();
+    if (result != 0) {
+      return result;
+    }
+    return 0;
   }
 
 }

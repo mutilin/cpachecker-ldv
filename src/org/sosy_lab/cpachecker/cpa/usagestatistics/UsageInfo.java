@@ -58,16 +58,16 @@ public class UsageInfo implements Comparable<UsageInfo> {
   private final SingleIdentifier id;
   //Can not be immutable due to reduce/expand - lock states are modified (may be smth else)
   private final Map<Class<? extends CompatibleState>, CompatibleState> compatibleStates = new LinkedHashMap<>();
-  public boolean failureFlag;
-  private boolean reachable;
+  private boolean isLooped;
+  private boolean isReachable;
 
   private UsageInfo() {
     //Only for unsupported usage
     line = null;
     accessType = Access.WRITE;
     keyState = null;
-    failureFlag = false;
-    reachable = false;
+    isLooped = false;
+    isReachable = false;
     id = null;
   }
 
@@ -75,8 +75,8 @@ public class UsageInfo implements Comparable<UsageInfo> {
     line = l;
     accessType = atype;
     keyState = null;
-    failureFlag = false;
-    reachable = true;
+    isLooped = false;
+    isReachable = true;
     id = ident;
   }
 
@@ -122,6 +122,14 @@ public class UsageInfo implements Comparable<UsageInfo> {
   public @Nonnull SingleIdentifier getId() {
     assert(id != null);
     return id;
+  }
+
+  public void setAsLooped() {
+    isLooped = true;
+  }
+
+  public boolean isLooped() {
+    return isLooped;
   }
 
   public boolean isSupported() {
@@ -197,9 +205,9 @@ public class UsageInfo implements Comparable<UsageInfo> {
     keyState = state;
   }
 
-  public void resetKeyState(List<CFAEdge> p) {
+  public void setRefinedPath(List<CFAEdge> p) {
     keyState = null;
-    setPath(p);
+    path = p;
   }
 
   public AbstractState getKeyState() {
@@ -234,12 +242,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
       }
     }
 
-    result = this.line.getLine() - pO.line.getLine();
-    if (result != 0) {
-      return result;
-    }
-    //Some nodes can be from one line, but different nodes
-    result = this.line.getNode().getNodeNumber() - pO.line.getNode().getNodeNumber();
+    result = this.line.compareTo(pO.line);
     if (result != 0) {
       return result;
     }
@@ -261,16 +264,12 @@ public class UsageInfo implements Comparable<UsageInfo> {
     return 0;
   }
 
-  private void setPath(List<CFAEdge> p) {
-    path = p;
-  }
-
   public boolean isReachable() {
-    return reachable;
+    return isReachable;
   }
 
   public void setAsUnreachable() {
-    reachable = false;
+    isReachable = false;
   }
 
   @Override
@@ -278,7 +277,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
     UsageInfo result = new UsageInfo(accessType, line, id);
     result.keyState = this.keyState;
     result.path = this.path;
-    result.failureFlag = this.failureFlag;
+    result.isLooped = this.isLooped;
     return result;
   }
 

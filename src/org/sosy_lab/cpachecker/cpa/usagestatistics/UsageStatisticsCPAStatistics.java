@@ -78,7 +78,6 @@ import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UnsafeDetector;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsageContainer;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsageInfoSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsagePoint;
-import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.SourceLocationMapper;
@@ -181,14 +180,14 @@ public class UsageStatisticsCPAStatistics implements Statistics {
    * looks through all unsafe cases of current identifier and find the example of two lines with different locks,
    * one of them must be 'write'
    */
-  private void createVisualization(final SingleIdentifier id, final UsageInfo usage, final Writer writer) throws IOException, CPATransferException, InterruptedException {
+  private void createVisualization(final SingleIdentifier id, final UsageInfo usage, final Writer writer) throws IOException {
     LockStatisticsState Locks = (LockStatisticsState) usage.getState(LockStatisticsState.class);
 
     writer.append("Line 0:     N0 -{/*_____________________*/}-> N0\n");
     if (Locks != null) {
       writer.append("Line 0:     N0 -{/*" + Locks.toString() + "*/}-> N0\n");
     }
-    if (usage.failureFlag) {
+    if (usage.isLooped()) {
       writer.append("Line 0:     N0 -{/*Failure in refinement*/}-> N0\n");
     }
     if (usage.getKeyState() != null) {
@@ -244,7 +243,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       totalNumberOfUsagePoints++;
       UsageInfoSet uset = l.getUsageInfo(point);
       for (UsageInfo uinfo : uset.getUsages()) {
-        if (uinfo.failureFlag) {
+        if (uinfo.isLooped()) {
           totalFailureUsages++;
         }
         continue;
@@ -256,10 +255,10 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     Pair<UsageInfo, UsageInfo> unsafe = detector.getUnsafePair(l);
     UsageInfo first = unsafe.getFirst();
     UsageInfo second = unsafe.getSecond();
-    if (first.failureFlag) {
+    if (first.isLooped()) {
       totalFailureUsages++;
     }
-    if (second.failureFlag && first != second) {
+    if (second.isLooped() && first != second) {
       totalFailureUsages++;
     }
     totalNumberOfUsagePoints += l.size();
@@ -282,7 +281,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
   }
 
-  private void createVisualization(final SingleIdentifier id, final Writer pWriter, boolean printOnlyTrueUnsafes) throws IOException, CPATransferException, InterruptedException {
+  private void createVisualization(final SingleIdentifier id, final Writer pWriter, boolean printOnlyTrueUnsafes) throws IOException {
     Writer writer = pWriter;
     final AbstractUsagePointSet uinfo = container.getUsages(id);
     final boolean isTrueUnsafe = (uinfo instanceof RefinedUsagePointSet);
@@ -327,9 +326,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     createVisualization(id, tmpPair.getFirst(), writer);
     createVisualization(id, tmpPair.getSecond(), writer);
     dumpGraphMl(id, tmpPair);
-    if (tmpPair.getFirst().failureFlag && tmpPair.getSecond().failureFlag) {
+    if (tmpPair.getFirst().isLooped() && tmpPair.getSecond().isLooped()) {
       totalFailureUnsafes++;
-    } else if (tmpPair.getFirst().failureFlag || tmpPair.getSecond().failureFlag) {
+    } else if (tmpPair.getFirst().isLooped() || tmpPair.getSecond().isLooped()) {
       totalUnsafesWithFailureUsageInPair++;
     }
     if (pWriter == null) {
@@ -361,7 +360,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     root = subgraphComputer.findPath(newTreeTarget, emptySet);
     ARGPath path = ARGUtils.getRandomPath(root);
     //path is transformed internally
-    usage.resetKeyState(path.getInnerEdges());
+    usage.setRefinedPath(path.getInnerEdges());
   }
 
   int globalCounter = 0;
@@ -535,14 +534,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         return;
       } catch (IOException e) {
         logger.log(Level.SEVERE, e.getMessage());
-        return;
-      } catch (CPATransferException e) {
-        logger.log(Level.SEVERE, "Exception during visualization");
-        e.printStackTrace();
-        return;
-      } catch (InterruptedException e) {
-        logger.log(Level.SEVERE, "Printing statistics was interrupted");
-        e.printStackTrace();
         return;
       }
       if (printFalseUnsafes) {

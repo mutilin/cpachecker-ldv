@@ -87,8 +87,8 @@ public class RefinementResult {
     if (firstUsage == secondUsage) {
       secondUsage = secondUsage.clone();
     }
-    firstUsage.resetKeyState(firstPath.getInnerEdges());
-    secondUsage.resetKeyState(secondPath.getInnerEdges());
+    firstUsage.setRefinedPath(firstPath.getInnerEdges());
+    secondUsage.setRefinedPath(secondPath.getInnerEdges());
     return new RefinementResult(RefinementStatus.TRUE, firstUsage, secondUsage);
   }
 
