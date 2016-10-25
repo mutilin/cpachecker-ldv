@@ -36,8 +36,8 @@ import org.sosy_lab.cpachecker.core.interfaces.AbstractWrapperState;
 import org.sosy_lab.cpachecker.core.interfaces.Partitionable;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.location.LocationState;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.CompatibleState;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageTreeNode;
+import org.sosy_lab.cpachecker.cpa.usage.CompatibleState;
+import org.sosy_lab.cpachecker.cpa.usage.UsageTreeNode;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 
 import com.google.common.base.Preconditions;

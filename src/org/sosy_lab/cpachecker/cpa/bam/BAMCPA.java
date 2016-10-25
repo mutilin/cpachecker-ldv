@@ -61,7 +61,7 @@ import org.sosy_lab.cpachecker.core.reachedset.ReachedSetFactory;
 import org.sosy_lab.cpachecker.cpa.lock.LockCPA;
 import org.sosy_lab.cpachecker.cpa.lock.LockTransferRelation;
 import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateCPA;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsCPA;
+import org.sosy_lab.cpachecker.cpa.usage.UsageCPA;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.UnsupportedCCodeException;
@@ -144,7 +144,7 @@ public class BAMCPA extends AbstractSingleWrapperCPA implements StatisticsProvid
     } else {
       transfer = new BAMTransferRelation(config, logger, this, wrappedProofChecker, data, pShutdownNotifier);
     }
-    UsageStatisticsCPA usageCPA = CPAs.retrieveCPA(pCpa, UsageStatisticsCPA.class);
+    UsageCPA usageCPA = CPAs.retrieveCPA(pCpa, UsageCPA.class);
     if (usageCPA != null) {
       usageCPA.getStats().setBAMTransfer(transfer);
     }

@@ -38,8 +38,8 @@ import org.sosy_lab.cpachecker.cpa.lock.LockIdentifier.LockType;
 import org.sosy_lab.cpachecker.cpa.lock.effects.AcquireLockEffect;
 import org.sosy_lab.cpachecker.cpa.lock.effects.LockEffect;
 import org.sosy_lab.cpachecker.cpa.lock.effects.ReleaseLockEffect;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.CompatibleState;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageTreeNode;
+import org.sosy_lab.cpachecker.cpa.usage.CompatibleState;
+import org.sosy_lab.cpachecker.cpa.usage.UsageTreeNode;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
