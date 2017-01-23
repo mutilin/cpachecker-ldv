@@ -494,6 +494,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       builder.addDataElementChild(result, KeyDef.SOURCECODE, pEdge.getRawStatement());
     }
 
+    builder.addDataElementChild(result, KeyDef.ASSUMPTION, "");
     builder.addDataElementChild(result, KeyDef.THREADIDENTIFIER, ThreadNum);
 
     if (addWarning) {
