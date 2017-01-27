@@ -23,11 +23,14 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
+import static com.google.common.collect.FluentIterable.from;
+
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.Writer;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -95,6 +98,7 @@ import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.StructureFieldIdentifier;
 import org.w3c.dom.Element;
 
+import com.google.common.base.Predicate;
 import com.google.common.collect.Sets;
 
 @Options(prefix="cpa.usagestatistics")
@@ -412,29 +416,47 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
       nextId = currentId;
 
-      Iterator<CFAEdge> iterator = firstPath.iterator();
+      Iterator<CFAEdge> iterator;// = firstPath.iterator();
+      iterator = from(firstPath)
+                 .filter(new Predicate<CFAEdge>() {
+                   @Override
+                    public boolean apply(CFAEdge pArg0) {
+                      return !SourceLocationMapper.getFileLocationsFromCfaEdge(pArg0).isEmpty();
+                    }
+                  })
+                 .iterator();
       Element result = null;
 
       while (iterator.hasNext()) {
-        CFAEdge pEdge = iterator.next();
         currentId = nextId;
         nextId = getId();
 
-        boolean isWarning = (pEdge.getLineNumber() == firstUsage.getLine().getLine() && pEdge.toString().contains(pId.getName()));
-        result = prepareElement(builder, currentId, nextId, pEdge, defaultSourcefileName, "0", isWarning);
+        do {
+          CFAEdge pEdge = iterator.next();
+          boolean isWarning = (pEdge.getLineNumber() == firstUsage.getLine().getLine() && pEdge.toString().contains(pId.getName()));
+          result = prepareElement(builder, currentId, nextId, pEdge, defaultSourcefileName, "0", isWarning);
+        } while (result == null && iterator.hasNext());
 
         builder.appendToAppendable(result);
       }
 
-      iterator = secondPath.iterator();
+      iterator = from(secondPath)
+          .filter(new Predicate<CFAEdge>() {
+            @Override
+             public boolean apply(CFAEdge pArg0) {
+               return !SourceLocationMapper.getFileLocationsFromCfaEdge(pArg0).isEmpty();
+             }
+           })
+          .iterator();
       while (iterator.hasNext()) {
-        CFAEdge pEdge = iterator.next();
         currentId = nextId;
         nextId = getId();
 
-        boolean isWarning = (pEdge.getLineNumber() == secondUsage.getLine().getLine() && pEdge.toString().contains(pId.getName()));
-
-        result = prepareElement(builder, currentId, nextId, pEdge, defaultSourcefileName, "1", isWarning);
+        do {
+          CFAEdge pEdge = iterator.next();
+          boolean isWarning = (pEdge.getLineNumber() == secondUsage.getLine().getLine() && pEdge.toString().contains(pId.getName()));
+          result = prepareElement(builder, currentId, nextId, pEdge, defaultSourcefileName, "1", isWarning);
+        } while (result == null && iterator.hasNext());
 
         if (!iterator.hasNext()) {
           builder.addDataElementChild(result, NodeFlag.ISVIOLATION.key, "true");
@@ -488,13 +510,14 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       }
       builder.addDataElementChild(result, KeyDef.ORIGINLINE, Integer.toString(l.getStartingLineInOrigin()));
       builder.addDataElementChild(result, KeyDef.OFFSET, Integer.toString(l.getNodeOffset()));
+    } else {
+      return null;
     }
 
     if (!pEdge.getRawStatement().trim().isEmpty()) {
       builder.addDataElementChild(result, KeyDef.SOURCECODE, pEdge.getRawStatement());
     }
 
-    builder.addDataElementChild(result, KeyDef.ASSUMPTION, "");
     builder.addDataElementChild(result, KeyDef.THREADIDENTIFIER, ThreadNum);
 
     if (addWarning) {
@@ -511,10 +534,16 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       printStatisticsTimer.start();
       ARGState firstState = AbstractStates.extractStateByType(reached.getFirstState(), ARGState.class);
       //getLastState() returns not the correct last state
-      ARGState lastState = firstState.getChildren().iterator().next();
-      UsageStatisticsState USlastState = AbstractStates.extractStateByType(lastState, UsageStatisticsState.class);
-      USlastState.updateContainerIfNecessary();
-      container = USlastState.getContainer();
+      Collection<ARGState> children = firstState.getChildren();
+      if (!children.isEmpty()) {
+        //Analysis finished normally
+        ARGState lastState = firstState.getChildren().iterator().next();
+        UsageStatisticsState USlastState = AbstractStates.extractStateByType(lastState, UsageStatisticsState.class);
+        USlastState.updateContainerIfNecessary();
+        container = USlastState.getContainer();
+      } else {
+        container = AbstractStates.extractStateByType(firstState, UsageStatisticsState.class).getContainer();
+      }
       detector = container.getUnsafeDetector();
       Writer writer = null;
       try {
