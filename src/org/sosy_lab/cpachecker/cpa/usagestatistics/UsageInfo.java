@@ -23,11 +23,16 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
+import static com.google.common.collect.FluentIterable.from;
+
 import java.util.List;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
 import org.sosy_lab.cpachecker.cpa.thread.ThreadState;
@@ -35,6 +40,8 @@ import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsagePoint;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
+
+import com.google.common.base.Predicate;
 
 
 public class UsageInfo implements Comparable<UsageInfo> {
@@ -243,7 +250,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
 
   private void setPath(List<CFAEdge> p) {
     List<CFAEdge> edges = p;
-    /*edges = from(edges).filter(new Predicate<CFAEdge>() {
+    edges = from(edges).filter(new Predicate<CFAEdge>() {
       @Override
       public boolean apply(@Nullable CFAEdge pInput) {
         if (pInput instanceof CDeclarationEdge) {
@@ -258,7 +265,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
         }
         return true;
       }
-    }).toList();*/
+    }).toList();
     path = edges;
   }
 
