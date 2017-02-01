@@ -197,6 +197,12 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
       }
     }
 
+    // in case of true, we need to copy usages
+    for (SingleIdentifier id : this.recentUsages.keySet()) {
+      for (UsageInfo usage : this.recentUsages.get(id)) {
+        other.addUsage(id, usage);
+      }
+    }
     return true;
   }
 
