@@ -45,6 +45,7 @@ import org.sosy_lab.cpachecker.core.defaults.SingleEdgeTransferRelation;
 import org.sosy_lab.cpachecker.core.defaults.SingletonPrecision;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
+import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackTransferRelation;
@@ -58,6 +59,7 @@ import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 public class ThreadTransferRelation extends SingleEdgeTransferRelation {
   private final TransferRelation locationTransfer;
   private final TransferRelation callstackTransfer;
+  private final ThreadCPAStatistics threadStatistics;
 
   private static String JOIN = "ldv_thread_join";
   private static String JOIN_SELF_PARALLEL = "ldv_thread_join_N";
@@ -68,12 +70,14 @@ public class ThreadTransferRelation extends SingleEdgeTransferRelation {
       TransferRelation c, Configuration pConfiguration) {
     locationTransfer = l;
     callstackTransfer = c;
+    threadStatistics = new ThreadCPAStatistics();
   }
 
   @Override
   public Collection<? extends AbstractState> getAbstractSuccessorsForEdge(AbstractState pState,
       Precision pPrecision, CFAEdge pCfaEdge) throws CPATransferException, InterruptedException {
 
+    threadStatistics.transfer.start();
     ThreadState tState = (ThreadState)pState;
     LocationState oldLocationState = tState.getLocationState();
     CallstackState oldCallstackState = tState.getCallstackState();
@@ -83,6 +87,7 @@ public class ThreadTransferRelation extends SingleEdgeTransferRelation {
       if (pCfaEdge.getEdgeType() == CFAEdgeType.FunctionCallEdge) {
           if (!handleFunctionCall((CFunctionCallEdge)pCfaEdge, builder)) {
             //Try to join non-created thread
+            threadStatistics.transfer.stop();
             return Collections.emptySet();
           }
       } else if (pCfaEdge instanceof CFunctionSummaryStatementEdge) {
@@ -96,11 +101,13 @@ public class ThreadTransferRelation extends SingleEdgeTransferRelation {
       } else if (pCfaEdge.getEdgeType() == CFAEdgeType.FunctionReturnEdge) {
         CFunctionCall functionCall = ((CFunctionReturnEdge)pCfaEdge).getSummaryEdge().getExpression();
         if (isThreadCreateFunction(functionCall)) {
+          threadStatistics.transfer.stop();
           return Collections.emptySet();
         }
       }
     } catch (HandleCodeException e) {
       //throw new CPATransferException(e.getMessage());
+      threadStatistics.transfer.stop();
       return Collections.emptySet();
     }
 
@@ -121,6 +128,7 @@ public class ThreadTransferRelation extends SingleEdgeTransferRelation {
       ((CallstackTransferRelation)callstackTransfer).disableRecursiveContext();
       resetCallstacksFlag = false;
     }
+    threadStatistics.transfer.stop();
     return resultStates;
   }
 
@@ -131,9 +139,14 @@ public class ThreadTransferRelation extends SingleEdgeTransferRelation {
     boolean success = true;
     CFunctionCall fCall = pCfaEdge.getSummaryEdge().getExpression();
     if (isThreadCreateFunction(fCall)) {
+      threadStatistics.threadCreates.inc();
       LabelStatus status =  ((CThreadCreateStatement)fCall).isSelfParallel() ? LabelStatus.SELF_PARALLEL_THREAD : LabelStatus.CREATED_THREAD;
       builder.addToThreadSet(new ThreadLabel(functionName, status));
+      //Just to statistics
+      ThreadState tmpState = builder.build();
+      threadStatistics.maxNumberOfThreads.setNextValue(tmpState.getThreadSet().size());
     } else if (functionName.equals(JOIN) || functionName.equals(JOIN_SELF_PARALLEL)) {
+      threadStatistics.threadJoins.inc();
       List<CExpression> args = pCfaEdge.getArguments();
       functionName = ((CUnaryExpression)args.get(1)).getOperand().toASTString();
       success = builder.removeFromThreadSet(new ThreadLabel(functionName, LabelStatus.PARENT_THREAD));
@@ -152,5 +165,9 @@ public class ThreadTransferRelation extends SingleEdgeTransferRelation {
       throws CPATransferException, InterruptedException {
     // TODO Auto-generated method stub
     return null;
+  }
+
+  public Statistics getStatistics() {
+    return threadStatistics;
   }
 }

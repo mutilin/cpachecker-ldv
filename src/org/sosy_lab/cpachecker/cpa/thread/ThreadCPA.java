@@ -24,6 +24,7 @@
 package org.sosy_lab.cpachecker.cpa.thread;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 
 import org.sosy_lab.common.configuration.Configuration;
@@ -47,6 +48,8 @@ import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustment;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
 import org.sosy_lab.cpachecker.core.interfaces.StateSpacePartition;
+import org.sosy_lab.cpachecker.core.interfaces.Statistics;
+import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
 import org.sosy_lab.cpachecker.core.interfaces.StopOperator;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.core.interfaces.WrapperCPA;
@@ -58,7 +61,7 @@ import org.sosy_lab.cpachecker.cpa.location.LocationState;
 import com.google.common.base.Preconditions;
 
 
-public class ThreadCPA implements ConfigurableProgramAnalysis, WrapperCPA, ConfigurableProgramAnalysisWithBAM {
+public class ThreadCPA implements ConfigurableProgramAnalysis, WrapperCPA, ConfigurableProgramAnalysisWithBAM, StatisticsProvider {
 
   public static CPAFactory factory() {
     return AutomaticCPAFactory.forType(ThreadCPA.class);
@@ -139,5 +142,10 @@ public class ThreadCPA implements ConfigurableProgramAnalysis, WrapperCPA, Confi
     cpas.add(locationCPA);
     cpas.add(callstackCPA);
     return cpas;
+  }
+
+  @Override
+  public void collectStatistics(Collection<Statistics> pStatsCollection) {
+    pStatsCollection.add(transferRelation.getStatistics());
   }
 }
