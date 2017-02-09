@@ -126,6 +126,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   @Option(description="print information about false unsafes")
   private boolean printFalseUnsafes = false;
 
+  @Option(description="output only true unsafes")
+  private boolean printOnlyTrueUnsafes = false;
+
   /* Previous container is used when internal time limit occurs
    * and we need to store statistics. In current one the information can be not
    * relevant (for example not all ARG was built).
@@ -195,7 +198,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     if (usage.failureFlag) {
       writer.append("Line 0:     N0 -{/*Failure in refinement*/}-> N0\n");
     }
-    if (usage.getKeyState() != null) {
+    if (usage.getPath() == null && usage.getKeyState() != null) {
       createPath(usage);
     }
     int callstackDepth = 1;
@@ -297,6 +300,10 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     if (printOnlyTrueUnsafes && !isTrueUnsafe) {
       return;
     }
+    Pair<UsageInfo, UsageInfo> tmpPair = detector.getUnsafePair(uinfo);
+    if ((tmpPair.getFirst().failureFlag || tmpPair.getSecond().failureFlag) && printOnlyTrueUnsafes) {
+      return;
+    }
     countStatistics(uinfo);
     totalUsages += uinfo.size();
     if (uinfo.size() > maxNumberOfUsages) {
@@ -327,7 +334,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     writer.append("Line 0:     N0 -{/*Number of usage points:" + uinfo.getNumberOfTopUsagePoints() + "*/}-> N0" + "\n");
     writer.append("Line 0:     N0 -{/*Number of usages      :" + uinfo.size() + "*/}-> N0" + "\n");
     writer.append("Line 0:     N0 -{/*Two examples:*/}-> N0" + "\n");
-    Pair<UsageInfo, UsageInfo> tmpPair = detector.getUnsafePair(uinfo);
+
     createVisualization(id, tmpPair.getFirst(), writer);
     createVisualization(id, tmpPair.getSecond(), writer);
     dumpGraphMl(id, tmpPair);
@@ -375,11 +382,11 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     UsageInfo secondUsage = pTmpPair.getSecond();
     List<CFAEdge> firstPath, secondPath;
 
-    if (firstUsage.getKeyState() != null) {
+    if (firstUsage.getPath() == null) {
       createPath(firstUsage);
     }
     firstPath = firstUsage.getPath();
-    if (secondUsage.getKeyState() != null) {
+    if (secondUsage.getPath() == null) {
       createPath(secondUsage);
     }
     secondPath = secondUsage.getPath();
@@ -529,7 +536,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     return builder.createNodeElement(nextId, NodeType.ONPATH);
   }
 
-  public void printUnsafeRawdata(final ReachedSet reached, boolean printOnlyTrueUnsafes) {
+  public void printUnsafeRawdata(final ReachedSet reached) {
     try {
       printStatisticsTimer.start();
       ARGState firstState = AbstractStates.extractStateByType(reached.getFirstState(), ARGState.class);
@@ -553,7 +560,12 @@ public class UsageStatisticsCPAStatistics implements Statistics {
           printCountStatistics(writer, container.getUnsafeIterator());
         }
         logger.log(Level.FINEST, "Processing unsafe identifiers");
-        Iterator<SingleIdentifier> unsafeIterator = container.getUnsafeIterator();
+        Iterator<SingleIdentifier> unsafeIterator;
+        if (printOnlyTrueUnsafes) {
+          unsafeIterator = container.getTrueUnsafeIterator();
+        } else {
+          unsafeIterator = container.getUnsafeIterator();
+        }
         while (unsafeIterator.hasNext()) {
           createVisualization(unsafeIterator.next(), writer, printOnlyTrueUnsafes);
         }
@@ -602,7 +614,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   public void printStatistics(final PrintStream out, final Result result, final ReachedSet reached) {
     resetAllCounters();
     //should be the first, as it set the container
-    printUnsafeRawdata(reached, false);
+    printUnsafeRawdata(reached);
     int unsafeSize = container.getUnsafeSize();
     out.println("Amount of unsafes:                                         " + unsafeSize);
     out.println("Amount of unsafe usages:                                   " + totalUsages + "(avg. " +

@@ -179,6 +179,10 @@ public class UsageContainer {
     return getAllUnsafes().iterator();
   }
 
+  public Iterator<SingleIdentifier> getTrueUnsafeIterator() {
+    return refinedIds.keySet().iterator();
+  }
+
   public int getUnsafeSize() {
     getUnsafesIfNecessary();
     return unrefinedIds.size() + refinedIds.size();
