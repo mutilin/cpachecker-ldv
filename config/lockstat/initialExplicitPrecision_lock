@@ -1,0 +1,106 @@
+(declare-fun |mtxCheckSignal::code|() Real)
+(define-fun t1() Bool (= |mtxCheckSignal::code| 27))
+(declare-fun |global|() Real)
+(define-fun t2() Bool (= |global| 0))
+(declare-fun |ldv::ret|() Real)
+(define-fun t3() Bool (= |ldv::ret| 0))
+(define-fun t20() Bool (= |ldv::ret| 27))
+(declare-fun |mtxCheckSignal::tmp|() Real)
+(define-fun t4() Bool (= |mtxCheckSignal::tmp| 0))
+(declare-fun |mtxCheckSignal::__retval__|() Real)
+(define-fun t6() Bool (= |mtxCheckSignal::__retval__| 27))
+(declare-fun |objIdToAdrShared::__retval__|() Real)
+(define-fun t7() Bool (= |objIdToAdrShared::__retval__| 0))
+(declare-fun |mtxGetObject::__retval__|() Real)
+(define-fun t8() Bool (= |mtxGetObject::__retval__| 0))
+(declare-fun |mtxGetObject::tmp___0|() Real)
+(define-fun t9() Bool (= |mtxGetObject::tmp___0| 0))
+(declare-fun |mtxInitializer::__retval__|() Real)
+(define-fun t10() Bool (= |mtxInitializer::__retval__| 0))
+(declare-fun |objIdToAdrShared::id___0|() Real)
+(define-fun t11() Bool (= |objIdToAdrShared::id___0| 0))
+(declare-fun |mtxGetObject::mtx|() Real)
+(define-fun t12() Bool (= |mtxGetObject::mtx| 0))
+(declare-fun |pthread_mutex_timedlock::mtx|() Real)
+(define-fun t13() Bool (= |pthread_mutex_timedlock::mtx| 0))
+(declare-fun |mtxGetObject::tmp___1|() Real)
+(define-fun t14() Bool (= |mtxGetObject::tmp___1| 0))
+(declare-fun |mtxInitializer::__CPAchecker_TMP_0|() Real)
+(define-fun t15() Bool (= |mtxInitializer::__CPAchecker_TMP_0| 0))
+(declare-fun |pthread_mutex_timedlock::ret|() Real)
+(define-fun t16() Bool (= |pthread_mutex_timedlock::ret| 10))
+(define-fun t22() Bool (= |pthread_mutex_timedlock::ret| 27))
+(declare-fun |mtxTryLock::__retval__|() Real)
+(define-fun t17() Bool (= |mtxTryLock::__retval__| 10))
+(declare-fun |mtxLockInternal::rt|() Real)
+(define-fun t18() Bool (= |mtxLockInternal::rt| 10))
+(define-fun t19() Bool (= |mtxLockInternal::rt| 27))
+(declare-fun |pthread_mutex_setprioceiling::mtx|() Real)
+(define-fun t21() Bool (= |pthread_mutex_setprioceiling::mtx| 0))
+(declare-fun |sem_wait::tmp___1|() Real)
+(define-fun t23() Bool (= |sem_wait::tmp___1| 0))
+(declare-fun |sem_wait::pSem|() Real)
+(define-fun t24() Bool (= |sem_wait::pSem| 0))
+(declare-fun |semTimedwait___0::tmp___1|() Real)
+(define-fun t25() Bool (= |semTimedwait___0::tmp___1| 0))
+(declare-fun |semTimedwait___0::pSem|() Real)
+(define-fun t26() Bool (= |semTimedwait___0::pSem| 0))
+(declare-fun |pthread_mutex_trylock::ret|() Real)
+(define-fun t27() Bool (= |pthread_mutex_trylock::ret| 10))
+(declare-fun |pthread_mutex_trylock::mtx|() Real)
+(define-fun t28() Bool (= |pthread_mutex_trylock::mtx| 0))
+
+
+mtxCheckSignal:
+(assert t1)
+(assert t4)
+(assert t6)
+
+*:
+(assert t2)
+
+ldv:
+(assert t3)
+(assert t20)
+
+objIdToAdrShared:
+(assert t7)
+(assert t11)
+
+mtxGetObject:
+(assert t8)
+(assert t9)
+(assert t12)
+(assert t14)
+
+mtxInitializer:
+(assert t10)
+(assert t15)
+
+pthread_mutex_timedlock:
+(assert t13)
+(assert t16)
+(assert t22)
+
+mtxTryLock:
+(assert t17)
+
+mtxLockInternal:
+(assert t18)
+(assert t19)
+
+pthread_mutex_setprioceiling:
+(assert t21)
+(assert t22)
+
+sem_wait:
+(assert t23)
+(assert t24)
+
+semTimedwait___0:
+(assert t25)
+(assert t26)
+
+pthread_mutex_trylock:
+(assert t27)
+(assert t28)
