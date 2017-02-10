@@ -23,11 +23,17 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
+import static com.google.common.collect.FluentIterable.from;
+
 import java.util.List;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 
+import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionDeclaration;
+import org.sosy_lab.cpachecker.cfa.ast.c.CTypeDeclaration;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
 import org.sosy_lab.cpachecker.cpa.thread.ThreadState;
@@ -35,6 +41,8 @@ import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsagePoint;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
+
+import com.google.common.base.Predicate;
 
 
 public class UsageInfo implements Comparable<UsageInfo> {
@@ -242,24 +250,20 @@ public class UsageInfo implements Comparable<UsageInfo> {
   }
 
   private void setPath(List<CFAEdge> p) {
-    /*List<CFAEdge> edges = p;
+    List<CFAEdge> edges = p;
     edges = from(edges).filter(new Predicate<CFAEdge>() {
       @Override
       public boolean apply(@Nullable CFAEdge pInput) {
         if (pInput instanceof CDeclarationEdge) {
-          if (((CDeclarationEdge)pInput).getDeclaration().isGlobal() ||
-              pInput.getSuccessor().getFunctionName().equals("ldv_main")) {
+          if (((CDeclarationEdge)pInput).getDeclaration() instanceof CFunctionDeclaration ||
+              ((CDeclarationEdge)pInput).getDeclaration() instanceof CTypeDeclaration) {
             return false;
           }
-        } else if (pInput.getSuccessor().getFunctionName().equals("ldv_main")
-            && pInput instanceof CAssumeEdge) {
-          //Remove infinite switch, it's too long
-          return false;
         }
         return true;
       }
-    }).toList();*/
-    path = p;
+    }).toList();
+    path = edges;
   }
 
   public boolean isReachable() {
