@@ -96,8 +96,8 @@ public class ExpressionHandler implements CExpressionVisitor<Void, HandleCodeExc
     addNewId(expression);
     if (expression.isPointerDereference()) {
       accessMode = Access.READ;
+      expression.getFieldOwner().accept(this);
     }
-    expression.getFieldOwner().accept(this);
     return null;
   }
 
