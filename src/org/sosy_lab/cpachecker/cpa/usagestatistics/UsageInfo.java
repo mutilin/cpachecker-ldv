@@ -180,6 +180,22 @@ public class UsageInfo implements Comparable<UsageInfo> {
     return sb.toString();
   }
 
+  public String getWarningMessage() {
+    StringBuilder sb = new StringBuilder();
+
+    sb.append(accessType);
+    sb.append(" access to ");
+    sb.append(id);
+    if (locks.getSize() == 0) {
+      sb.append(" without locks");
+    } else {
+      sb.append(" with ");
+      sb.append(locks);
+    }
+
+    return sb.toString();
+  }
+
   public void setKeyState(AbstractState state) {
     keyState = state;
   }
@@ -198,7 +214,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
   }
 
   public List<CFAEdge> getPath() {
-    assert path != null;
+    //assert path != null;
     return path;
   }
 

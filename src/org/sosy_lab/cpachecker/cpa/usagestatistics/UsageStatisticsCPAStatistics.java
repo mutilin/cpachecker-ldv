@@ -441,7 +441,11 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         do {
           CFAEdge pEdge = iterator.next();
           boolean isWarning = (pEdge.getLineNumber() == firstUsage.getLine().getLine() && pEdge.toString().contains(pId.getName()));
-          result = prepareElement(builder, currentId, nextId, pEdge, defaultSourcefileName, "0", isWarning);
+          String warningMessage = "";
+          if (isWarning) {
+            warningMessage = firstUsage.getWarningMessage();
+          }
+          result = prepareElement(builder, currentId, nextId, pEdge, defaultSourcefileName, "0", warningMessage);
         } while (result == null && iterator.hasNext());
 
         builder.appendToAppendable(result);
@@ -462,7 +466,11 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         do {
           CFAEdge pEdge = iterator.next();
           boolean isWarning = (pEdge.getLineNumber() == secondUsage.getLine().getLine() && pEdge.toString().contains(pId.getName()));
-          result = prepareElement(builder, currentId, nextId, pEdge, defaultSourcefileName, "1", isWarning);
+          String warningMessage = "";
+          if (isWarning) {
+            warningMessage = secondUsage.getWarningMessage();
+          }
+          result = prepareElement(builder, currentId, nextId, pEdge, defaultSourcefileName, "1", warningMessage);
         } while (result == null && iterator.hasNext());
 
         if (!iterator.hasNext()) {
@@ -488,7 +496,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   }
 
   private Element prepareElement(GraphMlBuilder builder, String currentId, String nextId, CFAEdge pEdge,
-      String defaultSourcefileName, String ThreadNum, boolean addWarning) {
+      String defaultSourcefileName, String ThreadNum, String warningMessage) {
     Element result = builder.createEdgeElement(currentId, nextId);
 
     if (pEdge.getSuccessor() instanceof FunctionEntryNode) {
@@ -527,8 +535,8 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
     builder.addDataElementChild(result, KeyDef.THREADIDENTIFIER, ThreadNum);
 
-    if (addWarning) {
-      builder.addDataElementChild(result, KeyDef.WARNING, "Target usage");
+    if (!warningMessage.isEmpty()) {
+      builder.addDataElementChild(result, KeyDef.WARNING, warningMessage);
     }
 
     builder.appendToAppendable(result);
