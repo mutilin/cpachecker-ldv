@@ -437,8 +437,13 @@ public class CPAchecker {
     UsageStatisticsState state = AbstractStates.extractStateByType(reached.getLastState(), UsageStatisticsState.class);
     if (state != null) {
       state.updateContainerIfNecessary();
-      if (state.getContainer().getUnsafeSize() > 0) {
-        return Result.FALSE;
+      if (state.getContainer().getTotalUnsafeSize() > 0) {
+        if (state.getContainer().getUnsafeSize() > 0) {
+          return Result.FALSE;
+        } else {
+          //We have unprocessed unsafes
+          return Result.UNKNOWN;
+        }
       }
     }
 

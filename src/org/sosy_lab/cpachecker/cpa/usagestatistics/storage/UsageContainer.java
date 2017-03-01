@@ -53,6 +53,7 @@ import com.google.common.collect.Sets;
 public class UsageContainer {
   private final SortedMap<SingleIdentifier, UnrefinedUsagePointSet> unrefinedIds;
   private final SortedMap<SingleIdentifier, RefinedUsagePointSet> refinedIds;
+  private final SortedMap<SingleIdentifier, RefinedUsagePointSet> failedIds;
 
   private final UnsafeDetector detector;
 
@@ -76,16 +77,19 @@ public class UsageContainer {
   public UsageContainer(Configuration config, LogManager l) throws InvalidConfigurationException {
     this(new TreeMap<SingleIdentifier, UnrefinedUsagePointSet>(),
         new TreeMap<SingleIdentifier, RefinedUsagePointSet>(),
+        new TreeMap<SingleIdentifier, RefinedUsagePointSet>(),
         new TreeSet<SingleIdentifier>(), l, new UnsafeDetector(config));
     config.inject(this);
   }
 
   private UsageContainer(SortedMap<SingleIdentifier, UnrefinedUsagePointSet> pUnrefinedStat,
       SortedMap<SingleIdentifier, RefinedUsagePointSet> pRefinedStat,
+      SortedMap<SingleIdentifier, RefinedUsagePointSet> failedStat,
       Set<SingleIdentifier> pFalseUnsafes, LogManager pLogger,
       UnsafeDetector pDetector) {
     unrefinedIds = pUnrefinedStat;
     refinedIds = pRefinedStat;
+    failedIds = failedStat;
     falseUnsafes = pFalseUnsafes;
     logger = pLogger;
     detector = pDetector;
@@ -175,6 +179,7 @@ public class UsageContainer {
     getUnsafesIfNecessary();
     Set<SingleIdentifier> result = new TreeSet<>(unrefinedIds.keySet());
     result.addAll(refinedIds.keySet());
+    result.addAll(failedIds.keySet());
     return result;
   }
 
@@ -184,7 +189,7 @@ public class UsageContainer {
 
   public Iterator<SingleIdentifier> getUnsafeIterator() {
     if (printOnlyTrueUnsafes) {
-      return refinedIds.keySet().iterator();
+      return getTrueUnsafeIterator();
     } else {
       return getAllUnsafes().iterator();
     }
@@ -203,20 +208,20 @@ public class UsageContainer {
     if (printOnlyTrueUnsafes) {
       return refinedIds.size();
     } else {
-      return unrefinedIds.size() + refinedIds.size();
+      return unrefinedIds.size() + refinedIds.size() + failedIds.size();
     }
   }
 
   public int getTotalUnsafeSize() {
-    return unrefinedIds.size() + refinedIds.size();
+    return unrefinedIds.size() + refinedIds.size() + failedIds.size();
   }
 
   public boolean printOnlyTrueUnsafes() {
     return printOnlyTrueUnsafes;
   }
 
-  public int getTrueUnsafeSize() {
-    return refinedIds.size();
+  public int getProcessedUnsafeSize() {
+    return refinedIds.size() + failedIds.size();
   }
 
   public UnsafeDetector getUnsafeDetector() {
@@ -243,8 +248,10 @@ public class UsageContainer {
   public AbstractUsagePointSet getUsages(SingleIdentifier id) {
     if (unrefinedIds.containsKey(id)) {
       return unrefinedIds.get(id);
-    } else {
+    } else if (refinedIds.containsKey(id)){
       return refinedIds.get(id);
+    } else {
+      return failedIds.get(id);
     }
   }
 
@@ -260,7 +267,12 @@ public class UsageContainer {
   }
 
   public void setAsRefined(SingleIdentifier id, UsageInfo firstUsage, UsageInfo secondUsage) {
-    refinedIds.put(id, RefinedUsagePointSet.create(firstUsage, secondUsage));
+    RefinedUsagePointSet rSet = RefinedUsagePointSet.create(firstUsage, secondUsage);
+    if (firstUsage.failureFlag || secondUsage.failureFlag) {
+      failedIds.put(id, rSet);
+    } else {
+      refinedIds.put(id, rSet);
+    }
     removeIdFromCaches(id);
   }
 
@@ -292,7 +304,7 @@ public class UsageContainer {
   @Override
   public UsageContainer clone() {
     UsageContainer result = new UsageContainer(Maps.newTreeMap(unrefinedIds),
-        Maps.newTreeMap(refinedIds), Sets.newHashSet(falseUnsafes), logger, detector);
+        Maps.newTreeMap(refinedIds), Maps.newTreeMap(failedIds), Sets.newHashSet(falseUnsafes), logger, detector);
     return result;
   }
 

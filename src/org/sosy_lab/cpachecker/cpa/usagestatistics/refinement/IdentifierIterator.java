@@ -164,7 +164,7 @@ public class IdentifierIterator extends WrappedConfigurableRefinementBlock<Reach
         }
       }
     }
-    int newTrueUnsafeSize = container.getTrueUnsafeSize();
+    int newTrueUnsafeSize = container.getProcessedUnsafeSize();
     if (lastTrueUnsafes == -1) {
       //It's normal, if in the first iteration the true unsafes are not involved in counter
       lastTrueUnsafes = newTrueUnsafeSize;
