@@ -120,7 +120,8 @@ public class PredicateRefinerAdapter extends GenericSinglePathRefiner {
           logger.log(Level.WARNING, "Path is repeated, but predicates are missed");
           result = performPredicateRefinement(pInput);
           //We expect the same result
-          assert result.isFalse();
+          //but in case of loop the transformation path -> set is not correct, so, there can be a true result
+          //assert result.isFalse() : "Current result is " + result;
         }
         //pInput.failureFlag = true;
       } else {
@@ -128,7 +129,7 @@ public class PredicateRefinerAdapter extends GenericSinglePathRefiner {
           //We refined it for other usage
           //just return the result;
           //PredicatePrecision previousPreds = falseCacheForCurrentIteration.get(edgeSet);
-          return RefinementResult.createFalse();
+          result = RefinementResult.createFalse();
         } else {
           /*if (!totalARGCleaning) {
             subtreesRemover.addStateForRemoving((ARGState)target.getKeyState());
