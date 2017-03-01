@@ -38,7 +38,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.logging.Level;
 
-import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.FileOption;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
@@ -59,6 +58,7 @@ import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.arg.ARGToDotWriter;
 import org.sosy_lab.cpachecker.cpa.arg.ARGUtils;
+import org.sosy_lab.cpachecker.util.Pair;
 
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
@@ -70,6 +70,9 @@ import com.google.common.collect.Multimap;
  */
 @Options(prefix="cpa.bam")
 class BAMCPAStatistics implements Statistics {
+
+  @Option(secure=true, description="export blocked ARG as .dot file")
+  private boolean exportARGs = true;
 
   @Option(secure=true, description="export blocked ARG as .dot file")
   @FileOption(FileOption.Type.OUTPUT_FILE)
@@ -171,8 +174,10 @@ class BAMCPAStatistics implements Statistics {
       }
     }
 
-    exportAllReachedSets(argFile, indexedArgFile, reached);
-    exportUsedReachedSets(simplifiedArgFile, reached);
+    if (exportARGs) {
+      exportAllReachedSets(argFile, indexedArgFile, reached);
+      exportUsedReachedSets(simplifiedArgFile, reached);
+    }
   }
 
   protected void exportAllReachedSets(final Path superArgFile, final PathTemplate indexedFile,
