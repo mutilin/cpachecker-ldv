@@ -37,7 +37,6 @@ import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
-import org.sosy_lab.cpachecker.core.MainCPAStatistics;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.StateSpacePartition;
@@ -50,7 +49,6 @@ import org.sosy_lab.cpachecker.cpa.predicate.PredicatePrecision;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsCPA;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsState;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.AbstractUsagePointSet;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.RefinedUsagePointSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UnrefinedUsagePointSet;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsageContainer;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
@@ -113,16 +111,16 @@ public class IdentifierIterator extends WrappedConfigurableRefinementBlock<Reach
 
     logger.log(Level.INFO, ("Perform US refinement: " + i++));
     int originUnsafeSize = container.getUnsafeSize();
-    System.out.println("Time: " + MainCPAStatistics.programTime);
-    System.out.println("Unsafes: " + originUnsafeSize);
-    Iterator<SingleIdentifier> iterator = container.getUnsafeIterator();
+    //System.out.println("Time: " + MainCPAStatistics.programTime);
+    //System.out.println("Unsafes: " + originUnsafeSize);
+    /*iterator = container.getUnsafeIterator();
     int trueU = 0;
     while (iterator.hasNext()) {
       if (container.getUsages(iterator.next()) instanceof RefinedUsagePointSet) {
         trueU++;
       }
-    }
-    System.out.println("True unsafes: " + trueU);
+    }*/
+    //System.out.println("True unsafes: " + trueU);
     if (lastFalseUnsafeSize == -1) {
       lastFalseUnsafeSize = originUnsafeSize;
     }
@@ -133,7 +131,7 @@ public class IdentifierIterator extends WrappedConfigurableRefinementBlock<Reach
     sendUpdateSignal(UsagePairIterator.class, container);
     sendUpdateSignal(PointIterator.class, container);
 
-    iterator = container.getUnsafeIterator();
+    Iterator<SingleIdentifier> iterator = container.getUnrefinedUnsafeIterator();
     boolean isPrecisionChanged = false;
     while (iterator.hasNext()) {
       SingleIdentifier currentId = iterator.next();
@@ -174,8 +172,8 @@ public class IdentifierIterator extends WrappedConfigurableRefinementBlock<Reach
     counter += (newTrueUnsafeSize -lastTrueUnsafes);
     if (counter >= precisionReset) {
       Precision p = pReached.getPrecision(pReached.getFirstState());
-      PredicatePrecision predicates = Precisions.extractPrecisionByType(p, PredicatePrecision.class);
-      System.out.println("Clean: " + predicates.getLocalPredicates().size());
+     // PredicatePrecision predicates = Precisions.extractPrecisionByType(p, PredicatePrecision.class);
+      //System.out.println("Clean: " + predicates.getLocalPredicates().size());
       pReached.updatePrecision(pReached.getFirstState(),
           Precisions.replaceByType(p, PredicatePrecision.empty(), Predicates.instanceOf(PredicatePrecision.class)));
 
@@ -208,11 +206,11 @@ public class IdentifierIterator extends WrappedConfigurableRefinementBlock<Reach
       }
       sendUpdateSignal(PredicateRefinerAdapter.class, removedIds);
       pReached.add(cpa.getInitialState(firstNode, StateSpacePartition.getDefaultPartition()), precision);
-      PredicatePrecision p = Precisions.extractPrecisionByType(pReached.getPrecision(pReached.getFirstState()),
-          PredicatePrecision.class);
+      /*PredicatePrecision p = Precisions.extractPrecisionByType(pReached.getPrecision(pReached.getFirstState()),
+          PredicatePrecision.class);*/
 
       sendFinishSignal();
-      System.out.println("Total number of predicates: " + p.getLocalPredicates().size());
+      //System.out.println("Total number of predicates: " + p.getLocalPredicates().size());
     }
     //pStat.UnsafeCheck.stopIfRunning();
     if (refinementFinish) {

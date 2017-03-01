@@ -35,6 +35,8 @@ import java.util.logging.Level;
 
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
+import org.sosy_lab.common.configuration.Option;
+import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.TemporaryUsageStorage;
@@ -47,6 +49,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 
+@Options(prefix="cpa.usagestatistics")
 public class UsageContainer {
   private final SortedMap<SingleIdentifier, UnrefinedUsagePointSet> unrefinedIds;
   private final SortedMap<SingleIdentifier, RefinedUsagePointSet> refinedIds;
@@ -67,10 +70,14 @@ public class UsageContainer {
   int unsafeUsages = -1;
   int totalIds = 0;
 
+  @Option(description="output only true unsafes")
+  private boolean printOnlyTrueUnsafes = false;
+
   public UsageContainer(Configuration config, LogManager l) throws InvalidConfigurationException {
     this(new TreeMap<SingleIdentifier, UnrefinedUsagePointSet>(),
         new TreeMap<SingleIdentifier, RefinedUsagePointSet>(),
         new TreeSet<SingleIdentifier>(), l, new UnsafeDetector(config));
+    config.inject(this);
   }
 
   private UsageContainer(SortedMap<SingleIdentifier, UnrefinedUsagePointSet> pUnrefinedStat,
@@ -176,7 +183,15 @@ public class UsageContainer {
   }
 
   public Iterator<SingleIdentifier> getUnsafeIterator() {
-    return getAllUnsafes().iterator();
+    if (printOnlyTrueUnsafes) {
+      return refinedIds.keySet().iterator();
+    } else {
+      return getAllUnsafes().iterator();
+    }
+  }
+
+  public Iterator<SingleIdentifier> getUnrefinedUnsafeIterator() {
+    return unrefinedIds.keySet().iterator();
   }
 
   public Iterator<SingleIdentifier> getTrueUnsafeIterator() {
@@ -185,7 +200,19 @@ public class UsageContainer {
 
   public int getUnsafeSize() {
     getUnsafesIfNecessary();
+    if (printOnlyTrueUnsafes) {
+      return refinedIds.size();
+    } else {
+      return unrefinedIds.size() + refinedIds.size();
+    }
+  }
+
+  public int getTotalUnsafeSize() {
     return unrefinedIds.size() + refinedIds.size();
+  }
+
+  public boolean printOnlyTrueUnsafes() {
+    return printOnlyTrueUnsafes;
   }
 
   public int getTrueUnsafeSize() {

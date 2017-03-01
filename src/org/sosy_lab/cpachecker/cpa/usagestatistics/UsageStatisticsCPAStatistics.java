@@ -126,9 +126,6 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   @Option(description="print information about false unsafes")
   private boolean printFalseUnsafes = false;
 
-  @Option(description="output only true unsafes")
-  private boolean printOnlyTrueUnsafes = false;
-
   /* Previous container is used when internal time limit occurs
    * and we need to store statistics. In current one the information can be not
    * relevant (for example not all ARG was built).
@@ -569,13 +566,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         }
         logger.log(Level.FINEST, "Processing unsafe identifiers");
         Iterator<SingleIdentifier> unsafeIterator;
-        if (printOnlyTrueUnsafes) {
-          unsafeIterator = container.getTrueUnsafeIterator();
-        } else {
-          unsafeIterator = container.getUnsafeIterator();
-        }
+        unsafeIterator = container.getUnsafeIterator();
         while (unsafeIterator.hasNext()) {
-          createVisualization(unsafeIterator.next(), writer, printOnlyTrueUnsafes);
+          createVisualization(unsafeIterator.next(), writer, container.printOnlyTrueUnsafes());
         }
         if (writer != null) {
           writer.close();
