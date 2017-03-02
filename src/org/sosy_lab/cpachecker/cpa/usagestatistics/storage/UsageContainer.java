@@ -196,7 +196,9 @@ public class UsageContainer {
   }
 
   public Iterator<SingleIdentifier> getUnrefinedUnsafeIterator() {
-    return unrefinedIds.keySet().iterator();
+    //New set to avoid concurrent modification exception
+    Set<SingleIdentifier> result = new TreeSet<>(unrefinedIds.keySet());
+    return result.iterator();
   }
 
   public Iterator<SingleIdentifier> getTrueUnsafeIterator() {
