@@ -23,67 +23,81 @@
  */
 package org.sosy_lab.cpachecker.cpa.smg.refiner;
 
-import java.util.Collection;
-import java.util.Deque;
+import com.google.common.base.Function;
+import com.google.common.collect.FluentIterable;
+import com.google.common.collect.ImmutableList;
 
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
-import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
-import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
+import org.sosy_lab.cpachecker.cpa.smg.SMGPredicateManager;
 import org.sosy_lab.cpachecker.cpa.smg.SMGState;
 import org.sosy_lab.cpachecker.cpa.smg.SMGTransferRelation;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
-import org.sosy_lab.cpachecker.util.refinement.StrongestPostOperator;
+import org.sosy_lab.cpachecker.exceptions.CPATransferException;
+import org.sosy_lab.cpachecker.util.predicates.BlockOperator;
 
-import com.google.common.base.Optional;
-import com.google.common.collect.Iterables;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 
 
-public class SMGStrongestPostOperator implements StrongestPostOperator<SMGState> {
+public class SMGStrongestPostOperator {
 
   private final SMGTransferRelation transfer;
 
-  public SMGStrongestPostOperator(LogManager pLogger, Configuration pBuild, CFA pCfa)
-      throws InvalidConfigurationException {
-    transfer = SMGTransferRelation.createTransferRelationForRefinement(pBuild, pLogger, pCfa.getMachineModel());
+  private SMGStrongestPostOperator(SMGTransferRelation pTransferRelation) {
+    transfer = pTransferRelation;
   }
 
-  @Override
-  public Optional<SMGState> getStrongestPost(SMGState pOrigin, Precision pPrecision, CFAEdge pOperation)
-      throws CPAException, InterruptedException {
+  public static SMGStrongestPostOperator getSMGStrongestPostOperatorForCEX(LogManager pLogger,
+      Configuration pConfig, CFA pCfa, SMGPredicateManager pSMGPredicateManager, BlockOperator pBlockOperator) throws InvalidConfigurationException {
+    SMGTransferRelation transfer =
+        SMGTransferRelation.createTransferRelationForCEX(pConfig, pLogger, pCfa.getMachineModel(), pSMGPredicateManager, pBlockOperator);
+    return new SMGStrongestPostOperator(transfer);
+  }
 
+  public Collection<SMGState> getStrongestPost(SMGState pOrigin, Precision pPrecision,
+      CFAEdge pOperation)
+          throws CPAException, InterruptedException {
 
-    final Collection<? extends AbstractState> successors =
-        transfer.getAbstractSuccessorsForEdge(pOrigin, pPrecision, pOperation);
+    Collection<SMGState> start = ImmutableList.of(pOrigin);
 
-    if (successors.isEmpty()) {
-      return Optional.absent();
+    return getStrongestPost(start, pPrecision, pOperation);
+  }
 
-    } else {
-      return Optional.of((SMGState) Iterables.getOnlyElement(successors));
+  public Collection<SMGState> getStrongestPost(Collection<SMGState> pStates,
+      Precision pPrecision,
+      CFAEdge pOperation) throws CPATransferException, InterruptedException {
+
+    List<AbstractState> result = new ArrayList<>();
+
+    for (SMGState state : pStates) {
+      Collection<? extends AbstractState> successors =
+          transfer.getAbstractSuccessorsForEdge(state, pPrecision, pOperation);
+      result.addAll(successors);
     }
+
+    return FluentIterable.from(result).transform(new Function<AbstractState, SMGState>() {
+
+      @Override
+      public SMGState apply(AbstractState pState) {
+        return (SMGState) pState;
+      }
+    }).toList();
   }
 
-  @Override
-  public SMGState handleFunctionCall(SMGState pState, CFAEdge pEdge, Deque<SMGState> pCallstack) {
-    return pState;
-  }
+  public static SMGStrongestPostOperator getSMGStrongestPostOperatorForInterpolation(
+      LogManager pLogger, Configuration pConfig, CFA pCfa, SMGPredicateManager pSMGPredicateManager,
+      BlockOperator pBlockOperator) throws InvalidConfigurationException {
 
-  @Override
-  public SMGState handleFunctionReturn(SMGState pNext, CFAEdge pEdge, Deque<SMGState> pCallstack) {
-    // TODO investigate scoping?
-    return pNext;
+    SMGTransferRelation transferRelation = SMGTransferRelation
+        .createTransferRelationForInterpolation(pConfig, pLogger, pCfa.getMachineModel(),
+            pSMGPredicateManager, pBlockOperator);
+    return new SMGStrongestPostOperator(transferRelation);
   }
-
-  @Override
-  public SMGState performAbstraction(SMGState pNext, CFANode pCurrNode, ARGPath pErrorPath, Precision pPrecision) {
-    // TODO Investigate abstraction
-    return pNext;
-  }
-
 }

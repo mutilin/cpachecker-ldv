@@ -27,33 +27,32 @@ import static com.google.common.collect.FluentIterable.from;
 import static org.sosy_lab.cpachecker.cpa.arg.ARGUtils.getUncoveredChildrenView;
 import static org.sosy_lab.cpachecker.util.AbstractStates.extractLocation;
 
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Sets;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.Writer;
+import java.nio.charset.Charset;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayDeque;
 import java.util.Collection;
 import java.util.Deque;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.logging.Level;
-
-import org.sosy_lab.common.ShutdownNotifier;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.FileOption;
 import org.sosy_lab.common.configuration.IntegerOption;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
-import org.sosy_lab.common.io.Files;
-import org.sosy_lab.common.io.Path;
-import org.sosy_lab.common.io.Paths;
+import org.sosy_lab.common.io.MoreFiles;
 import org.sosy_lab.common.log.LogManager;
-import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
-import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
-import org.sosy_lab.cpachecker.core.AnalysisDirection;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
@@ -61,6 +60,8 @@ import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
 import org.sosy_lab.cpachecker.core.interfaces.WrapperCPA;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
+import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
+import org.sosy_lab.cpachecker.cpa.arg.ARGCPA;
 import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.assumptions.storage.AssumptionStorageCPA;
@@ -69,15 +70,10 @@ import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.RefinementFailedException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.assumptions.AssumptionWithLocation;
-import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormulaManager;
-import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormulaManagerImpl;
 import org.sosy_lab.cpachecker.util.predicates.smt.FormulaManagerView;
 import org.sosy_lab.cpachecker.util.statistics.AbstractStatistics;
-import org.sosy_lab.solver.api.BooleanFormula;
-import org.sosy_lab.solver.api.BooleanFormulaManager;
-
-import com.google.common.collect.Iterables;
-import com.google.common.collect.Sets;
+import org.sosy_lab.java_smt.api.BooleanFormula;
+import org.sosy_lab.java_smt.api.BooleanFormulaManager;
 
 /**
  * Outer algorithm to collect all invariants generated during
@@ -108,9 +104,7 @@ public class AssumptionCollectorAlgorithm implements Algorithm, StatisticsProvid
   private final Algorithm innerAlgorithm;
   private final FormulaManagerView formulaManager;
   private final AssumptionWithLocation exceptionAssumptions;
-  private final AssumptionStorageCPA cpa;
   private final BooleanFormulaManager bfmgr;
-  private final PathFormulaManager pfmgr;
 
   // store only the ids, not the states in order to prevent memory leaks
   private final Set<Integer> exceptionStates = new HashSet<>();
@@ -118,25 +112,26 @@ public class AssumptionCollectorAlgorithm implements Algorithm, StatisticsProvid
   // statistics
   private int automatonStates = 0;
 
-  public AssumptionCollectorAlgorithm(Algorithm algo, ConfigurableProgramAnalysis pCpa,
-      CFA pCFA,
-      ShutdownNotifier pShutdownNotifier,
-      Configuration config, LogManager logger) throws InvalidConfigurationException {
+  public AssumptionCollectorAlgorithm(Algorithm algo,
+                                      ConfigurableProgramAnalysis pCpa,
+                                      Configuration config,
+                                      LogManager logger) throws InvalidConfigurationException {
     config.inject(this);
 
     this.logger = logger;
     this.innerAlgorithm = algo;
-    this.cpa = ((WrapperCPA)pCpa).retrieveWrappedCpa(AssumptionStorageCPA.class);
-    if (this.cpa == null) {
+    AssumptionStorageCPA cpa =
+        ((WrapperCPA) pCpa).retrieveWrappedCpa(AssumptionStorageCPA.class);
+    if (cpa == null) {
       throw new InvalidConfigurationException("AssumptionStorageCPA needed for AssumptionCollectionAlgorithm");
+    }
+    if (exportAssumptions && assumptionAutomatonFile != null && !(pCpa instanceof ARGCPA)) {
+      throw new InvalidConfigurationException(
+          "ARGCPA needed for for export of assumption automaton in AssumptionCollectionAlgorithm");
     }
     this.formulaManager = cpa.getFormulaManager();
     this.bfmgr = formulaManager.getBooleanFormulaManager();
     this.exceptionAssumptions = new AssumptionWithLocation(formulaManager);
-    pfmgr = new PathFormulaManagerImpl(
-        formulaManager, config, logger, pShutdownNotifier, pCFA,
-        AnalysisDirection.FORWARD
-    );
   }
 
   @Override
@@ -199,7 +194,7 @@ public class AssumptionCollectorAlgorithm implements Algorithm, StatisticsProvid
     return status;
   }
 
-  private AssumptionWithLocation collectLocationAssumptions(ReachedSet reached, AssumptionWithLocation exceptionAssumptions) {
+  private AssumptionWithLocation collectLocationAssumptions(UnmodifiableReachedSet reached, AssumptionWithLocation exceptionAssumptions) {
     AssumptionWithLocation result = AssumptionWithLocation.copyOf(exceptionAssumptions);
 
     // collect and dump all assumptions stored in abstract states
@@ -235,7 +230,7 @@ public class AssumptionCollectorAlgorithm implements Algorithm, StatisticsProvid
    * Add a given assumption for the location and state of a state.
    */
   private void addAssumption(AssumptionWithLocation invariant, BooleanFormula assumption, AbstractState state) {
-    BooleanFormula dataRegion = AbstractStates.extractReportedFormulas(formulaManager, state, pfmgr);
+    BooleanFormula dataRegion = AbstractStates.extractReportedFormulas(formulaManager, state);
 
     CFANode loc = extractLocation(state);
     assert loc != null;
@@ -246,10 +241,10 @@ public class AssumptionCollectorAlgorithm implements Algorithm, StatisticsProvid
    * Create an assumption that is sufficient to exclude an abstract state
    */
   private void addAvoidingAssumptions(AssumptionWithLocation invariant, AbstractState state) {
-    addAssumption(invariant, bfmgr.makeBoolean(false), state);
+    addAssumption(invariant, bfmgr.makeFalse(), state);
   }
 
-  private void produceAssumptionAutomaton(Appendable output, ReachedSet reached) throws IOException {
+  private void produceAssumptionAutomaton(Appendable output, UnmodifiableReachedSet reached) throws IOException {
     final AbstractState firstState = reached.getFirstState();
     if (!(firstState instanceof ARGState)) {
       output.append("Cannot dump assumption as automaton if ARGCPA is not used.");
@@ -361,18 +356,16 @@ public class AssumptionCollectorAlgorithm implements Algorithm, StatisticsProvid
       for (final ARGState child : getUncoveredChildrenView(s)) {
         assert !child.isCovered();
 
-        CFAEdge edge = s.getEdgeToChild(child);
+        List<CFAEdge> edges = s.getEdgesToChild(child);
 
-        if (edge instanceof MultiEdge) {
-          assert (((MultiEdge) edge).getEdges().size() > 1);
-
+        if (edges.size() > 1) {
           sb.append("    MATCH \"");
-          escape(((MultiEdge) edge).getEdges().get(0).getRawStatement(), sb);
+          escape(edges.get(0).getRawStatement(), sb);
           sb.append("\" -> ");
           sb.append("GOTO ARG" + s.getStateId() + "M" + multiEdgeID);
 
           boolean first = true;
-          for (CFAEdge innerEdge : from(((MultiEdge) edge).getEdges()).skip(1)) {
+          for (CFAEdge innerEdge : from(edges).skip(1)) {
 
             if (!first) {
               multiEdgeID++;
@@ -399,7 +392,7 @@ public class AssumptionCollectorAlgorithm implements Algorithm, StatisticsProvid
         } else {
 
           sb.append("    MATCH \"");
-          escape(edge.getRawStatement(), sb);
+          escape(Iterables.getOnlyElement(edges).getRawStatement(), sb);
           sb.append("\" -> ");
 
           AssumptionStorageState assumptionChild = AbstractStates.extractStateByType(child, AssumptionStorageState.class);
@@ -510,7 +503,7 @@ public class AssumptionCollectorAlgorithm implements Algorithm, StatisticsProvid
     }
 
     @Override
-    public void printStatistics(PrintStream out, Result pResult, ReachedSet pReached) {
+    public void printStatistics(PrintStream out, Result pResult, UnmodifiableReachedSet pReached) {
       AssumptionWithLocation resultAssumption = collectLocationAssumptions(pReached, exceptionAssumptions);
 
       put(out, "Number of locations with assumptions", resultAssumption.getNumberOfLocations());
@@ -518,14 +511,15 @@ public class AssumptionCollectorAlgorithm implements Algorithm, StatisticsProvid
       if (exportAssumptions) {
         if (assumptionsFile != null) {
           try {
-            Files.writeFile(assumptionsFile, resultAssumption);
+            MoreFiles.writeFile(assumptionsFile, Charset.defaultCharset(), resultAssumption);
           } catch (IOException e) {
             logger.logUserException(Level.WARNING, e, "Could not write assumptions to file");
           }
         }
 
         if (assumptionAutomatonFile != null) {
-          try (Writer w = Files.openOutputFile(assumptionAutomatonFile)) {
+          try (Writer w =
+              MoreFiles.openOutputFile(assumptionAutomatonFile, Charset.defaultCharset())) {
            produceAssumptionAutomaton(w, pReached);
           } catch (IOException e) {
             logger.logUserException(Level.WARNING, e, "Could not write assumptions to file");

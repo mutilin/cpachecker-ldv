@@ -31,7 +31,6 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-
 import org.sosy_lab.cpachecker.cfa.ast.ASimpleDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CIntegerLiteralExpression;
@@ -39,6 +38,7 @@ import org.sosy_lab.cpachecker.cfa.types.MachineModel;
 import org.sosy_lab.cpachecker.cfa.types.MachineModel.BaseSizeofVisitor;
 import org.sosy_lab.cpachecker.cfa.types.Type;
 import org.sosy_lab.cpachecker.cfa.types.c.CArrayType;
+import org.sosy_lab.cpachecker.cfa.types.c.CBitFieldType;
 import org.sosy_lab.cpachecker.cfa.types.c.CCompositeType;
 import org.sosy_lab.cpachecker.cfa.types.c.CCompositeType.CCompositeTypeMemberDeclaration;
 import org.sosy_lab.cpachecker.cfa.types.c.CElaboratedType;
@@ -176,6 +176,7 @@ public class UseDefBasedInterpolator {
    * of the given variable declaration.
    */
   private List<MemoryLocation> obtainMemoryLocationsForType(ASimpleDeclaration use) {
+
     return ((CType) use.getType()).accept(
         new MemoryLocationCreator(use.getQualifiedName(), machineModel));
   }
@@ -202,6 +203,11 @@ public class UseDefBasedInterpolator {
      */
     private int currentOffset = 0;
 
+    /**
+     * marker to know if traversal went through a complex type
+     */
+    private boolean withinComplexType = false;
+
     private MemoryLocationCreator(final String pQualifiedName, final MachineModel pModel) {
       model = pModel;
       qualifiedName = pQualifiedName;
@@ -209,6 +215,8 @@ public class UseDefBasedInterpolator {
 
     @Override
     public List<MemoryLocation> visit(final CArrayType pArrayType) throws IllegalArgumentException {
+      withinComplexType = true;
+
       CExpression arrayLength = pArrayType.getLength();
 
       if (arrayLength instanceof CIntegerLiteralExpression) {
@@ -223,6 +231,8 @@ public class UseDefBasedInterpolator {
 
     @Override
     public List<MemoryLocation> visit(final CCompositeType pCompositeType) throws IllegalArgumentException {
+      withinComplexType = true;
+
       switch (pCompositeType.getKind()) {
         case STRUCT: return createMemoryLocationsForStructure(pCompositeType);
         case UNION:  return createMemoryLocationsForUnion(pCompositeType);
@@ -233,6 +243,8 @@ public class UseDefBasedInterpolator {
 
     @Override
     public List<MemoryLocation> visit(final CElaboratedType pElaboratedType) throws IllegalArgumentException {
+      withinComplexType = true;
+
       CType definition = pElaboratedType.getRealType();
       if (definition != null) {
         return definition.accept(this);
@@ -284,10 +296,15 @@ public class UseDefBasedInterpolator {
     }
 
     private List<MemoryLocation> createSingleMemoryLocation(final int pSize) {
-      List<MemoryLocation> memory = Collections.singletonList(MemoryLocation.valueOf(qualifiedName, currentOffset));
-      currentOffset = currentOffset + pSize;
+      if (withinComplexType) {
+        List<MemoryLocation> memory = Collections.singletonList(MemoryLocation.valueOf(qualifiedName, currentOffset));
 
-      return memory;
+        currentOffset = currentOffset + pSize;
+
+        return memory;
+      }
+
+      return Collections.singletonList(MemoryLocation.valueOf(qualifiedName));
     }
 
     private List<MemoryLocation> createMemoryLocationsForArray(final int pLength, final CType pType) {
@@ -312,6 +329,12 @@ public class UseDefBasedInterpolator {
 
     private List<MemoryLocation> createMemoryLocationsForUnion(final CCompositeType pCompositeType) {
       return createSingleMemoryLocation(new BaseSizeofVisitor(model).visit(pCompositeType));
+    }
+
+    @Override
+    public List<MemoryLocation> visit(CBitFieldType pCBitFieldType)
+        throws IllegalArgumentException {
+      return createSingleMemoryLocation(model.getSizeof(pCBitFieldType));
     }
   }
 }

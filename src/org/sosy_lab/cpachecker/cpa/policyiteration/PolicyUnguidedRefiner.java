@@ -1,6 +1,6 @@
 package org.sosy_lab.cpachecker.cpa.policyiteration;
 
-import java.util.logging.Level;
+import com.google.common.collect.Iterables;
 
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
@@ -16,17 +16,18 @@ import org.sosy_lab.cpachecker.cpa.loopstack.LoopstackCPA;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.util.CPAs;
 
-import com.google.common.collect.Iterables;
+import java.util.logging.Level;
 
 /**
  * Unguided precision refiner: increase the number of generated templates
  * at each refinement stage.
  */
-@Options(prefix="cpa.stator.policy")
+@Options(prefix="cpa.lpi")
 public class PolicyUnguidedRefiner implements Refiner {
 
   @Option(secure=true,
-      description="Number of refinements after which the unrolling depth is increased")
+      description="Number of refinements after which the unrolling depth is increased."
+          + "Set to -1 to never increase the depth.")
   private int unrollingRefinementThreshold = 2;
 
   private final PolicyCPA policyCPA;
@@ -67,8 +68,8 @@ public class PolicyUnguidedRefiner implements Refiner {
     boolean out = policyCPA.adjustPrecision();
     if (out) {
 
-      if (refinementsPerformed == unrollingRefinementThreshold
-            && loopstackCPA != null) {
+      if (unrollingRefinementThreshold != -1 &&
+          refinementsPerformed == unrollingRefinementThreshold && loopstackCPA != null) {
         loopstackCPA.incLoopIterationsBeforeAbstraction();
         logger.log(Level.INFO, "LPI Refinement: increasing unrolling bound.");
       }
@@ -84,7 +85,7 @@ public class PolicyUnguidedRefiner implements Refiner {
     }
   }
 
-  public void forceRestart(ReachedSet reached) {
+  private void forceRestart(ReachedSet reached) {
     ARGState firstChild = Iterables
         .getOnlyElement(((ARGState)reached.getFirstState()).getChildren());
 

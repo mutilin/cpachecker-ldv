@@ -39,7 +39,7 @@ public final class TestHelpers {
       SMGObject node = new SMGRegion(pSize, pPrefix + "list_node" + i);
       SMGEdgeHasValue hv;
       if (value == null) {
-        hv = new SMGEdgeHasValue(pSize, 0, node, 0);
+        hv = new SMGEdgeHasValue(CPointerType.POINTER_TO_VOID, pOffset, node, 0);
       } else {
         hv = new SMGEdgeHasValue(CPointerType.POINTER_TO_VOID, pOffset, node, value);
       }
@@ -55,7 +55,7 @@ public final class TestHelpers {
 
   static public SMGEdgeHasValue createGlobalList(CLangSMG pSmg, int pLength, int pSize, int pOffset, String pVariable) {
     Integer value = TestHelpers.createList(pSmg, pLength, pSize, pOffset, pVariable);
-    SMGRegion globalVar = new SMGRegion(8, pVariable);
+    SMGRegion globalVar = new SMGRegion(64, pVariable);
     SMGEdgeHasValue hv = new SMGEdgeHasValue(CPointerType.POINTER_TO_VOID, 0, globalVar, value);
     pSmg.addGlobalObject(globalVar);
     pSmg.addHasValueEdge(hv);

@@ -23,29 +23,26 @@
  */
 package org.sosy_lab.cpachecker.cfa.parser.eclipse.c;
 
+import com.google.common.collect.ImmutableSet;
 import java.util.Set;
-
 import org.eclipse.cdt.core.dom.ast.IASTBinaryExpression;
 import org.eclipse.cdt.core.dom.ast.IASTTypeIdExpression;
 import org.eclipse.cdt.core.dom.ast.IASTUnaryExpression;
-import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression.BinaryOperator;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CTypeIdExpression.TypeIdOperator;
 import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression.UnaryOperator;
-
-import com.google.common.base.Function;
-import com.google.common.collect.ImmutableSet;
+import org.sosy_lab.cpachecker.util.Pair;
 
 /** This Class contains functions,
  * that convert operators from C-source into CPAchecker-format. */
 class ASTOperatorConverter {
 
-  private final Function<String, String> niceFileNameFunction;
+  private final ParseContext parseContext;
 
-  ASTOperatorConverter(Function<String, String> pNiceFileNameFunction) {
-    niceFileNameFunction = pNiceFileNameFunction;
+  ASTOperatorConverter(ParseContext pParseContext) {
+    parseContext = pParseContext;
   }
 
   /** converts and returns the operator of an unaryExpression
@@ -65,7 +62,7 @@ class ASTOperatorConverter {
     case IASTUnaryExpression.op_alignOf:
       return UnaryOperator.ALIGNOF;
     default:
-      throw new CFAGenerationRuntimeException("Unknown unary operator", e, niceFileNameFunction);
+      throw parseContext.parseError("Unknown unary operator", e);
     }
   }
 
@@ -169,7 +166,7 @@ class ASTOperatorConverter {
       operator = BinaryOperator.NOT_EQUALS;
       break;
     default:
-      throw new CFAGenerationRuntimeException("Unknown binary operator", e, niceFileNameFunction);
+      throw parseContext.parseError("Unknown binary operator", e);
     }
 
     return Pair.of(operator, isAssign);
@@ -183,12 +180,10 @@ class ASTOperatorConverter {
       return TypeIdOperator.ALIGNOF;
     case IASTTypeIdExpression.op_sizeof:
       return TypeIdOperator.SIZEOF;
-    case IASTTypeIdExpression.op_typeid:
-      return TypeIdOperator.TYPEID;
     case IASTTypeIdExpression.op_typeof:
       return TypeIdOperator.TYPEOF;
     default:
-      throw new CFAGenerationRuntimeException("Unknown type id operator", e, niceFileNameFunction);
+      throw parseContext.parseError("Unknown type id operator", e);
     }
   }
 

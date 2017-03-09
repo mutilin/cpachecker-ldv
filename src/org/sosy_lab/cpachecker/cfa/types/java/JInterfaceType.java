@@ -39,9 +39,11 @@ import com.google.common.collect.ImmutableSet;
  */
 public final class JInterfaceType extends JClassOrInterfaceType implements JReferenceType {
 
+  private static final long serialVersionUID = 1985477760453866693L;
+
   private static final JInterfaceType UNRESOLVABLE_TYPE =
-      new JInterfaceType("_unspecified_", "_unspecified_", VisibilityModifier.NONE,
-          new HashSet<JInterfaceType>());
+      new JInterfaceType(
+          "_unspecified_", "_unspecified_", VisibilityModifier.NONE, new HashSet<>());
 
 
   private final Set<JClassType> interfaceImplementingClasses = new HashSet<>();

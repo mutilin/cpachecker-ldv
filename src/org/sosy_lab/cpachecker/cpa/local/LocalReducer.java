@@ -34,14 +34,14 @@ import org.sosy_lab.cpachecker.core.interfaces.Reducer;
 public class LocalReducer implements Reducer {
 
   @Override
-  public AbstractState getVariableReducedState(AbstractState pExpandedState, Block pContext, Block outerContext, CFANode pCallNode) {
+  public AbstractState getVariableReducedState(AbstractState pExpandedState, Block pContext, CFANode pCallNode) {
     LocalState localState = (LocalState) pExpandedState;
     LocalState reducedState = localState.reduce();
     return reducedState;
   }
 
   @Override
-  public AbstractState getVariableExpandedState(AbstractState pRootState, Block pReducedContext, Block outerSubtree,
+  public AbstractState getVariableExpandedState(AbstractState pRootState, Block pReducedContext,
       AbstractState pReducedState) {
     LocalState newState = (LocalState)pReducedState;
     return newState.expand((LocalState)pRootState);
@@ -63,7 +63,6 @@ public class LocalReducer implements Reducer {
     return getHashCodeForState(pStateKey);
   }
 
-  @Override
   public Object getHashCodeForState(AbstractState pStateKey) {
     LocalState state = (LocalState)pStateKey;
     return state.hashCode();
@@ -72,18 +71,6 @@ public class LocalReducer implements Reducer {
   @Override
   public int measurePrecisionDifference(Precision pPrecision, Precision pOtherPrecision) {
     return 0;
-  }
-
-  @Override
-  public AbstractState getVariableReducedStateForProofChecking(AbstractState pExpandedState, Block pContext,
-      CFANode pCallNode) {
-    return getVariableReducedState(pExpandedState, pContext, null, pCallNode);
-  }
-
-  @Override
-  public AbstractState getVariableExpandedStateForProofChecking(AbstractState pRootState, Block pReducedContext,
-      AbstractState pReducedState) {
-    return getVariableExpandedState(pRootState, pReducedContext, null, pReducedState);
   }
 
   @Override

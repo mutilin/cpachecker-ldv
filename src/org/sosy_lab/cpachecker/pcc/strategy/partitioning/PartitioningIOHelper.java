@@ -33,10 +33,7 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.locks.Lock;
 import java.util.logging.Level;
-
 import javax.annotation.Nullable;
-
-import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.common.ShutdownNotifier;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
@@ -48,13 +45,14 @@ import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.interfaces.pcc.BalancedGraphPartitioner;
 import org.sosy_lab.cpachecker.core.interfaces.pcc.PartialReachedConstructionAlgorithm;
-import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.pcc.strategy.AbstractStrategy.PCStrategyStatistics;
 import org.sosy_lab.cpachecker.pcc.strategy.partialcertificate.PartialCertificateTypeProvider;
 import org.sosy_lab.cpachecker.pcc.strategy.partialcertificate.PartialReachedSetDirectedGraph;
 import org.sosy_lab.cpachecker.pcc.strategy.partitioning.GraphPartitionerFactory.PartitioningHeuristics;
+import org.sosy_lab.cpachecker.pcc.util.ProofStatesInfoCollector;
+import org.sosy_lab.cpachecker.util.Pair;
 
 @Options(prefix = "pcc.partitioning")
 public class PartitioningIOHelper {
@@ -75,6 +73,7 @@ public class PartitioningIOHelper {
   private int numPartitions;
   private List<Pair<AbstractState[], AbstractState[]>> partitions;
   private Statistics currentGraphStatistics;
+  private ProofStatesInfoCollector infoCollector;
 
   public PartitioningIOHelper(final Configuration pConfig, final LogManager pLogger,
       final ShutdownNotifier pShutdownNotifier) throws InvalidConfigurationException {
@@ -215,6 +214,9 @@ public class PartitioningIOHelper {
 
   private void writePartition(final ObjectOutputStream pOut, final AbstractState[] pPartitionNodes,
       AbstractState[] pAdjacentNodesOutside) throws IOException {
+    if(infoCollector!=null) {
+      infoCollector.addInfoForStates(pPartitionNodes);
+    }
     pOut.writeObject(pPartitionNodes);
     pOut.writeObject(pAdjacentNodesOutside);
   }
@@ -230,6 +232,10 @@ public class PartitioningIOHelper {
     }
   }
 
+  public void setProofInfoCollector(final ProofStatesInfoCollector pInfoCollector) {
+    infoCollector = pInfoCollector;
+  }
+
   public Statistics getPartitioningStatistc() {
     return new PartitioningStatistics();
   }
@@ -239,8 +245,8 @@ public class PartitioningIOHelper {
       return new Statistics() {
 
         @Override
-        public void printStatistics(PrintStream pOut, Result pResult, ReachedSet pReached) {
-        }
+        public void printStatistics(
+            PrintStream pOut, Result pResult, UnmodifiableReachedSet pReached) {}
 
         @Override
         public @Nullable
@@ -255,7 +261,7 @@ public class PartitioningIOHelper {
   private class PartitioningStatistics implements Statistics {
 
     @Override
-    public void printStatistics(PrintStream pOut, Result pResult, ReachedSet pReached) {
+    public void printStatistics(PrintStream pOut, Result pResult, UnmodifiableReachedSet pReached) {
       if (numPartitions > 0 && partitions != null) {
         pOut.format("Number of partitions: %d%n", numPartitions);
         pOut.format("The following numbers are given in number of states.%n");

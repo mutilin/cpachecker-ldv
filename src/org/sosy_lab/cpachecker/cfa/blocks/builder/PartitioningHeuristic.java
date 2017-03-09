@@ -27,54 +27,64 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.Set;
-
+import javax.annotation.Nullable;
+import org.sosy_lab.common.configuration.Configuration;
+import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
+import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.blocks.BlockPartitioning;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsTransferRelation;
+import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.util.CFAUtils;
 
 
 /**
  * Defines an interface for heuristics for the partition of a program's CFA into blocks.
+ *
+ * Subclasses need to have exactly one public constructor or a static method named "create"
+ * which may take a {@link LogManager} and a {@link CFA}, and throw at most a {@link CPAException}.
  */
 public abstract class PartitioningHeuristic {
+
+  public interface Factory {
+    PartitioningHeuristic create(LogManager logger, CFA cfa, Configuration pConfig)
+        throws CPAException, InvalidConfigurationException;
+  }
 
   protected final CFA cfa;
   protected final LogManager logger;
 
-  /** Do not change signature! Constructor will be created with Reflections.
-   * Subclasses should also implement the same signature. */
-  public PartitioningHeuristic(LogManager pLogger, CFA pCfa) {
+  /**
+   * @param pConfig configuration can be used and injected in subclasses.
+   */
+  public PartitioningHeuristic(LogManager pLogger, CFA pCfa, Configuration pConfig) {
     cfa = pCfa;
     logger = pLogger;
   }
 
   /**
    * Creates a <code>BlockPartitioning</code> using the represented heuristic.
-   * @param mainFunction CFANode at which the main-function is defined
+   * @param cfa control-flow automaton of the program
    * @return BlockPartitioning
    * @see org.sosy_lab.cpachecker.cfa.blocks.BlockPartitioning
    */
-  public final BlockPartitioning buildPartitioning(CFANode mainFunction, LockStatisticsTransferRelation l) {
-    BlockPartitioningBuilder builder = new BlockPartitioningBuilder(l);
+  public final BlockPartitioning buildPartitioning(CFA cfa, BlockPartitioningBuilder builder) {
 
     //traverse CFG
-    Set<CFANode> seen = new HashSet<>();
-    Deque<CFANode> stack = new ArrayDeque<>();
+    final Set<CFANode> seen = new HashSet<>();
+    final Deque<CFANode> stack = new ArrayDeque<>();
 
+    final  CFANode mainFunction = cfa.getMainFunction();
     seen.add(mainFunction);
     stack.push(mainFunction);
 
     while (!stack.isEmpty()) {
-      CFANode node = stack.pop();
+      final CFANode node = stack.pop();
 
-      if (shouldBeCached(node)) {
-        Set<CFANode> subtree = getBlockForNode(node);
-        if (subtree != null) {
-          builder.addBlock(subtree, mainFunction);
-        }
+      final Set<CFANode> subtree = getBlockForNode(node);
+      if (subtree != null) {
+        builder.addBlock(subtree, node);
       }
 
       for (CFANode nextNode : CFAUtils.successorsOf(node)) {
@@ -85,18 +95,24 @@ public abstract class PartitioningHeuristic {
       }
     }
 
-    return builder.build(mainFunction);
+    return builder.build(cfa);
   }
 
   /**
-   * @param pNode the node to be checked
-   * @return <code>true</code>, if for the given node a new <code>Block</code> should be created; <code>false</code> otherwise
+   * Compute the nodes of a block,
+   * such that the entry-node and all possible exit-nodes should be part of the block.
+   * For efficiency a block should not contain the nodes of inner function calls,
+   * because we will add them automatically later.
+   * <p>
+   * (TODO This case never happened before, but who knows... :
+   * If a block contains a partial body of a called function,
+   * we expect that either the function entry or the function exit is not part of the block.)
+   *
+   * @param pBlockHead CFANode that should be cached.
+   * @return set of nodes that represent a {@link Block},
+   *         or NULL, if no block should be build for this node.
+   *         In most cases, we will return NULL.
    */
-  protected abstract boolean shouldBeCached(CFANode pNode);
-
-  /**
-   * @param pNode CFANode that should be cached. We assume {@link #shouldBeCached(CFANode)} for the node.
-   * @return set of nodes that represent a <code>Block</code>.
-   */
-  protected abstract Set<CFANode> getBlockForNode(CFANode pNode);
+  @Nullable
+  protected abstract Set<CFANode> getBlockForNode(CFANode pBlockHead);
 }

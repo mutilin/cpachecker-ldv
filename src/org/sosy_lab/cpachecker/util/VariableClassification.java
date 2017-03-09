@@ -25,23 +25,7 @@ package org.sosy_lab.cpachecker.util;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
-import java.math.BigInteger;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Set;
-import java.util.logging.Level;
-
-import org.sosy_lab.cpachecker.util.Pair;
-import org.sosy_lab.common.log.LogManager;
-import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
-import org.sosy_lab.cpachecker.cfa.model.FunctionCallEdge;
-import org.sosy_lab.cpachecker.cfa.types.c.CCompositeType;
-
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableMap;
@@ -51,6 +35,22 @@ import com.google.common.collect.ImmutableSetMultimap;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Multiset;
 import com.google.common.collect.Sets;
+
+import org.sosy_lab.common.log.LogManager;
+import org.sosy_lab.common.log.LogManagerWithoutDuplicates;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.FunctionCallEdge;
+import org.sosy_lab.cpachecker.cfa.types.c.CCompositeType;
+
+import java.math.BigInteger;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Optional;
+import java.util.Set;
+import java.util.logging.Level;
 
 public class VariableClassification {
 
@@ -77,6 +77,8 @@ public class VariableClassification {
   // then all essential fields (by propagation)
   private final Multimap<CCompositeType, String> relevantFields;
 
+  private final Multimap<CCompositeType, String> addressedFields;
+
   private final Set<Partition> partitions;
   private final Set<Partition> intBoolPartitions;
   private final Set<Partition> intEqualPartitions;
@@ -84,7 +86,7 @@ public class VariableClassification {
 
   private final Map<Pair<CFAEdge, Integer>, Partition> edgeToPartitions;
 
-  private final LogManager logger;
+  private final LogManagerWithoutDuplicates logger;
 
   VariableClassification(boolean pHasRelevantNonIntAddVars,
       Set<String> pIntBoolVars,
@@ -93,6 +95,7 @@ public class VariableClassification {
       Set<String> pRelevantVariables,
       Set<String> pAddressedVariables,
       Multimap<CCompositeType, String> pRelevantFields,
+      Multimap<CCompositeType, String> pAddressedFields,
       Collection<Partition> pPartitions,
       Set<Partition> pIntBoolPartitions,
       Set<Partition> pIntEqualPartitions,
@@ -108,6 +111,7 @@ public class VariableClassification {
     relevantVariables = ImmutableSet.copyOf(pRelevantVariables);
     addressedVariables = ImmutableSet.copyOf(pAddressedVariables);
     relevantFields = ImmutableSetMultimap.copyOf(pRelevantFields);
+    addressedFields = ImmutableSetMultimap.copyOf(pAddressedFields);
     partitions = ImmutableSet.copyOf(pPartitions);
     intBoolPartitions = ImmutableSet.copyOf(pIntBoolPartitions);
     intEqualPartitions = ImmutableSet.copyOf(pIntEqualPartitions);
@@ -115,7 +119,7 @@ public class VariableClassification {
     edgeToPartitions = ImmutableMap.copyOf(pEdgeToPartitions);
     assumedVariables = ImmutableMultiset.copyOf(pAssumedVariables);
     assignedVariables = ImmutableMultiset.copyOf(pAssignedVariables);
-    logger = pLogger;
+    logger = new LogManagerWithoutDuplicates(pLogger);
   }
 
   @VisibleForTesting
@@ -126,6 +130,7 @@ public class VariableClassification {
         ImmutableSet.<String>of(),
         ImmutableSet.<String>of(),
         ImmutableSet.<String>of(),
+        ImmutableSetMultimap.<CCompositeType, String>of(),
         ImmutableSetMultimap.<CCompositeType, String>of(),
         ImmutableSet.<Partition>of(),
         ImmutableSet.<Partition>of(),
@@ -177,6 +182,16 @@ public class VariableClassification {
    */
   public Multimap<CCompositeType, String> getRelevantFields() {
     return relevantFields;
+  }
+
+  /**
+   * All fields that have their addresses taken somewhere in the source code.
+   * (only fields accessed explicitly through either dot (.) or arrow (->) operator count).
+   *
+   * @return A collection of (CCompositeType, fieldName) mappings.
+   */
+  public Multimap<CCompositeType, String> getAddressedFields() {
+    return addressedFields;
   }
 
   /** This function returns a collection of scoped names.
@@ -324,7 +339,7 @@ public class VariableClassification {
 
       // check for overflow
       if(newScore < oldScore) {
-        logger.log(Level.WARNING,
+        logger.logOnce(Level.WARNING,
             "Highest possible value reached in score computation."
                 + " Error path prefix preference may not be applied reliably.");
         logger.logf(Level.FINE,

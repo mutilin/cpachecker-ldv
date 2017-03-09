@@ -23,11 +23,15 @@
  */
 package org.sosy_lab.cpachecker.util.predicates.smt;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import static org.sosy_lab.java_smt.api.SolverContext.ProverOptions.GENERATE_UNSAT_CORE;
 
-import javax.annotation.Nullable;
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Verify;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Maps;
+
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 import org.sosy_lab.common.ShutdownNotifier;
 import org.sosy_lab.common.configuration.Configuration;
@@ -37,28 +41,28 @@ import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.util.predicates.interpolation.SeparateInterpolatingProverEnvironment;
-import org.sosy_lab.cpachecker.util.predicates.smt.BooleanFormulaManagerView.ConjunctionSplitter;
 import org.sosy_lab.cpachecker.util.predicates.ufCheckingProver.UFCheckingBasicProverEnvironment.UFCheckingProverOptions;
-import org.sosy_lab.cpachecker.util.predicates.ufCheckingProver.UFCheckingInterpolatingProverEnvironmentWithAssumptions;
+import org.sosy_lab.cpachecker.util.predicates.ufCheckingProver.UFCheckingInterpolatingProverEnvironment;
 import org.sosy_lab.cpachecker.util.predicates.ufCheckingProver.UFCheckingProverEnvironment;
-import org.sosy_lab.solver.SolverContextFactory;
-import org.sosy_lab.solver.SolverContextFactory.Solvers;
-import org.sosy_lab.solver.SolverException;
-import org.sosy_lab.solver.api.BooleanFormula;
-import org.sosy_lab.solver.api.Formula;
-import org.sosy_lab.solver.api.FormulaManager;
-import org.sosy_lab.solver.api.InterpolatingProverEnvironment;
-import org.sosy_lab.solver.api.InterpolatingProverEnvironmentWithAssumptions;
-import org.sosy_lab.solver.api.OptEnvironment;
-import org.sosy_lab.solver.api.ProverEnvironment;
-import org.sosy_lab.solver.api.SolverContext;
-import org.sosy_lab.solver.api.SolverContext.ProverOptions;
+import org.sosy_lab.java_smt.SolverContextFactory;
+import org.sosy_lab.java_smt.SolverContextFactory.Solvers;
+import org.sosy_lab.java_smt.api.BooleanFormula;
+import org.sosy_lab.java_smt.api.Formula;
+import org.sosy_lab.java_smt.api.FormulaManager;
+import org.sosy_lab.java_smt.api.InterpolatingProverEnvironment;
+import org.sosy_lab.java_smt.api.OptimizationProverEnvironment;
+import org.sosy_lab.java_smt.api.ProverEnvironment;
+import org.sosy_lab.java_smt.api.SolverContext;
+import org.sosy_lab.java_smt.api.SolverContext.ProverOptions;
+import org.sosy_lab.java_smt.api.SolverException;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Verify;
-import com.google.common.collect.Maps;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import javax.annotation.Nullable;
 
 /**
  * Encapsulation of an SMT solver.
@@ -89,7 +93,11 @@ public final class Solver implements AutoCloseable {
   @SuppressFBWarnings(value = "RCN_REDUNDANT_NULLCHECK_OF_NULL_VALUE")
   private @Nullable Solvers interpolationSolver = null;
 
-  private final UFCheckingProverOptions ufCheckingProverOptions;
+  @Option(secure=true,
+  description="Extract and cache unsat cores for satisfiability checking")
+  private boolean cacheUnsatCores = true;
+
+  private final @Nullable UFCheckingProverOptions ufCheckingProverOptions;
 
   private final FormulaManagerView fmgr;
   private final BooleanFormulaManagerView bfmgr;
@@ -98,6 +106,19 @@ public final class Solver implements AutoCloseable {
   private final SolverContext interpolatingContext;
 
   private final Map<BooleanFormula, Boolean> unsatCache = Maps.newHashMap();
+
+  /**
+   * More complex unsat cache, grouped by an arbitrary key.
+   *
+   * <p>For each node, map a set of constraints to whether it is unsatisfiable
+   * or satisfiable (maps to |true| <=> |UNSAT|).
+   * If a set of constraints is satisfiable, any subset of it is also
+   * satisfiable.
+   * If a set of constraints is unsatisfiable, any superset of it is also
+   * unsatisfiable.
+   */
+  private final Map<Object, Map<Set<BooleanFormula>, Boolean>>
+      groupedUnsatCache = new HashMap<>();
 
   private final LogManager logger;
 
@@ -130,9 +151,6 @@ public final class Solver implements AutoCloseable {
 
     // Instantiate another SMT solver for interpolation if requested.
     if (interpolationSolver != null) {
-
-      // todo: new config?
-      // new factory?
       interpolatingContext = pSolverFactory.generateContext(interpolationSolver);
     } else {
       interpolatingContext = solvingContext;
@@ -190,6 +208,8 @@ public final class Solver implements AutoCloseable {
       pe = new UFCheckingProverEnvironment(logger, pe, fmgr, ufCheckingProverOptions);
     }
 
+    pe = new ProverEnvironmentView(pe, fmgr.getFormulaWrappingHandler());
+
     return pe;
   }
 
@@ -199,40 +219,47 @@ public final class Solver implements AutoCloseable {
    * This environment needs to be closed after it is used by calling {@link InterpolatingProverEnvironment#close()}.
    * It is recommended to use the try-with-resources syntax.
    */
-  public InterpolatingProverEnvironmentWithAssumptions<?> newProverEnvironmentWithInterpolation() {
+  public InterpolatingProverEnvironment<?> newProverEnvironmentWithInterpolation() {
     InterpolatingProverEnvironment<?> ipe = interpolatingContext.newProverEnvironmentWithInterpolation();
-
-    InterpolatingProverEnvironmentWithAssumptions<?> ipeA = (InterpolatingProverEnvironmentWithAssumptions<?>) ipe;
 
     if (solvingContext != interpolatingContext) {
       // If interpolatingContext is not the normal solver,
       // we use SeparateInterpolatingProverEnvironment
       // which copies formula back and forth using strings.
       // We don't need this if the solvers are the same anyway.
-      ipeA = new SeparateInterpolatingProverEnvironment<>(
-          solvingContext.getFormulaManager(),
-          interpolatingContext.getFormulaManager(),
-          ipeA
-      );
+      ipe =
+          new SeparateInterpolatingProverEnvironment<>(
+              solvingContext.getFormulaManager(), interpolatingContext.getFormulaManager(), ipe);
     }
 
     if (checkUFs) {
-      ipeA = new UFCheckingInterpolatingProverEnvironmentWithAssumptions<>(logger, ipeA, fmgr, ufCheckingProverOptions);
+      ipe =
+          new UFCheckingInterpolatingProverEnvironment<>(
+              logger, ipe, fmgr, ufCheckingProverOptions);
     }
 
-    return ipeA;
+    ipe = new InterpolatingProverEnvironmentView<>(ipe, fmgr.getFormulaWrappingHandler());
+
+    return ipe;
   }
 
   /**
    * Direct reference to the underlying SMT solver for optimization queries.
    * This creates a fresh, new, environment in the solver.
-   * This environment needs to be closed after it is used by calling {@link OptEnvironment#close()}.
+   * This environment needs to be closed after it is used by calling {@link OptimizationProverEnvironment#close()}.
    * It is recommended to use the try-with-resources syntax.
    */
-  public OptEnvironment newOptEnvironment() {
-    OptEnvironment environment = solvingContext.newOptEnvironment();
-    environment = new OptEnvironmentView(environment, fmgr);
+  public OptimizationProverEnvironment newOptEnvironment() {
+    OptimizationProverEnvironment environment = solvingContext.newOptimizationProverEnvironment();
+    environment = new OptimizationProverEnvironmentView(environment, fmgr);
     return environment;
+  }
+
+  public OptimizationProverEnvironment newCachedOptEnvironment() {
+    throw new UnsupportedOperationException("Java-SMT does not support cached prover enviroments.");
+    // OptimizationProverEnvironment environment = solvingContext.newCachedOptimizationProverEnvironment();
+    // environment = new OptimizationProverEnvironmentView(environment, fmgr);
+    // return environment;
   }
 
   /**
@@ -268,6 +295,85 @@ public final class Solver implements AutoCloseable {
   }
 
   /**
+   * Unsatisfiability check with more complex cache look up,
+   * optionally based on unsat core.
+   *
+   * @param constraints Conjunction of formulas to test for satisfiability
+   * @param cacheKey Key to group cached results under, usually CFANode
+   *                 is a good candidate.
+   * @return Whether {@code f} is unsatisfiable.
+   */
+  public boolean isUnsat(Set<BooleanFormula> constraints, Object cacheKey)
+      throws InterruptedException, SolverException {
+    solverTime.start();
+    try {
+      return isUnsat0(constraints, cacheKey);
+    } finally {
+      solverTime.stop();
+    }
+  }
+
+  private boolean isUnsat0(Set<BooleanFormula> lemmas, Object cacheKey)
+      throws InterruptedException, SolverException {
+    satChecks++;
+
+    Map<Set<BooleanFormula>, Boolean> stored = groupedUnsatCache.get(cacheKey);
+    if (stored != null) {
+      for (Entry<Set<BooleanFormula>, Boolean> isUnsatResults : stored
+          .entrySet()) {
+        Set<BooleanFormula> cachedConstraints = isUnsatResults.getKey();
+        boolean cachedIsUnsat = isUnsatResults.getValue();
+
+        if (cachedIsUnsat && lemmas.containsAll(cachedConstraints)) {
+
+          // Any superset of unreachable constraints is unreachable.
+          cachedSatChecks++;
+          return true;
+        } else if (!cachedIsUnsat &&
+            cachedConstraints.containsAll(lemmas)) {
+
+          // Any subset of reachable constraints is reachable.
+          cachedSatChecks++;
+          return false;
+        }
+      }
+    }
+
+    if (stored == null) {
+      stored = new HashMap<>();
+    } else {
+      stored = new HashMap<>(stored);
+    }
+
+    ProverOptions opts[];
+    if (cacheUnsatCores) {
+      opts = new ProverOptions[]{GENERATE_UNSAT_CORE};
+    } else {
+      opts = new ProverOptions[0];
+    }
+
+    try (ProverEnvironment pe = newProverEnvironment(opts)){
+      pe.push();
+      for (BooleanFormula lemma : lemmas) {
+        pe.addConstraint(lemma);
+      }
+      if (pe.isUnsat()) {
+        if (cacheUnsatCores) {
+          stored.put(ImmutableSet.copyOf(pe.getUnsatCore()), true);
+        } else {
+          stored.put(ImmutableSet.copyOf(lemmas), true);
+        }
+        return true;
+      } else {
+        stored.put(lemmas, false);
+        return false;
+      }
+    } finally {
+      groupedUnsatCache.put(cacheKey, ImmutableMap.copyOf(stored));
+    }
+  }
+
+  /**
    * Helper function for UNSAT core generation.
    * Takes a single API call to perform.
    *
@@ -275,32 +381,15 @@ public final class Solver implements AutoCloseable {
    * nodes into multiple constraints (thus an UNSAT core can contain only a
    * subset of some AND node).
    */
-  public List<BooleanFormula> unsatCore(Iterable<BooleanFormula> constraints)
+  public List<BooleanFormula> unsatCore(BooleanFormula constraints)
       throws SolverException, InterruptedException {
 
-    try (ProverEnvironment prover = newProverEnvironment(ProverOptions.GENERATE_UNSAT_CORE)) {
-      for (BooleanFormula constraint : constraints) {
-        addConstraint(constraint);
+    try (ProverEnvironment prover = newProverEnvironment(GENERATE_UNSAT_CORE)) {
+      for (BooleanFormula constraint : bfmgr.toConjunctionArgs(constraints, true)) {
+        prover.addConstraint(constraint);
       }
       Verify.verify(prover.isUnsat());
       return prover.getUnsatCore();
-    }
-  }
-
-  /**
-   * Helper function: add the constraint, OR, if the constraint is an AND-node,
-   * add children one by one. Keep going recursively.
-   */
-  private void addConstraint(BooleanFormula constraint) {
-
-    List<BooleanFormula> splittedConjunction = bfmgr.visit(new ConjunctionSplitter(fmgr), constraint);
-    if (splittedConjunction == null) {
-      // in this case, we could not split the constraint and use it "as is".
-      splittedConjunction = Collections.singletonList(constraint);
-    }
-
-    for (BooleanFormula f : splittedConjunction) {
-      addConstraint(f);
     }
   }
 
@@ -338,7 +427,7 @@ public final class Solver implements AutoCloseable {
    * may not be used anymore after closing.
    */
   @Override
-  public void close() throws Exception {
+  public void close() {
     // Reliably close both formula managers and re-throw exceptions,
     // such that no exception gets lost and both managers get closed.
     // Taken from https://stackoverflow.com/questions/24705055/wrapping-multiple-autocloseables

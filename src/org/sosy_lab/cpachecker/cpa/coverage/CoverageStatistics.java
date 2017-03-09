@@ -28,25 +28,23 @@ import static com.google.common.collect.FluentIterable.from;
 import static org.sosy_lab.cpachecker.util.AbstractStates.EXTRACT_LOCATION;
 
 import java.io.PrintStream;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Set;
-
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.FileOption;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
-import org.sosy_lab.common.io.Path;
-import org.sosy_lab.common.io.Paths;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
-import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.reachedset.ForwardingReachedSet;
 import org.sosy_lab.cpachecker.core.reachedset.LocationMappedReachedSet;
-import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
+import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
 import org.sosy_lab.cpachecker.cpa.coverage.CoverageData.CoverageMode;
 import org.sosy_lab.cpachecker.util.CFAUtils;
 import org.sosy_lab.cpachecker.util.statistics.AbstractStatistics;
@@ -82,7 +80,7 @@ public class CoverageStatistics extends AbstractStatistics {
   }
 
   @Override
-  public void printStatistics(PrintStream pOut, Result pResult, ReachedSet pReached) {
+  public void printStatistics(PrintStream pOut, Result pResult, UnmodifiableReachedSet pReached) {
 
     if (cov.getCoverageMode() == CoverageMode.REACHED) {
       computeCoverageFromReached(pReached);
@@ -106,7 +104,7 @@ public class CoverageStatistics extends AbstractStatistics {
   }
 
   public void computeCoverageFromReached(
-      final ReachedSet pReached) {
+      final UnmodifiableReachedSet pReached) {
 
     Set<CFANode> reachedLocations = getAllLocationsFromReached(pReached);
 
@@ -117,13 +115,7 @@ public class CoverageStatistics extends AbstractStatistics {
         boolean visited = reachedLocations.contains(edge.getPredecessor())
             && reachedLocations.contains(edge.getSuccessor());
 
-        if (edge instanceof MultiEdge) {
-          for (CFAEdge innerEdge : ((MultiEdge)edge).getEdges()) {
-            cov.handleEdgeCoverage(innerEdge, visited);
-          }
-        } else {
-          cov.handleEdgeCoverage(edge, visited);
-        }
+        cov.handleEdgeCoverage(edge, visited);
       }
     }
 
@@ -138,7 +130,7 @@ public class CoverageStatistics extends AbstractStatistics {
 
   }
 
-  private Set<CFANode> getAllLocationsFromReached(ReachedSet pReached) {
+  private Set<CFANode> getAllLocationsFromReached(UnmodifiableReachedSet pReached) {
     if (pReached instanceof ForwardingReachedSet) {
       pReached = ((ForwardingReachedSet)pReached).getDelegate();
     }

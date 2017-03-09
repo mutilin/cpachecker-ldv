@@ -23,6 +23,9 @@
  */
 package org.sosy_lab.cpachecker.cpa.invariants;
 
+import com.google.common.base.Preconditions;
+import com.google.common.collect.Lists;
+import com.google.common.math.IntMath;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -30,23 +33,15 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
-
 import javax.annotation.Nullable;
-
 import org.sosy_lab.cpachecker.cpa.invariants.operators.Operator;
 import org.sosy_lab.cpachecker.cpa.invariants.operators.bitvector.ICCOperatorFactory;
 import org.sosy_lab.cpachecker.cpa.invariants.operators.bitvector.IICOperatorFactory;
 import org.sosy_lab.cpachecker.cpa.invariants.operators.bitvector.ISCOperatorFactory;
 
-import com.google.common.base.Function;
-import com.google.common.base.Preconditions;
-import com.google.common.collect.Lists;
-import com.google.common.math.IntMath;
-
-/**
- * Instances of this class represent compound states of intervals.
- */
-public class CompoundBitVectorInterval implements CompoundInterval, BitVectorType {
+/** Instances of this class represent compound states of intervals. */
+@SuppressWarnings("AmbiguousMethodReference")
+public class CompoundBitVectorInterval implements CompoundIntegralInterval, BitVectorType {
 
   private final BitVectorInfo info;
 
@@ -74,7 +69,7 @@ public class CompoundBitVectorInterval implements CompoundInterval, BitVectorTyp
    * {@code null}.
    */
   private CompoundBitVectorInterval(BitVectorInterval pInterval) {
-    this.info = pInterval.getBitVectorInfo();
+    this.info = pInterval.getTypeInfo();
     this.intervals = new BitVectorInterval[] { pInterval };
   }
 
@@ -126,7 +121,7 @@ public class CompoundBitVectorInterval implements CompoundInterval, BitVectorTyp
   }
 
   @Override
-  public BitVectorInfo getBitVectorInfo() {
+  public BitVectorInfo getTypeInfo() {
     return info;
   }
 
@@ -159,26 +154,13 @@ public class CompoundBitVectorInterval implements CompoundInterval, BitVectorTyp
    */
   @Override
   public List<SimpleInterval> getIntervals() {
-    return Lists.transform(getBitVectorIntervals(), new Function<BitVectorInterval, SimpleInterval>() {
-
-      @Override
-      public SimpleInterval apply(BitVectorInterval pBitVectorInterval) {
-        return SimpleInterval.of(pBitVectorInterval.getLowerBound(), pBitVectorInterval.getUpperBound());
-      }
-
-    });
+    return Lists.transform(getBitVectorIntervals(), pBitVectorInterval ->
+        SimpleInterval.of(pBitVectorInterval.getLowerBound(), pBitVectorInterval.getUpperBound()));
   }
 
   @Override
   public List<CompoundBitVectorInterval> splitIntoIntervals() {
-    return Lists.transform(Arrays.asList(this.intervals), new Function<BitVectorInterval, CompoundBitVectorInterval>() {
-
-      @Override
-      public CompoundBitVectorInterval apply(BitVectorInterval pInterval) {
-        return of(pInterval);
-      }
-
-    });
+    return Lists.transform(Arrays.asList(this.intervals), CompoundBitVectorInterval::of);
   }
 
   public void checkBitVectorCompatibilityWith(BitVectorInfo pOtherInfo) {
@@ -210,7 +192,7 @@ public class CompoundBitVectorInterval implements CompoundInterval, BitVectorTyp
    * @return the union of this compound state with the given simple interval.
    */
   public CompoundBitVectorInterval unionWith(BitVectorInterval pOther) {
-    checkBitVectorCompatibilityWith(pOther.getBitVectorInfo());
+    checkBitVectorCompatibilityWith(pOther.getTypeInfo());
     if (contains(pOther)) { return this; }
     if (isBottom() || pOther.isTop()) { return getInternal(pOther); }
     ArrayList<BitVectorInterval> resultIntervals = new ArrayList<>();
@@ -306,7 +288,7 @@ public class CompoundBitVectorInterval implements CompoundInterval, BitVectorTyp
    * @return the compound state resulting from the intersection of this compound state with the given interval.
    */
   public CompoundBitVectorInterval intersectWith(BitVectorInterval pOther) {
-    checkBitVectorCompatibilityWith(pOther.getBitVectorInfo());
+    checkBitVectorCompatibilityWith(pOther.getTypeInfo());
     if (isBottom() || pOther.isTop()) { return this; }
     if (contains(pOther)) { return CompoundBitVectorInterval.of(pOther); }
     if (this.intervals.length == 1 && pOther.contains(this.intervals[0])) { return this; }
@@ -404,8 +386,12 @@ public class CompoundBitVectorInterval implements CompoundInterval, BitVectorTyp
     while (leftInclusive < rightExclusive) {
       int index = IntMath.mean(leftInclusive, rightExclusive);
       BitVectorInterval intervalAtIndex = this.intervals[index];
-      boolean lbIndexLeqLb = !intervalAtIndex.hasLowerBound() || hasLowerBound && intervalAtIndex.getLowerBound().compareTo(lb) <= 0;
-      boolean ubIndexGeqUb = !intervalAtIndex.hasUpperBound() || hasUpperBound && intervalAtIndex.getUpperBound().compareTo(ub) >= 0;
+      boolean lbIndexLeqLb =
+          !intervalAtIndex.hasLowerBound()
+              || (hasLowerBound && intervalAtIndex.getLowerBound().compareTo(lb) <= 0);
+      boolean ubIndexGeqUb =
+          !intervalAtIndex.hasUpperBound()
+              || (hasUpperBound && intervalAtIndex.getUpperBound().compareTo(ub) >= 0);
       if (lbIndexLeqLb) { // Interval at index starts before interval
         if (ubIndexGeqUb) { // Interval at index ends after interval
           return true;
@@ -612,17 +598,10 @@ public class CompoundBitVectorInterval implements CompoundInterval, BitVectorTyp
     // If the value fits in, the cast is easy
     if (pBitVectorInfo.getRange().contains(info.getRange())) {
       BitVectorInterval[] castedIntervals = new BitVectorInterval[intervals.length];
-      Lists.transform(getBitVectorIntervals(), new Function<BitVectorInterval, BitVectorInterval>() {
-
-        @Override
-        public BitVectorInterval apply(BitVectorInterval pInterval) {
-          return BitVectorInterval.of(
-              pBitVectorInfo,
-              pInterval.getLowerBound(),
-              pInterval.getUpperBound());
-        }
-
-      }).toArray(castedIntervals);
+      Lists.transform(getBitVectorIntervals(), pInterval -> BitVectorInterval.of(
+          pBitVectorInfo,
+          pInterval.getLowerBound(),
+          pInterval.getUpperBound())).toArray(castedIntervals);
       return new CompoundBitVectorInterval(
           pBitVectorInfo,
           castedIntervals);
@@ -987,7 +966,9 @@ public class CompoundBitVectorInterval implements CompoundInterval, BitVectorTyp
     if (pValue.equals(BigInteger.ONE)) {
       return this;
     }
-    return applyOperationToAllAndUnite(ISCOperatorFactory.INSTANCE.getMuliply(pAllowSignedWrapAround, pOverflowEventHandler), pValue);
+    return applyOperationToAllAndUnite(
+        ISCOperatorFactory.INSTANCE.getMultiply(pAllowSignedWrapAround, pOverflowEventHandler),
+        pValue);
   }
 
   /**
@@ -1366,7 +1347,9 @@ public class CompoundBitVectorInterval implements CompoundInterval, BitVectorTyp
   public CompoundBitVectorInterval logicalAnd(final CompoundBitVectorInterval pState) {
     checkBitVectorCompatibilityWith(pState.info);
     if (isBottom() || pState.isBottom()) { return bottom(info); }
-    if (isSingleton() && containsZero() || pState.isSingleton() && pState.containsZero()) { return logicalFalse(info); }
+    if ((isSingleton() && containsZero()) || (pState.isSingleton() && pState.containsZero())) {
+      return logicalFalse(info);
+    }
     if (!containsZero() && !pState.containsZero()) { return logicalTrue(info); }
     return getInternal(info.getRange());
   }
@@ -1783,9 +1766,9 @@ public class CompoundBitVectorInterval implements CompoundInterval, BitVectorTyp
    * @return the union of the two intervals.
    */
   private static BitVectorInterval union(BitVectorInterval pA, BitVectorInterval pB) {
-    Preconditions.checkArgument(pA.getBitVectorInfo().equals(pB.getBitVectorInfo()));
+    Preconditions.checkArgument(pA.getTypeInfo().equals(pB.getTypeInfo()));
     Preconditions.checkArgument(pA.touches(pB), "Cannot unite intervals that do not touch.");
-    return BitVectorInterval.of(pA.getBitVectorInfo(), lowestBound(pA, pB), highestBound(pA, pB));
+    return BitVectorInterval.of(pA.getTypeInfo(), lowestBound(pA, pB), highestBound(pA, pB));
   }
 
   /**

@@ -29,14 +29,14 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Queue;
 import java.util.Set;
-
-import org.sosy_lab.cpachecker.cpa.invariants.BitVectorInfo;
-import org.sosy_lab.cpachecker.cpa.invariants.BitVectorType;
 import org.sosy_lab.cpachecker.cpa.invariants.CompoundInterval;
 import org.sosy_lab.cpachecker.cpa.invariants.CompoundIntervalManager;
 import org.sosy_lab.cpachecker.cpa.invariants.CompoundIntervalManagerFactory;
+import org.sosy_lab.cpachecker.cpa.invariants.TypeInfo;
+import org.sosy_lab.cpachecker.cpa.invariants.Typed;
 import org.sosy_lab.cpachecker.util.states.MemoryLocation;
 
 /**
@@ -78,28 +78,45 @@ public class PartialEvaluator implements
     this.compoundIntervalFormulaManager = new CompoundIntervalFormulaManager(compoundIntervalManagerFactory);
   }
 
-  private CompoundIntervalManager getCompoundIntervalManager(BitVectorInfo pBitVectorInfo) {
-    return compoundIntervalManagerFactory.createCompoundIntervalManager(pBitVectorInfo);
+  @Override
+  public boolean equals(Object pObj) {
+    if (this == pObj) {
+      return true;
+    }
+    if (pObj instanceof PartialEvaluator) {
+      PartialEvaluator other = (PartialEvaluator) pObj;
+      return compoundIntervalManagerFactory.equals(other.compoundIntervalManagerFactory)
+          && compoundIntervalFormulaManager.equals(other.compoundIntervalFormulaManager)
+          && environment.equals(other.environment);
+    }
+    return false;
   }
 
-  private CompoundIntervalManager getCompoundIntervalManager(BitVectorType pBitvectorType) {
-    return getCompoundIntervalManager(pBitvectorType.getBitVectorInfo());
+  @Override
+  public int hashCode() {
+    return Objects.hash(
+        compoundIntervalManagerFactory, compoundIntervalFormulaManager, environment);
+  }
+
+  private CompoundIntervalManager getCompoundIntervalManager(TypeInfo pTypeInfo) {
+    return compoundIntervalManagerFactory.createCompoundIntervalManager(pTypeInfo);
+  }
+
+  private CompoundIntervalManager getCompoundIntervalManager(Typed pTyped) {
+    return getCompoundIntervalManager(pTyped.getTypeInfo());
   }
 
   private NumeralFormula<CompoundInterval> evaluateAndWrap(NumeralFormula<CompoundInterval> pFormula, FormulaEvaluationVisitor<CompoundInterval> pEvaluationVisitor) {
     return InvariantsFormulaManager.INSTANCE.asConstant(
-        pFormula.getBitVectorInfo(),
-        pFormula.accept(pEvaluationVisitor, environment));
+        pFormula.getTypeInfo(), pFormula.accept(pEvaluationVisitor, environment));
   }
 
-  private NumeralFormula<CompoundInterval> asConstant(BitVectorType pBitVectorType, CompoundInterval pValue) {
-    return InvariantsFormulaManager.INSTANCE.asConstant(
-        pBitVectorType.getBitVectorInfo(),
-        pValue);
+  private NumeralFormula<CompoundInterval> asConstant(Typed pTyped, CompoundInterval pValue) {
+    return InvariantsFormulaManager.INSTANCE.asConstant(pTyped.getTypeInfo(), pValue);
   }
 
-  private NumeralFormula<CompoundInterval> singleton(BitVectorType pBitVectorType, BigInteger pValue) {
-    BitVectorInfo info = pBitVectorType.getBitVectorInfo();
+  private NumeralFormula<CompoundInterval> singleton(Typed pTyped, BigInteger pValue) {
+    TypeInfo info = pTyped.getTypeInfo();
     return InvariantsFormulaManager.INSTANCE.asConstant(
         info,
         getCompoundIntervalManager(info).singleton(pValue));
@@ -271,6 +288,18 @@ public class PartialEvaluator implements
         return result;
       }
     }
+    // If either operand is false, return it
+    if (operand1 instanceof BooleanConstant<?> && !((BooleanConstant<?>) operand1).getValue()) {
+      return operand1;
+    }
+    if (operand2 instanceof BooleanConstant<?> && !((BooleanConstant<?>) operand2).getValue()) {
+      return operand2;
+    }
+    // If both operands are true, return the first one
+    if (operand1 instanceof BooleanConstant<?> && ((BooleanConstant<?>) operand1).getValue()
+        && operand2 instanceof BooleanConstant<?> && ((BooleanConstant<?>) operand2).getValue()) {
+      return operand1;
+    }
     if (operand1 == pAnd.getOperand1() && operand2 == pAnd.getOperand2()) {
       return pAnd;
     }
@@ -289,6 +318,9 @@ public class PartialEvaluator implements
     // The negation of a negation yields the inner operand
     if (operand instanceof LogicalNot<?>) {
       return ((LogicalNot<CompoundInterval>) operand).getNegated();
+    }
+    if (operand instanceof BooleanConstant<?>) {
+      return ((BooleanConstant<CompoundInterval>) operand).negate();
     }
     if (operand == pNot.getNegated()) {
       return pNot;
@@ -339,7 +371,7 @@ public class PartialEvaluator implements
     if (c != null && otherFactor != null) {
       CompoundInterval state = c.getValue();
       if (state.isSingleton()) {
-        BigInteger value = state.getValue();
+        Number value = state.getValue();
         if (value.equals(BigInteger.ONE)) {
           return otherFactor;
         }
@@ -522,7 +554,7 @@ public class PartialEvaluator implements
     if (operand == pCast.getCasted()) {
       return pCast;
     }
-    return compoundIntervalFormulaManager.cast(pCast.getBitVectorInfo(), operand);
+    return compoundIntervalFormulaManager.cast(pCast.getTypeInfo(), operand);
   }
 
 }

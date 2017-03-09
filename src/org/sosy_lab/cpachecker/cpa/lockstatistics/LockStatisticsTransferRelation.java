@@ -25,6 +25,8 @@ package org.sosy_lab.cpachecker.cpa.lockstatistics;
 
 import static com.google.common.collect.FluentIterable.from;
 
+import com.google.common.base.Function;
+import com.google.common.base.Predicate;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
@@ -32,9 +34,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
 import javax.annotation.Nullable;
-
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
@@ -51,7 +51,6 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CLeftHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
-import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionReturnEdge;
@@ -73,9 +72,6 @@ import org.sosy_lab.cpachecker.cpa.lockstatistics.effects.SetLockEffect;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCCodeException;
 import org.sosy_lab.cpachecker.util.Pair;
-
-import com.google.common.base.Function;
-import com.google.common.base.Predicate;
 
 @Options(prefix="cpa.lockStatistics")
 public class LockStatisticsTransferRelation implements TransferRelation
@@ -196,12 +192,6 @@ public class LockStatisticsTransferRelation implements TransferRelation
       case CallToReturnEdge:
         break;
 
-      case MultiEdge:
-        result = new LinkedList<>();
-        for (CFAEdge edge : (MultiEdge)cfaEdge) {
-          result.addAll(handleSimpleEdge(edge));
-        }
-        return result;
       default:
         throw new UnrecognizedCCodeException("Unknown edge type", cfaEdge);
     }
@@ -441,11 +431,5 @@ public class LockStatisticsTransferRelation implements TransferRelation
     }
     sb.delete(sb.length() - 2, sb.length());
     return sb.toString();
-  }
-
-  @Override
-  public Collection<? extends AbstractState> strengthen(AbstractState pState, List<AbstractState> pOtherStates,
-      @Nullable CFAEdge pCfaEdge, Precision pPrecision) throws CPATransferException, InterruptedException {
-    return null;
   }
 }

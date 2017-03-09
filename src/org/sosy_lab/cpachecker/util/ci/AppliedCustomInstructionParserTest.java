@@ -23,24 +23,13 @@
  */
 package org.sosy_lab.cpachecker.util.ci;
 
-import java.io.IOException;
-import java.io.Writer;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Deque;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
+import com.google.common.truth.Truth;
 
 import org.junit.Before;
 import org.junit.Test;
 import org.sosy_lab.common.ShutdownNotifier;
-import org.sosy_lab.common.configuration.InvalidConfigurationException;
-import org.sosy_lab.common.io.Files;
-import org.sosy_lab.common.io.Path;
-import org.sosy_lab.common.io.Paths;
-import org.sosy_lab.common.log.BasicLogManager;
+import org.sosy_lab.common.io.MoreFiles;
+import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdgeType;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
@@ -54,7 +43,17 @@ import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.SSAMap;
 import org.sosy_lab.cpachecker.util.test.TestDataTools;
 
-import com.google.common.truth.Truth;
+import java.io.IOException;
+import java.io.Writer;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Deque;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
 
 public class AppliedCustomInstructionParserTest {
 
@@ -64,50 +63,50 @@ public class AppliedCustomInstructionParserTest {
   private List<CLabelNode> labelNodes;
 
   @Before
-  public void init() throws IOException, ParserException, InterruptedException, InvalidConfigurationException {
-    String testProgram = ""
-          + "extern int test3(int);"
-          + "int test(int p) {"
-            + "return p+1;"
-          + "}"
-          + "int test2(int p) {"
-            + "start_ci: return p+2;"
-          + "}"
-          + "void ci(int var) {"
-            + "var = var + 39;"
-            + "int globalVar;"
-            + "int u;"
-            + "int x = globalVar + 5;"
-            + "int y;"
-            + "int z;"
-            + "start_ci:"
-            + "if (z>0) {"
-              + "y = y + 1;"
-            + "} else {"
-              + "var = var + 1;"
-            + "}"
-            + "test(u);"
-            + "z = test(globalVar);"
-            + "end_ci_1: x = x + 1;"
-          + "}"
-          + "void main() {"
-            + "int m;"
-            + "int n;"
-            + "int o;"
-            + "start_ci:"
-            + "if (m>o) {"
-              + "ci(m);"
-            + "}"
-            + "test3(n);"
-            + "n = test3(o);"
-            + "end_ci_2:"
-            + "test2(4);"
-          + "}";
-    cfa = TestDataTools.makeCFA(testProgram);
+  public void init() throws IOException, ParserException, InterruptedException {
+    cfa =
+        TestDataTools.makeCFA(
+            "extern int test3(int);",
+            "int test(int p) {",
+            "  return p+1;",
+            "}",
+            "int test2(int p) {",
+            "  start_ci: return p+2;",
+            "}",
+            "void ci(int var) {",
+            "  var = var + 39;",
+            "  int globalVar;",
+            "  int u;",
+            "  int x = globalVar + 5;",
+            "  int y;",
+            "  int z;",
+            "  start_ci:",
+            "  if (z>0) {",
+            "    y = y + 1;",
+            "  } else {",
+            "    var = var + 1;",
+            "  }",
+            "  test(u);",
+            "  z = test(globalVar);",
+            "  end_ci_1: x = x + 1;",
+            "}",
+            "void main() {",
+            "  int m;",
+            "  int n;",
+            "  int o;",
+            "  start_ci:",
+            "  if (m>o) {",
+            "    ci(m);",
+            "  }",
+            "  test3(n);",
+            "  n = test3(o);",
+            "  end_ci_2:",
+            "  test2(4);",
+            "}");
     aciParser =
         new AppliedCustomInstructionParser(
             ShutdownNotifier.createDummy(),
-            new BasicLogManager(TestDataTools.configurationForTest().build()),
+            LogManager.createTestLogManager(),
             cfa);
     GlobalInfo.getInstance().storeCFA(cfa);
     cfaInfo = GlobalInfo.getInstance().getCFAInfo().get();
@@ -218,27 +217,28 @@ public class AppliedCustomInstructionParserTest {
   }
 
   @Test
-  public void testParse() throws AppliedCustomInstructionParsingFailedException, IOException, InterruptedException, SecurityException, ParserException, InvalidConfigurationException {
-    String testProgram = ""
-        + "void main() {"
-          + "int x;"
-          + "int y;"
-          + "start_ci: x = x + y;"
-          + "end_ci_1:"
-          + "x = x + x;"
-          + "y = y + y;"
-          + "y = y + x;"
-        + "}";
+  public void testParse() throws Exception {
+    cfa =
+        TestDataTools.makeCFA(
+            "void main() {",
+            "  int x;",
+            "  int y;",
+            "  start_ci: x = x + y;",
+            "  end_ci_1:",
+            "  x = x + x;",
+            "  y = y + y;",
+            "  y = y + x;",
+            "}");
 
-    CFA cfa = TestDataTools.makeCFA(testProgram);
     GlobalInfo.getInstance().storeCFA(cfa);
     aciParser =
         new AppliedCustomInstructionParser(
             ShutdownNotifier.createDummy(),
-            new BasicLogManager(TestDataTools.configurationForTest().build()),
+            LogManager.createTestLogManager(),
             cfa);
-    Path p = Paths.createTempPath("test_acis", null);
-    try (Writer file = Files.openOutputFile(p)) {
+
+    Path p = MoreFiles.createTempFile("test_acis", null, null);
+    try (Writer file = MoreFiles.openOutputFile(p, StandardCharsets.US_ASCII)) {
       file.append("main\n");
       CFANode node;
       Deque<CFANode> toVisit = new ArrayDeque<>();
@@ -256,6 +256,19 @@ public class AppliedCustomInstructionParserTest {
       file.flush();
     }
 
+    Path signatureFile = MoreFiles.createTempFile("ci_spec", ".txt", null);
+    try {
+      testParse(p, signatureFile);
+    } finally {
+      try {
+        java.nio.file.Files.deleteIfExists(p);
+        java.nio.file.Files.deleteIfExists(signatureFile);
+      } catch (IOException e) {
+      }
+    }
+  }
+
+  private void testParse(Path p, Path signatureFile) throws Exception {
     CFANode expectedStart = null;
     for(CLabelNode n: getLabelNodes(cfa)){
       if(n.getLabel().startsWith("start_ci") && n.getFunctionName().equals("main")) {
@@ -264,7 +277,7 @@ public class AppliedCustomInstructionParserTest {
     }
     int startNodeNr = expectedStart.getNodeNumber();
 
-    CustomInstructionApplications cia = aciParser.parse(p);
+    CustomInstructionApplications cia = aciParser.parse(p, signatureFile);
     Map<CFANode, AppliedCustomInstruction> cis = cia.getMapping();
     Truth.assertThat(cis.size()).isEqualTo(4);
     List<CFANode> aciNodes = new ArrayList<>(2);

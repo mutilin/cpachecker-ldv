@@ -27,8 +27,18 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Predicates.not;
 import static com.google.common.collect.FluentIterable.from;
 import static org.sosy_lab.cpachecker.cfa.model.CFAEdgeType.FunctionReturnEdge;
-import static org.sosy_lab.cpachecker.util.CFAUtils.*;
+import static org.sosy_lab.cpachecker.util.CFAUtils.edgeHasType;
+import static org.sosy_lab.cpachecker.util.CFAUtils.hasBackWardsEdges;
+import static org.sosy_lab.cpachecker.util.CFAUtils.leavingEdges;
 
+import com.google.common.base.Function;
+import com.google.common.base.Predicate;
+import com.google.common.collect.ImmutableCollection;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMultimap;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableSortedSet;
+import com.google.common.collect.Sets;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -40,37 +50,23 @@ import java.util.NavigableSet;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
-
 import javax.annotation.Nullable;
-
 import org.sosy_lab.cpachecker.cfa.Language;
 import org.sosy_lab.cpachecker.cfa.MutableCFA;
 import org.sosy_lab.cpachecker.cfa.ast.c.CAssignment;
 import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression.BinaryOperator;
-import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpressionCollectorVisitor;
 import org.sosy_lab.cpachecker.cfa.ast.c.CLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdgeType;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
-import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
 import org.sosy_lab.cpachecker.exceptions.CParserException;
 import org.sosy_lab.cpachecker.exceptions.JParserException;
 import org.sosy_lab.cpachecker.exceptions.ParserException;
-
-import com.google.common.base.Function;
-import com.google.common.base.Predicate;
-import com.google.common.base.Predicates;
-import com.google.common.collect.ImmutableCollection;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMultimap;
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.ImmutableSortedSet;
-import com.google.common.collect.Sets;
 
 /**
  * Class collecting and containing information about all loops in a CFA.
@@ -153,7 +149,9 @@ public final class LoopStructure {
 
       innerLoopEdges = Sets.intersection(incomingEdges, outgoingEdges).immutableCopy();
       incomingEdges.removeAll(innerLoopEdges);
+      incomingEdges.removeIf(e -> e.getEdgeType().equals(CFAEdgeType.FunctionReturnEdge));
       outgoingEdges.removeAll(innerLoopEdges);
+      outgoingEdges.removeIf(e -> e.getEdgeType().equals(CFAEdgeType.FunctionCallEdge));
 
       assert !incomingEdges.isEmpty() : "Unreachable loop?";
 
@@ -252,7 +250,7 @@ public final class LoopStructure {
     }
 
     /**
-     * Get the set of all incoming CFA edges,
+     * Get the set of all outgoing CFA edges,
      * i.e., edges which connect a loop node with a non-loop CFA node inside the same function.
      * Although called functions are not considered loop nodes,
      * this set does not contain any edges from inside the loop to called functions.
@@ -312,31 +310,13 @@ public final class LoopStructure {
    */
   public ImmutableSet<CFANode> getAllLoopHeads() {
     if (loopHeads == null) {
-      loopHeads = from(loops.values())
-          .transformAndConcat(new Function<Loop, Iterable<CFANode>>() {
-            @Override
-            public Iterable<CFANode> apply(Loop loop) {
-              return loop.getLoopHeads();
-            }
-          })
-          .toSet();
+      loopHeads = from(loops.values()).transformAndConcat(Loop::getLoopHeads).toSet();
     }
     return loopHeads;
   }
 
   public ImmutableSet<Loop> getLoopsForLoopHead(final CFANode loopHead) {
-    return from(loops.values())
-        .transform(new Function<Loop, Loop>() {
-          @Override
-          public Loop apply(Loop loop) {
-            if (loop.getLoopHeads().contains(loopHead)) {
-              return loop;
-            } else {
-              return null;
-            }
-          }})
-        .filter(Predicates.notNull())
-        .toSet();
+    return from(loops.values()).filter(loop -> loop.getLoopHeads().contains(loopHead)).toSet();
   }
 
   /**
@@ -352,17 +332,13 @@ public final class LoopStructure {
   }
 
   private ImmutableSet<String> collectLoopCondVars() {
-    ImmutableSet.Builder<String> result = ImmutableSet.builder();
-    for (Loop l : loops.values()) {
-      // Get all variables that are used in exit-conditions
-      for (CFAEdge e : l.getOutgoingEdges()) {
-        if (e instanceof CAssumeEdge) {
-          CExpression expr = ((CAssumeEdge) e).getExpression();
-          result.addAll(CIdExpressionCollectorVisitor.getVariablesOfExpression(expr));
-        }
-      }
-    }
-    return result.build();
+    // Get all variables that are used in exit-conditions
+    return from(loops.values())
+        .transform(Loop::getOutgoingEdges)
+        .filter(CAssumeEdge.class)
+        .transform(CAssumeEdge::getExpression)
+        .transformAndConcat(CFAUtils::getVariableNamesOfExpression)
+        .toSet();
   }
 
   /**
@@ -383,19 +359,9 @@ public final class LoopStructure {
     for (Loop l : loops.values()) {
      // Get all variables that are incremented or decrement by literal values
       for (CFAEdge e : l.getInnerLoopEdges()) {
-        if (e instanceof MultiEdge) {
-          for (CFAEdge singleEdge: ((MultiEdge)e).getEdges()) {
-            String var = obtainIncDecVariable(singleEdge);
-            if (var != null) {
-              result.add(var);
-            }
-          }
-
-        } else {
-          String var = obtainIncDecVariable(e);
-          if (var != null) {
-            result.add(var);
-          }
+        String var = obtainIncDecVariable(e);
+        if (var != null) {
+          result.add(var);
         }
       }
     }
@@ -509,7 +475,8 @@ public final class LoopStructure {
     }
     String loopFunction = pSingleLoopHead.getFunctionName();
     // A size of one means only the loop head is contained
-    if (loopNodes.isEmpty() || loopNodes.size() == 1 && !pSingleLoopHead.hasEdgeTo(pSingleLoopHead)) {
+    if (loopNodes.isEmpty()
+        || (loopNodes.size() == 1 && !pSingleLoopHead.hasEdgeTo(pSingleLoopHead))) {
       return new LoopStructure(ImmutableMultimap.<String, Loop>of());
     }
 
@@ -584,12 +551,7 @@ public final class LoopStructure {
     // We use the reverse post-order id of each node as the array index for that node,
     // because this id is unique, without gaps, and its minimum is 0.
     // It's important to not use the node number because it has large gaps.
-    final Function<CFANode, Integer> arrayIndexForNode = new Function<CFANode, Integer>() {
-        @Override
-        public Integer apply(CFANode n) {
-          return n.getReversePostorderId();
-        }
-      };
+    final Function<CFANode, Integer> arrayIndexForNode = CFANode::getReversePostorderId;
     // this is the size of the arrays
     int size = nodes.size();
 

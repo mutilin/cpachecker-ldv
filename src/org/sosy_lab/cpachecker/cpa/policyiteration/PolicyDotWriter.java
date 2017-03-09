@@ -1,12 +1,13 @@
 package org.sosy_lab.cpachecker.cpa.policyiteration;
 
+import org.sosy_lab.common.rationals.LinearExpression;
+import org.sosy_lab.common.rationals.Rational;
+import org.sosy_lab.cpachecker.util.Pair;
+import org.sosy_lab.cpachecker.util.templates.Template;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
-
-import org.sosy_lab.cpachecker.util.Pair;
-import org.sosy_lab.common.rationals.LinearExpression;
-import org.sosy_lab.common.rationals.Rational;
 
 /**
  * Converts a set of invariants to the pretty text representation.
@@ -21,12 +22,13 @@ public class PolicyDotWriter {
 
     // Pretty-printing is tricky.
     Map<LinearExpression<?>, Rational> lessThan = new HashMap<>();
+    Map<LinearExpression<?>, Rational> greaterThan = new HashMap<>();
     Map<LinearExpression<?>, Pair<Rational, Rational>> bounded
         = new HashMap<>();
     Map<LinearExpression<?>, Rational> equal = new HashMap<>();
 
     for (Map.Entry<Template, PolicyBound> e : data.entrySet()) {
-      toSort.put(e.getKey().linearExpression, e.getValue());
+      toSort.put(e.getKey().getLinearExpression(), e.getValue());
     }
     while (toSort.size() > 0) {
       LinearExpression<?> template, negTemplate;
@@ -38,15 +40,12 @@ public class PolicyDotWriter {
 
       toSort.remove(template);
 
+      // Rotate the inequality if necessary.
+      boolean negated = isNegated(template);
+
       if (toSort.containsKey(negTemplate)) {
         Rational lowerBound = toSort.get(negTemplate).getBound().negate();
         toSort.remove(negTemplate);
-
-        // Rotate the pair if necessary.
-        boolean negated = false;
-        if (template.toString().startsWith("-")) {
-          negated = true;
-        }
 
         if (lowerBound.equals(upperBound)) {
           if (negated) {
@@ -64,7 +63,11 @@ public class PolicyDotWriter {
           }
         }
       } else {
-        lessThan.put(template, upperBound);
+        if (negated) {
+          greaterThan.put(template.negate(), upperBound.negate());
+        } else {
+          lessThan.put(template, upperBound);
+        }
       }
     }
 
@@ -77,8 +80,7 @@ public class PolicyDotWriter {
     }
 
     // Print bounded.
-    for (Map.Entry<LinearExpression<?>, Pair<Rational, Rational>> entry
-        : bounded.entrySet()) {
+    for (Map.Entry<LinearExpression<?>, Pair<Rational, Rational>> entry : bounded.entrySet()) {
       b
           .append(entry.getValue().getFirst())
           .append("≤")
@@ -96,7 +98,17 @@ public class PolicyDotWriter {
           .append("\n");
     }
 
+    // Printing greater-than.
+    for (Map.Entry<LinearExpression<?>, Rational> entry : greaterThan.entrySet()) {
+      b.append(entry.getKey())
+          .append("≥")
+          .append(entry.getValue())
+          .append("\n");
+    }
     return b.toString();
+  }
 
+  private boolean isNegated(LinearExpression<?> pTemplate) {
+   return pTemplate.toString().trim().startsWith("-");
   }
 }

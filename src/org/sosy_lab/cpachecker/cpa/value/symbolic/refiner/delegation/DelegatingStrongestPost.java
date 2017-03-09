@@ -23,9 +23,6 @@
  */
 package org.sosy_lab.cpachecker.cpa.value.symbolic.refiner.delegation;
 
-import java.util.ArrayDeque;
-import java.util.Deque;
-
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.log.LogManager;
@@ -41,7 +38,9 @@ import org.sosy_lab.cpachecker.cpa.value.symbolic.refiner.ForgettingCompositeSta
 import org.sosy_lab.cpachecker.cpa.value.symbolic.refiner.SymbolicStrongestPostOperator;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 
-import com.google.common.base.Optional;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.Optional;
 
 /**
  * Strongest-post operator with the semantics of
@@ -74,7 +73,7 @@ public class DelegatingStrongestPost implements SymbolicStrongestPostOperator {
         explicitStrongestPost.getStrongestPost(pOrigin.getValueState(), pPrecision, pOperation);
 
     if (!successor.isPresent()) {
-      return Optional.absent();
+      return Optional.empty();
     } else {
       ValueAnalysisState next = successor.get();
       return Optional.of(new ForgettingCompositeState(next, INITIAL_CONSTRAINTS));
@@ -88,10 +87,13 @@ public class DelegatingStrongestPost implements SymbolicStrongestPostOperator {
       final Deque<ForgettingCompositeState> pCallstack
   ) {
     Deque<ValueAnalysisState> valueCallstack = transformToValueStack(pCallstack);
+    assert pCallstack.size() == valueCallstack.size();
 
+    pCallstack.push(pState);
     ValueAnalysisState result =
         explicitStrongestPost.handleFunctionCall(pState.getValueState(), pEdge, valueCallstack);
 
+    assert pCallstack.size() == valueCallstack.size();
     return new ForgettingCompositeState(result, INITIAL_CONSTRAINTS);
   }
 
@@ -114,9 +116,13 @@ public class DelegatingStrongestPost implements SymbolicStrongestPostOperator {
       final Deque<ForgettingCompositeState> pCallstack
   ) {
     Deque<ValueAnalysisState> valueCallstack = transformToValueStack(pCallstack);
+    assert pCallstack.size() == valueCallstack.size();
+
+    pCallstack.pop();
     ValueAnalysisState result =
         explicitStrongestPost.handleFunctionReturn(pNext.getValueState(), pEdge, valueCallstack);
 
+    assert pCallstack.size() == valueCallstack.size();
     return new ForgettingCompositeState(result, INITIAL_CONSTRAINTS);
   }
 

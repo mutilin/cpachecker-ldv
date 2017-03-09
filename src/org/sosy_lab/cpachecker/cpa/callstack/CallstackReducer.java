@@ -26,20 +26,16 @@ package org.sosy_lab.cpachecker.cpa.callstack;
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
+import org.sosy_lab.cpachecker.core.defaults.GenericReducer;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
-import org.sosy_lab.cpachecker.core.interfaces.Reducer;
 
 
-public class CallstackReducer implements Reducer {
+class CallstackReducer extends GenericReducer<CallstackState, Precision> {
 
   @Override
-  public AbstractState getVariableReducedState(
-      AbstractState pExpandedState, Block pContext, Block outerContext, CFANode callNode) {
-
-    CallstackState element = (CallstackState) pExpandedState;
-
-    return copyCallstackUpToCallNode(element, callNode);
+  protected CallstackState getVariableReducedState0(
+      CallstackState pExpandedState, Block pContext, CFANode callNode) {
+    return copyCallstackUpToCallNode(pExpandedState, callNode);
     //    return new CallstackState(null, state.getCurrentFunction(), location);
   }
 
@@ -56,17 +52,12 @@ public class CallstackReducer implements Reducer {
   }
 
   @Override
-  public AbstractState getVariableExpandedState(
-      AbstractState pRootState, Block pReducedContext, Block outerSubtree,
-      AbstractState pReducedState) {
+  protected CallstackState getVariableExpandedState0(
+      CallstackState pRootState, Block pReducedContext, CallstackState pReducedState) {
+    // the stackframe on top of rootState and the stackframe on bottom of reducedState
+    // are the same function, now glue both stacks together at this state
 
-    CallstackState rootState = (CallstackState) pRootState;
-    CallstackState reducedState = (CallstackState) pReducedState;
-
-    // the stackframe on top of rootState and the stackframe on bottom of reducedState are the same function
-    // now glue both stacks together at this state
-
-    return copyCallstackExceptLast(rootState, reducedState);
+    return copyCallstackExceptLast(pRootState, pReducedState);
   }
 
   private CallstackState copyCallstackExceptLast(CallstackState target, CallstackState source) {
@@ -85,82 +76,28 @@ public class CallstackReducer implements Reducer {
     }
   }
 
-  private static boolean isEqual(CallstackState reducedTargetElement,
-      CallstackState candidateElement) {
-    if (reducedTargetElement.getDepth() != candidateElement.getDepth()) { return false; }
-
-    while (reducedTargetElement != null) {
-      if (!reducedTargetElement.getCallNode().equals(candidateElement.getCallNode())
-          || !reducedTargetElement.getCurrentFunction().equals(candidateElement.getCurrentFunction())) { return false; }
-      reducedTargetElement = reducedTargetElement.getPreviousState();
-      candidateElement = candidateElement.getPreviousState();
-    }
-
-    return true;
+  @Override
+  protected Object getHashCodeForState0(CallstackState pElementKey, Precision pPrecisionKey) {
+    return new CallstackStateEqualsWrapper(pElementKey);
   }
 
   @Override
-  public Object getHashCodeForState(AbstractState pElementKey, Precision pPrecisionKey) {
-    return getHashCodeForState(pElementKey);
-  }
-
-  @Override
-  public Object getHashCodeForState(AbstractState pElementKey) {
-    return new CallstackStateWithEquals((CallstackState) pElementKey);
-  }
-
-  private static class CallstackStateWithEquals {
-
-    private final CallstackState state;
-
-    public CallstackStateWithEquals(CallstackState pElement) {
-      state = pElement;
-    }
-
-    @Override
-    public boolean equals(Object other) {
-      if (!(other instanceof CallstackStateWithEquals)) { return false; }
-
-      return isEqual(state, ((CallstackStateWithEquals) other).state);
-    }
-
-    @Override
-    public int hashCode() {
-      return (state.getDepth() * 17 + state.getCurrentFunction().hashCode()) * 31 + state.getCallNode().hashCode();
-    }
-  }
-
-  @Override
-  public Precision getVariableReducedPrecision(Precision pPrecision,
-      Block pContext) {
+  protected Precision getVariableReducedPrecision0(Precision pPrecision, Block pContext) {
     return pPrecision;
   }
 
   @Override
-  public Precision getVariableExpandedPrecision(Precision rootPrecision, Block rootContext, Precision reducedPrecision) {
+  protected Precision getVariableExpandedPrecision0(
+      Precision rootPrecision, Block rootContext, Precision reducedPrecision) {
     return reducedPrecision;
   }
 
   @Override
-  public int measurePrecisionDifference(Precision pPrecision, Precision pOtherPrecision) {
-    return 0;
-  }
-
-  @Override
-  public AbstractState getVariableReducedStateForProofChecking(AbstractState pExpandedState, Block pContext,
-      CFANode pCallNode) {
-    return getVariableReducedState(pExpandedState, pContext, null, pCallNode);
-  }
-
-  @Override
-  public AbstractState getVariableExpandedStateForProofChecking(AbstractState pRootState, Block pReducedContext,
-      AbstractState pReducedState) {
-    return getVariableExpandedState(pRootState, pReducedContext, null, pReducedState);
-  }
-
-  @Override
-  public AbstractState rebuildStateAfterFunctionCall(AbstractState rootState, AbstractState entryState,
-      AbstractState expandedState, FunctionExitNode exitLocation) {
+  protected CallstackState rebuildStateAfterFunctionCall0(
+      CallstackState rootState,
+      CallstackState entryState,
+      CallstackState expandedState,
+      FunctionExitNode exitLocation) {
     return expandedState;
   }
 }

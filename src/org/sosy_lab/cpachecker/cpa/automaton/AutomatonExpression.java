@@ -24,7 +24,6 @@
 package org.sosy_lab.cpachecker.cpa.automaton;
 
 import java.util.logging.Level;
-
 import org.sosy_lab.cpachecker.core.interfaces.AbstractQueryableState;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
@@ -51,6 +50,8 @@ interface AutomatonExpression {
       str = str.replaceAll("\\$[Ll]ocation", pArgs.getCfaEdge().getFileLocation().toString());
       // replace $file
       str = str.replaceAll("\\$[Ff]ile", pArgs.getCfaEdge().getFileLocation().getFileName());
+      // replace $states
+      str = str.replaceAll("\\$[Ss]tates", pArgs.getAbstractStates().toString());
       // replace Transition Variables and AutomatonVariables
       str = pArgs.replaceVariables(str);
       if (str == null) {
@@ -152,6 +153,15 @@ interface AutomatonExpression {
      */
     resultType getValue() {
       return value;
+    }
+
+    @Override
+    public String toString() {
+      if (canNotEvaluate()) {
+        return String.format("not evaluated (%s)", failureMessage);
+      } else {
+        return getValue().toString();
+      }
     }
   }
 }

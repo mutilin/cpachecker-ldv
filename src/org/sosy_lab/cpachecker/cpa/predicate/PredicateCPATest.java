@@ -23,32 +23,36 @@
  */
 package org.sosy_lab.cpachecker.cpa.predicate;
 
-import static com.google.common.collect.FluentIterable.from;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.TruthJUnit.assume;
 
-import java.net.URLClassLoader;
-import java.util.regex.Pattern;
-
-import org.junit.Test;
-import org.sosy_lab.common.ShutdownNotifier;
-import org.sosy_lab.common.configuration.Configuration;
-import org.sosy_lab.common.log.LogManager;
-import org.sosy_lab.common.log.TestLogManager;
-import org.sosy_lab.cpachecker.cfa.CFA;
-import org.sosy_lab.cpachecker.core.interfaces.CPAFactory;
-import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
-import org.sosy_lab.cpachecker.core.reachedset.ReachedSetFactory;
-import org.sosy_lab.cpachecker.util.test.LoggingClassLoader;
-import org.sosy_lab.cpachecker.util.test.TestDataTools;
-
-import com.google.common.base.Function;
 import com.google.common.base.Predicates;
 import com.google.common.collect.FluentIterable;
 import com.google.common.reflect.Invokable;
 
+import org.junit.Test;
+import org.sosy_lab.common.Classes;
+import org.sosy_lab.common.ShutdownNotifier;
+import org.sosy_lab.common.configuration.Configuration;
+import org.sosy_lab.common.log.LogManager;
+import org.sosy_lab.cpachecker.cfa.CFA;
+import org.sosy_lab.cpachecker.core.Specification;
+import org.sosy_lab.cpachecker.core.interfaces.CPAFactory;
+import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
+import org.sosy_lab.cpachecker.core.reachedset.AggregatedReachedSets;
+import org.sosy_lab.cpachecker.core.reachedset.ReachedSetFactory;
+import org.sosy_lab.cpachecker.util.test.TestDataTools;
+
+import java.lang.reflect.Field;
+import java.net.URLClassLoader;
+import java.util.Vector;
+import java.util.regex.Pattern;
+
 public class PredicateCPATest {
 
+  private static final Pattern PREDICATECPA_CLASSES =
+      Pattern.compile(
+          "org\\.sosy_lab\\.cpachecker\\..*(predicate|bdd|BDD|FormulaReportingState|InvariantSupplier).*");
   private static final Pattern BDD_CLASS_PATTERN = Pattern.compile("(BDD|bdd)");
 
   /**
@@ -82,12 +86,14 @@ public class PredicateCPATest {
   private FluentIterable<String> loadPredicateCPA(Configuration config) throws Exception {
     ClassLoader myClassLoader = PredicateCPATest.class.getClassLoader();
     assume().that(myClassLoader).isInstanceOf(URLClassLoader.class);
-    LogManager logger = TestLogManager.getInstance();
+    LogManager logger = LogManager.createTestLogManager();
 
-    try (LoggingClassLoader cl = new LoggingClassLoader(
-          Pattern.compile("(org\\.sosy_lab\\.cpachecker\\..*(util|predicate|bdd|BDD).*)|(org\\.sosy_lab\\.solver\\..*)"),
-          ((URLClassLoader)myClassLoader).getURLs(), myClassLoader
-        )) {
+    try (URLClassLoader cl =
+        Classes.makeExtendedURLClassLoader()
+            .setParent(myClassLoader)
+            .setUrls(((URLClassLoader) myClassLoader).getURLs())
+            .setDirectLoadClasses(PREDICATECPA_CLASSES)
+            .build()) {
       Class<?> cpaClass = cl.loadClass(PredicateCPATest.class.getPackage().getName() + ".PredicateCPA");
       Invokable<?, CPAFactory> factoryMethod = Invokable.from(cpaClass.getDeclaredMethod("factory")).returning(CPAFactory.class);
       CPAFactory factory = factoryMethod.invoke(null);
@@ -95,19 +101,21 @@ public class PredicateCPATest {
       factory.setConfiguration(config);
       factory.setLogger(logger);
       factory.setShutdownNotifier(ShutdownNotifier.createDummy());
-      factory.set(TestDataTools.makeCFA("void main() { }", config), CFA.class);
+      factory.set(new AggregatedReachedSets(), AggregatedReachedSets.class);
+      factory.set(TestDataTools.makeCFA(config, "void main() { }"), CFA.class);
       factory.set(new ReachedSetFactory(config), ReachedSetFactory.class);
+      factory.set(Specification.alwaysSatisfied(), Specification.class);
 
       ConfigurableProgramAnalysis cpa = factory.createInstance();
       if (cpa instanceof AutoCloseable) {
         ((AutoCloseable)cpa).close();
       }
-      return from(cl.getLoadedClasses()).transform(new Function<Class<?>, String>() {
-            @Override
-            public String apply(Class<?> pInput) {
-              return pInput.getName();
-            }
-          });
+
+      Field classesField = ClassLoader.class.getDeclaredField("classes");
+      classesField.setAccessible(true);
+      @SuppressWarnings("unchecked")
+      Vector<Class<?>> classes = (Vector<Class<?>>) classesField.get(cl);
+      return FluentIterable.from(classes).transform(Class::getName);
     }
   }
 }

@@ -33,10 +33,13 @@ import org.sosy_lab.cpachecker.cpa.value.type.NumericValue;
 import org.sosy_lab.cpachecker.cpa.value.type.Value;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.ci.redundancyremover.RedundantRequirementsRemover.RedundantRequirementsRemoverImplementation;
+import org.sosy_lab.cpachecker.util.states.MemoryLocation;
 
 
 public class RedundantRequirementsValueAnalysisStateImplementation extends
     RedundantRequirementsRemoverImplementation<ValueAnalysisState, Value> {
+
+  private static final long serialVersionUID = 2875464105471673418L;
 
   @Override
   public int compare(Value pO1, Value pO2) {
@@ -86,8 +89,9 @@ public class RedundantRequirementsValueAnalysisStateImplementation extends
       constant = Integer.parseInt(pVarOrConst);
       return new NumericValue(constant);
     } catch (NumberFormatException e) {
-      if (pAbstractState.contains(pVarOrConst)) {
-        return pAbstractState.getValueFor(pVarOrConst);
+      MemoryLocation memLoc = MemoryLocation.valueOf(pVarOrConst);
+      if (pAbstractState.contains(memLoc)) {
+        return pAbstractState.getValueFor(memLoc);
       }
     }
 

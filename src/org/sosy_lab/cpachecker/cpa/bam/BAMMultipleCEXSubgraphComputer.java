@@ -29,31 +29,31 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.NavigableSet;
 import java.util.Set;
-import java.util.Stack;
-
+import java.util.TreeSet;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 
 
-public class BAMMultipleCEXSubgraphComputer extends BAMCEXSubgraphComputer{
+public class BAMMultipleCEXSubgraphComputer extends BAMSubgraphComputer{
 
   private final Map<AbstractState, AbstractState> reducedToExpanded;
   private Set<LinkedList<Integer>> remainingStates = new HashSet<>();
 
-  BAMMultipleCEXSubgraphComputer(BAMCPA bamCPA, Map<ARGState, ARGState> pPathStateToReachedState,
+  BAMMultipleCEXSubgraphComputer(BAMCPA bamCPA,
       Map<AbstractState, AbstractState> pReduced) {
-    super(bamCPA, pPathStateToReachedState);
+    super(bamCPA);
     this.reducedToExpanded = pReduced;
   }
 
 
-  public ARGState findPath(BackwardARGState newTreeTarget, Set<List<Integer>> pProcessedStates) {
+  public ARGState findPath(BackwardARGState newTreeTarget, Set<List<Integer>> pProcessedStates) throws InterruptedException, MissingBlockException {
 
     Map<ARGState, BackwardARGState> elementsMap = new HashMap<>();
-    Stack<ARGState> openElements = new Stack<>();
+    final NavigableSet<ARGState> openElements = new TreeSet<>(); // for sorted IDs in ARGstates
     ARGState root = null;
 
     //Deep clone to be patient about modification
@@ -62,7 +62,7 @@ public class BAMMultipleCEXSubgraphComputer extends BAMCEXSubgraphComputer{
       remainingStates.add(new LinkedList<>(newList));
     }
 
-    ARGState target = pathStateToReachedState.get(newTreeTarget);
+    ARGState target = newTreeTarget.getARGState();
     elementsMap.put(target, newTreeTarget);
     ARGState currentState = target;
 
@@ -72,14 +72,24 @@ public class BAMMultipleCEXSubgraphComputer extends BAMCEXSubgraphComputer{
       assert (pState.isAbstractionState());
     }
 
-    openElements.push(target);
-    while (!openElements.empty()) {
-      ARGState currentElement = openElements.pop();
-      BackwardARGState newCurrentElement = elementsMap.get(currentElement);
+    openElements.add(target);
+    while (!openElements.isEmpty()) {
+      currentState = openElements.pollLast();
+      BackwardARGState newCurrentElement = new BackwardARGState(currentState);
+      elementsMap.put(currentState, newCurrentElement);
 
-      if (currentElement.getParents().isEmpty()) {
+      final Set<BackwardARGState> childrenInSubgraph = new TreeSet<>();
+      for (final ARGState child : currentState.getChildren()) {
+        // if a child is not in the subgraph, it does not lead to the target, so ignore it.
+        // Because of the ordering, all important children should be finished already.
+        if (elementsMap.containsKey(child)) {
+          childrenInSubgraph.add(elementsMap.get(child));
+        }
+      }
+
+      if (currentState.getParents().isEmpty()) {
         //Find correct expanded state
-        ARGState expandedState = (ARGState) reducedToExpanded.get(currentElement);
+        ARGState expandedState = (ARGState) reducedToExpanded.get(currentState);
 
         if (expandedState == null) {
           //The first state
@@ -87,57 +97,45 @@ public class BAMMultipleCEXSubgraphComputer extends BAMCEXSubgraphComputer{
           break;
         }
         //Try to find path.
-        BackwardARGState newExpandedState = new BackwardARGState(expandedState);
-        pathStateToReachedState.put(newExpandedState, expandedState);
-        elementsMap.put(expandedState, newExpandedState);
-        for (ARGState child : newCurrentElement.getChildren()) {
-          child.addParent(newExpandedState);
+        //Exchange the reduced state by the expanded one
+        currentState = expandedState;
+        newCurrentElement = new BackwardARGState(currentState);
+        elementsMap.put(currentState, newCurrentElement);
+      }
+
+      // add parent for further processing
+      openElements.addAll(currentState.getParents());
+
+      if (data.hasInitialState(currentState)) {
+
+        // If child-state is an expanded state, the child is at the exit-location of a block.
+        // In this case, we enter the block (backwards).
+        // We must use a cached reachedSet to process further, because the block has its own reachedSet.
+        // The returned 'innerTreeRoot' is the rootNode of the subtree, created from the cached reachedSet.
+        // The current subtree (successors of child) is appended beyond the innerTree, to get a complete subgraph.
+        computeCounterexampleSubgraphForBlock(newCurrentElement, childrenInSubgraph);
+        assert childrenInSubgraph.size() == 1;
+        BackwardARGState tmpState = childrenInSubgraph.iterator().next(), nextState;
+        while (tmpState != newCurrentElement) {
+          Collection<ARGState> parents = tmpState.getParents();
+          assert parents.size() == 1;
+          nextState = (BackwardARGState) parents.iterator().next();
+          if (checkRepeatitionOfState(tmpState.getARGState())) {
+            return DUMMY_STATE_FOR_REPEATED_STATE;
+          }
+          tmpState = nextState;
         }
-        newCurrentElement.removeFromARG();
-        openElements.push(expandedState);
+
       } else {
-        for (ARGState parent : currentElement.getParents()) {
-          //create node for parent in the new subtree
-          BackwardARGState newParent = new BackwardARGState(parent);
-          elementsMap.put(parent, newParent);
-          pathStateToReachedState.put(newParent, parent);
-          //and remember to explore the parent later
-          openElements.push(parent);
-          if (data.expandedStateToReducedState.containsKey(currentElement)) {
-            //this is a summarized call and thus an direct edge could not be found
-            //we have the transfer function to handle this case, as our reachSet is wrong
-            //(we have to use the cached ones)
-            ARGState targetARGState = (ARGState) data.expandedStateToReducedState.get(currentElement);
-            ARGState innerTree =
-                computeCounterexampleSubgraphForBlock(parent, parent.getParents().iterator().next(), targetARGState, newCurrentElement);
-            if (innerTree == null) {
-              return null;
-            }
-            ARGState tmpState = newCurrentElement, nextState;
-            while (tmpState != innerTree) {
-              Collection<ARGState> parents = tmpState.getParents();
-              assert parents.size() == 1;
-              nextState = parents.iterator().next();
-              if (checkRepeatitionOfState(pathStateToReachedState.get(tmpState))) {
-                return DUMMY_STATE_FOR_REPEATED_STATE;
-              }
-              tmpState = nextState;
-            }
-            for (ARGState child : innerTree.getChildren()) {
-              child.addParent(newParent);
-            }
-            innerTree.removeFromARG();
-          } else {
-            //normal edge
-            //create an edge from parent to current
-            newCurrentElement.addParent(newParent);
-            if (checkRepeatitionOfState(currentElement)) {
-              return DUMMY_STATE_FOR_REPEATED_STATE;
-            }
+        // children are a normal successors -> create an connection from parent to children
+        for (final BackwardARGState newChild : childrenInSubgraph) {
+          newChild.addParent(newCurrentElement);
+          if (checkRepeatitionOfState(newChild)) {
+            return DUMMY_STATE_FOR_REPEATED_STATE;
           }
         }
       }
-      if (currentElement.isDestroyed()) {
+      if (currentState.isDestroyed()) {
         return null;
       }
     }

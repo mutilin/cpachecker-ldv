@@ -25,17 +25,16 @@ package org.sosy_lab.cpachecker.cpa.invariants;
 
 import java.util.Collection;
 import java.util.concurrent.CopyOnWriteArrayList;
-
 import org.sosy_lab.cpachecker.cfa.types.MachineModel;
 import org.sosy_lab.cpachecker.cfa.types.Type;
 
-
+@SuppressWarnings("ImmutableEnumChecker") // enum used as stateful factory
 public enum CompoundBitVectorIntervalManagerFactory implements CompoundIntervalManagerFactory {
 
   ALLOW_SIGNED_WRAP_AROUND {
 
     @Override
-    boolean isSignedWrapAroundAllowed() {
+    public boolean isSignedWrapAroundAllowed() {
       return true;
     }
   },
@@ -43,7 +42,7 @@ public enum CompoundBitVectorIntervalManagerFactory implements CompoundIntervalM
   FORBID_SIGNED_WRAP_AROUND {
 
     @Override
-    boolean isSignedWrapAroundAllowed() {
+    public boolean isSignedWrapAroundAllowed() {
       return false;
     }
   };
@@ -66,11 +65,22 @@ public enum CompoundBitVectorIntervalManagerFactory implements CompoundIntervalM
   }
 
   @Override
-  public CompoundIntervalManager createCompoundIntervalManager(BitVectorInfo pBitVectorInfo) {
-    return new CompoundBitVectorIntervalManager(pBitVectorInfo, isSignedWrapAroundAllowed(), compositeHandler);
+  public CompoundIntervalManager createCompoundIntervalManager(TypeInfo pInfo) {
+    return createCompoundIntervalManager(pInfo, true);
   }
 
-  abstract boolean isSignedWrapAroundAllowed();
+  public CompoundIntervalManager createCompoundIntervalManager(TypeInfo pInfo, boolean pWithOverflowHandlers) {
+    if (pInfo instanceof BitVectorInfo) {
+      return new CompoundBitVectorIntervalManager(
+          (BitVectorInfo) pInfo, isSignedWrapAroundAllowed(), pWithOverflowHandlers ? compositeHandler : () -> {});
+    }
+    if (pInfo instanceof FloatingPointTypeInfo) {
+      return new CompoundFloatingPointIntervalManager((FloatingPointTypeInfo) pInfo);
+    }
+    throw new AssertionError("Unsupported type: " + pInfo);
+  }
+
+  public abstract boolean isSignedWrapAroundAllowed();
 
   public void addOverflowEventHandler(OverflowEventHandler pOverflowEventHandler) {
     overflowEventHandlers.add(pOverflowEventHandler);

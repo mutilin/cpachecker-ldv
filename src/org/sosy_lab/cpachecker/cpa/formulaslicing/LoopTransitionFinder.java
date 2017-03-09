@@ -1,34 +1,5 @@
 package org.sosy_lab.cpachecker.cpa.formulaslicing;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.logging.Level;
-
-import org.sosy_lab.common.ShutdownNotifier;
-import org.sosy_lab.common.configuration.Configuration;
-import org.sosy_lab.common.configuration.InvalidConfigurationException;
-import org.sosy_lab.common.configuration.Option;
-import org.sosy_lab.common.configuration.Options;
-import org.sosy_lab.common.log.LogManager;
-import org.sosy_lab.cpachecker.cfa.CFA;
-import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
-import org.sosy_lab.cpachecker.cfa.model.CFANode;
-import org.sosy_lab.cpachecker.exceptions.CPATransferException;
-import org.sosy_lab.cpachecker.util.CFATraversal;
-import org.sosy_lab.cpachecker.util.CFATraversal.EdgeCollectingCFAVisitor;
-import org.sosy_lab.cpachecker.util.LoopStructure;
-import org.sosy_lab.cpachecker.util.LoopStructure.Loop;
-import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormula;
-import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormulaManager;
-import org.sosy_lab.cpachecker.util.predicates.pathformula.SSAMap;
-import org.sosy_lab.cpachecker.util.predicates.pathformula.pointeraliasing.PointerTargetSet;
-import org.sosy_lab.cpachecker.util.predicates.smt.FormulaManagerView;
-
 import com.google.common.base.Preconditions;
 import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.ImmutableList;
@@ -37,43 +8,111 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
 import com.google.common.collect.Table;
 import com.google.common.collect.Table.Cell;
+import java.io.PrintStream;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
+import org.sosy_lab.common.ShutdownManager;
+import org.sosy_lab.common.ShutdownNotifier;
+import org.sosy_lab.common.configuration.Configuration;
+import org.sosy_lab.common.configuration.InvalidConfigurationException;
+import org.sosy_lab.common.configuration.Option;
+import org.sosy_lab.common.configuration.Options;
+import org.sosy_lab.common.configuration.TimeSpanOption;
+import org.sosy_lab.common.log.LogManager;
+import org.sosy_lab.common.time.TimeSpan;
+import org.sosy_lab.common.time.Timer;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.FunctionCallEdge;
+import org.sosy_lab.cpachecker.cfa.model.FunctionReturnEdge;
+import org.sosy_lab.cpachecker.cfa.model.FunctionSummaryEdge;
+import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
+import org.sosy_lab.cpachecker.core.interfaces.Statistics;
+import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
+import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
+import org.sosy_lab.cpachecker.exceptions.CPATransferException;
+import org.sosy_lab.cpachecker.util.CFATraversal;
+import org.sosy_lab.cpachecker.util.CFATraversal.CFAVisitor;
+import org.sosy_lab.cpachecker.util.CFATraversal.TraversalProcess;
+import org.sosy_lab.cpachecker.util.LoopStructure;
+import org.sosy_lab.cpachecker.util.LoopStructure.Loop;
+import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormula;
+import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormulaManager;
+import org.sosy_lab.cpachecker.util.predicates.pathformula.SSAMap;
+import org.sosy_lab.cpachecker.util.predicates.pathformula.pointeraliasing.PointerTargetSet;
+import org.sosy_lab.cpachecker.util.predicates.smt.FormulaManagerView;
+import org.sosy_lab.cpachecker.util.resources.ResourceLimitChecker;
+import org.sosy_lab.cpachecker.util.resources.WalltimeLimit;
 
 /**
  * Return a path-formula describing all possible transitions inside the loop.
  */
 @Options(prefix="cpa.slicing")
-public class LoopTransitionFinder {
+public class LoopTransitionFinder implements StatisticsProvider {
+
+  /**
+   * Statistics for formula slicing.
+   */
+  private static class Stats implements Statistics {
+    final Timer LBEencodingTimer = new Timer();
+
+    @Override
+    public void printStatistics(PrintStream out, Result result, UnmodifiableReachedSet reached) {
+      out.printf("Time spent in LBE Encoding: %s (Max: %s), (Avg: %s)%n",
+          LBEencodingTimer,
+          LBEencodingTimer.getMaxTime().formatAs(TimeUnit.SECONDS),
+          LBEencodingTimer.getAvgTime().formatAs(TimeUnit.SECONDS));
+    }
+
+    @Override
+    public String getName() {
+      return "LBE Encoding of Loops";
+    }
+  }
 
   @Option(secure=true, description="Apply AND- LBE transformation to loop "
       + "transition relation.")
   private boolean applyLBETransformation = true;
 
-  @Option(secure=true, description="Instead of considering the entire SCC, "
-      + "ignore the function nested in the loop. UNSOUND!")
-  private boolean ignoreFunctionCallsInLoop = false;
+  @Option(
+      secure = true,
+      description =
+          "Time for loop generation before aborting.\n"
+              + "(Use seconds or specify a unit; 0 for infinite)"
+  )
+  @TimeSpanOption(codeUnit = TimeUnit.NANOSECONDS, defaultUserUnit = TimeUnit.SECONDS, min = 0)
+   private TimeSpan timeForLoopGeneration = TimeSpan.ofSeconds(0);
 
   private final PathFormulaManager pfmgr;
   private final FormulaManagerView fmgr;
   private final LogManager logger;
   private final LoopStructure loopStructure;
-  private final FormulaSlicingStatistics statistics;
+  private final Stats statistics;
   private final ShutdownNotifier shutdownNotifier;
 
   private final Map<CFANode, Table<CFANode, CFANode, EdgeWrapper>> LBEcache;
 
   public LoopTransitionFinder(
       Configuration config,
-      CFA pCfa, PathFormulaManager pPfmgr,
+      LoopStructure pLoopStructure, PathFormulaManager pPfmgr,
       FormulaManagerView pFmgr, LogManager pLogger,
-      FormulaSlicingStatistics pStatistics, ShutdownNotifier pShutdownNotifier)
+      ShutdownNotifier pShutdownNotifier)
       throws InvalidConfigurationException {
     shutdownNotifier = pShutdownNotifier;
     config.inject(this);
-    statistics = pStatistics;
+    statistics = new Stats();
     pfmgr = pPfmgr;
     fmgr = pFmgr;
     logger = pLogger;
-    loopStructure = pCfa.getLoopStructure().get();
+    loopStructure = pLoopStructure;
 
     LBEcache = new HashMap<>();
   }
@@ -87,16 +126,29 @@ public class LoopTransitionFinder {
     Preconditions.checkState(loopStructure.getAllLoopHeads()
         .contains(loopHead));
 
+    ShutdownManager loopGenerationShutdown = ShutdownManager.createWithParent(shutdownNotifier);
+    ResourceLimitChecker limits = null;
+    if (!timeForLoopGeneration.isEmpty()) {
+      WalltimeLimit l = WalltimeLimit.fromNowOn(timeForLoopGeneration);
+      limits =
+          new ResourceLimitChecker(
+              loopGenerationShutdown, Collections.singletonList(l));
+      limits.start();
+    }
 
     PathFormula out;
     statistics.LBEencodingTimer.start();
     try {
-      out = LBE(loopHead, start, pts);
+      out = performLargeBlockEncoding(loopHead, start, pts);
     } finally {
       statistics.LBEencodingTimer.stop();
     }
 
-    return out.updateFormula(fmgr.simplify(out.getFormula()));
+    if (!timeForLoopGeneration.isEmpty()) {
+      limits.cancel();
+    }
+
+    return out;
   }
 
 
@@ -105,27 +157,112 @@ public class LoopTransitionFinder {
    * or an empty set, if {@code node} is not a loop-head.
    */
   private List<CFAEdge> getEdgesInSCC(CFANode node) {
-    if (ignoreFunctionCallsInLoop) {
-      // Returns *local* loop.
-      Set<CFAEdge> out = new HashSet<>();
-      for (Loop loop :
-          loopStructure.getLoopsForLoopHead(node)) {
-        out.addAll(loop.getInnerLoopEdges());
+    SummarizingVisitor forwardVisitor = new SummarizingVisitorForward();
+    SummarizingVisitor backwardsVisitor = new SummarizingVisitorBackwards();
+
+    CFATraversal.dfs().traverse(node, forwardVisitor);
+    CFATraversal.dfs().backwards().traverse(node, backwardsVisitor);
+
+    Set<CFAEdge> forwardsReachable = ImmutableSet.copyOf(forwardVisitor.getVisitedEdges());
+    Set<CFAEdge> backwardsReachable = ImmutableSet.copyOf(backwardsVisitor.getVisitedEdges());
+
+    Set<CFAEdge> intersection = Sets.intersection(forwardsReachable, backwardsReachable);
+    return ImmutableList.copyOf(intersection);
+  }
+
+
+  /**
+   * Traverse the CFA, *including* function calls, yet on return edge, return only to functions
+   * we have already been to.
+   *
+   * <p>Otherwise, inter-procedural traversal quickly traverses entire CFA, even unreachable
+   * parts (e.g. consider a {@code log()} function called from everywhere).
+   */
+  private abstract static class SummarizingVisitor implements CFAVisitor {
+    final Set<CFAEdge> visitedEdges = new HashSet<>();
+    @Override
+    public TraversalProcess visitEdge(CFAEdge edge) {
+      if (visitedEdges.contains(edge)) {
+        return TraversalProcess.SKIP;
       }
-      return ImmutableList.copyOf(out);
-    } else {
-      EdgeCollectingCFAVisitor v1 = new EdgeCollectingCFAVisitor();
-      EdgeCollectingCFAVisitor v2 = new EdgeCollectingCFAVisitor();
+      if (edge instanceof FunctionCallEdge) {
+        return onCallEdge(edge);
 
-      // Note that we CAN NOT ignore function calls, as the loop
-      // may contain functions inside which do affect the global state.
-      CFATraversal.dfs().ignoreSummaryEdges().traverse(node, v1);
-      CFATraversal.dfs().ignoreSummaryEdges().backwards().traverse(node, v2);
+      } else if (edge instanceof FunctionReturnEdge) {
+        return onReturnEdge(edge);
+      } else if (edge instanceof FunctionSummaryEdge) {
+        return TraversalProcess.SKIP;
+      } else {
+        visitedEdges.add(edge);
+        return TraversalProcess.CONTINUE;
+      }
+    }
 
-      Set<CFAEdge> s1 = ImmutableSet.copyOf(v1.getVisitedEdges());
-      Set<CFAEdge> s2 = ImmutableSet.copyOf(v2.getVisitedEdges());
-      Set<CFAEdge> intersection = Sets.intersection(s1, s2);
-      return ImmutableList.copyOf(intersection);
+    abstract TraversalProcess onCallEdge(CFAEdge callEdge);
+
+    abstract TraversalProcess onReturnEdge(CFAEdge returnEdge);
+
+    @Override
+    public TraversalProcess visitNode(CFANode node) {
+      return TraversalProcess.CONTINUE;
+    }
+
+    private ImmutableSet<CFAEdge> getVisitedEdges() {
+      return ImmutableSet.copyOf(visitedEdges);
+    }
+  }
+
+  /**
+   * Jump only to join points which are reachable.
+   */
+  private static class SummarizingVisitorForward extends SummarizingVisitor {
+    private final Set<CFANode> expectedJoinNodes = new HashSet<>();
+
+    @Override
+    TraversalProcess onCallEdge(CFAEdge callEdge) {
+      visitedEdges.add(callEdge);
+      expectedJoinNodes.add(callEdge.getPredecessor().getLeavingSummaryEdge().getSuccessor());
+      return TraversalProcess.CONTINUE;
+    }
+
+    @Override
+    TraversalProcess onReturnEdge(CFAEdge returnEdge) {
+      if (expectedJoinNodes.contains(returnEdge.getSuccessor())) {
+        visitedEdges.add(returnEdge);
+        return TraversalProcess.CONTINUE;
+      } else {
+
+        // Returning to a function we can never get to.
+        return TraversalProcess.SKIP;
+      }
+    }
+  }
+
+  /**
+   * Jump only to callsites which are reachable.
+   */
+  private static final class SummarizingVisitorBackwards extends SummarizingVisitor {
+
+    private final Set<CFANode> expectedCallsites = new HashSet<>();
+
+    @Override
+    TraversalProcess onReturnEdge(CFAEdge edge) {
+      CFANode callsite = edge.getSuccessor().getEnteringSummaryEdge().getPredecessor();
+      expectedCallsites.add(callsite);
+      visitedEdges.add(edge);
+      return TraversalProcess.CONTINUE;
+    }
+
+    @Override
+    TraversalProcess onCallEdge(CFAEdge edge) {
+      if (expectedCallsites.contains(edge.getPredecessor())) {
+        visitedEdges.add(edge);
+        return TraversalProcess.CONTINUE;
+      } else {
+
+        // Returning to a function we can never get to.
+        return TraversalProcess.SKIP;
+      }
     }
   }
 
@@ -141,7 +278,7 @@ public class LoopTransitionFinder {
    * Runs in (at most) quadratic time.
    *
    */
-  private PathFormula LBE(
+  private PathFormula performLargeBlockEncoding(
       CFANode loopHead,
       SSAMap start,
       PointerTargetSet pts)
@@ -166,7 +303,7 @@ public class LoopTransitionFinder {
       do {
         shutdownNotifier.shutdownIfNecessary();
         changed = false;
-        if (applyLBETransformation && applyLBETransformation(out)) {
+        if (applyLBETransformation && applyLargeBlockEncodingTransformationPass(out)) {
           changed = true;
         }
       } while (changed);
@@ -175,7 +312,7 @@ public class LoopTransitionFinder {
     }
 
     PathFormula empty = new PathFormula(
-        fmgr.getBooleanFormulaManager().makeBoolean(true),
+        fmgr.getBooleanFormulaManager().makeTrue(),
         start, pts, 0);
     EdgeWrapper outEdge;
     if (out.size() == 1) {
@@ -190,7 +327,7 @@ public class LoopTransitionFinder {
    * Apply and- and or- LBE transformation,
    * return whether the passed table was changed.
    */
-  private boolean applyLBETransformation(
+  private boolean applyLargeBlockEncodingTransformationPass(
       Table<CFANode, CFANode, EdgeWrapper> out) {
 
     // successor (row) -> predecessor (column) -> EdgeWrapper (value)
@@ -199,30 +336,42 @@ public class LoopTransitionFinder {
       EdgeWrapper e = cell.getValue();
       CFANode predecessor = e.getPredecessor();
 
-      // Do not perform reduction on nodes ending in a loop-head.
-      if (loopStructure.getAllLoopHeads().contains(predecessor)) continue;
+      // Do not perform reduction on edges which predecessor is a loop-head.
+      if (loopStructure.getAllLoopHeads().contains(predecessor)) {
+        continue;
+      }
+      if (e.getPredecessor().equals(e.getSuccessor())) {
 
-      // Successor equivalent to our predecessor.
+        // Can not process self-looping edges.
+        continue;
+      }
+
+      // Edges which successor node equal to the predecessor of the currently processed edge.
       Collection<EdgeWrapper> candidates = out.row(predecessor).values();
-      if (candidates.size() == 1) {
-        EdgeWrapper candidate = candidates.iterator().next();
-        EdgeWrapper added = new AndEdge(ImmutableList.of(candidate, e));
 
-        // We need to check whether adding "added" would create a double entry.
-        EdgeWrapper alternative = out.get(
-            added.getSuccessor(), added.getPredecessor());
-
-        out.remove(candidate.getSuccessor(), candidate.getPredecessor());
+      if (candidates.size() >= 1) {
         out.remove(e.getSuccessor(), e.getPredecessor());
-        logger.log(Level.ALL, "Removing", e, "and", candidate);
+        logger.log(Level.ALL, "Removing", e);
 
-        if (alternative != null) {
-          added = new OrEdge(ImmutableList.of(added, alternative));
-          out.remove(alternative.getSuccessor(), alternative.getPredecessor());
-          logger.log(Level.ALL, "Removing", alternative);
+        for (EdgeWrapper candidate : ImmutableList.copyOf(candidates)) {
+          logger.log(Level.ALL, "Removing", candidate);
+          out.remove(candidate.getSuccessor(), candidate.getPredecessor());
+
+          EdgeWrapper added = new AndEdge(ImmutableList.of(candidate, e));
+
+          // We need to check whether adding "added" would create a double entry.
+          // We maintain invariant that there is always at most one alternative edge.
+          EdgeWrapper alternative = out.get(added.getSuccessor(), added.getPredecessor());
+          if (alternative != null) {
+            added = new OrEdge(ImmutableList.of(added, alternative));
+
+            logger.log(Level.ALL, "Removing", alternative);
+            out.remove(alternative.getSuccessor(), alternative.getPredecessor());
+          }
+
+          logger.log(Level.ALL, "Adding", added);
+          out.put(added.getSuccessor(), added.getPredecessor(), added);
         }
-        out.put(added.getSuccessor(), added.getPredecessor(), added);
-        logger.log(Level.ALL, "Adding", added);
 
         // Terminate the iteration on first change.
         return true;
@@ -379,7 +528,9 @@ public class LoopTransitionFinder {
       PathFormula out = first.toPathFormula(prev);
 
       for (EdgeWrapper edge : edges) {
-        if (edge == first) continue;
+        if (edge == first) {
+          continue;
+        }
         out = pfmgr.makeOr(out, edge.toPathFormula(prev));
       }
       return out;
@@ -406,5 +557,10 @@ public class LoopTransitionFinder {
     }
     sb.append(prefix).append(")");
     return sb.toString();
+  }
+
+  @Override
+  public void collectStatistics(Collection<Statistics> pStatsCollection) {
+    pStatsCollection.add(statistics);
   }
 }

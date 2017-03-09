@@ -23,9 +23,6 @@
  */
 package org.sosy_lab.cpachecker.cpa.rtt;
 
-import java.util.Collection;
-import java.util.List;
-
 import org.sosy_lab.cpachecker.cfa.ast.AInitializer;
 import org.sosy_lab.cpachecker.cfa.ast.java.DefaultJExpressionVisitor;
 import org.sosy_lab.cpachecker.cfa.ast.java.JArrayCreationExpression;
@@ -78,11 +75,11 @@ import org.sosy_lab.cpachecker.cfa.types.java.JReferenceType;
 import org.sosy_lab.cpachecker.cfa.types.java.JSimpleType;
 import org.sosy_lab.cpachecker.cfa.types.java.JType;
 import org.sosy_lab.cpachecker.core.defaults.ForwardingTransferRelation;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
-import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCCodeException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCodeException;
+
+import java.util.List;
 
 /**
  * Transfer Relation traversing the CFA and tracking Run Time Type Information
@@ -214,7 +211,7 @@ public class RTTTransferRelation extends ForwardingTransferRelation<RTTState,RTT
 
     // expression is a binary operation, e.g. a = b;
     if (statement instanceof JAssignment) {
-      return handleAssignment((JAssignment) statement);
+      return handleAssignment((JAssignment) statement, cfaEdge);
 
       // external function call - do nothing
     } else if (statement instanceof JMethodOrConstructorInvocation) {
@@ -229,7 +226,7 @@ public class RTTTransferRelation extends ForwardingTransferRelation<RTTState,RTT
     return state;
   }
 
-  private RTTState handleAssignment(JAssignment assignExpression)
+  private RTTState handleAssignment(JAssignment assignExpression, CFAEdge edge)
       throws UnrecognizedCCodeException {
 
     JExpression op1 = assignExpression.getLeftHandSide();
@@ -253,7 +250,7 @@ public class RTTTransferRelation extends ForwardingTransferRelation<RTTState,RTT
         newState.forget(scopedName);
         return newState;
       } else {
-        return handleAssignmentToVariable((JIdExpression) op1, op2);
+        return handleAssignmentToVariable((JIdExpression) op1, op2, edge);
       }
     }
 
@@ -263,7 +260,7 @@ public class RTTTransferRelation extends ForwardingTransferRelation<RTTState,RTT
 
   /** assigns the evaluated RightHandSide to the LeftHandSide if possible,
    *  or deletes its value. */
-  private RTTState handleAssignmentToVariable(JIdExpression lParam, JRightHandSide exp)
+  private RTTState handleAssignmentToVariable(JIdExpression lParam, JRightHandSide exp, CFAEdge edge)
       throws UnrecognizedCCodeException {
 
     String lParamObjectScope = nameProvider.getObjectScope(state, functionName, lParam);
@@ -763,11 +760,6 @@ public class RTTTransferRelation extends ForwardingTransferRelation<RTTState,RTT
       return e.getConstantName();
     }
 
-  }
-
-  @Override
-  public Collection<? extends AbstractState> strengthen(AbstractState pState, List<AbstractState> pStates, CFAEdge cfaEdge, Precision precision) throws CPATransferException, InterruptedException {
-    return null;
   }
 
   /**

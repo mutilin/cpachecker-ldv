@@ -23,10 +23,14 @@
  */
 package org.sosy_lab.cpachecker.pcc.strategy.parallel.interleaved;
 
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.Multimap;
+import com.google.common.collect.Sets;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -40,10 +44,8 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Level;
 import java.util.zip.ZipInputStream;
-
-import org.sosy_lab.cpachecker.util.Pair;
+import javax.annotation.Nullable;
 import org.sosy_lab.common.ShutdownNotifier;
-import org.sosy_lab.cpachecker.util.Triple;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.log.LogManager;
@@ -60,10 +62,8 @@ import org.sosy_lab.cpachecker.pcc.strategy.parallel.ParallelPartitionChecker;
 import org.sosy_lab.cpachecker.pcc.strategy.partialcertificate.PartialReachedSetDirectedGraph;
 import org.sosy_lab.cpachecker.pcc.strategy.partitioning.PartitioningIOHelper;
 import org.sosy_lab.cpachecker.pcc.strategy.partitioning.PartitioningUtils;
-
-import com.google.common.collect.HashMultimap;
-import com.google.common.collect.Multimap;
-import com.google.common.collect.Sets;
+import org.sosy_lab.cpachecker.util.Pair;
+import org.sosy_lab.cpachecker.util.Triple;
 
 public class PartialReachedSetIOCheckingInterleavedStrategy extends AbstractStrategy {
 
@@ -72,10 +72,14 @@ public class PartialReachedSetIOCheckingInterleavedStrategy extends AbstractStra
   private final ShutdownNotifier shutdownNotifier;
   private final Lock lock = new ReentrantLock();
 
-  public PartialReachedSetIOCheckingInterleavedStrategy(final Configuration pConfig, final LogManager pLogger,
-      final ShutdownNotifier pShutdownNotifier, final PropertyCheckerCPA pCpa)
+  public PartialReachedSetIOCheckingInterleavedStrategy(
+      final Configuration pConfig,
+      final LogManager pLogger,
+      final ShutdownNotifier pShutdownNotifier,
+      final Path pProofFile,
+      final @Nullable PropertyCheckerCPA pCpa)
       throws InvalidConfigurationException {
-    super(pConfig, pLogger);
+    super(pConfig, pLogger, pProofFile);
     ioHelper = new PartitioningIOHelper(pConfig, pLogger, pShutdownNotifier);
     cpa = pCpa;
     shutdownNotifier = pShutdownNotifier;

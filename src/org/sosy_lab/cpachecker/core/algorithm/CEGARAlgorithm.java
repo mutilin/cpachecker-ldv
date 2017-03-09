@@ -22,21 +22,23 @@
  *    http://cpachecker.sosy-lab.org
  */
 package org.sosy_lab.cpachecker.core.algorithm;
+
+import static com.google.common.base.Verify.verifyNotNull;
 import static com.google.common.collect.FluentIterable.from;
-import static org.sosy_lab.cpachecker.util.AbstractStates.*;
+import static org.sosy_lab.cpachecker.util.AbstractStates.IS_TARGET_STATE;
+import static org.sosy_lab.cpachecker.util.AbstractStates.isTargetState;
 import static org.sosy_lab.cpachecker.util.statistics.StatisticsUtils.div;
 
+import com.google.common.base.Preconditions;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.io.PrintStream;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 import java.util.Collection;
+import java.util.List;
+import java.util.Objects;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
-
 import org.sosy_lab.common.AbstractMBean;
-import org.sosy_lab.common.Classes;
-import org.sosy_lab.common.Classes.UnexpectedCheckedException;
 import org.sosy_lab.common.configuration.ClassOption;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
@@ -45,23 +47,21 @@ import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
+import org.sosy_lab.cpachecker.core.algorithm.ParallelAlgorithm.ReachedSetUpdateListener;
+import org.sosy_lab.cpachecker.core.algorithm.ParallelAlgorithm.ReachedSetUpdater;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.Refiner;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
+import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
 import org.sosy_lab.cpachecker.cpa.value.refiner.UnsoundRefiner;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
-import org.sosy_lab.cpachecker.exceptions.InvalidComponentException;
 import org.sosy_lab.cpachecker.exceptions.RefinementFailedException;
 
-import com.google.common.base.Preconditions;
-import com.google.common.base.Throwables;
-
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-
-@Options(prefix="cegar")
-public class CEGARAlgorithm implements Algorithm, StatisticsProvider {
+@Options(prefix = "cegar")
+public class CEGARAlgorithm implements Algorithm, StatisticsProvider, ReachedSetUpdater {
 
   private static class CEGARStatistics implements Statistics {
 
@@ -85,8 +85,7 @@ public class CEGARAlgorithm implements Algorithm, StatisticsProvider {
     }
 
     @Override
-    public void printStatistics(PrintStream out, Result pResult,
-        ReachedSet pReached) {
+    public void printStatistics(PrintStream out, Result pResult, UnmodifiableReachedSet pReached) {
 
       out.println("Number of refinements:                " + countRefinements);
 
@@ -107,6 +106,9 @@ public class CEGARAlgorithm implements Algorithm, StatisticsProvider {
   }
 
   private final CEGARStatistics stats = new CEGARStatistics();
+
+  private final List<ReachedSetUpdateListener> reachedSetUpdateListeners =
+      new CopyOnWriteArrayList<>();
 
   public static interface CEGARMXBean {
     int getNumberOfRefinements();
@@ -138,12 +140,17 @@ public class CEGARAlgorithm implements Algorithm, StatisticsProvider {
 
   private volatile int sizeOfReachedSetBeforeRefinement = 0;
 
-  @Option(secure=true, name="refiner", required = true,
-      description = "Which refinement algorithm to use? "
-      + "(give class name, required for CEGAR) If the package name starts with "
-      + "'org.sosy_lab.cpachecker.', this prefix can be omitted.")
+  @Option(
+    secure = true,
+    name = "refiner",
+    required = true,
+    description =
+        "Which refinement algorithm to use? "
+            + "(give class name, required for CEGAR) If the package name starts with "
+            + "'org.sosy_lab.cpachecker.', this prefix can be omitted."
+  )
   @ClassOption(packagePrefix = "org.sosy_lab.cpachecker")
-  private Class<? extends Refiner> refiner = null;
+  private Refiner.Factory refinerFactory;
 
   @Option(secure=true, name="globalRefinement", description="Whether to do refinement immediately after finding an error state, or globally after the ARG has been unrolled completely.")
   private boolean globalRefinement = false;
@@ -158,55 +165,13 @@ public class CEGARAlgorithm implements Algorithm, StatisticsProvider {
   private final Algorithm algorithm;
   private final Refiner mRefiner;
 
-  // TODO Copied from CPABuilder, should be refactored into a generic implementation
-  private Refiner createInstance(ConfigurableProgramAnalysis pCpa) throws CPAException, InvalidConfigurationException {
-
-    // get factory method
-    Method factoryMethod;
-    try {
-      factoryMethod = refiner.getMethod("create", ConfigurableProgramAnalysis.class);
-    } catch (NoSuchMethodException e) {
-      throw new InvalidComponentException(refiner, "Refiner", "No public static method \"create\" with exactly one parameter of type ConfigurableProgramAnalysis.");
-    }
-
-    // verify signature
-    if (!Modifier.isStatic(factoryMethod.getModifiers())) {
-      throw new InvalidComponentException(refiner, "Refiner", "Factory method is not static");
-    }
-
-    String exception = Classes.verifyDeclaredExceptions(factoryMethod, CPAException.class, InvalidConfigurationException.class);
-    if (exception != null) {
-      throw new InvalidComponentException(refiner, "Refiner", "Factory method declares the unsupported checked exception " + exception + ".");
-    }
-
-    // invoke factory method
-    Object refinerObj;
-    try {
-      refinerObj = factoryMethod.invoke(null, pCpa);
-
-    } catch (IllegalAccessException e) {
-      throw new InvalidComponentException(refiner, "Refiner", "Factory method is not public.");
-
-    } catch (InvocationTargetException e) {
-      Throwable cause = e.getCause();
-      Throwables.propagateIfPossible(cause, CPAException.class, InvalidConfigurationException.class);
-
-      throw new UnexpectedCheckedException("instantiation of refiner " + refiner.getSimpleName(), cause);
-    }
-
-    if ((refinerObj == null) || !(refinerObj instanceof Refiner)) {
-      throw new InvalidComponentException(refiner, "Refiner", "Factory method did not return a Refiner instance.");
-    }
-
-    return (Refiner)refinerObj;
-  }
-
   public CEGARAlgorithm(Algorithm algorithm, ConfigurableProgramAnalysis pCpa, Configuration config, LogManager logger) throws InvalidConfigurationException, CPAException {
     config.inject(this);
+    verifyNotNull(refinerFactory);
     this.algorithm = algorithm;
     this.logger = logger;
 
-    mRefiner = createInstance(pCpa);
+    mRefiner = refinerFactory.create(pCpa);
     new CEGARMBean(); // don't store it because we wouldn't know when to unregister anyway
   }
 
@@ -232,21 +197,24 @@ public class CEGARAlgorithm implements Algorithm, StatisticsProvider {
       boolean refinementSuccessful;
       do {
         refinementSuccessful = false;
+        final AbstractState previousLastState = reached.getLastState();
 
         // run algorithm
         status = status.update(algorithm.run(reached));
+        notifyReachedSetUpdateListeners(reached);
 
         if (stats.countRefinements == refinementLoops) {
           break;
         }
         // if there is any target state do refinement
-        //if (refinementNecessary(reached)) {
+        //if (refinementNecessary(reached, previousLastState)) {
           refinementSuccessful = refine(reached);
           refinedInPreviousIteration = true;
           // assert that reached set is free of target states,
           // if refinement was successful and initial reached set was empty (i.e. stopAfterError=true)
           if (refinementSuccessful && initialReachedSetSize == 1) {
-            assert !from(reached).anyMatch(IS_TARGET_STATE);
+            assert !from(reached).anyMatch(IS_TARGET_STATE) : "Target state should not be present"
+                + " in the reached set after refinement.";
           }
         //}
 
@@ -270,14 +238,17 @@ public class CEGARAlgorithm implements Algorithm, StatisticsProvider {
     return status;
   }
 
-  private boolean refinementNecessary(ReachedSet reached) {
+  private boolean refinementNecessary(ReachedSet reached, AbstractState previousLastState) {
     if (globalRefinement) {
       // check other states
       return from(reached).anyMatch(IS_TARGET_STATE);
 
     } else {
-      // check only last state
-      return isTargetState(reached.getLastState());
+      // Check only last state, but only if it is different from the last iteration.
+      // Otherwise we would attempt to refine the same state twice if CEGARAlgorithm.run
+      // is called again but this time the inner algorithm does not find any successor states.
+      return !Objects.equals(reached.getLastState(), previousLastState)
+          && isTargetState(reached.getLastState());
     }
   }
 
@@ -326,6 +297,28 @@ public class CEGARAlgorithm implements Algorithm, StatisticsProvider {
       ((StatisticsProvider)mRefiner).collectStatistics(pStatsCollection);
     }
     pStatsCollection.add(stats);
+  }
+
+  @Override
+  public void register(ReachedSetUpdateListener pReachedSetUpdateListener) {
+    if (algorithm instanceof ReachedSetUpdater) {
+      ((ReachedSetUpdater) algorithm).register(pReachedSetUpdateListener);
+    }
+    reachedSetUpdateListeners.add(pReachedSetUpdateListener);
+  }
+
+  @Override
+  public void unregister(ReachedSetUpdateListener pReachedSetUpdateListener) {
+    if (algorithm instanceof ReachedSetUpdater) {
+      ((ReachedSetUpdater) algorithm).unregister(pReachedSetUpdateListener);
+    }
+    reachedSetUpdateListeners.remove(pReachedSetUpdateListener);
+  }
+
+  private void notifyReachedSetUpdateListeners(ReachedSet pReachedSet) {
+    for (ReachedSetUpdateListener rsul : reachedSetUpdateListeners) {
+      rsul.updated(pReachedSet);
+    }
   }
 
 }

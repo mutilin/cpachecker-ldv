@@ -23,14 +23,15 @@
  */
 package org.sosy_lab.cpachecker.core.algorithm.bmc;
 
-import org.sosy_lab.cpachecker.core.algorithm.invariants.InvariantGenerator;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
-import org.sosy_lab.cpachecker.exceptions.UnrecognizedCodeException;
-import org.sosy_lab.solver.api.BooleanFormula;
+import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormula;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormulaManager;
 import org.sosy_lab.cpachecker.util.predicates.smt.FormulaManagerView;
+import org.sosy_lab.java_smt.api.BooleanFormula;
+
+import javax.annotation.Nullable;
 
 
 public interface CandidateInvariant {
@@ -38,13 +39,19 @@ public interface CandidateInvariant {
   /**
    * Gets the uninstantiated invariant formula.
    *
+   * @param pFMGR the formula manager.
+   * @param pPFMGR the path formula manager.
+   * @param pContext the path formula context.
+   *
    * @return the uninstantiated invariant formula.
    *
    * @throws CPATransferException if a CPA transfer required to produce the
    * assertion failed.
    * @throws InterruptedException if the formula creation was interrupted.
    */
-  BooleanFormula getFormula(FormulaManagerView pFMGR, PathFormulaManager pPFMGR) throws CPATransferException, InterruptedException;
+  BooleanFormula getFormula(
+      FormulaManagerView pFMGR, PathFormulaManager pPFMGR, @Nullable PathFormula pContext)
+      throws CPATransferException, InterruptedException;
 
   /**
    * Creates an assertion of the invariant over the given reached set, using
@@ -53,6 +60,7 @@ public interface CandidateInvariant {
    * @param pReachedSet the reached set to assert the invariant over.
    * @param pFMGR the formula manager.
    * @param pPFMGR the path formula manager.
+   * @param pDefaultIndex the default SSA index.
    *
    * @return the assertion.
    *
@@ -60,7 +68,12 @@ public interface CandidateInvariant {
    * assertion failed.
    * @throws InterruptedException if the formula creation was interrupted.
    */
-  BooleanFormula getAssertion(Iterable<AbstractState> pReachedSet, FormulaManagerView pFMGR, PathFormulaManager pPFMGR) throws CPATransferException, InterruptedException;
+  BooleanFormula getAssertion(
+      Iterable<AbstractState> pReachedSet,
+      FormulaManagerView pFMGR,
+      PathFormulaManager pPFMGR,
+      int pDefaultIndex)
+      throws CPATransferException, InterruptedException;
 
   /**
    * Assume that the invariant holds and remove states from the given reached
@@ -69,16 +82,5 @@ public interface CandidateInvariant {
    * @param pReachedSet the reached set to remove unreachable states from.
    */
   void assumeTruth(ReachedSet pReachedSet);
-
-  /**
-   * Try to inject the invariant into an invariant generator in order to
-   * improve its results.
-   *
-   * @param pInvariantGenerator the invariant generator to inject the invariant
-   * into.
-   * @throws UnrecognizedCodeException if a problem occurred during the
-   * injection.
-   */
-  void attemptInjection(InvariantGenerator pInvariantGenerator) throws UnrecognizedCodeException;
 
 }

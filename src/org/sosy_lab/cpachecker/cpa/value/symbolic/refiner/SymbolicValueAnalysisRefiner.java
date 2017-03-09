@@ -23,12 +23,12 @@
  */
 package org.sosy_lab.cpachecker.cpa.value.symbolic.refiner;
 
+import com.google.common.collect.Multimap;
 import java.io.PrintStream;
 import java.util.ArrayDeque;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
-
 import org.sosy_lab.common.ShutdownNotifier;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
@@ -39,7 +39,7 @@ import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
-import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
+import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGCPA;
 import org.sosy_lab.cpachecker.cpa.arg.ARGReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
@@ -51,7 +51,6 @@ import org.sosy_lab.cpachecker.cpa.value.ValueAnalysisCPA;
 import org.sosy_lab.cpachecker.cpa.value.symbolic.refiner.interpolant.SymbolicInterpolant;
 import org.sosy_lab.cpachecker.cpa.value.symbolic.refiner.interpolant.SymbolicInterpolantManager;
 import org.sosy_lab.cpachecker.util.AbstractStates;
-import org.sosy_lab.cpachecker.util.CPAs;
 import org.sosy_lab.cpachecker.util.predicates.smt.Solver;
 import org.sosy_lab.cpachecker.util.refinement.FeasibilityChecker;
 import org.sosy_lab.cpachecker.util.refinement.GenericPrefixProvider;
@@ -60,8 +59,6 @@ import org.sosy_lab.cpachecker.util.refinement.InterpolationTree;
 import org.sosy_lab.cpachecker.util.refinement.PathExtractor;
 import org.sosy_lab.cpachecker.util.refinement.PathInterpolator;
 import org.sosy_lab.cpachecker.util.states.MemoryLocation;
-
-import com.google.common.collect.Multimap;
 
 /**
  * Refiner for value analysis using symbolic values.
@@ -76,23 +73,9 @@ public class SymbolicValueAnalysisRefiner
   public static SymbolicValueAnalysisRefiner create(final ConfigurableProgramAnalysis pCpa)
       throws InvalidConfigurationException {
 
-    final ARGCPA argCpa = CPAs.retrieveCPA(pCpa, ARGCPA.class);
-    final ValueAnalysisCPA valueAnalysisCpa = CPAs.retrieveCPA(pCpa, ValueAnalysisCPA.class);
-    final ConstraintsCPA constraintsCpa = CPAs.retrieveCPA(pCpa, ConstraintsCPA.class);
-
-    if (argCpa == null) {
-      throw new InvalidConfigurationException(SymbolicValueAnalysisRefiner.class.getSimpleName() + " needs to be wrapped in an ARGCPA");
-    }
-
-    if (valueAnalysisCpa == null) {
-      throw new InvalidConfigurationException(SymbolicValueAnalysisRefiner.class.getSimpleName()
-          + " needs a ValueAnalysisCPA");
-    }
-
-    if (constraintsCpa == null) {
-      throw new InvalidConfigurationException(SymbolicValueAnalysisRefiner.class.getSimpleName()
-          + " needs a ConstraintsCPA");
-    }
+    final ARGCPA argCpa = retrieveCPA(pCpa, ARGCPA.class);
+    final ValueAnalysisCPA valueAnalysisCpa = retrieveCPA(pCpa, ValueAnalysisCPA.class);
+    final ConstraintsCPA constraintsCpa = retrieveCPA(pCpa, ConstraintsCPA.class);
 
     final Configuration config = valueAnalysisCpa.getConfiguration();
 
@@ -103,7 +86,7 @@ public class SymbolicValueAnalysisRefiner
     final CFA cfa = valueAnalysisCpa.getCFA();
     final ShutdownNotifier shutdownNotifier = valueAnalysisCpa.getShutdownNotifier();
 
-    final Solver solver = Solver.create(config, logger, shutdownNotifier);
+    final Solver solver = constraintsCpa.getSolver();
 
     final SymbolicStrongestPostOperator strongestPostOperator =
         new ValueTransferBasedStrongestPostOperator(solver, logger, config, cfa, shutdownNotifier);
@@ -116,9 +99,13 @@ public class SymbolicValueAnalysisRefiner
 
 
     final GenericPrefixProvider<ForgettingCompositeState> prefixProvider =
-        new GenericPrefixProvider<>(strongestPostOperator,
-                                    ForgettingCompositeState.getInitialState(),
-                                    logger, cfa, config, ValueAnalysisCPA.class);
+        new GenericPrefixProvider<>(
+            strongestPostOperator,
+            ForgettingCompositeState.getInitialState(cfa.getMachineModel()),
+            logger,
+            cfa,
+            config,
+            ValueAnalysisCPA.class);
 
     final ElementTestingSymbolicEdgeInterpolator edgeInterpolator =
         new ElementTestingSymbolicEdgeInterpolator(feasibilityChecker,
@@ -165,8 +152,8 @@ public class SymbolicValueAnalysisRefiner
   @Override
   protected void refineUsingInterpolants(
       final ARGReachedSet pReached,
-      final InterpolationTree<ForgettingCompositeState, SymbolicInterpolant> pInterpolants
-  ) {
+      final InterpolationTree<ForgettingCompositeState, SymbolicInterpolant> pInterpolants)
+      throws InterruptedException {
     final Collection<ARGState> roots = pInterpolants.obtainRefinementRoots(restartStrategy);
 
     ARGTreePrecisionUpdater precUpdater = ARGTreePrecisionUpdater.getInstance();
@@ -211,8 +198,8 @@ public class SymbolicValueAnalysisRefiner
   }
 
   @Override
-  protected void printAdditionalStatistics(PrintStream out, Result pResult,
-      ReachedSet pReached) {
+  protected void printAdditionalStatistics(
+      PrintStream out, Result pResult, UnmodifiableReachedSet pReached) {
     // DO NOTHING for now
   }
 }

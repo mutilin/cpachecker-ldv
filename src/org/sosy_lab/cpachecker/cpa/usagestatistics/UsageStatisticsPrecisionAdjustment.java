@@ -23,6 +23,10 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
+import com.google.common.base.Function;
+import com.google.common.base.Functions;
+import com.google.common.base.Preconditions;
+import java.util.Optional;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustment;
@@ -32,11 +36,6 @@ import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
 import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSetView;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
-
-import com.google.common.base.Function;
-import com.google.common.base.Functions;
-import com.google.common.base.Optional;
-import com.google.common.base.Preconditions;
 
 class UsageStatisticsPrecisionAdjustment implements PrecisionAdjustment {
 
@@ -71,7 +70,7 @@ class UsageStatisticsPrecisionAdjustment implements PrecisionAdjustment {
         fullState);
 
     if (!optionalUnwrappedResult.isPresent()) {
-      return Optional.absent();
+      return Optional.empty();
     }
 
     PrecisionAdjustmentResult unwrappedResult = optionalUnwrappedResult.get();

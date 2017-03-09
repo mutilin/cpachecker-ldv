@@ -42,7 +42,7 @@ public class UsageStatisticsReducer implements Reducer {
 
   @Override
   public AbstractState getVariableReducedState(AbstractState pExpandedElement,
-                                          Block pContext, Block outerContext, CFANode pLocation) {
+                                          Block pContext, Block outerContext, CFANode pLocation) throws InterruptedException {
     UsageStatisticsState funElement = (UsageStatisticsState)pExpandedElement;
     AbstractState red = wrappedReducer.getVariableReducedState(funElement.getWrappedState(), pContext, outerContext, pLocation);
     return funElement.reduce(red);
@@ -51,11 +51,29 @@ public class UsageStatisticsReducer implements Reducer {
 
   @Override
   public AbstractState getVariableExpandedState(AbstractState pRootElement,
-                        Block pReducedContext, Block outerSubtree, AbstractState pReducedElement) {
+                        Block pReducedContext, Block outerSubtree, AbstractState pReducedElement) throws InterruptedException {
     UsageStatisticsState funRootState = (UsageStatisticsState)pRootElement;
     UsageStatisticsState funReducedState = (UsageStatisticsState)pReducedElement;
-    AbstractState exp = wrappedReducer.getVariableExpandedState(funRootState.getWrappedState(), pReducedContext, outerSubtree, funReducedState.getWrappedState());
-    return funReducedState.expand(funRootState, exp, pReducedContext, outerSubtree, lockReducer);
+    AbstractState exp = wrappedReducer.getVariableExpandedState(funRootState.getWrappedState(), pReducedContext, funReducedState.getWrappedState());
+    return funReducedState.expand(funRootState, exp, pReducedContext, lockReducer);
+  }
+
+  @Override
+  public AbstractState getVariableReducedState(AbstractState pExpandedElement,
+                                          Block pContext, CFANode pLocation) throws InterruptedException {
+    UsageStatisticsState funElement = (UsageStatisticsState)pExpandedElement;
+    AbstractState red = wrappedReducer.getVariableReducedState(funElement.getWrappedState(), pContext, pLocation);
+    return funElement.reduce(red);
+
+  }
+
+  @Override
+  public AbstractState getVariableExpandedState(AbstractState pRootElement,
+                        Block pReducedContext, AbstractState pReducedElement) throws InterruptedException {
+    UsageStatisticsState funRootState = (UsageStatisticsState)pRootElement;
+    UsageStatisticsState funReducedState = (UsageStatisticsState)pReducedElement;
+    AbstractState exp = wrappedReducer.getVariableExpandedState(funRootState.getWrappedState(), pReducedContext, funReducedState.getWrappedState());
+    return funReducedState.expand(funRootState, exp, pReducedContext, lockReducer);
   }
 
   @Override
@@ -63,12 +81,6 @@ public class UsageStatisticsReducer implements Reducer {
     UsageStatisticsState funElement = (UsageStatisticsState)pElementKey;
     UsageStatisticsPrecision precision = (UsageStatisticsPrecision) pPrecisionKey;
     return wrappedReducer.getHashCodeForState(funElement.getWrappedState(), precision.getWrappedPrecision());
-  }
-
-  @Override
-  public Object getHashCodeForState(AbstractState pElementKey) {
-    UsageStatisticsState funElement = (UsageStatisticsState)pElementKey;
-    return wrappedReducer.getHashCodeForState(funElement.getWrappedState());
   }
 
   @Override
@@ -93,18 +105,6 @@ public class UsageStatisticsReducer implements Reducer {
     UsageStatisticsPrecision second = (UsageStatisticsPrecision) pOtherPrecision;
     int wrapperDifference = wrappedReducer.measurePrecisionDifference(first.getWrappedPrecision(), second.getWrappedPrecision());
     return wrapperDifference + Math.abs(first.getTotalRecords() - second.getTotalRecords());
-  }
-
-  @Override
-  public AbstractState getVariableReducedStateForProofChecking(AbstractState pExpandedState, Block pContext,
-      CFANode pCallNode) {
-    return getVariableReducedState(pExpandedState, pContext, null, pCallNode);
-  }
-
-  @Override
-  public AbstractState getVariableExpandedStateForProofChecking(AbstractState pRootState, Block pReducedContext,
-      AbstractState pReducedState) {
-    return getVariableExpandedState(pRootState, pReducedContext, null, pReducedState);
   }
 
   @Override

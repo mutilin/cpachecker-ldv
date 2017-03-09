@@ -25,33 +25,40 @@ package org.sosy_lab.cpachecker.cpa.composite;
 
 import static com.google.common.base.Preconditions.checkState;
 
-import java.io.Serializable;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Set;
+import com.google.common.base.Joiner;
+import com.google.common.base.Preconditions;
+import com.google.common.collect.ComparisonChain;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Ordering;
+import com.google.common.collect.Sets;
 
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractWrapperState;
 import org.sosy_lab.cpachecker.core.interfaces.Graphable;
 import org.sosy_lab.cpachecker.core.interfaces.Partitionable;
 import org.sosy_lab.cpachecker.core.interfaces.Property;
+import org.sosy_lab.cpachecker.core.interfaces.PseudoPartitionable;
 import org.sosy_lab.cpachecker.core.interfaces.Targetable;
 
-import com.google.common.base.Joiner;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Sets;
+import java.io.Serializable;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Set;
 
-public class CompositeState implements AbstractWrapperState,
-    Targetable, Partitionable, Serializable, Graphable {
+public class CompositeState
+    implements AbstractWrapperState, Targetable, Partitionable, PseudoPartitionable, Serializable,
+        Graphable {
   private static final long serialVersionUID = -5143296331663510680L;
   private final ImmutableList<AbstractState> states;
   private transient Object partitionKey; // lazily initialized
+  private transient Comparable<?> pseudoPartitionKey; // lazily initialized
+  private transient Object pseudoHashCode; // lazily initialized
 
   public CompositeState(List<AbstractState> elements) {
     this.states = ImmutableList.copyOf(elements);
   }
 
-  public int getNumberOfStates() {
+  int getNumberOfStates() {
     return states.size();
   }
 
@@ -157,6 +164,46 @@ public class CompositeState implements AbstractWrapperState,
     return partitionKey;
   }
 
+  @Override
+  public Comparable<?> getPseudoPartitionKey() {
+    if (pseudoPartitionKey == null) {
+      Comparable<?>[] keys = new Comparable<?>[states.size()];
+
+      int i = 0;
+      for (AbstractState element : states) {
+        if (element instanceof PseudoPartitionable) {
+          keys[i] = ((PseudoPartitionable) element).getPseudoPartitionKey();
+        }
+        i++;
+      }
+
+      // wrap array of keys in object to enable overriding of equals and hashCode
+      pseudoPartitionKey = new CompositePseudoPartitionKey(keys);
+    }
+
+    return pseudoPartitionKey;
+  }
+
+  @Override
+  public Object getPseudoHashCode() {
+    if (pseudoHashCode == null) {
+      Object[] keys = new Object[states.size()];
+
+      int i = 0;
+      for (AbstractState element : states) {
+        if (element instanceof PseudoPartitionable) {
+          keys[i] = ((PseudoPartitionable)element).getPseudoHashCode();
+        }
+        i++;
+      }
+
+      // wrap array of keys in object to enable overriding of equals and hashCode
+      pseudoHashCode = new CompositePartitionKey(keys);
+    }
+
+    return pseudoHashCode;
+  }
+
   private static final class CompositePartitionKey {
 
     private final Object[] keys;
@@ -186,6 +233,50 @@ public class CompositeState implements AbstractWrapperState,
     @Override
     public String toString() {
       return "[" + Joiner.on(", ").skipNulls().join(keys) + "]";
+    }
+  }
+
+  @SuppressWarnings("rawtypes")
+  private static final class CompositePseudoPartitionKey
+      implements Comparable<CompositePseudoPartitionKey> {
+
+    private final Comparable<?>[] keys;
+
+    private CompositePseudoPartitionKey(Comparable<?>[] pElements) {
+      keys = pElements;
+    }
+
+    @Override
+    public boolean equals(Object pObj) {
+      if (this == pObj) {
+        return true;
+      }
+
+      if (!(pObj instanceof CompositePseudoPartitionKey)) {
+        return false;
+      }
+
+      return Arrays.equals(this.keys, ((CompositePseudoPartitionKey) pObj).keys);
+    }
+
+    @Override
+    public int hashCode() {
+      return Arrays.hashCode(keys);
+    }
+
+    @Override
+    public String toString() {
+      return "[" + Joiner.on(", ").skipNulls().join(keys) + "]";
+    }
+
+    @Override
+    public int compareTo(CompositePseudoPartitionKey other) {
+      Preconditions.checkArgument(keys.length == other.keys.length);
+      ComparisonChain c = ComparisonChain.start();
+      for (int i = 0; i < keys.length; i++) {
+        c = c.compare(keys[i], other.keys[i], Ordering.natural().nullsFirst());
+      }
+      return c.result();
     }
   }
 }

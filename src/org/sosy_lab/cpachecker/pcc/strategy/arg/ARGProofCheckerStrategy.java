@@ -23,11 +23,12 @@
  */
 package org.sosy_lab.cpachecker.pcc.strategy.arg;
 
+import java.nio.file.Path;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.logging.Level;
-
+import javax.annotation.Nullable;
 import org.sosy_lab.common.ShutdownNotifier;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
@@ -51,11 +52,15 @@ public class ARGProofCheckerStrategy extends AbstractARGStrategy {
   private Set<ARGState> inWaitlist;
 
 
-  public ARGProofCheckerStrategy(final Configuration pConfig, final LogManager pLogger,
-      final ShutdownNotifier pShutdownNotifier, final ProofChecker pChecker)
+  public ARGProofCheckerStrategy(
+      final Configuration pConfig,
+      final LogManager pLogger,
+      final ShutdownNotifier pShutdownNotifier,
+      final Path pProofFile,
+      final @Nullable ProofChecker pChecker)
       throws InvalidConfigurationException {
     super(pConfig, pLogger, pChecker instanceof PropertyCheckerCPA ? ((PropertyCheckerCPA) pChecker).getPropChecker()
-        : new NoTargetStateChecker(), pShutdownNotifier);
+        : new NoTargetStateChecker(), pShutdownNotifier, pProofFile);
     checker = pChecker;
   }
 

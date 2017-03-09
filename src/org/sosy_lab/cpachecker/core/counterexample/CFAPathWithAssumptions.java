@@ -23,28 +23,30 @@
  */
 package org.sosy_lab.cpachecker.core.counterexample;
 
+import com.google.common.collect.FluentIterable;
+import com.google.common.collect.ForwardingList;
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMultimap;
+import com.google.common.collect.Multimap;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
-
-import javax.annotation.Nullable;
-
 import org.sosy_lab.cpachecker.cfa.ast.AExpressionStatement;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
-import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
 import org.sosy_lab.cpachecker.core.counterexample.ConcreteStatePath.ConcreteStatePathNode;
-import org.sosy_lab.cpachecker.core.counterexample.ConcreteStatePath.MultiConcreteState;
+import org.sosy_lab.cpachecker.core.counterexample.ConcreteStatePath.IntermediateConcreteState;
 import org.sosy_lab.cpachecker.core.counterexample.ConcreteStatePath.SingleConcreteState;
+import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
+import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysisWithConcreteCex;
 import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
 import org.sosy_lab.cpachecker.cpa.arg.ARGPath.PathIterator;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
+import org.sosy_lab.cpachecker.util.CPAs;
 import org.sosy_lab.cpachecker.util.predicates.PathChecker;
-
-import com.google.common.collect.ImmutableList;
 
 
 /**
@@ -53,118 +55,64 @@ import com.google.common.collect.ImmutableList;
  * the class {@link PathChecker}.
  *
  */
-public class CFAPathWithAssumptions implements Iterable<CFAEdgeWithAssumptions> {
+public class CFAPathWithAssumptions extends ForwardingList<CFAEdgeWithAssumptions> {
 
-  private final List<CFAEdgeWithAssumptions> pathWithAssignments;
+  private final ImmutableList<CFAEdgeWithAssumptions> pathWithAssignments;
 
   private CFAPathWithAssumptions(
       List<CFAEdgeWithAssumptions> pPathWithAssignments) {
     pathWithAssignments = ImmutableList.copyOf(pPathWithAssignments);
   }
 
-  private CFAPathWithAssumptions(
-      CFAPathWithAssumptions pPathWithAssignments, CFAPathWithAssumptions pPathWithAssignments2) {
-
-    assert pPathWithAssignments.size() == pPathWithAssignments2.size();
-
-    List<CFAEdgeWithAssumptions> result = new ArrayList<>(pPathWithAssignments.size());
-    Iterator<CFAEdgeWithAssumptions> path2Iterator = pPathWithAssignments2.iterator();
-
-    for (CFAEdgeWithAssumptions edge : pPathWithAssignments) {
-      CFAEdgeWithAssumptions resultEdge = edge.mergeEdge(path2Iterator.next());
-      result.add(resultEdge);
-    }
-
-    pathWithAssignments = result;
+  public static CFAPathWithAssumptions empty() {
+    return new CFAPathWithAssumptions(ImmutableList.<CFAEdgeWithAssumptions>of());
   }
 
-  public CFAPathWithAssumptions() {
-    pathWithAssignments = ImmutableList.of();
+  @Override
+  protected List<CFAEdgeWithAssumptions> delegate() {
+    return pathWithAssignments;
   }
 
-  public ImmutableList<CFAEdgeWithAssumptions> asList() {
-    return ImmutableList.copyOf(pathWithAssignments);
-  }
-
-  @Nullable
-  public CFAPathWithAssumptions getExactVariableValues(List<CFAEdge> pPath) {
-
-    if (fitsPath(pPath)) {
-      return this;
-    }
-
-    int index = pathWithAssignments.size() - pPath.size();
-
-    if (index < 0) {
-      return null;
-    }
-
-    List<CFAEdgeWithAssumptions> result;
-
-    result = new ArrayList<>(pPath.size());
-
-    for (CFAEdge edge : pPath) {
-
-      if (index > pathWithAssignments.size()) {
-        return null;
-      }
-
-      CFAEdgeWithAssumptions cfaWithAssignment = pathWithAssignments.get(index);
-
-      if (!edge.equals(cfaWithAssignment.getCFAEdge())) {
-        return null;
-      }
-
-      result.add(cfaWithAssignment);
-      index++;
-    }
-
-    return new CFAPathWithAssumptions(result);
-  }
-
-  private boolean fitsPath(List<CFAEdge> pPath) {
-
-    if (pPath.size() != pathWithAssignments.size()) {
-      return false;
-    }
-
+  boolean fitsPath(List<CFAEdge> pPath) {
     int index = 0;
+    Iterator<CFAEdge> it = pPath.iterator();
 
-    for (CFAEdge edge : pPath) {
-
+    while (it.hasNext()) {
+      CFAEdge edge = it.next();
       CFAEdgeWithAssumptions cfaWithAssignment = pathWithAssignments.get(index);
 
       if (!edge.equals(cfaWithAssignment.getCFAEdge())) {
         return false;
       }
-
       index++;
     }
 
     return true;
   }
 
-  @Nullable
-  public Map<ARGState, CFAEdgeWithAssumptions> getExactVariableValues(ARGPath pPath) {
+  public Multimap<ARGState, CFAEdgeWithAssumptions> getExactVariableValues(ARGPath pPath) {
+    Multimap<ARGState, CFAEdgeWithAssumptions> result = HashMultimap.create();
 
+    PathIterator pathIterator = pPath.fullPathIterator();
+    int multiEdgeOffset = 0;
 
-    if (pPath.getInnerEdges().size() != (pathWithAssignments.size())) {
-      return null;
-    }
-
-    Map<ARGState, CFAEdgeWithAssumptions> result = new HashMap<>();
-
-    PathIterator pathIterator = pPath.pathIterator();
     while (pathIterator.hasNext()) {
-
-      CFAEdgeWithAssumptions edgeWithAssignment = pathWithAssignments.get(pathIterator.getIndex());
+      CFAEdgeWithAssumptions edgeWithAssignment = pathWithAssignments.get(pathIterator.getIndex() + multiEdgeOffset);
       CFAEdge argPathEdge = pathIterator.getOutgoingEdge();
+
       if (!edgeWithAssignment.getCFAEdge().equals(argPathEdge)) {
         // path is not equivalent
-        return null;
+        return ImmutableMultimap.of();
       }
 
-      result.put(pathIterator.getAbstractState(), edgeWithAssignment);
+      final ARGState abstractState;
+      if (pathIterator.isPositionWithState()) {
+        abstractState = pathIterator.getAbstractState();
+      } else {
+        abstractState = pathIterator.getPreviousAbstractState();
+      }
+      result.put(abstractState, edgeWithAssignment);
+
       pathIterator.advance();
     }
     // last state is ignored
@@ -176,115 +124,136 @@ public class CFAPathWithAssumptions implements Iterable<CFAEdgeWithAssumptions> 
       AssumptionToEdgeAllocator pAllocator) {
 
     List<CFAEdgeWithAssumptions> result = new ArrayList<>(statePath.size());
+    List<IntermediateConcreteState> currentIntermediateStates = new ArrayList<>();
 
     for (ConcreteStatePathNode node : statePath) {
-      if (node instanceof SingleConcreteState) {
+      CFAEdgeWithAssumptions edge;
 
-        SingleConcreteState singleState = (SingleConcreteState) node;
-        CFAEdgeWithAssumptions edge = createCFAEdgeWithAssignment(singleState, pAllocator);
-        result.add(edge);
+      // this is an intermediate state: just create the assumptions for it
+      // and add it as if it was a normal edge
+      if (node instanceof IntermediateConcreteState) {
+        IntermediateConcreteState intermediateState = (IntermediateConcreteState) node;
+        currentIntermediateStates.add(intermediateState);
+        edge =
+            pAllocator.allocateAssumptionsToEdge(
+                intermediateState.getCfaEdge(), intermediateState.getConcreteState());
+
       } else {
-        MultiConcreteState multiState = (MultiConcreteState) node;
-        CFAEdgeWithAssumptions edge = createCFAEdgeWithAssignment(multiState, pAllocator);
-        result.add(edge);
+        SingleConcreteState singleState = (SingleConcreteState) node;
+
+        // no ARG hole, just a normal edge
+        if (currentIntermediateStates.isEmpty()) {
+          edge =
+              pAllocator.allocateAssumptionsToEdge(
+                  singleState.getCfaEdge(), singleState.getConcreteState());
+
+          /* End of an ARG hole, handle all the intermediate edges before
+           * and create the assumptions at the end of the (dynamic) multi edge
+           * for all changed variables.Since it is impossible to properly project
+           * the assumption from the assumptions of the edges in the multi edge,
+           * due to aliasing, simply create assumptions for all edges with the concrete state
+           * of the last edge, thus correctly projecting all lvalues at the end of the multi edge.*/
+        } else {
+          Set<AExpressionStatement> assumptions = new HashSet<>();
+          Set<String> assumptionCodes = new HashSet<>();
+          ConcreteState lastState = singleState.getConcreteState();
+
+          StringBuilder comment = new StringBuilder("");
+
+          for (IntermediateConcreteState intermediates : currentIntermediateStates) {
+            CFAEdgeWithAssumptions assumptionForedge =
+                pAllocator.allocateAssumptionsToEdge(intermediates.getCfaEdge(), lastState);
+            addAssumptionsIfNecessary(assumptions, assumptionCodes, comment, assumptionForedge);
+          }
+
+          // add assumptions for last edge if necessary
+          addAssumptionsIfNecessary(assumptions, assumptionCodes, comment, pAllocator.allocateAssumptionsToEdge(singleState.getCfaEdge(), lastState));
+
+          // Finally create Last edge and multi edge
+          edge =
+              new CFAEdgeWithAssumptions(
+                  singleState.getCfaEdge(), new ArrayList<>(assumptions), comment.toString());
+
+          // remove all handled intermediate states
+          currentIntermediateStates.clear();
+        }
       }
+
+      // add created edge to result
+      result.add(edge);
     }
 
     return new CFAPathWithAssumptions(result);
   }
 
-  private static CFAEdgeWithAssumptions createCFAEdgeWithAssignment(MultiConcreteState state,
-      AssumptionToEdgeAllocator pAllocator) {
-
-    MultiEdge multiEdge = state.getCfaEdge();
-    int sizeOfMultiEdge= multiEdge.getEdges().size();
-    List<CFAEdgeWithAssumptions> edges = new ArrayList<>(sizeOfMultiEdge);
-
-
-    // First, create all assumptions for each edge in the multi edge except the last one
-    Iterator<SingleConcreteState> it = state.iterator();
-    for (int c = 0; c < sizeOfMultiEdge - 1; c++) {
-      SingleConcreteState node = it.next();
-      edges.add(createCFAEdgeWithAssignment(node, pAllocator));
-    }
-
-    /* Second, create all assumptions at the end of the multi edge for
-    * all changed variables. Since it is impossible to properly project
-    * the assumption from the assumptions of the edges in the multi edge,
-    * due to aliasing, simply create assumptions for all edges with the concrete state
-    * of the last edge, thus correctly projecting all lvalues at the end of the multi edge.*/
-    Set<AExpressionStatement> assumptions = new HashSet<>();
-    Set<String> assumptionCodes = new HashSet<>();
-    ConcreteState lastState = state.getLastConcreteState().getConcreteState();
-
-    StringBuilder comment = new StringBuilder("");
-
-    for (CFAEdge cfaEdge : multiEdge) {
-      CFAEdgeWithAssumptions assumptionForedge = pAllocator.allocateAssumptionsToEdge(cfaEdge, lastState);
-
-      // throw away redundant assumptions
-      for (AExpressionStatement assumption : assumptionForedge.getExpStmts()) {
-        if (!assumptionCodes.contains(assumption.toASTString())) {
-          assumptions.add(assumption);
-          assumptionCodes.add(assumption.toASTString());
-        }
-      }
-
-      String commentOfEdge = assumptionForedge.getComment();
-
-      if(commentOfEdge != null && !commentOfEdge.isEmpty()) {
-        comment.append(commentOfEdge);
-        comment.append("\n");
+  private static void addAssumptionsIfNecessary(Set<AExpressionStatement> assumptions, Set<String> assumptionCodes,
+      StringBuilder comment, CFAEdgeWithAssumptions lastIntermediate) {
+    // throw away redundant assumptions
+    for (AExpressionStatement assumption : lastIntermediate.getExpStmts()) {
+      if (!assumptionCodes.contains(assumption.toASTString())) {
+        assumptions.add(assumption);
+        assumptionCodes.add(assumption.toASTString());
       }
     }
 
-    // Finally create Last edge and multi edge
-    ArrayList<AExpressionStatement> assumptionsList = new ArrayList<>(assumptions);
-    CFAEdge lastEdge = state.getLastConcreteState().getCfaEdge();
-    CFAEdgeWithAssumptions lastAssumptionEdge = new CFAEdgeWithAssumptions(lastEdge, assumptionsList, comment.toString());
-    edges.add(lastAssumptionEdge);
+    String commentOfEdge = lastIntermediate.getComment();
 
-    CFAMultiEdgeWithAssumptions edge = CFAMultiEdgeWithAssumptions.valueOf(multiEdge, edges, assumptionsList, comment.toString());
-    return edge;
+    if (commentOfEdge != null && !commentOfEdge.isEmpty()) {
+      comment.append(commentOfEdge);
+      comment.append("\n");
+    }
   }
 
-  private static CFAEdgeWithAssumptions createCFAEdgeWithAssignment(
-      SingleConcreteState pState, AssumptionToEdgeAllocator pAllocator) {
-
-    CFAEdge cfaEdge = pState.getCfaEdge();
-    ConcreteState concreteState = pState.getConcreteState();
-
-    return pAllocator.allocateAssumptionsToEdge(cfaEdge, concreteState);
-  }
-
-  public boolean isEmpty() {
-    return pathWithAssignments.isEmpty();
-  }
-
-  @Override
-  public String toString() {
-    return pathWithAssignments.toString();
-  }
-
-  public CFAEdge getCFAEdgeAtPosition(int index) {
-    return pathWithAssignments.get(index).getCFAEdge();
-  }
-
-  public int size() {
-    return pathWithAssignments.size();
-  }
-
-  @Override
-  public Iterator<CFAEdgeWithAssumptions> iterator() {
-    return pathWithAssignments.iterator();
-  }
-
-  public CFAPathWithAssumptions mergePaths(CFAPathWithAssumptions pOtherPath) {
+  public Optional<CFAPathWithAssumptions> mergePaths(CFAPathWithAssumptions pOtherPath) {
 
     if (pOtherPath.size() != this.size()) {
-      return this;
+      return Optional.empty();
     }
 
-    return new CFAPathWithAssumptions(this, pOtherPath);
+    List<CFAEdgeWithAssumptions> result = new ArrayList<>(size());
+    Iterator<CFAEdgeWithAssumptions> path2Iterator = iterator();
+
+    for (CFAEdgeWithAssumptions edge : this) {
+      CFAEdgeWithAssumptions other = path2Iterator.next();
+      if (!edge.getCFAEdge().equals(other.getCFAEdge())) {
+        return Optional.empty();
+      }
+      CFAEdgeWithAssumptions resultEdge = edge.mergeEdge(other);
+      result.add(resultEdge);
+    }
+
+    return Optional.of(new CFAPathWithAssumptions(result));
+  }
+
+  public static CFAPathWithAssumptions of(
+      ARGPath pPath,
+      ConfigurableProgramAnalysis pCPA,
+      AssumptionToEdgeAllocator pAssumptionToEdgeAllocator) {
+
+    FluentIterable<ConfigurableProgramAnalysisWithConcreteCex> cpas =
+        CPAs.asIterable(pCPA).filter(ConfigurableProgramAnalysisWithConcreteCex.class);
+
+    Optional<CFAPathWithAssumptions> result = Optional.empty();
+
+    for (ConfigurableProgramAnalysisWithConcreteCex wrappedCpa : cpas) {
+      ConcreteStatePath path = wrappedCpa.createConcreteStatePath(pPath);
+      CFAPathWithAssumptions cexPath = CFAPathWithAssumptions.of(path, pAssumptionToEdgeAllocator);
+
+      if (result.isPresent()) {
+        result = result.get().mergePaths(cexPath);
+        // If there were conflicts during merging, stop
+        if (!result.isPresent()) {
+          break;
+        }
+      } else {
+        result = Optional.of(cexPath);
+      }
+    }
+
+    if (!result.isPresent()) {
+      return CFAPathWithAssumptions.empty();
+    } else {
+      return result.get();
+    }
   }
 }

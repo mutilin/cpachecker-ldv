@@ -24,21 +24,19 @@
 package org.sosy_lab.cpachecker.cpa.predicate.counterexamples;
 
 import static com.google.common.collect.FluentIterable.from;
-import static org.sosy_lab.cpachecker.util.AbstractStates.toState;
+
+import java.util.Optional;
+import com.google.common.collect.ImmutableList;
 
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
-import org.sosy_lab.cpachecker.core.CounterexampleInfo;
+import org.sosy_lab.cpachecker.core.counterexample.CounterexampleInfo;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.cpa.arg.counterexamples.AbstractSetBasedCounterexampleFilter;
 import org.sosy_lab.cpachecker.cpa.arg.counterexamples.CounterexampleFilter;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
 import org.sosy_lab.cpachecker.util.AbstractStates;
-
-import com.google.common.base.Optional;
-import com.google.common.base.Predicates;
-import com.google.common.collect.ImmutableList;
 
 /**
  * An implementation of {@link CounterexampleFilter} that bases path similarity
@@ -55,10 +53,8 @@ public class ABEBlockCounterexampleFilter extends AbstractSetBasedCounterexample
   protected Optional<ImmutableList<CFANode>> getCounterexampleRepresentation(CounterexampleInfo counterexample) {
     return Optional.of(
         from(counterexample.getTargetPath().asStatesList())
-            .filter(Predicates.compose(PredicateAbstractState.FILTER_ABSTRACTION_STATES,
-                                       toState(PredicateAbstractState.class)))
+            .filter(PredicateAbstractState.CONTAINS_ABSTRACTION_STATE)
             .transform(AbstractStates.EXTRACT_LOCATION)
-            .toList()
-            );
+            .toList());
   }
 }

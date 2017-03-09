@@ -26,26 +26,25 @@ package org.sosy_lab.cpachecker.cpa.composite;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.collect.FluentIterable.from;
 import static com.google.common.collect.Iterables.any;
-import static org.sosy_lab.cpachecker.util.AbstractStates.*;
+import static org.sosy_lab.common.collect.Collections3.transformedImmutableListCopy;
+import static org.sosy_lab.cpachecker.util.AbstractStates.IS_TARGET_STATE;
+import static org.sosy_lab.cpachecker.util.AbstractStates.extractStateByType;
 
+import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Iterables;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-
-import org.sosy_lab.common.configuration.Configuration;
-import org.sosy_lab.common.configuration.InvalidConfigurationException;
-import org.sosy_lab.common.configuration.Option;
-import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCall;
 import org.sosy_lab.cpachecker.cfa.ast.c.CSimpleDeclaration;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdgeType;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
-import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractStateWithLocations;
@@ -58,41 +57,25 @@ import org.sosy_lab.cpachecker.cpa.predicate.PredicateTransferRelation;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 
-import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Iterables;
-
-@Options(prefix="cpa.composite")
-public final class CompositeTransferRelation implements TransferRelation {
-
-  @Option(secure=true,
-      description="Split MultiEdges and pass each inner edge to the component CPAs"
-          + " to allow strengthen calls after each single edge."
-          + " Does not work with backwards analysis!")
-  private boolean splitMultiEdges = false;
-
-  @Option(secure=true, description="Instead of introducing MultiEdges in the CFA"
-      + " the Composite CPA can handle all paths in the CFA where MultiEdges could"
-      + " be if they were there. This has the big advantage, that we can have"
-      + " error locations in the middle of multi edges, which is not possible with"
-      + "static MultiEdges.\n Note that while this option is set to true,"
-      + " cfa.useMultiEdges has to be set to false.")
-  private boolean useDynamicMultiEdges = false;
+final class CompositeTransferRelation implements TransferRelation {
 
   private final ImmutableList<TransferRelation> transferRelations;
   private final CFA cfa;
   private final int size;
-  private int assumptionIndex = -1;
-  private int predicatesIndex = -1;
+  private final int assumptionIndex;
+  private final int predicatesIndex;
+  private final boolean aggregateBasicBlocks;
 
-  public CompositeTransferRelation(ImmutableList<TransferRelation> pTransferRelations,
-      Configuration pConfig, CFA pCFA) throws InvalidConfigurationException {
-    pConfig.inject(this);
+  CompositeTransferRelation(
+      ImmutableList<TransferRelation> pTransferRelations, CFA pCFA, boolean pAggregateBasicBlocks) {
     transferRelations = pTransferRelations;
     cfa = pCFA;
     size = pTransferRelations.size();
+    aggregateBasicBlocks = pAggregateBasicBlocks;
 
     // prepare special case handling if both predicates and assumptions are used
+    int predicatesIndex = -1;
+    int assumptionIndex = -1;
     for (int i = 0; i < size; i++) {
       TransferRelation t = pTransferRelations.get(i);
       if (t instanceof PredicateTransferRelation) {
@@ -102,6 +85,8 @@ public final class CompositeTransferRelation implements TransferRelation {
         assumptionIndex = i;
       }
     }
+    this.predicatesIndex = predicatesIndex;
+    this.assumptionIndex = assumptionIndex;
   }
 
   @Override
@@ -134,7 +119,7 @@ public final class CompositeTransferRelation implements TransferRelation {
     CompositePrecision compositePrecision = (CompositePrecision)precision;
 
     Collection<CompositeState> results = new ArrayList<>(1);
-    getAbstractSuccessorForEdge(compositeState, compositePrecision, cfaEdge, results);
+    getAbstractSuccessorForSimpleEdge(compositeState, compositePrecision, cfaEdge, results);
 
     return results;
   }
@@ -143,11 +128,8 @@ public final class CompositeTransferRelation implements TransferRelation {
   private void getAbstractSuccessorForEdge(CompositeState compositeState, CompositePrecision compositePrecision, CFAEdge cfaEdge,
       Collection<CompositeState> compositeSuccessors) throws CPATransferException, InterruptedException {
 
-    if (useDynamicMultiEdges) {
-
-      assert !(cfaEdge instanceof MultiEdge) : "Static and dynamic MultiEdges may not be mixed.";
-
-      CFANode startNode = cfaEdge.getPredecessor();
+    if (aggregateBasicBlocks) {
+      final CFANode startNode = cfaEdge.getPredecessor();
 
       // dynamic multiEdges may be used if the following conditions apply
       if (isValidMultiEdgeStart(startNode)
@@ -155,9 +137,8 @@ public final class CompositeTransferRelation implements TransferRelation {
 
         Collection<CompositeState> currentStates = new ArrayList<>(1);
         currentStates.add(compositeState);
-        CFAEdge nextEdge = cfaEdge;
 
-        while (isValidMultiEdgeComponent(nextEdge)) {
+        while (isValidMultiEdgeComponent(cfaEdge)) {
           Collection<CompositeState> successorStates = new ArrayList<>(currentStates.size());
 
           for (CompositeState currentState : currentStates) {
@@ -173,9 +154,10 @@ public final class CompositeTransferRelation implements TransferRelation {
           // make successor states the new to-be-handled states for the next edge
           currentStates = Collections.unmodifiableCollection(successorStates);
 
-          startNode = cfaEdge.getSuccessor();
-          if (startNode.getNumLeavingEdges() == 1) {
-            cfaEdge = startNode.getLeavingEdge(0);
+          // if there is more than one leaving edge we do not create a further
+          // multi edge part
+          if (cfaEdge.getSuccessor().getNumLeavingEdges() == 1) {
+            cfaEdge = cfaEdge.getSuccessor().getLeavingEdge(0);
           } else {
             break;
           }
@@ -188,30 +170,6 @@ public final class CompositeTransferRelation implements TransferRelation {
       } else {
         getAbstractSuccessorForSimpleEdge(compositeState, compositePrecision, cfaEdge, compositeSuccessors);
       }
-
-    } else if (splitMultiEdges && cfaEdge instanceof MultiEdge) {
-      // We want to resolve MultiEdges here such that for every edge along
-      // the MultiEdge there is a separate call to TransferRelation.getAbstractSuccessorsForEdge
-      // and especially to TransferRelation.strengthen.
-      // As there can be multiple successors at each step,
-      // we keep a list of "frontier states", handle one edge for each of them,
-      // and use the successors of all these states as the new frontier.
-      Collection<CompositeState> currentStates = new ArrayList<>(1);
-      currentStates.add(compositeState);
-
-      for (CFAEdge simpleEdge : ((MultiEdge)cfaEdge).getEdges()) {
-        Collection<CompositeState> successorStates = new ArrayList<>(currentStates.size());
-
-        for (CompositeState currentState : currentStates) {
-          getAbstractSuccessorForSimpleEdge(currentState, compositePrecision, simpleEdge, successorStates);
-        }
-
-        assert !from(successorStates).anyMatch(AbstractStates.IS_TARGET_STATE);
-        // make successor states the new to-be-handled states for the next edge
-        currentStates = Collections.unmodifiableCollection(successorStates);
-      }
-
-      compositeSuccessors.addAll(currentStates);
 
     } else {
       getAbstractSuccessorForSimpleEdge(compositeState, compositePrecision, cfaEdge, compositeSuccessors);
@@ -236,11 +194,10 @@ public final class CompositeTransferRelation implements TransferRelation {
 
     CFANode nodeAfterEdge = edge.getSuccessor();
 
-    result = result && nodeAfterEdge.getNumLeavingEdges() == 1
-                    && nodeAfterEdge.getNumEnteringEdges() == 1
-                    && nodeAfterEdge.getLeavingSummaryEdge() == null
-                    && !nodeAfterEdge.isLoopStart()
-                    && nodeAfterEdge.getClass() == CFANode.class;
+    result =
+        result
+            && nodeAfterEdge.getNumEnteringEdges() == 1
+            && nodeAfterEdge.getClass() == CFANode.class;
 
     return result && !containsFunctionCall(edge);
   }
@@ -257,13 +214,14 @@ public final class CompositeTransferRelation implements TransferRelation {
       CStatementEdge statementEdge = (CStatementEdge)edge;
 
       if ((statementEdge.getStatement() instanceof CFunctionCall)) {
-        CFunctionCall call = ((CFunctionCall)statementEdge.getStatement());
+        CFunctionCall call = ((CFunctionCall) statementEdge.getStatement());
         CSimpleDeclaration declaration = call.getFunctionCallExpression().getDeclaration();
 
         // declaration == null -> functionPointer
         // functionName exists in CFA -> functioncall with CFA for called function
         // otherwise: call of non-existent function, example: nondet_int() -> ignore this case
-        return declaration == null || cfa.getAllFunctionNames().contains(declaration.getQualifiedName());
+        return declaration == null
+            || cfa.getAllFunctionNames().contains(declaration.getQualifiedName());
       }
       return (statementEdge.getStatement() instanceof CFunctionCall);
     }
@@ -337,18 +295,13 @@ public final class CompositeTransferRelation implements TransferRelation {
 
       Collection<? extends AbstractState> lResultsList = lCurrentTransfer.strengthen(lCurrentElement, reachedState, cfaEdge, lCurrentPrecision);
 
-      if (lResultsList == null) {
-        lStrengthenResults.add(Collections.singleton(lCurrentElement));
-      } else {
-        resultCount *= lResultsList.size();
-
-        if (resultCount == 0) {
-          // shortcut
-          break;
-        }
-
-        lStrengthenResults.add(lResultsList);
+      resultCount *= lResultsList.size();
+      if (resultCount == 0) {
+        // shortcut
+        break;
       }
+
+      lStrengthenResults.add(lResultsList);
     }
 
     // special case handling if we have predicate and assumption cpas
@@ -439,11 +392,38 @@ public final class CompositeTransferRelation implements TransferRelation {
   }
 
   @Override
-  public Collection<? extends AbstractState> strengthen(AbstractState element,
-      List<AbstractState> otherElements, CFAEdge cfaEdge,
-      Precision precision) {
-    // strengthen is only called by the composite CPA on its component CPAs
-    return null;
+  public Collection<? extends AbstractState> strengthen(
+      AbstractState element,
+      List<AbstractState> otherElements,
+      CFAEdge cfaEdge,
+      Precision precision) throws CPATransferException, InterruptedException {
+
+    CompositeState compositeState = (CompositeState) element;
+    CompositePrecision compositePrecision = (CompositePrecision) precision;
+    List<Collection<? extends AbstractState>> lStrengthenResults = new ArrayList<>(size);
+    int resultCount = 1;
+
+    for (int i = 0; i < size; i++) {
+
+      TransferRelation lCurrentTransfer = transferRelations.get(i);
+      AbstractState lCurrentElement = compositeState.get(i);
+      Precision lCurrentPrecision = compositePrecision.get(i);
+
+      Collection<? extends AbstractState> lResultsList =
+          lCurrentTransfer.strengthen(lCurrentElement, otherElements, cfaEdge, lCurrentPrecision);
+
+      resultCount *= lResultsList.size();
+      if (resultCount == 0) {
+        // shortcut
+        break;
+      }
+
+      lStrengthenResults.add(lResultsList);
+    }
+
+
+    Collection<List<AbstractState>> lResultingElements = createCartesianProduct(lStrengthenResults, resultCount);
+    return transformedImmutableListCopy(lResultingElements, CompositeState::new);
   }
 
   boolean areAbstractSuccessors(AbstractState pElement, CFAEdge pCfaEdge, Collection<? extends AbstractState> pSuccessors, List<ConfigurableProgramAnalysis> cpas) throws CPATransferException, InterruptedException {

@@ -23,7 +23,6 @@
  */
 package org.sosy_lab.cpachecker.cfa.types.c;
 import javax.annotation.Nullable;
-
 import org.sosy_lab.cpachecker.cfa.types.Type;
 
 public interface CType extends Type {
@@ -34,6 +33,13 @@ public interface CType extends Type {
   public abstract String toString();
 
   public boolean isVolatile();
+
+  /**
+   * Check whether the current type is *incomplete* as defined by the C standard in § 6.2.5 (1).
+   * Incomplete types miss some information (e.g., <code>struct s;</code>),
+   * and for example their size cannot be computed.
+   */
+  public boolean isIncomplete();
 
   /**
    * Will throw a UnsupportedOperationException

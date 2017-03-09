@@ -24,11 +24,13 @@
 package org.sosy_lab.cpachecker.core.algorithm.pcc;
 
 import java.io.PrintStream;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Collection;
 import java.util.logging.Level;
-
 import org.sosy_lab.common.ShutdownNotifier;
 import org.sosy_lab.common.configuration.Configuration;
+import org.sosy_lab.common.configuration.FileOption;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
@@ -36,6 +38,7 @@ import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
+import org.sosy_lab.cpachecker.core.Specification;
 import org.sosy_lab.cpachecker.core.algorithm.Algorithm;
 import org.sosy_lab.cpachecker.core.defaults.SingletonPrecision;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
@@ -43,11 +46,12 @@ import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
 import org.sosy_lab.cpachecker.core.interfaces.pcc.PCCStrategy;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
+import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.pcc.strategy.PCCStrategyBuilder;
 import org.sosy_lab.cpachecker.util.error.DummyErrorState;
 
-@Options
+@Options(prefix = "pcc")
 public class ProofCheckAlgorithm implements Algorithm, StatisticsProvider {
 
   private static class CPAStatistics implements Statistics {
@@ -61,9 +65,10 @@ public class ProofCheckAlgorithm implements Algorithm, StatisticsProvider {
     }
 
     @Override
-    public void printStatistics(PrintStream out, Result pResult,
-        ReachedSet pReached) {
+    public void printStatistics(PrintStream out, Result pResult, UnmodifiableReachedSet pReached) {
       out.println();
+      out.println("Proof Checking statistics");
+      out.println("-------------------------------------");
       out.println("Total time for proof check algorithm:     " + totalTimer);
       out.println("  Time for reading in proof (not complete time in interleaved modes):  " + readTimer);
     }
@@ -72,21 +77,27 @@ public class ProofCheckAlgorithm implements Algorithm, StatisticsProvider {
   private final CPAStatistics stats = new CPAStatistics();
   private final LogManager logger;
 
-
-  @Option(secure=true,
-      name = "pcc.strategy",
-      description = "Qualified name for class which implements proof checking strategy to be used.")
-  private String pccStrategy = "org.sosy_lab.cpachecker.pcc.strategy.arg.ARGProofCheckerStrategy";
-
   private PCCStrategy checkingStrategy;
 
+  @Option(secure=true,
+      name = "proof",
+      description = "file in which proof representation needed for proof checking is stored")
+  @FileOption(FileOption.Type.REQUIRED_INPUT_FILE)
+  protected Path proofFile = Paths.get("arg.obj");
 
-  public ProofCheckAlgorithm(ConfigurableProgramAnalysis cpa, Configuration pConfig,
-      LogManager logger, ShutdownNotifier pShutdownNotifier, CFA pCfa)
+  public ProofCheckAlgorithm(
+      ConfigurableProgramAnalysis cpa,
+      Configuration pConfig,
+      LogManager logger,
+      ShutdownNotifier pShutdownNotifier,
+      CFA pCfa,
+      Specification specification)
       throws InvalidConfigurationException {
     pConfig.inject(this);
 
-    checkingStrategy = PCCStrategyBuilder.buildStrategy(pccStrategy, pConfig, logger, pShutdownNotifier, cpa, pCfa);
+    checkingStrategy =
+        PCCStrategyBuilder.buildStrategy(
+            pConfig, logger, pShutdownNotifier, proofFile, cpa, pCfa, specification);
 
     this.logger = logger;
 
@@ -104,12 +115,21 @@ public class ProofCheckAlgorithm implements Algorithm, StatisticsProvider {
     logger.log(Level.INFO, "Finished reading proof.");
   }
 
-  protected ProofCheckAlgorithm(ConfigurableProgramAnalysis cpa, Configuration pConfig,
-      LogManager logger, ShutdownNotifier pShutdownNotifier, ReachedSet pReachedSet, CFA pCfa)
+  protected ProofCheckAlgorithm(
+      ConfigurableProgramAnalysis cpa,
+      Configuration pConfig,
+      LogManager logger,
+      ShutdownNotifier pShutdownNotifier,
+      ReachedSet pReachedSet,
+      CFA pCfa,
+      Specification specification)
       throws InvalidConfigurationException, InterruptedException {
+
     pConfig.inject(this);
 
-    checkingStrategy = PCCStrategyBuilder.buildStrategy(pccStrategy, pConfig, logger, pShutdownNotifier, cpa, pCfa);
+    checkingStrategy =
+        PCCStrategyBuilder.buildStrategy(
+            pConfig, logger, pShutdownNotifier, proofFile, cpa, pCfa, specification);
     this.logger = logger;
 
     if (pReachedSet == null || pReachedSet.hasWaitingState()) { throw new IllegalArgumentException(

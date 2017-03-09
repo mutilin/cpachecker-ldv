@@ -23,6 +23,7 @@
  */
 package org.sosy_lab.cpachecker.core.reachedset;
 
+import javax.annotation.Nullable;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
@@ -34,16 +35,17 @@ import org.sosy_lab.cpachecker.core.waitlist.ExplicitSortedWaitlist;
 import org.sosy_lab.cpachecker.core.waitlist.LoopstackSortedWaitlist;
 import org.sosy_lab.cpachecker.core.waitlist.PostorderSortedWaitlist;
 import org.sosy_lab.cpachecker.core.waitlist.ReversePostorderSortedWaitlist;
+import org.sosy_lab.cpachecker.core.waitlist.ThreadingSortedWaitlist;
 import org.sosy_lab.cpachecker.core.waitlist.Waitlist;
 import org.sosy_lab.cpachecker.core.waitlist.Waitlist.WaitlistFactory;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.USReachedSet;
 import org.sosy_lab.cpachecker.cpa.automaton.AutomatonVariableWaitlist;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.USReachedSet;
 
 @Options(prefix="analysis")
 public class ReachedSetFactory {
 
   private static enum ReachedSetType {
-    NORMAL, LOCATIONMAPPED, PARTITIONED, USAGESTATISTICS
+    NORMAL, LOCATIONMAPPED, PARTITIONED, PSEUDOPARTITIONED, USAGESTATISTICS
   }
 
   @Option(secure=true, name="traversal.order",
@@ -85,14 +87,20 @@ public class ReachedSetFactory {
 
   @Option(secure=true, name = "traversal.byAutomatonVariable",
       description = "traverse in the order defined by the values of an automaton variable")
-  String byAutomatonVariable = null;
+  @Nullable String byAutomatonVariable = null;
+
+  @Option(secure=true, name = "traversal.useNumberOfThreads",
+      description = "handle abstract states with fewer running threads first? (needs ThreadingCPA)")
+  boolean useNumberOfThreads = false;
 
   @Option(secure=true, name = "reachedSet",
       description = "which reached set implementation to use?"
       + "\nNORMAL: just a simple set"
       + "\nLOCATIONMAPPED: a different set per location "
       + "(faster, states with different locations cannot be merged)"
-      + "\nPARTITIONED: partitioning depending on CPAs (e.g Location, Callstack etc.)")
+      + "\nPARTITIONED: partitioning depending on CPAs (e.g Location, Callstack etc.)"
+      + "\nPSEUDOPARTITIONED: based on PARTITIONED, uses additional info about the states' lattice "
+      + "(maybe faster for some special analyses which use merge_sep and stop_sep")
   ReachedSetType reachedSet = ReachedSetType.PARTITIONED;
 
   public ReachedSetFactory(Configuration config) throws InvalidConfigurationException {
@@ -127,10 +135,16 @@ public class ReachedSetFactory {
     if (byAutomatonVariable != null) {
       waitlistFactory = AutomatonVariableWaitlist.factory(waitlistFactory, byAutomatonVariable);
     }
+    if (useNumberOfThreads) {
+      waitlistFactory = ThreadingSortedWaitlist.factory(waitlistFactory);
+    }
 
     switch (reachedSet) {
     case PARTITIONED:
       return new PartitionedReachedSet(waitlistFactory);
+
+    case PSEUDOPARTITIONED:
+      return new PseudoPartitionedReachedSet(waitlistFactory);
 
     case LOCATIONMAPPED:
       return new LocationMappedReachedSet(waitlistFactory);

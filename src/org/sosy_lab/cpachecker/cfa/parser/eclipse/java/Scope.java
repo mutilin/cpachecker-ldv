@@ -23,18 +23,22 @@
  */
 package org.sosy_lab.cpachecker.cfa.parser.eclipse.java;
 
-import static com.google.common.base.Preconditions.*;
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
 
+import com.google.common.base.Joiner;
+import com.google.common.collect.Lists;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
 import java.util.Stack;
 import java.util.concurrent.ConcurrentLinkedQueue;
-
 import org.eclipse.jdt.core.dom.AnonymousClassDeclaration;
 import org.eclipse.jdt.core.dom.ITypeBinding;
 import org.sosy_lab.common.log.LogManager;
@@ -53,10 +57,6 @@ import org.sosy_lab.cpachecker.cfa.types.java.JInterfaceType;
 import org.sosy_lab.cpachecker.cfa.types.java.JMethodType;
 import org.sosy_lab.cpachecker.cfa.types.java.JSimpleType;
 import org.sosy_lab.cpachecker.cfa.types.java.JType;
-
-import com.google.common.base.Joiner;
-import com.google.common.base.Optional;
-import com.google.common.collect.Lists;
 
 /**
  * Provides a symbol table that maps variable and methods to their declaration
@@ -123,7 +123,7 @@ class Scope {
   }
 
   private void enterProgramScope() {
-    varsStack.addLast(new HashMap<String, JSimpleDeclaration>());
+    varsStack.addLast(new HashMap<>());
     varsList.addLast(varsStack.getLast());
   }
 
@@ -155,14 +155,14 @@ class Scope {
    */
   public void enterMethod(JMethodDeclaration methodDef) {
     currentMethodName = methodDef.getOrigName();
-    returnVariable = Optional.fromNullable(createFunctionReturnVariable(methodDef));
+    returnVariable = Optional.ofNullable(createFunctionReturnVariable(methodDef));
 
     enterBlock();
   }
 
   private JVariableDeclaration createFunctionReturnVariable(JMethodDeclaration pMethod) {
     FileLocation fileLocation = pMethod.getFileLocation();
-    JType returnType = (JType) pMethod.getType().getReturnType();
+    JType returnType = pMethod.getType().getReturnType();
     String qualifiedReturnVarName = createQualifiedName(RETURN_VAR_NAME);
 
     if (JSimpleType.getVoid().equals(returnType)) {
@@ -247,7 +247,7 @@ class Scope {
    * enters a Block while traversing the JDT AST.
    */
   public void enterBlock() {
-    varsStack.addLast(new HashMap<String, JSimpleDeclaration>());
+    varsStack.addLast(new HashMap<>());
     varsList.addLast(varsStack.getLast());
   }
 

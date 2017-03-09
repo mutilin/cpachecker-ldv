@@ -33,7 +33,7 @@ import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.predicates.precisionConverter.SymbolEncoding.Type;
 import org.sosy_lab.cpachecker.util.predicates.precisionConverter.SymbolEncoding.UnknownFormulaSymbolException;
-import org.sosy_lab.solver.api.FormulaType;
+import org.sosy_lab.java_smt.api.FormulaType;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
@@ -100,8 +100,12 @@ public class Converter {
     if (terms.isEmpty()) {
       return wrap("(" + op.getFirst() + ")"); // should not happen?
     } else {
-      return wrap("(" + op.getFirst() + " " +
-          Joiner.on(' ').join(Lists.transform(terms, Pair.getProjectionToFirst())) + ")");
+      return wrap(
+          "("
+              + op.getFirst()
+              + " "
+              + Joiner.on(' ').join(Lists.transform(terms, Pair::getFirst))
+              + ")");
     }
   }
 

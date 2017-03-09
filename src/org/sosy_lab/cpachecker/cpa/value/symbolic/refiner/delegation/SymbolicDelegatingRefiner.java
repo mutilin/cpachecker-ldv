@@ -26,9 +26,7 @@ package org.sosy_lab.cpachecker.cpa.value.symbolic.refiner.delegation;
 import java.io.PrintStream;
 import java.util.Collection;
 import java.util.logging.Level;
-
 import javax.annotation.Nullable;
-
 import org.sosy_lab.common.ShutdownNotifier;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
@@ -41,6 +39,7 @@ import org.sosy_lab.cpachecker.core.interfaces.Refiner;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
+import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGCPA;
 import org.sosy_lab.cpachecker.cpa.constraints.ConstraintsCPA;
 import org.sosy_lab.cpachecker.cpa.constraints.refiner.precision.RefinableConstraintsPrecision;
@@ -129,9 +128,13 @@ public class SymbolicDelegatingRefiner implements Refiner, StatisticsProvider {
             cfa);
 
     final GenericPrefixProvider<ForgettingCompositeState> symbolicPrefixProvider =
-        new GenericPrefixProvider<>(symbolicStrongestPost,
-            ForgettingCompositeState.getInitialState(),
-            logger, cfa, config, ValueAnalysisCPA.class);
+        new GenericPrefixProvider<>(
+            symbolicStrongestPost,
+            ForgettingCompositeState.getInitialState(cfa.getMachineModel()),
+            logger,
+            cfa,
+            config,
+            ValueAnalysisCPA.class);
 
     final ElementTestingSymbolicEdgeInterpolator symbolicEdgeInterpolator =
         new ElementTestingSymbolicEdgeInterpolator(feasibilityChecker,
@@ -157,25 +160,31 @@ public class SymbolicDelegatingRefiner implements Refiner, StatisticsProvider {
     final FeasibilityChecker<ForgettingCompositeState> explicitFeasibilityChecker =
         new GenericFeasibilityChecker<>(
             explicitStrongestPost,
-            ForgettingCompositeState.getInitialState(),
+            ForgettingCompositeState.getInitialState(cfa.getMachineModel()),
             ValueAnalysisCPA.class, // we want to work on the ValueAnalysisCPA only
-            logger, config, cfa
-            );
+            logger,
+            config,
+            cfa);
 
     final EdgeInterpolator<ForgettingCompositeState, SymbolicInterpolant> explicitEdgeInterpolator =
         new GenericEdgeInterpolator<>(
             explicitStrongestPost,
             explicitFeasibilityChecker,
             SymbolicInterpolantManager.getInstance(),
-            ForgettingCompositeState.getInitialState(),
+            ForgettingCompositeState.getInitialState(cfa.getMachineModel()),
             ValueAnalysisCPA.class, // we want to work on the ValueAnalysisCPA only
-            config, shutdownNotifier, cfa);
+            config,
+            shutdownNotifier,
+            cfa);
 
     final GenericPrefixProvider<ForgettingCompositeState> explicitPrefixProvider =
         new GenericPrefixProvider<>(
             explicitStrongestPost,
-            ForgettingCompositeState.getInitialState(),
-            logger, cfa, config, ValueAnalysisCPA.class);
+            ForgettingCompositeState.getInitialState(cfa.getMachineModel()),
+            logger,
+            cfa,
+            config,
+            ValueAnalysisCPA.class);
 
     final PathInterpolator<SymbolicInterpolant> explicitPathInterpolator =
         new GenericPathInterpolator<>(
@@ -258,7 +267,7 @@ public class SymbolicDelegatingRefiner implements Refiner, StatisticsProvider {
   public void collectStatistics(Collection<Statistics> statsCollection) {
     statsCollection.add(new Statistics() {
       @Override
-      public void printStatistics(PrintStream out, Result result, ReachedSet reached) {
+      public void printStatistics(PrintStream out, Result result, UnmodifiableReachedSet reached) {
         out.println("Explicit refinements: " + explicitRefinements);
         out.println("Successful explicit refinements: " + successfulExplicitRefinements);
         out.println("Symbolic refinements: " + symbolicRefinements);

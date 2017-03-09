@@ -23,47 +23,95 @@
  */
 package org.sosy_lab.cpachecker.util.expressions;
 
-import org.sosy_lab.cpachecker.cfa.ast.AExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
-import org.sosy_lab.cpachecker.core.counterexample.CExpressionToOrinalCodeVisitor;
-
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.collect.FluentIterable;
 
 
-public enum ToCodeVisitor implements ExpressionTreeVisitor<String> {
+public class ToCodeVisitor<LeafType> extends CachingVisitor<LeafType, String, RuntimeException> {
 
-  INSTANCE;
+  private static String wrapInParentheses(String pCode) {
+    return "(" + pCode + ")";
+  }
 
-  public static final Function<ExpressionTree, String> TO_CODE = new Function<ExpressionTree, String>() {
+  private final Function<? super LeafType, String> leafExpressionToCodeFunction;
 
-    @Override
-    public String apply(ExpressionTree pArg0) {
-      return pArg0.accept(INSTANCE);
-    }
+  public ToCodeVisitor(Function<? super LeafType, String> pLeafExpressionToCodeFunction) {
+    this.leafExpressionToCodeFunction = pLeafExpressionToCodeFunction;
+  }
 
-  };
+  private final Function<ExpressionTree<LeafType>, String> toParenthesizedCodeFunction() {
+    return new Function<ExpressionTree<LeafType>, String>() {
+
+      @Override
+      public String apply(ExpressionTree<LeafType> pExpressionTree) {
+        return pExpressionTree.accept(
+            new ExpressionTreeVisitor<LeafType, String, RuntimeException>() {
+
+              @Override
+              public String visit(And<LeafType> pAnd) {
+                return wrapInParentheses(pAnd.accept(ToCodeVisitor.this));
+              }
+
+              @Override
+              public String visit(Or<LeafType> pOr) {
+                return wrapInParentheses(pOr.accept(ToCodeVisitor.this));
+              }
+
+              @Override
+              public String visit(LeafExpression<LeafType> pLeafExpression) {
+                return pLeafExpression.accept(ToCodeVisitor.this);
+              }
+
+              @Override
+              public String visitTrue() {
+                return ToCodeVisitor.this.visitTrue();
+              }
+
+              @Override
+              public String visitFalse() {
+                return ToCodeVisitor.this.visitFalse();
+              }
+            });
+      }
+    };
+  }
 
   @Override
-  public String visit(And pAnd) {
+  protected String cacheMissAnd(And<LeafType> pAnd) {
     assert pAnd.iterator().hasNext();
-    return "(" + Joiner.on(" && ").join(FluentIterable.from(pAnd).transform(TO_CODE)) + ")";
+    return Joiner.on(" && ")
+        .join(FluentIterable.from(pAnd).transform(toParenthesizedCodeFunction()));
   }
 
   @Override
-  public String visit(Or pOr) {
+  protected String cacheMissOr(Or<LeafType> pOr) {
     assert pOr.iterator().hasNext();
-    return "(" + Joiner.on(" || ").join(FluentIterable.from(pOr).transform(TO_CODE)) + ")";
+    return Joiner.on(" || ")
+        .join(FluentIterable.from(pOr).transform(toParenthesizedCodeFunction()));
   }
 
   @Override
-  public String visit(LeafExpression pLeafExpression) {
-    AExpression expression = pLeafExpression.getExpression();
-    if (!(expression instanceof CExpression)) {
-      throw new AssertionError("Unsupported expression.");
+  protected String cacheMissLeaf(LeafExpression<LeafType> pLeafExpression) {
+    LeafType expression = pLeafExpression.getExpression();
+    String expressionCode = leafExpressionToCodeFunction.apply(expression);
+    if (pLeafExpression.assumeTruth()) {
+      return expressionCode;
     }
-    return ((CExpression) expression).accept(CExpressionToOrinalCodeVisitor.INSTANCE);
+    if (!expressionCode.startsWith("(") || !expressionCode.endsWith(")")) {
+      expressionCode = wrapInParentheses(expressionCode);
+    }
+    return "!" + expressionCode;
+  }
+
+  @Override
+  protected String cacheMissTrue() {
+    return "1";
+  }
+
+  @Override
+  protected String cacheMissFalse() {
+    return "0";
   }
 
 }

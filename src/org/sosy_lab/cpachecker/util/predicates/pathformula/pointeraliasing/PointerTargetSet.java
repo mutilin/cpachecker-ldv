@@ -23,7 +23,17 @@
  */
 package org.sosy_lab.cpachecker.util.predicates.pathformula.pointeraliasing;
 
-import static com.google.common.base.MoreObjects.firstNonNull;
+import com.google.common.base.Joiner;
+import com.google.common.collect.ComparisonChain;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+
+import org.sosy_lab.common.collect.PathCopyingPersistentTreeMap;
+import org.sosy_lab.common.collect.PersistentLinkedList;
+import org.sosy_lab.common.collect.PersistentList;
+import org.sosy_lab.common.collect.PersistentSortedMap;
+import org.sosy_lab.cpachecker.cfa.types.c.CType;
+import org.sosy_lab.cpachecker.util.Pair;
 
 import java.io.IOException;
 import java.io.InvalidObjectException;
@@ -35,17 +45,8 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
 
-import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
-
-import org.sosy_lab.common.collect.PathCopyingPersistentTreeMap;
-import org.sosy_lab.common.collect.PersistentLinkedList;
-import org.sosy_lab.common.collect.PersistentList;
-import org.sosy_lab.common.collect.PersistentSortedMap;
-import org.sosy_lab.cpachecker.cfa.types.c.CType;
-
-import com.google.common.base.Joiner;
-import com.google.common.collect.Maps;
 
 @Immutable
 public final class PointerTargetSet implements Serializable {
@@ -59,7 +60,7 @@ public final class PointerTargetSet implements Serializable {
    * </p>
    */
   @Immutable
-  public static class CompositeField implements Comparable<CompositeField>, Serializable {
+  static class CompositeField implements Comparable<CompositeField>, Serializable {
 
     private static final long serialVersionUID = -5194535211223682619L;
 
@@ -68,17 +69,9 @@ public final class PointerTargetSet implements Serializable {
       this.fieldName = fieldName;
     }
 
-    public static CompositeField of(final @Nonnull String compositeType, final @Nonnull String fieldName) {
+    static CompositeField of(final String compositeType, final String fieldName) {
       return new CompositeField(compositeType, fieldName);
     }
-
-//    public String compositeType() {
-//      return compositeType;
-//    }
-
-//    public String fieldName() {
-//      return fieldName;
-//    }
 
     @Override
     public String toString() {
@@ -87,12 +80,10 @@ public final class PointerTargetSet implements Serializable {
 
     @Override
     public int compareTo(final CompositeField other) {
-      final int result = this.compositeType.compareTo(other.compositeType);
-      if (result != 0) {
-        return result;
-      } else {
-        return this.fieldName.compareTo(other.fieldName);
-      }
+      return ComparisonChain.start()
+          .compare(this.compositeType, other.compositeType)
+          .compare(this.fieldName, other.fieldName)
+          .result();
     }
 
     @Override
@@ -128,16 +119,15 @@ public final class PointerTargetSet implements Serializable {
     return baseName.replaceFirst(BASE_PREFIX, "");
   }
 
-  public PersistentList<PointerTarget> getAllTargets(final CType type) {
-    return firstNonNull(targets.get(CTypeUtils.typeToString(type)),
-                        PersistentLinkedList.<PointerTarget>of());
+  PersistentList<PointerTarget> getAllTargets(final String regionName) {
+    return targets.getOrDefault(regionName, PersistentLinkedList.of());
   }
 
   public static PointerTargetSet emptyPointerTargetSet() {
     return EMPTY_INSTANCE;
   }
 
-  public boolean isEmpty() {
+  boolean isEmpty() {
     return bases.isEmpty() && fields.isEmpty()
         && lastBase == null && deferredAllocations.isEmpty();
   }
@@ -175,11 +165,12 @@ public final class PointerTargetSet implements Serializable {
     }
   }
 
-  PointerTargetSet(final PersistentSortedMap<String, CType> bases,
-                           final String lastBase,
-                           final PersistentSortedMap<CompositeField, Boolean> fields,
-                           final PersistentSortedMap<String, DeferredAllocationPool> deferredAllocations,
-                           final PersistentSortedMap<String, PersistentList<PointerTarget>> targets) {
+  PointerTargetSet(
+      final PersistentSortedMap<String, CType> bases,
+      final @Nullable String lastBase,
+      final PersistentSortedMap<CompositeField, Boolean> fields,
+      final PersistentList<Pair<String, DeferredAllocation>> deferredAllocations,
+      final PersistentSortedMap<String, PersistentList<PointerTarget>> targets) {
     this.bases = bases;
     this.lastBase = lastBase;
     this.fields = fields;
@@ -195,33 +186,62 @@ public final class PointerTargetSet implements Serializable {
     }
   }
 
-  private static final PointerTargetSet EMPTY_INSTANCE = new PointerTargetSet(
-      PathCopyingPersistentTreeMap.<String, CType>of(),
-      null,
-      PathCopyingPersistentTreeMap.<CompositeField, Boolean>of(),
-      PathCopyingPersistentTreeMap.<String, DeferredAllocationPool>of(),
-      PathCopyingPersistentTreeMap.<String, PersistentList<PointerTarget>>of()
-      );
+  public PersistentSortedMap<String, CType> getBases() {
+    return bases;
+  }
+
+  /**
+   * Returns, if a variable is the actual base of a pointer.
+   *
+   * @param name The name of the variable.
+   * @return True, if the variable is an actual base, false otherwise.
+   */
+  public boolean isActualBase(final String name) {
+    return bases.containsKey(name) && !PointerTargetSetManager.isFakeBaseType(bases.get(name));
+  }
+
+  PersistentSortedMap<CompositeField, Boolean> getFields() {
+    return fields;
+  }
+
+  PersistentList<Pair<String, DeferredAllocation>> getDeferredAllocations() {
+    return deferredAllocations;
+  }
+
+  PersistentSortedMap<String, PersistentList<PointerTarget>> getTargets() {
+    return targets;
+  }
+
+  @Nullable
+  String getLastBase() {
+    return lastBase;
+  }
+
+  private static final PointerTargetSet EMPTY_INSTANCE =
+      new PointerTargetSet(
+          PathCopyingPersistentTreeMap.<String, CType>of(),
+          null,
+          PathCopyingPersistentTreeMap.<CompositeField, Boolean>of(),
+          PersistentLinkedList.<Pair<String, DeferredAllocation>>of(),
+          PathCopyingPersistentTreeMap.<String, PersistentList<PointerTarget>>of());
 
   private static final Joiner joiner = Joiner.on(" ");
-
-  // The following fields are modified in the derived class only
 
   // The set of known memory objects.
   // This includes allocated memory regions and global/local structs/arrays.
   // The key of the map is the name of the base (without the BASE_PREFIX).
   // There are also "fake" bases in the map for variables that have their address
   // taken somewhere but are not yet tracked.
-  final PersistentSortedMap<String, CType> bases;
+  private final PersistentSortedMap<String, CType> bases;
 
   // The last added memory region (used to create the chain of inequalities between bases).
-  final String lastBase;
+  private final @Nullable String lastBase;
 
   // The set of "shared" fields that are accessed directly via pointers,
   // so they are represented with UFs instead of as variables.
-  final PersistentSortedMap<CompositeField, Boolean> fields;
+  private final PersistentSortedMap<CompositeField, Boolean> fields;
 
-  final PersistentSortedMap<String, DeferredAllocationPool> deferredAllocations;
+  private final PersistentList<Pair<String, DeferredAllocation>> deferredAllocations;
 
   // The complete set of tracked memory locations.
   // The map key is the type of the memory location.
@@ -230,7 +250,7 @@ public final class PointerTargetSet implements Serializable {
   // for all values of i from this map).
   // This means that when a location is not present in this map,
   // its value is not tracked and might get lost.
-  final PersistentSortedMap<String, PersistentList<PointerTarget>> targets;
+  private final PersistentSortedMap<String, PersistentList<PointerTarget>> targets;
 
   private static final String BASE_PREFIX = "__ADDRESS_OF_";
 
@@ -254,28 +274,36 @@ public final class PointerTargetSet implements Serializable {
     private final PersistentSortedMap<String, CType> bases;
     private final String lastBase;
     private final PersistentSortedMap<CompositeField, Boolean> fields;
-    private final PersistentSortedMap<String, DeferredAllocationPool> deferredAllocations;
+    private final List<Pair<String, DeferredAllocation>> deferredAllocations;
     private final Map<String, List<PointerTarget>> targets;
 
-    public SerializationProxy(PointerTargetSet pts) {
+    private SerializationProxy(PointerTargetSet pts) {
       bases = pts.bases;
       lastBase = pts.lastBase;
       fields = pts.fields;
-      deferredAllocations = pts.deferredAllocations;
-      Map<String, List<PointerTarget>> map = Maps.newHashMapWithExpectedSize(pts.targets.size());
+      List<Pair<String, DeferredAllocation>> deferredAllocations =
+          Lists.newArrayList(pts.deferredAllocations);
+      this.deferredAllocations = deferredAllocations;
+      Map<String, List<PointerTarget>> targets =
+          Maps.newHashMapWithExpectedSize(pts.targets.size());
       for(Entry<String, PersistentList<PointerTarget>> entry : pts.targets.entrySet()) {
-        map.put(entry.getKey(), new ArrayList<>(entry.getValue()));
+        targets.put(entry.getKey(), new ArrayList<>(entry.getValue()));
       }
-      targets = map;
+      this.targets = targets;
     }
 
     private Object readResolve() {
-      Map<String, PersistentList<PointerTarget>> map = Maps.newHashMapWithExpectedSize(targets.size());
-      for (Entry<String, List<PointerTarget>> entry : targets.entrySet()) {
-        map.put(entry.getKey(), PersistentLinkedList.copyOf(entry.getValue()));
+      Map<String, PersistentList<PointerTarget>> targets =
+          Maps.newHashMapWithExpectedSize(this.targets.size());
+      for (Entry<String, List<PointerTarget>> entry : this.targets.entrySet()) {
+        targets.put(entry.getKey(), PersistentLinkedList.copyOf(entry.getValue()));
       }
-      return new PointerTargetSet(bases, lastBase, fields, deferredAllocations,
-          PathCopyingPersistentTreeMap.copyOf(map));
+      return new PointerTargetSet(
+          bases,
+          lastBase,
+          fields,
+          PersistentLinkedList.copyOf(deferredAllocations),
+          PathCopyingPersistentTreeMap.copyOf(targets));
     }
   }
 }

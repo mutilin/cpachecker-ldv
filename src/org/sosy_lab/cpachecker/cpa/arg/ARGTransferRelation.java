@@ -23,23 +23,16 @@
  */
 package org.sosy_lab.cpachecker.cpa.arg;
 
-import static org.sosy_lab.cpachecker.util.AbstractStates.getOutgoingEdges;
-
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
-import org.sosy_lab.cpachecker.core.interfaces.pcc.ProofChecker;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
+import org.sosy_lab.cpachecker.exceptions.UnsupportedCodeException;
 
-import com.google.common.collect.HashMultimap;
-import com.google.common.collect.Iterables;
-import com.google.common.collect.Multimap;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 
 public class ARGTransferRelation implements TransferRelation {
 
@@ -63,7 +56,15 @@ public class ARGTransferRelation implements TransferRelation {
     element.markExpanded();
 
     AbstractState wrappedState = element.getWrappedState();
-    Collection<? extends AbstractState> successors = transferRelation.getAbstractSuccessors(wrappedState, pPrecision);
+    Collection<? extends AbstractState> successors;
+    try {
+      successors = transferRelation.getAbstractSuccessors(wrappedState, pPrecision);
+    } catch (UnsupportedCodeException e) {
+      // setting parent of this unsupported code part
+      e.setParentState(element);
+      throw e;
+    }
+
     if (successors.isEmpty()) {
       return Collections.emptySet();
     }
@@ -84,36 +85,5 @@ public class ARGTransferRelation implements TransferRelation {
     throw new UnsupportedOperationException(
         "ARGCPA needs to be used as the outer-most CPA,"
         + " thus it does not support returning successors for a single edge.");
-  }
-
-  @Override
-  public Collection<? extends AbstractState> strengthen(AbstractState element,
-                         List<AbstractState> otherElements, CFAEdge cfaEdge,
-                         Precision precision) {
-    return null;
-  }
-
-  boolean areAbstractSuccessors(AbstractState pElement, CFAEdge pCfaEdge, Collection<? extends AbstractState> pSuccessors, ProofChecker wrappedProofChecker) throws CPATransferException, InterruptedException {
-    ARGState element = (ARGState)pElement;
-
-    assert Iterables.elementsEqual(element.getChildren(), pSuccessors);
-
-    AbstractState wrappedState = element.getWrappedState();
-    Multimap<CFAEdge, AbstractState> wrappedSuccessors = HashMultimap.create();
-    for (AbstractState absElement : pSuccessors) {
-      ARGState successorElem = (ARGState)absElement;
-      wrappedSuccessors.put(element.getEdgeToChild(successorElem), successorElem.getWrappedState());
-    }
-
-    if (pCfaEdge != null) {
-      return wrappedProofChecker.areAbstractSuccessors(wrappedState, pCfaEdge, wrappedSuccessors.get(pCfaEdge));
-    }
-
-    for (CFAEdge edge : getOutgoingEdges(element)) {
-      if (!wrappedProofChecker.areAbstractSuccessors(wrappedState, edge, wrappedSuccessors.get(edge))) {
-        return false;
-      }
-    }
-    return true;
   }
 }

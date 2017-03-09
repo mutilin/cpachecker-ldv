@@ -23,23 +23,16 @@
  */
 package org.sosy_lab.cpachecker.cfa.types.c;
 
-import static com.google.common.base.Preconditions.*;
-import static com.google.common.collect.Iterables.transform;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
 
-import java.util.ArrayList;
-import java.util.Iterator;
+import com.google.common.base.Joiner;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
 import java.util.List;
 import java.util.Objects;
-
 import javax.annotation.Nullable;
-
 import org.sosy_lab.cpachecker.cfa.types.AFunctionType;
-
-import com.google.common.base.Function;
-import com.google.common.base.Functions;
-import com.google.common.base.Joiner;
-import com.google.common.base.Strings;
-import com.google.common.collect.ImmutableList;
 
 public class CFunctionType extends AFunctionType implements CType {
 
@@ -51,8 +44,8 @@ public class CFunctionType extends AFunctionType implements CType {
 
   public final static CFunctionType NO_ARGS_VOID_FUNCTION = functionTypeWithReturnType(CVoidType.VOID);
 
-  private boolean   isConst;
-  private boolean   isVolatile;
+  private final boolean isConst;
+  private final boolean isVolatile;
   private String name = null;
 
   public CFunctionType(
@@ -88,22 +81,15 @@ public class CFunctionType extends AFunctionType implements CType {
   }
 
   @Override
-  public String toString() {
-    return toASTString(Strings.nullToEmpty(getName()), Functions.toStringFunction());
-  }
-
-  @Override
   public String toASTString(final String pDeclarator) {
-    return toASTString(pDeclarator,
-                       new Function<CType, String>() {
-                         @Override
-                         public String apply(final CType pInput) {
-                           return pInput.toASTString("");
-                         }
-                        });
+    return toASTString(
+        pDeclarator,
+        Lists.transform(getParameters(), pInput -> pInput.toASTString("")));
   }
 
-  public String toASTString(final String pDeclarator, final Function<? super CType, String> pTypeToString) {
+  String toASTString(
+      final String pDeclarator,
+      final Iterable<?> pParameters) {
     checkNotNull(pDeclarator);
     final StringBuilder lASTString = new StringBuilder();
 
@@ -113,9 +99,6 @@ public class CFunctionType extends AFunctionType implements CType {
     if (isVolatile()) {
       lASTString.append("volatile ");
     }
-
-    lASTString.append(pTypeToString.apply(getReturnType()));
-    lASTString.append(" ");
 
     if (pDeclarator.startsWith("*")) {
       // this is a function pointer, insert parentheses
@@ -127,7 +110,7 @@ public class CFunctionType extends AFunctionType implements CType {
     }
 
     lASTString.append("(");
-    Joiner.on(", ").appendTo(lASTString, transform(getParameters(), pTypeToString));
+    Joiner.on(", ").appendTo(lASTString, pParameters);
     if (takesVarArgs()) {
       if (!getParameters().isEmpty()) {
         lASTString.append(", ");
@@ -136,7 +119,9 @@ public class CFunctionType extends AFunctionType implements CType {
     }
     lASTString.append(")");
 
-    return lASTString.toString();
+    // The return type can span the rest of the type, so we cannot prefix but need this trick.
+    String nameAndParams = lASTString.toString();
+    return getReturnType().toASTString(nameAndParams);
   }
 
   @Override
@@ -147,6 +132,11 @@ public class CFunctionType extends AFunctionType implements CType {
   @Override
   public boolean isVolatile() {
     return isVolatile;
+  }
+
+  @Override
+  public boolean isIncomplete() {
+    return false;
   }
 
   @Override
@@ -191,12 +181,15 @@ public class CFunctionType extends AFunctionType implements CType {
 
   @Override
   public CFunctionType getCanonicalType(boolean pForceConst, boolean pForceVolatile) {
-    List<CType> newParameterTypes = new ArrayList<>();
-    Iterator<CType> it = getParameters().iterator();
-
-    while (it.hasNext()) {
-      newParameterTypes.add(it.next().getCanonicalType());
+    ImmutableList.Builder<CType> newParameterTypes = ImmutableList.builder();
+    for (CType parameter : getParameters()) {
+      newParameterTypes.add(parameter.getCanonicalType());
     }
-    return new CFunctionType(isConst || pForceConst, isVolatile || pForceVolatile, getReturnType().getCanonicalType(), newParameterTypes, takesVarArgs());
+    return new CFunctionType(
+        isConst || pForceConst,
+        isVolatile || pForceVolatile,
+        getReturnType().getCanonicalType(),
+        newParameterTypes.build(),
+        takesVarArgs());
   }
 }

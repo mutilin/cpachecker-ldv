@@ -23,31 +23,29 @@
  */
 package org.sosy_lab.cpachecker.cpa.predicate.relevantpredicates;
 
+import com.google.common.collect.HashBasedTable;
+import com.google.common.collect.Table;
+import com.google.errorprone.annotations.ForOverride;
 import java.util.Collection;
 import java.util.HashSet;
-import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
-
-import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.util.predicates.AbstractionPredicate;
 import org.sosy_lab.cpachecker.util.predicates.smt.FormulaManagerView;
-
-import com.google.common.collect.Maps;
-import com.google.errorprone.annotations.ForOverride;
 
 public abstract class AbstractRelevantPredicatesComputer<T> implements RelevantPredicatesComputer {
 
   protected final FormulaManagerView fmgr;
 
-  protected final Map<Pair<T, AbstractionPredicate>, Boolean> relevantPredicates = Maps.newHashMap();
+  private final Table<T, AbstractionPredicate, Boolean> relevantPredicates = HashBasedTable.create();
 
   protected AbstractRelevantPredicatesComputer(FormulaManagerView pFmgr) {
     fmgr = pFmgr;
   }
 
   @Override
-  public Set<AbstractionPredicate> getRelevantPredicates(Block context, Collection<AbstractionPredicate> predicates) {
+  public final Set<AbstractionPredicate> getRelevantPredicates(Block context, Collection<AbstractionPredicate> predicates) {
     Set<AbstractionPredicate> result = new HashSet<>(predicates.size());
 
     T precomputeResult = precompute(context, predicates);
@@ -62,8 +60,7 @@ public abstract class AbstractRelevantPredicatesComputer<T> implements RelevantP
 
   private boolean isRelevant0(T pPrecomputeResult, AbstractionPredicate pPredicate) {
     // lookup in cache
-    Pair<T, AbstractionPredicate> key = Pair.of(pPrecomputeResult, pPredicate);
-    Boolean cacheResult = relevantPredicates.get(key);
+    Boolean cacheResult = relevantPredicates.get(pPrecomputeResult, pPredicate);
     if (cacheResult != null) {
       return cacheResult;
     }
@@ -81,7 +78,7 @@ public abstract class AbstractRelevantPredicatesComputer<T> implements RelevantP
       }
     }
 
-    relevantPredicates.put(key, result);
+    relevantPredicates.put(pPrecomputeResult, pPredicate, result);
     return result;
   }
 
@@ -91,14 +88,23 @@ public abstract class AbstractRelevantPredicatesComputer<T> implements RelevantP
   protected abstract T precompute(Block pContext, Collection<AbstractionPredicate> pPredicates);
 
   @Override
-  public Set<AbstractionPredicate> getIrrelevantPredicates(Block context, Collection<AbstractionPredicate> predicates) {
-
-    Set<AbstractionPredicate> result = new HashSet<>(predicates);
-    result.removeAll(getRelevantPredicates(context, predicates));
-
-    return result;
+  public boolean equals(Object o) {
+    if (o == this) {
+      return true;
+    }
+    if (o instanceof AbstractRelevantPredicatesComputer) {
+      AbstractRelevantPredicatesComputer<?> other = (AbstractRelevantPredicatesComputer<?>) o;
+      return fmgr.equals(other.fmgr) && relevantPredicates.equals(other.relevantPredicates);
+    }
+    return false;
   }
-  
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(fmgr, relevantPredicates);
+  }
+
+  @Override
   public void clear() {
     relevantPredicates.clear();
   }

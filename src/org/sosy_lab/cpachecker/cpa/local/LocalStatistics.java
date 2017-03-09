@@ -27,58 +27,65 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.Writer;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.logging.Level;
-
 import org.sosy_lab.common.configuration.Configuration;
-import org.sosy_lab.common.io.Files;
-import org.sosy_lab.common.io.Path;
-import org.sosy_lab.common.io.Paths;
+import org.sosy_lab.common.configuration.FileOption;
+import org.sosy_lab.common.configuration.InvalidConfigurationException;
+import org.sosy_lab.common.configuration.Option;
+import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
-import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
+import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 
-
+@Options(prefix="precision")
 public class LocalStatistics implements Statistics {
+  @Option(description = "A path to a precision output", name="path")
+  @FileOption(FileOption.Type.OUTPUT_FILE)
+  private Path outputFileName = Paths.get("localsave");
 
-  private String outputFileName = "output/localsave";
   private final LogManager logger;
 
-  public LocalStatistics(Configuration pConfig, LogManager pLogger) {
+  public LocalStatistics(Configuration pConfig, LogManager pLogger) throws InvalidConfigurationException {
     logger = pLogger;
-    String fName = pConfig.getProperty("precision.path");
+    pConfig.inject(this);
+    /*String fName = pConfig.getProperty("precision.path");
     if (fName != null) {
       outputFileName = fName;
-    }
+    }*/
   }
 
   @Override
-  public void printStatistics(PrintStream pOut, Result pResult, ReachedSet pReached) {
+  public void printStatistics(PrintStream pOut, Result pResult, UnmodifiableReachedSet pReached) {
     try {
       Map<CFANode, LocalState> reachedStatistics = new TreeMap<>();
-      Path p = Paths.get(outputFileName);
-      Writer writer = Files.openOutputFile(Paths.get(p.getAbsolutePath()));
-      logger.log(Level.FINE, "Write precision to " + outputFileName);
-      for (AbstractState state : pReached.asCollection()) {
-        CFANode node = AbstractStates.extractLocation(state);
-        LocalState lState = AbstractStates.extractStateByType(state, LocalState.class);
-        if (!reachedStatistics.containsKey(node)) {
-          reachedStatistics.put(node, lState);
-        } else {
-          LocalState previousState = reachedStatistics.get(node);
-          reachedStatistics.put(node, previousState.join(lState));
+      //Path p = Paths.get(outputFileName);
+      try (Writer writer = Files.newBufferedWriter(outputFileName, StandardOpenOption.WRITE)) {
+        logger.log(Level.FINE, "Write precision to " + outputFileName);
+        for (AbstractState state : pReached.asCollection()) {
+          CFANode node = AbstractStates.extractLocation(state);
+          LocalState lState = AbstractStates.extractStateByType(state, LocalState.class);
+          if (!reachedStatistics.containsKey(node)) {
+            reachedStatistics.put(node, lState);
+          } else {
+            LocalState previousState = reachedStatistics.get(node);
+            reachedStatistics.put(node, previousState.join(lState));
+          }
+        }
+        for (CFANode node : reachedStatistics.keySet()) {
+          writer.append(node.toString() + "\n");
+          writer.append(reachedStatistics.get(node).toLog() + "\n");
         }
       }
-      for (CFANode node : reachedStatistics.keySet()) {
-        writer.append(node.toString() + "\n");
-        writer.append(reachedStatistics.get(node).toLog() + "\n");
-      }
-      writer.close();
     } catch(FileNotFoundException e) {
       System.out.println("Cannot open file " + outputFileName);
       return;

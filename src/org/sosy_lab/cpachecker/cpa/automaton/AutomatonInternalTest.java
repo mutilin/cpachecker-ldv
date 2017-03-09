@@ -23,25 +23,33 @@
  */
 package org.sosy_lab.cpachecker.cpa.automaton;
 
-import static com.google.common.truth.Truth.*;
-import static org.mockito.Matchers.*;
-import static org.mockito.Mockito.*;
+import static com.google.common.truth.Truth.assertThat;
+import static com.google.common.truth.Truth.assert_;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
+import com.google.common.io.CharSource;
+import com.google.common.io.CharStreams;
+import com.google.common.truth.FailureStrategy;
+import com.google.common.truth.Subject;
+import com.google.common.truth.SubjectFactory;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.io.IOException;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
-
+import java_cup.runtime.ComplexSymbolFactory;
+import java_cup.runtime.Symbol;
 import org.junit.Test;
-import org.sosy_lab.common.configuration.Configuration;
-import org.sosy_lab.common.configuration.InvalidConfigurationException;
-import org.sosy_lab.common.io.Path;
-import org.sosy_lab.common.io.Paths;
+import org.sosy_lab.common.io.MoreFiles;
 import org.sosy_lab.common.log.LogManager;
-import org.sosy_lab.common.log.TestLogManager;
 import org.sosy_lab.cpachecker.cfa.CParser;
 import org.sosy_lab.cpachecker.cfa.CParser.ParserOptions;
 import org.sosy_lab.cpachecker.cfa.CProgramScope;
@@ -50,36 +58,24 @@ import org.sosy_lab.cpachecker.cfa.types.MachineModel;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.automaton.AutomatonASTComparator.ASTMatcher;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
-import org.sosy_lab.cpachecker.util.test.TestDataTools;
-
-import com.google.common.io.CharSource;
-import com.google.common.io.CharStreams;
-import com.google.common.truth.FailureStrategy;
-import com.google.common.truth.Subject;
-import com.google.common.truth.SubjectFactory;
-
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import java_cup.runtime.ComplexSymbolFactory;
-import java_cup.runtime.Symbol;
 
 /**
  * This class contains Tests for the AutomatonAnalysis
  */
 public class AutomatonInternalTest {
 
-  private final Configuration config;
   private final LogManager logger;
   private final CParser parser;
 
   private static final Path defaultSpecPath = Paths.get("test/config/automata/defaultSpecification.spc");
-  private static final CharSource defaultSpec = defaultSpecPath.asCharSource(StandardCharsets.UTF_8);
+  private static final CharSource defaultSpec =
+      MoreFiles.asCharSource(defaultSpecPath, StandardCharsets.UTF_8);
 
-  public AutomatonInternalTest() throws InvalidConfigurationException {
-    config = TestDataTools.configurationForTest().build();
-    logger = TestLogManager.getInstance();
+  public AutomatonInternalTest() {
+    logger = LogManager.createTestLogManager();
 
     ParserOptions options = CParser.Factory.getDefaultOptions();
-    parser = CParser.Factory.getParser(config, logger, options, MachineModel.LINUX32);
+    parser = CParser.Factory.getParser(logger, options, MachineModel.LINUX32);
   }
 
   @Test
@@ -99,7 +95,10 @@ public class AutomatonInternalTest {
     ComplexSymbolFactory sf = new ComplexSymbolFactory();
     try (Reader input = defaultSpec.openBufferedStream()) {
       AutomatonScanner scanner = new AutomatonScanner(input, defaultSpecPath, logger, sf);
-      Symbol symbol = new AutomatonParser(scanner, sf, logger, parser, CProgramScope.empty()).parse();
+      Symbol symbol =
+          new AutomatonParser(
+                  scanner, sf, logger, parser, MachineModel.LINUX32, CProgramScope.empty())
+              .parse();
       @SuppressWarnings("unchecked")
       List<Automaton> as = (List<Automaton>) symbol.value;
       for (Automaton a : as) {
@@ -182,7 +181,7 @@ public class AutomatonInternalTest {
     result = AutomatonASTComparator.replaceJokersInPattern("$1 = $?");
     assertThat(result).contains("CPAchecker_AutomatonAnalysis_JokerExpression_Num1  =  CPAchecker_AutomatonAnalysis_JokerExpression");
     result = AutomatonASTComparator.replaceJokersInPattern("$? = $?");
-    assertThat(result).contains("CPAchecker_AutomatonAnalysis_JokerExpression  =  CPAchecker_AutomatonAnalysis_JokerExpression");
+    assertThat(result).contains("CPAchecker_AutomatonAnalysis_JokerExpression_Wildcard0  =  CPAchecker_AutomatonAnalysis_JokerExpression_Wildcard1");
     result = AutomatonASTComparator.replaceJokersInPattern("$1 = $5");
     assertThat(result).contains("CPAchecker_AutomatonAnalysis_JokerExpression_Num1  =  CPAchecker_AutomatonAnalysis_JokerExpression_Num5 ");
   }
@@ -213,44 +212,81 @@ public class AutomatonInternalTest {
     result = args.replaceVariables("$1 == $5");
     assertThat(result).isNull(); // $5 has not been found
     // this test should issue a log message!
-    verify(mockLogger).log(eq(Level.WARNING), anyVararg());
+    verify(mockLogger).log(eq(Level.WARNING), (Object[]) any());
   }
 
   @Test
   public void testASTcomparison() {
+    assert_().about(astMatcher).that("x= $?;").matches("x=5;");
+    assert_().about(astMatcher).that("x= 10;").doesNotMatch("x=5;");
+    assert_().about(astMatcher).that("$? =10;").doesNotMatch("x=5;");
+    assert_().about(astMatcher).that("$?=$?;").matches("x  = 5;");
 
-   assert_().about(astMatcher).that("x= $?;").matches("x=5;");
-   assert_().about(astMatcher).that("x= 10;").doesNotMatch("x=5;");
-   assert_().about(astMatcher).that("$? =10;").doesNotMatch("x=5;");
-   assert_().about(astMatcher).that("$?=$?;").matches("x  = 5;");
+    assert_().about(astMatcher).that("b    = 5;").doesNotMatch("a = 5;");
 
-   assert_().about(astMatcher).that("b    = 5;").doesNotMatch("a = 5;");
+    assert_().about(astMatcher).that("init($?);").matches("init(a);");
+    assert_().about(astMatcher).that("init($?);").matches("init();");
+    assert_().about(astMatcher).that("init($1);").doesNotMatch("init();");
 
-   assert_().about(astMatcher).that("init($?);").matches("init(a);");
-   assert_().about(astMatcher).that("init($?);").matches("init();");
-   assert_().about(astMatcher).that("init($1);").doesNotMatch("init();");
+    assert_().about(astMatcher).that("init($?, b);").matches("init(a, b);");
+    assert_().about(astMatcher).that("init($?, c);").doesNotMatch("init(a, b);");
 
-   assert_().about(astMatcher).that("init($?, b);").matches("init(a, b);");
-   assert_().about(astMatcher).that("init($?, c);").doesNotMatch("init(a, b);");
+    assert_().about(astMatcher).that("x=$?").matches("x = 5;");
+    assert_().about(astMatcher).that("x=$?;").matches("x = 5");
 
-   assert_().about(astMatcher).that("x=$?").matches("x = 5;");
-   assert_().about(astMatcher).that("x=$?;").matches("x = 5");
+    assert_().about(astMatcher).that("f($?);").matches("f();");
+    assert_().about(astMatcher).that("f($?);").matches("f(x);");
+    assert_().about(astMatcher).that("f($?);").matches("f(x, y);");
 
+    // Too-large number in a joker makes it be ignored.
+    assert_().about(astMatcher).that("$12345678901;").doesNotMatch("x");
+  }
 
-   assert_().about(astMatcher).that("f($?);").matches("f();");
-   assert_().about(astMatcher).that("f($?);").matches("f(x);");
-   assert_().about(astMatcher).that("f($?);").matches("f(x, y);");
+  @Test
+  public void testAstMatcherFunctionParameters() {
+    assert_().about(astMatcher).that("f();").matches("f();");
+    assert_().about(astMatcher).that("f();").doesNotMatch("f(x);");
+    assert_().about(astMatcher).that("f();").doesNotMatch("f(x, y);");
 
-   assert_().about(astMatcher).that("f(x, $?);").doesNotMatch("f(x);");
-   assert_().about(astMatcher).that("f(x, $?);").matches("f(x, y);");
-   assert_().about(astMatcher).that("f(x, $?);").doesNotMatch("f(x, y, z);");
+    assert_().about(astMatcher).that("f($1);").doesNotMatch("f();");
+    assert_().about(astMatcher).that("f($1);").matches("f(x);").withVariableValue(1, "x");
+    assert_().about(astMatcher).that("f($1);").doesNotMatch("f(x, y);");
+
+    assert_().about(astMatcher).that("f($?);").matches("f();");
+    assert_().about(astMatcher).that("f($?);").matches("f(x);");
+    assert_().about(astMatcher).that("f($?);").matches("f(x, y);");
+
+    assert_().about(astMatcher).that("f(x, $?);").doesNotMatch("f(x);");
+    assert_().about(astMatcher).that("f(x, $?);").matches("f(x, y);");
+    assert_().about(astMatcher).that("f(x, $?);").doesNotMatch("f(x, y, z);");
+  }
+
+  @Test
+  public void testAstMatcherFunctionCall() {
+    assert_().about(astMatcher).that("$?();").matches("f();");
+    assert_().about(astMatcher).that("$?();").doesNotMatch("x = f();");
+    assert_().about(astMatcher).that("$1();").matches("f();").withVariableValue(1, "f");
+
+    assert_().about(astMatcher).that("x = $?();").doesNotMatch("f();");
+    assert_().about(astMatcher).that("x = $?();").matches("x = f();");
+    assert_().about(astMatcher).that("x = $1();").matches("x = f();").withVariableValue(1, "f");
+
+    assert_().about(astMatcher).that("$?($?);").matches("f();");
+    assert_().about(astMatcher).that("$?($?);").matches("f(y);");
+    assert_().about(astMatcher).that("$?($?);").matches("f(y, z);");
+    assert_().about(astMatcher).that("$?($?);").doesNotMatch("x = f();");
+
+    assert_().about(astMatcher).that("$? = $1($?);").matches("x = f();");
+    assert_().about(astMatcher).that("$? = $1($?);").matches("x = f(y);");
+    assert_().about(astMatcher).that("$? = $1($?);").matches("x = f(y, z);");
+    assert_().about(astMatcher).that("$? = $1($?);").doesNotMatch("f();");
   }
 
   private final SubjectFactory<ASTMatcherSubject, String> astMatcher =
       new SubjectFactory<ASTMatcherSubject, String>() {
         @Override
         public ASTMatcherSubject getSubject(FailureStrategy pFs, String pThat) {
-          return new ASTMatcherSubject(pFs, pThat);
+          return new ASTMatcherSubject(pFs, pThat).named("AST matcher pattern");
         }
       };
 
@@ -267,19 +303,11 @@ public class AutomatonInternalTest {
       super(pFailureStrategy, pPattern);
     }
 
-    @Override
-    protected String getDisplaySubject() {
-      if (internalCustomName() != null) {
-        return super.getDisplaySubject();
-      }
-      return "ASTMatcher pattern " + super.getDisplaySubject();
-    }
-
-    private boolean matches0(String src) throws InvalidAutomatonException, InvalidConfigurationException {
+    private boolean matches0(String src) throws InvalidAutomatonException {
       CAstNode sourceAST;
       ASTMatcher matcher;
-      sourceAST = AutomatonASTComparator.generateSourceAST(src, parser, CProgramScope.empty());
-      matcher = AutomatonASTComparator.generatePatternAST(getSubject(), parser, CProgramScope.empty());
+      sourceAST = CParserUtils.parseSingleStatement(src, parser, CProgramScope.empty());
+      matcher = AutomatonASTComparator.generatePatternAST(actual(), parser, CProgramScope.empty());
 
       return matcher.matches(sourceAST, args);
     }
@@ -288,7 +316,7 @@ public class AutomatonInternalTest {
       boolean matches;
       try {
         matches = matches0(src);
-      } catch (InvalidAutomatonException | InvalidConfigurationException e) {
+      } catch (InvalidAutomatonException e) {
         failureStrategy.fail("Cannot parse source or pattern", e);
         return new Matches() {
               @Override
@@ -329,7 +357,7 @@ public class AutomatonInternalTest {
         if (matches0(src)) {
           fail("does not match", src);
         }
-      } catch (InvalidAutomatonException | InvalidConfigurationException e) {
+      } catch (InvalidAutomatonException e) {
         failureStrategy.fail("Cannot parse source or pattern", e);
       }
     }

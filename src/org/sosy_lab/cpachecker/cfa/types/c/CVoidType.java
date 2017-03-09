@@ -25,18 +25,16 @@ package org.sosy_lab.cpachecker.cfa.types.c;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.List;
-
 import com.google.common.base.Joiner;
 import com.google.common.base.Strings;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * This class represents the type "void".
  * It does not allow any modifiers and has only a single instance.
  */
-public final class CVoidType implements CType, Serializable {
+public final class CVoidType implements CType {
 
   private static final long serialVersionUID = 1385808708190595556L;
 
@@ -70,6 +68,11 @@ public final class CVoidType implements CType, Serializable {
   @Override
   public boolean isVolatile() {
     return isVolatile;
+  }
+
+  @Override
+  public boolean isIncomplete() {
+    return true; // C standard § 6.2.5 (19)
   }
 
   @Override

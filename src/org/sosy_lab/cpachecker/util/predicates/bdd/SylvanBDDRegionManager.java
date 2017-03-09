@@ -25,24 +25,19 @@ package org.sosy_lab.cpachecker.util.predicates.bdd;
 
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.FluentIterable.from;
-import static jsylvan.JSylvan.*;
+import static jsylvan.JSylvan.deref;
+import static jsylvan.JSylvan.makeUnionPar;
+import static jsylvan.JSylvan.ref;
 import static org.sosy_lab.cpachecker.util.statistics.StatisticsWriter.writingStatisticsTo;
 
-import java.io.PrintStream;
-import java.lang.ref.PhantomReference;
-import java.lang.ref.ReferenceQueue;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.logging.Level;
+import com.google.common.base.Function;
+import com.google.common.base.Predicates;
+import com.google.common.collect.Maps;
+import com.google.common.primitives.Longs;
 
-import javax.annotation.concurrent.GuardedBy;
-
+import org.sosy_lab.common.Concurrency;
 import org.sosy_lab.common.NativeLibraries;
 import org.sosy_lab.common.ShutdownNotifier;
-import org.sosy_lab.common.concurrency.Threads;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.IntegerOption;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
@@ -56,17 +51,24 @@ import org.sosy_lab.cpachecker.util.predicates.regions.RegionManager;
 import org.sosy_lab.cpachecker.util.predicates.smt.BooleanFormulaManagerView;
 import org.sosy_lab.cpachecker.util.predicates.smt.FormulaManagerView;
 import org.sosy_lab.cpachecker.util.statistics.StatTimer;
-import org.sosy_lab.solver.api.BooleanFormula;
-import org.sosy_lab.solver.api.BooleanFormulaManager;
-import org.sosy_lab.solver.api.Formula;
-import org.sosy_lab.solver.api.FuncDecl;
-import org.sosy_lab.solver.api.QuantifiedFormulaManager.Quantifier;
-import org.sosy_lab.solver.visitors.BooleanFormulaVisitor;
+import org.sosy_lab.java_smt.api.BooleanFormula;
+import org.sosy_lab.java_smt.api.BooleanFormulaManager;
+import org.sosy_lab.java_smt.api.Formula;
+import org.sosy_lab.java_smt.api.FunctionDeclaration;
+import org.sosy_lab.java_smt.api.QuantifiedFormulaManager.Quantifier;
+import org.sosy_lab.java_smt.api.visitors.BooleanFormulaVisitor;
 
-import com.google.common.base.Function;
-import com.google.common.base.Predicates;
-import com.google.common.collect.Maps;
-import com.google.common.primitives.Longs;
+import java.io.PrintStream;
+import java.lang.ref.PhantomReference;
+import java.lang.ref.Reference;
+import java.lang.ref.ReferenceQueue;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.logging.Level;
+
+import javax.annotation.concurrent.GuardedBy;
 
 import jsylvan.JSylvan;
 
@@ -95,7 +97,7 @@ class SylvanBDDRegionManager implements RegionManager {
   // In this map we store the info which BDD to free after a SylvanBDDRegion object was GCed.
   // Needs to be concurrent because we access it from two threads,
   // and we don't want synchronized blocks in the main thread.
-  private final Map<PhantomReference<SylvanBDDRegion>, Long> referenceMap =
+  private final Map<Reference<SylvanBDDRegion>, Long> referenceMap =
       Maps.newConcurrentMap();
   @Option(secure = true, description = "Log2 size of the BDD node table.")
   @IntegerOption(min = 1)
@@ -129,16 +131,19 @@ class SylvanBDDRegionManager implements RegionManager {
     trueFormula = new SylvanBDDRegion(JSylvan.getTrue());
     falseFormula = new SylvanBDDRegion(JSylvan.getFalse());
 
-    Threads.newThread(new Runnable() {
-      @Override
-      public void run() {
-        // We pass all references explicitly to a static method
-        // in order to not leak the reference to the SylvanBDDRegionManager
-        // from within its constructor to a separate thread
-        // (this is not thread safe in Java).
-        cleanupReferences(referenceQueue, referenceMap, cleanupTimer);
-      }
-    }, "BDD cleanup thread", true).start();
+    Concurrency.newDaemonThread(
+            "BDD cleanup thread",
+            new Runnable() {
+              @Override
+              public void run() {
+                // We pass all references explicitly to a static method
+                // in order to not leak the reference to the SylvanBDDRegionManager
+                // from within its constructor to a separate thread
+                // (this is not thread safe in Java).
+                cleanupReferences(referenceQueue, referenceMap, cleanupTimer);
+              }
+            })
+        .start();
   }
 
   /**
@@ -165,14 +170,12 @@ class SylvanBDDRegionManager implements RegionManager {
    */
   private static void cleanupReferences(
       final ReferenceQueue<SylvanBDDRegion> referenceQueue,
-      final Map<PhantomReference<SylvanBDDRegion>, Long> referenceMap,
+      final Map<Reference<SylvanBDDRegion>, Long> referenceMap,
       final StatTimer cleanupTimer) {
 
     try {
       while (true) {
-        PhantomReference<? extends SylvanBDDRegion> ref =
-            (PhantomReference<? extends SylvanBDDRegion>)referenceQueue
-                .remove();
+        Reference<? extends SylvanBDDRegion> ref = referenceQueue.remove();
 
         // It would be faster to have a thread-safe timer instead of synchronized.
         // However, the lock is uncontended, and thus probably quite fast
@@ -300,11 +303,6 @@ class SylvanBDDRegionManager implements RegionManager {
   }
 
   @Override
-  public Set<Region> extractPredicates(Region pF) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
   public RegionBuilder builder(ShutdownNotifier pShutdownNotifier) {
     return new SylvanBDDRegionBuilder();
   }
@@ -332,7 +330,7 @@ class SylvanBDDRegionManager implements RegionManager {
 
     try (FormulaToRegionConverter converter =
              new FormulaToRegionConverter(fmgr, atomToRegion)) {
-      return wrap(bfmgr.visit(converter, pF));
+      return wrap(bfmgr.visit(pF, converter));
     }
   }
 
@@ -468,13 +466,8 @@ class SylvanBDDRegionManager implements RegionManager {
     }
 
     @Override
-    public Long visitTrue() {
-      return JSylvan.getTrue();
-    }
-
-    @Override
-    public Long visitFalse() {
-      return JSylvan.getFalse();
+    public Long visitConstant(boolean value) {
+      return value ? JSylvan.getTrue() : JSylvan.getFalse();
     }
 
     @Override
@@ -483,7 +476,7 @@ class SylvanBDDRegionManager implements RegionManager {
     }
 
     @Override
-    public Long visitAtom(BooleanFormula pAtom, FuncDecl decl) {
+    public Long visitAtom(BooleanFormula pAtom, FunctionDeclaration<BooleanFormula> decl) {
       return unwrap(atomToRegion.apply(pAtom));
     }
 
@@ -492,7 +485,7 @@ class SylvanBDDRegionManager implements RegionManager {
     private long convert(BooleanFormula pOperand) {
       Long operand = cache.get(pOperand);
       if (operand == null) {
-        operand = ref(bfmgr.visit(this, pOperand));
+        operand = ref(bfmgr.visit(pOperand, this));
         cache.put(pOperand, operand);
       }
       return operand;
@@ -560,7 +553,8 @@ class SylvanBDDRegionManager implements RegionManager {
     }
 
     @Override
-    public Long visitQuantifier(Quantifier q, List<Formula> boundVars, BooleanFormula pBody) {
+    public Long visitQuantifier(Quantifier q, BooleanFormula quantifiedAST, List<Formula>
+        boundVars, BooleanFormula pBody) {
       throw new UnsupportedOperationException();
     }
   }

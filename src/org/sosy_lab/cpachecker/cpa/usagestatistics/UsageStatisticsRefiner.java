@@ -24,27 +24,28 @@
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 import java.io.PrintStream;
 import java.util.Collection;
-
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
+import org.sosy_lab.cpachecker.core.interfaces.Refiner;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
 import org.sosy_lab.cpachecker.core.interfaces.WrapperCPA;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
+import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
 import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateCPA;
 import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateRefiner;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.ConfigurableRefinementBlock;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.refinement.RefinementBlockFactory;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 
-public class UsageStatisticsRefiner extends BAMPredicateRefiner implements StatisticsProvider {
+public class UsageStatisticsRefiner implements Refiner, StatisticsProvider {
 
   private class Stats implements Statistics {
 
     @Override
-    public void printStatistics(PrintStream pOut, Result pResult, ReachedSet pReached) {
+    public void printStatistics(PrintStream pOut, Result pResult, UnmodifiableReachedSet pReached) {
       pOut.println("");
       startingBlock.printStatistics(pOut);
     }
@@ -61,7 +62,6 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
   private final ConfigurableRefinementBlock<ReachedSet> startingBlock;
 
   public UsageStatisticsRefiner(Configuration pConfig, ConfigurableProgramAnalysis pCpa) throws InvalidConfigurationException {
-    super(pCpa);
     RefinementBlockFactory factory = new RefinementBlockFactory(pCpa, pConfig);
     startingBlock = factory.create();
   }
@@ -87,7 +87,6 @@ public class UsageStatisticsRefiner extends BAMPredicateRefiner implements Stati
 
   @Override
   public void collectStatistics(Collection<Statistics> pStatsCollection) {
-    super.collectStatistics(pStatsCollection);
     pStatsCollection.add(pStat);
   }
 

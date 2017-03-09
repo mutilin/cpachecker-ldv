@@ -23,33 +23,101 @@
  */
 package org.sosy_lab.cpachecker.util;
 
-import static com.google.common.base.Preconditions.*;
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Predicates.not;
-
-import java.util.ArrayDeque;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.Queue;
-import java.util.Set;
-import java.util.SortedSet;
-
-import org.sosy_lab.common.ShutdownNotifier;
-import org.sosy_lab.common.collect.Collections3;
-import org.sosy_lab.cpachecker.cfa.ast.AbstractSimpleDeclaration;
-import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
-import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
-import org.sosy_lab.cpachecker.cfa.model.CFAEdgeType;
-import org.sosy_lab.cpachecker.cfa.model.CFANode;
-import org.sosy_lab.cpachecker.util.CFATraversal.DefaultCFAVisitor;
-import org.sosy_lab.cpachecker.util.CFATraversal.TraversalProcess;
+import static com.google.common.collect.FluentIterable.from;
 
 import com.google.common.base.Function;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.FluentIterable;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Queues;
+import com.google.common.collect.TreeTraverser;
 import com.google.common.collect.UnmodifiableIterator;
+
+import org.sosy_lab.common.Optionals;
+import org.sosy_lab.common.ShutdownNotifier;
+import org.sosy_lab.common.collect.Collections3;
+import org.sosy_lab.cpachecker.cfa.ast.AArraySubscriptExpression;
+import org.sosy_lab.cpachecker.cfa.ast.AAstNode;
+import org.sosy_lab.cpachecker.cfa.ast.AAstNodeVisitor;
+import org.sosy_lab.cpachecker.cfa.ast.ABinaryExpression;
+import org.sosy_lab.cpachecker.cfa.ast.ACastExpression;
+import org.sosy_lab.cpachecker.cfa.ast.ACharLiteralExpression;
+import org.sosy_lab.cpachecker.cfa.ast.AExpression;
+import org.sosy_lab.cpachecker.cfa.ast.AExpressionAssignmentStatement;
+import org.sosy_lab.cpachecker.cfa.ast.AExpressionStatement;
+import org.sosy_lab.cpachecker.cfa.ast.AFloatLiteralExpression;
+import org.sosy_lab.cpachecker.cfa.ast.AFunctionCallAssignmentStatement;
+import org.sosy_lab.cpachecker.cfa.ast.AFunctionCallExpression;
+import org.sosy_lab.cpachecker.cfa.ast.AFunctionCallStatement;
+import org.sosy_lab.cpachecker.cfa.ast.AFunctionDeclaration;
+import org.sosy_lab.cpachecker.cfa.ast.AIdExpression;
+import org.sosy_lab.cpachecker.cfa.ast.AInitializerExpression;
+import org.sosy_lab.cpachecker.cfa.ast.AIntegerLiteralExpression;
+import org.sosy_lab.cpachecker.cfa.ast.ALeftHandSide;
+import org.sosy_lab.cpachecker.cfa.ast.AParameterDeclaration;
+import org.sosy_lab.cpachecker.cfa.ast.AReturnStatement;
+import org.sosy_lab.cpachecker.cfa.ast.AStringLiteralExpression;
+import org.sosy_lab.cpachecker.cfa.ast.AUnaryExpression;
+import org.sosy_lab.cpachecker.cfa.ast.AVariableDeclaration;
+import org.sosy_lab.cpachecker.cfa.ast.AbstractSimpleDeclaration;
+import org.sosy_lab.cpachecker.cfa.ast.FileLocation;
+import org.sosy_lab.cpachecker.cfa.ast.c.CAddressOfLabelExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CArrayDesignator;
+import org.sosy_lab.cpachecker.cfa.ast.c.CArrayRangeDesignator;
+import org.sosy_lab.cpachecker.cfa.ast.c.CAstNode;
+import org.sosy_lab.cpachecker.cfa.ast.c.CComplexCastExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CComplexTypeDeclaration;
+import org.sosy_lab.cpachecker.cfa.ast.c.CDesignatedInitializer;
+import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CFieldDesignator;
+import org.sosy_lab.cpachecker.cfa.ast.c.CFieldReference;
+import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CImaginaryLiteralExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CInitializer;
+import org.sosy_lab.cpachecker.cfa.ast.c.CInitializerExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CInitializerList;
+import org.sosy_lab.cpachecker.cfa.ast.c.CPointerExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSide;
+import org.sosy_lab.cpachecker.cfa.ast.c.CTypeDefDeclaration;
+import org.sosy_lab.cpachecker.cfa.ast.c.CTypeIdExpression;
+import org.sosy_lab.cpachecker.cfa.ast.java.JArrayCreationExpression;
+import org.sosy_lab.cpachecker.cfa.ast.java.JArrayInitializer;
+import org.sosy_lab.cpachecker.cfa.ast.java.JArrayLengthExpression;
+import org.sosy_lab.cpachecker.cfa.ast.java.JAstNode;
+import org.sosy_lab.cpachecker.cfa.ast.java.JBooleanLiteralExpression;
+import org.sosy_lab.cpachecker.cfa.ast.java.JClassInstanceCreation;
+import org.sosy_lab.cpachecker.cfa.ast.java.JEnumConstantExpression;
+import org.sosy_lab.cpachecker.cfa.ast.java.JNullLiteralExpression;
+import org.sosy_lab.cpachecker.cfa.ast.java.JRunTimeTypeEqualsType;
+import org.sosy_lab.cpachecker.cfa.ast.java.JThisExpression;
+import org.sosy_lab.cpachecker.cfa.ast.java.JVariableRunTimeType;
+import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
+import org.sosy_lab.cpachecker.cfa.model.BlankEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdgeType;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.FunctionCallEdge;
+import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
+import org.sosy_lab.cpachecker.cfa.model.FunctionSummaryEdge;
+import org.sosy_lab.cpachecker.cfa.types.c.CEnumType.CEnumerator;
+import org.sosy_lab.cpachecker.util.CFATraversal.DefaultCFAVisitor;
+import org.sosy_lab.cpachecker.util.CFATraversal.TraversalProcess;
+
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Queue;
+import java.util.Set;
+import java.util.SortedSet;
 
 public class CFAUtils {
 
@@ -177,27 +245,12 @@ public class CFAUtils {
     };
   }
 
-  public static final Function<CFAEdge,  CFANode> TO_PREDECESSOR = new Function<CFAEdge,  CFANode>() {
-      @Override
-      public CFANode apply(CFAEdge pInput) {
-        return pInput.getPredecessor();
-      }
-    };
-
-
-  public static final Function<CFAEdge,  CFANode> TO_SUCCESSOR = new Function<CFAEdge,  CFANode>() {
-    @Override
-    public CFANode apply(CFAEdge pInput) {
-      return pInput.getSuccessor();
-    }
-  };
-
   /**
    * Return an {@link Iterable} that contains the predecessor nodes of a given CFANode,
    * excluding the one reachable via the summary edge (if there is one).
    */
   public static FluentIterable<CFANode> predecessorsOf(final CFANode node) {
-    return enteringEdges(node).transform(TO_PREDECESSOR);
+    return enteringEdges(node).transform(CFAEdge::getPredecessor);
   }
 
   /**
@@ -205,7 +258,7 @@ public class CFAUtils {
    * including the one reachable via the summary edge (if there is one).
    */
   public static FluentIterable<CFANode> allPredecessorsOf(final CFANode node) {
-    return allEnteringEdges(node).transform(TO_PREDECESSOR);
+    return allEnteringEdges(node).transform(CFAEdge::getPredecessor);
   }
 
   /**
@@ -213,7 +266,7 @@ public class CFAUtils {
    * excluding the one reachable via the summary edge (if there is one).
    */
   public static FluentIterable<CFANode> successorsOf(final CFANode node) {
-    return leavingEdges(node).transform(TO_SUCCESSOR);
+    return leavingEdges(node).transform(CFAEdge::getSuccessor);
   }
 
   /**
@@ -221,25 +274,8 @@ public class CFAUtils {
    * including the one reachable via the summary edge (if there is one).
    */
   public static FluentIterable<CFANode> allSuccessorsOf(final CFANode node) {
-    return allLeavingEdges(node).transform(TO_SUCCESSOR);
+    return allLeavingEdges(node).transform(CFAEdge::getSuccessor);
   }
-
-  public static final Function<CFANode, String> GET_FUNCTION = new Function<CFANode, String>() {
-    @Override
-    public String apply(CFANode pInput) {
-      return pInput.getFunctionName();
-    }
-  };
-
-  /**
-   * A comparator for comparing {@link CFANode}s by their node numbers.
-   */
-  public static final Comparator<CFANode> NODE_NUMBER_COMPARATOR = new Comparator<CFANode>() {
-    @Override
-    public int compare(CFANode pO1, CFANode pO2) {
-      return Integer.compare(pO1.getNodeNumber(), pO2.getNodeNumber());
-    }
-  };
 
   /**
    * Returns a predicate for CFA edges with the given edge type.
@@ -249,14 +285,7 @@ public class CFAUtils {
    */
   public static Predicate<CFAEdge> edgeHasType(final CFAEdgeType pType) {
     checkNotNull(pType);
-    return new Predicate<CFAEdge>() {
-
-      @Override
-      public boolean apply(CFAEdge pInput) {
-        return pInput.getEdgeType() == pType;
-      }
-
-    };
+    return pInput -> pInput.getEdgeType() == pType;
   }
 
   /**
@@ -377,5 +406,434 @@ public class CFAUtils {
     // produces them.
     String prefix = checkNotNull(function) + "::";
     return Collections3.subSetWithPrefix(variables, prefix);
+  }
+
+  /**
+   * Get all (sub)-paths through the given nodes connected only via blank edges.
+   *
+   * @param pNode the node to get the blank paths for.
+   * @return all (sub)-paths through the given nodes connected only via blank edges.
+   */
+  public static Iterable<List<CFANode>> getBlankPaths(CFANode pNode) {
+    List<List<CFANode>> blankPaths = new ArrayList<>();
+    Queue<List<CFANode>> waitlist = Queues.newArrayDeque();
+    waitlist.offer(ImmutableList.of(pNode));
+    while (!waitlist.isEmpty()) {
+      List<CFANode> currentPath = waitlist.poll();
+      CFANode pathSucc = currentPath.get(currentPath.size() - 1);
+      List<BlankEdge> leavingBlankEdges =
+          CFAUtils.leavingEdges(pathSucc).filter(BlankEdge.class).toList();
+      if (pathSucc.getNumLeavingEdges() <= 0
+          || leavingBlankEdges.size() < pathSucc.getNumLeavingEdges()) {
+        blankPaths.add(currentPath);
+      } else {
+        for (CFAEdge leavingEdge : leavingBlankEdges) {
+          CFANode successor = leavingEdge.getSuccessor();
+          if (!currentPath.contains(successor)) {
+            List<CFANode> newPath =
+                ImmutableList.<CFANode>builder().addAll(currentPath).add(successor).build();
+            waitlist.offer(newPath);
+          }
+        }
+      }
+    }
+    waitlist.addAll(blankPaths);
+    blankPaths.clear();
+    while (!waitlist.isEmpty()) {
+      List<CFANode> currentPath = waitlist.poll();
+      CFANode pathPred = currentPath.get(0);
+      List<BlankEdge> enteringBlankEdges =
+          CFAUtils.enteringEdges(pathPred).filter(BlankEdge.class).toList();
+      if (pathPred.getNumEnteringEdges() <= 0
+          || enteringBlankEdges.size() < pathPred.getNumEnteringEdges()) {
+        blankPaths.add(currentPath);
+      } else {
+        for (CFAEdge enteringEdge : enteringBlankEdges) {
+          CFANode predecessor = enteringEdge.getPredecessor();
+          if (!currentPath.contains(predecessor)) {
+            List<CFANode> newPath =
+                ImmutableList.<CFANode>builder().add(predecessor).addAll(currentPath).build();
+            waitlist.offer(newPath);
+          }
+        }
+      }
+    }
+    return blankPaths;
+  }
+
+  /**
+   * Get all {@link FileLocation} objects that are attached to an edge or its AST nodes.
+   * The result has non-deterministic order.
+   */
+  public static Set<FileLocation> getFileLocationsFromCfaEdge(CFAEdge pEdge) {
+    Set<FileLocation> result =
+        from(getAstNodesFromCfaEdge(pEdge))
+            .transformAndConcat(node -> traverseRecursively((CAstNode) node))
+            .transform(CAstNode::getFileLocation)
+            .copyInto(new HashSet<>());
+
+    result.add(pEdge.getFileLocation());
+    result.remove(FileLocation.DUMMY);
+
+    if (result.isEmpty() && pEdge.getPredecessor() instanceof FunctionEntryNode) {
+      FunctionEntryNode functionEntryNode = (FunctionEntryNode) pEdge.getPredecessor();
+      if (!functionEntryNode.getFileLocation().equals(FileLocation.DUMMY)) {
+        return Collections.singleton(functionEntryNode.getFileLocation());
+      }
+    }
+    return Collections.unmodifiableSet(result);
+  }
+
+  private static Iterable<? extends AAstNode> getAstNodesFromCfaEdge(final CFAEdge edge) {
+    switch (edge.getEdgeType()) {
+      case CallToReturnEdge:
+        FunctionSummaryEdge fnSumEdge = (FunctionSummaryEdge) edge;
+        return ImmutableSet.of(fnSumEdge.getExpression());
+
+      case FunctionCallEdge:
+        FunctionCallEdge functionCallEdge = (FunctionCallEdge) edge;
+        return Iterables.concat(
+            Optionals.asSet(edge.getRawAST()),
+            getAstNodesFromCfaEdge(functionCallEdge.getSummaryEdge()));
+
+      default:
+        return Optionals.asSet(edge.getRawAST());
+    }
+  }
+
+  /**
+   * Return all variable names that are referenced in an expression,
+   * in pre-order and possibly with duplicates.
+   */
+  public static FluentIterable<String> getVariableNamesOfExpression(CExpression expr) {
+    return getIdExpressionsOfExpression(expr)
+        .transform(id -> id.getDeclaration().getQualifiedName());
+  }
+
+  /**
+   * Return all {@link CIdExpression}s that appear in an expression,
+   * in pre-order and possibly with duplicates.
+   */
+  public static FluentIterable<CIdExpression> getIdExpressionsOfExpression(CExpression expr) {
+    return traverseRecursively(expr).filter(CIdExpression.class);
+  }
+
+  /**
+   * Get an iterable that recursively lists all AST nodes that occur in an AST
+   * (in pre-order).
+   */
+  public static FluentIterable<AAstNode> traverseRecursively(AAstNode root) {
+    return AstNodeTraverser.REGULAR_INSTANCE.preOrderTraversal(root);
+  }
+
+  /**
+   * Get an iterable that recursively lists all AST nodes that occur in a C AST
+   * (in pre-order).
+   */
+  @SuppressWarnings(
+      "unchecked") // by construction, we only get CAstNodes if we start with a CAstNode
+  public static FluentIterable<CAstNode> traverseRecursively(CAstNode root) {
+    return (FluentIterable<CAstNode>)
+        (FluentIterable<?>) AstNodeTraverser.REGULAR_INSTANCE.preOrderTraversal(root);
+  }
+
+  /**
+   * Get an iterable that recursively lists all AST nodes that occur in a Java AST
+   * (in pre-order).
+   */
+  @SuppressWarnings(
+      "unchecked") // by construction, we only get JAstNodes if we start with a jAstNode
+  public static FluentIterable<JAstNode> traverseRecursively(JAstNode root) {
+    return (FluentIterable<JAstNode>)
+        (FluentIterable<?>) AstNodeTraverser.REGULAR_INSTANCE.preOrderTraversal(root);
+  }
+
+  /**
+   * Get an iterable that recursively lists all AST nodes that occur in a CRightHandSide
+   * (in pre-order).
+   */
+  @SuppressWarnings("unchecked") // by construction, we only get CRHS if we start with a CRHS
+  public static FluentIterable<CRightHandSide> traverseRecursively(CRightHandSide root) {
+    return (FluentIterable<CRightHandSide>)
+        (FluentIterable<?>) AstNodeTraverser.REGULAR_INSTANCE.preOrderTraversal(root);
+  }
+
+  /**
+   * Get an iterable that recursively lists all AST nodes that occur in a CExpression
+   * (in pre-order).
+   */
+  @SuppressWarnings("unchecked") // by construction, we only get CExps if we start with a CExp
+  public static FluentIterable<CExpression> traverseRecursively(CExpression root) {
+    return (FluentIterable<CExpression>)
+        (FluentIterable<?>) AstNodeTraverser.REGULAR_INSTANCE.preOrderTraversal(root);
+  }
+
+  /**
+   * Get an iterable that recursively lists AST nodes that occur in a {@link ALeftHandSide}
+   * (in pre-order).
+   *
+   * Note: contrary to {@link #traverseRecursively(AAstNode)},
+   * this iterable does not contain the subscript expressions of arrays,
+   * which are often not interesting when looking at the left-hand side of an array assignment.
+   */
+  @SuppressWarnings("unchecked") // by construction, we only get AExps if we start with a ALHS
+  public static FluentIterable<AExpression> traverseLeftHandSideRecursively(ALeftHandSide root) {
+    return (FluentIterable<AExpression>)
+        (FluentIterable<?>) AstNodeTraverser.LHS_INSTANCE.preOrderTraversal(root);
+  }
+
+  private static final class AstNodeTraverser extends TreeTraverser<AAstNode> {
+
+    private final AAstNodeVisitor<Iterable<? extends AAstNode>, RuntimeException> visitor;
+
+    private AstNodeTraverser(AAstNodeVisitor<Iterable<? extends AAstNode>, RuntimeException> pV) {
+      visitor = pV;
+    }
+
+    private static final AstNodeTraverser REGULAR_INSTANCE =
+        new AstNodeTraverser(new ChildExpressionVisitor());
+    private static final AstNodeTraverser LHS_INSTANCE =
+        new AstNodeTraverser(new LeftHandSideVisitor());
+
+    @SuppressWarnings("unchecked") // cast is safe for iterable
+    @Override
+    public Iterable<AAstNode> children(AAstNode pRoot) {
+      return (Iterable<AAstNode>) pRoot.accept_(visitor);
+    }
+  }
+
+  private static final class LeftHandSideVisitor extends ChildExpressionVisitor {
+
+    @Override
+    public Iterable<AAstNode> visit(AArraySubscriptExpression pE) {
+      return ImmutableList.of(pE.getArrayExpression());
+    }
+  }
+
+  private static class ChildExpressionVisitor
+      extends AAstNodeVisitor<Iterable<? extends AAstNode>, RuntimeException> {
+
+    @Override
+    public Iterable<AAstNode> visit(AArraySubscriptExpression pE) {
+      return ImmutableList.of(pE.getArrayExpression(), pE.getSubscriptExpression());
+    }
+
+    @Override
+    public Iterable<AAstNode> visit(ABinaryExpression pE) {
+      return ImmutableList.of(pE.getOperand1(), pE.getOperand2());
+    }
+
+    @Override
+    public Iterable<AAstNode> visit(ACastExpression pE) {
+      return ImmutableList.of(pE.getOperand());
+    }
+
+    @Override
+    public Iterable<CAstNode> visit(CComplexCastExpression pE) {
+      return ImmutableList.of(pE.getOperand());
+    }
+
+    @Override
+    public Iterable<CAstNode> visit(CFieldReference pE) {
+      return ImmutableList.of(pE.getFieldOwner());
+    }
+
+    @Override
+    public Iterable<CAstNode> visit(CPointerExpression pE) {
+      return ImmutableList.of(pE.getOperand());
+    }
+
+    @Override
+    public Iterable<AAstNode> visit(AUnaryExpression pE) {
+      return ImmutableList.of(pE.getOperand());
+    }
+
+    @Override
+    protected Iterable<? extends AAstNode> visit(AInitializerExpression pExp) {
+      return ImmutableList.of(pExp.getExpression());
+    }
+
+    @Override
+    public Iterable<AAstNode> visit(AIdExpression pExp) {
+      return ImmutableList.of();
+    }
+
+    @Override
+    public Iterable<AAstNode> visit(ACharLiteralExpression pExp) {
+      return ImmutableList.of();
+    }
+
+    @Override
+    public Iterable<AAstNode> visit(AFloatLiteralExpression pExp) {
+      return ImmutableList.of();
+    }
+
+    @Override
+    public Iterable<AAstNode> visit(AIntegerLiteralExpression pExp) {
+      return ImmutableList.of();
+    }
+
+    @Override
+    public Iterable<AAstNode> visit(AStringLiteralExpression pExp) {
+      return ImmutableList.of();
+    }
+
+    @Override
+    public Iterable<AAstNode> visit(AFunctionCallExpression pE) {
+      return Iterables.concat(
+          ImmutableList.of(pE.getFunctionNameExpression()), pE.getParameterExpressions());
+    }
+
+    @Override
+    public Iterable<AAstNode> visit(AExpressionAssignmentStatement pS) {
+      return ImmutableList.of(pS.getLeftHandSide(), pS.getRightHandSide());
+    }
+
+    @Override
+    public Iterable<AAstNode> visit(AExpressionStatement pS) {
+      return ImmutableList.of(pS.getExpression());
+    }
+
+    @Override
+    public Iterable<AAstNode> visit(AFunctionCallAssignmentStatement pS) {
+      return ImmutableList.of(pS.getLeftHandSide(), pS.getRightHandSide());
+    }
+
+    @Override
+    public Iterable<AAstNode> visit(AFunctionCallStatement pS) {
+      return ImmutableList.of(pS.getFunctionCallExpression());
+    }
+
+    @Override
+    public Iterable<? extends AAstNode> visit(AReturnStatement pNode) {
+      return Optionals.asSet(pNode.getReturnValue());
+    }
+
+    @Override
+    public Iterable<CAstNode> visit(CComplexTypeDeclaration pNode) {
+      return ImmutableList.of();
+    }
+
+    @Override
+    public Iterable<? extends CAstNode> visit(CEnumerator pNode) {
+      return ImmutableList.of();
+    }
+
+    @Override
+    public Iterable<? extends AAstNode> visit(AFunctionDeclaration pNode) {
+      return pNode.getParameters();
+    }
+
+    @Override
+    public Iterable<CAstNode> visit(AParameterDeclaration pNode) {
+      return ImmutableList.of();
+    }
+
+    @Override
+    public Iterable<AAstNode> visit(AVariableDeclaration pNode) {
+      return pNode.getInitializer() == null
+          ? ImmutableList.of()
+          : ImmutableList.of(pNode.getInitializer());
+    }
+
+    @Override
+    public Iterable<CAstNode> visit(CTypeDefDeclaration pNode) {
+      return ImmutableList.of();
+    }
+
+    @Override
+    public Iterable<CAstNode> visit(CDesignatedInitializer pNode) {
+      return Iterables.concat(pNode.getDesignators(), ImmutableList.of(pNode.getRightHandSide()));
+    }
+
+    @Override
+    public Iterable<CAstNode> visit(CInitializerExpression pNode) {
+      return ImmutableList.of(pNode.getExpression());
+    }
+
+    @Override
+    public Iterable<CInitializer> visit(CInitializerList pNode) {
+      return pNode.getInitializers();
+    }
+
+    @Override
+    public Iterable<CAstNode> visit(CArrayDesignator pNode) {
+      return ImmutableList.of(pNode.getSubscriptExpression());
+    }
+
+    @Override
+    public Iterable<CAstNode> visit(CArrayRangeDesignator pNode) {
+      return ImmutableList.of(pNode.getFloorExpression(), pNode.getCeilExpression());
+    }
+
+    @Override
+    public Iterable<CAstNode> visit(CFieldDesignator pNode) {
+      return ImmutableList.of();
+    }
+
+    @Override
+    public Iterable<AAstNode> visit(CTypeIdExpression pExp) {
+      return ImmutableList.of();
+    }
+
+    @Override
+    public Iterable<AAstNode> visit(CImaginaryLiteralExpression pExp) {
+      return ImmutableList.of();
+    }
+
+    @Override
+    public Iterable<AAstNode> visit(CAddressOfLabelExpression pExp) {
+      return ImmutableList.of();
+    }
+
+    @Override
+    public Iterable<AAstNode> visit(JClassInstanceCreation pExp) {
+      return ImmutableList.of(pExp.getFunctionNameExpression());
+    }
+
+    @Override
+    public Iterable<AAstNode> visit(JBooleanLiteralExpression pExp) {
+      return ImmutableList.of();
+    }
+
+    @Override
+    public Iterable<AAstNode> visit(JArrayCreationExpression pExp) {
+      return Iterables.concat(pExp.getLength(), ImmutableList.of(pExp.getInitializer()));
+    }
+
+    @Override
+    public Iterable<? extends AAstNode> visit(JArrayInitializer pNode) {
+      return pNode.getInitializerExpressions();
+    }
+
+    @Override
+    public Iterable<AAstNode> visit(JArrayLengthExpression pExp) {
+      return ImmutableList.of(pExp.getQualifier());
+    }
+
+    @Override
+    public Iterable<AAstNode> visit(JVariableRunTimeType pExp) {
+      return ImmutableList.of(pExp.getReferencedVariable());
+    }
+
+    @Override
+    public Iterable<AAstNode> visit(JRunTimeTypeEqualsType pExp) {
+      return ImmutableList.of(pExp.getRunTimeTypeExpression());
+    }
+
+    @Override
+    public Iterable<AAstNode> visit(JNullLiteralExpression pExp) {
+      return ImmutableList.of();
+    }
+
+    @Override
+    public Iterable<AAstNode> visit(JEnumConstantExpression pExp) {
+      return ImmutableList.of();
+    }
+
+    @Override
+    public Iterable<AAstNode> visit(JThisExpression pExp) {
+      return ImmutableList.of();
+    }
   }
 }

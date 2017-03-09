@@ -39,23 +39,18 @@ public class NoOpReducer implements Reducer {
   }
 
   @Override
-  public AbstractState getVariableReducedState(AbstractState pExpandedState, Block pContext, Block outerContext, CFANode pCallNode) {
+  public AbstractState getVariableReducedState(AbstractState pExpandedState, Block pContext, CFANode pCallNode) {
     return pExpandedState;
   }
 
   @Override
-  public AbstractState getVariableExpandedState(AbstractState pRootState, Block pReducedContext, Block outerSubtree, AbstractState pReducedState) {
+  public AbstractState getVariableExpandedState(AbstractState pRootState, Block pReducedContext, AbstractState pReducedState) {
     return pReducedState;
   }
 
   @Override
-  public Object getHashCodeForState(AbstractState pStateKey) {
-    return pStateKey;
-  }
-
-  @Override
   public Object getHashCodeForState(AbstractState pStateKey, Precision pPrecisionKey) {
-    return getHashCodeForState(pStateKey);
+    return pStateKey;
   }
 
   @Override
@@ -66,23 +61,6 @@ public class NoOpReducer implements Reducer {
   @Override
   public Precision getVariableExpandedPrecision(Precision rootPrecision, Block rootContext, Precision reducedPrecision) {
    return reducedPrecision;
-  }
-
-  @Override
-  public int measurePrecisionDifference(Precision pPrecision, Precision pOtherPrecision) {
-    return 0;
-  }
-
-  @Override
-  public AbstractState getVariableReducedStateForProofChecking(AbstractState pExpandedState, Block pContext,
-      CFANode pCallNode) {
-    return pExpandedState;
-  }
-
-  @Override
-  public AbstractState getVariableExpandedStateForProofChecking(AbstractState pRootState, Block pReducedContext,
-      AbstractState pReducedState) {
-    return pReducedState;
   }
 
   @Override

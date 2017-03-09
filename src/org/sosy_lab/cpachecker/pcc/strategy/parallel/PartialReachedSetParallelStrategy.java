@@ -23,6 +23,7 @@
  */
 package org.sosy_lab.cpachecker.pcc.strategy.parallel;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Semaphore;
@@ -31,7 +32,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Level;
-
+import javax.annotation.Nullable;
 import org.sosy_lab.common.ShutdownNotifier;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
@@ -54,9 +55,14 @@ public class PartialReachedSetParallelStrategy extends PartialReachedSetStrategy
       description = "If enabled, distributes checking of partial elements depending on actual checking costs, else uses the number of elements")
   private boolean enableLoadDistribution = false;
 
-  public PartialReachedSetParallelStrategy(Configuration pConfig, LogManager pLogger,
-      ShutdownNotifier pShutdownNotifier, PropertyCheckerCPA pCpa) throws InvalidConfigurationException {
-    super(pConfig, pLogger, pShutdownNotifier, pCpa);
+  public PartialReachedSetParallelStrategy(
+      Configuration pConfig,
+      LogManager pLogger,
+      ShutdownNotifier pShutdownNotifier,
+      final Path pProofFile,
+      @Nullable PropertyCheckerCPA pCpa)
+      throws InvalidConfigurationException {
+    super(pConfig, pLogger, pShutdownNotifier, pProofFile, pCpa);
     pConfig.inject(this);
   }
 

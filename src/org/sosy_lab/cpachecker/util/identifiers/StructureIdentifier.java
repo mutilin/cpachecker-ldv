@@ -25,28 +25,14 @@ package org.sosy_lab.cpachecker.util.identifiers;
 
 import java.util.Collection;
 import java.util.Map;
-
-import org.sosy_lab.cpachecker.cfa.types.c.CArrayType;
-import org.sosy_lab.cpachecker.cfa.types.c.CBasicType;
-import org.sosy_lab.cpachecker.cfa.types.c.CCompositeType;
-import org.sosy_lab.cpachecker.cfa.types.c.CElaboratedType;
-import org.sosy_lab.cpachecker.cfa.types.c.CEnumType;
-import org.sosy_lab.cpachecker.cfa.types.c.CFunctionType;
-import org.sosy_lab.cpachecker.cfa.types.c.CPointerType;
-import org.sosy_lab.cpachecker.cfa.types.c.CProblemType;
-import org.sosy_lab.cpachecker.cfa.types.c.CSimpleType;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
-import org.sosy_lab.cpachecker.cfa.types.c.CTypeVisitor;
-import org.sosy_lab.cpachecker.cfa.types.c.CTypedefType;
-import org.sosy_lab.cpachecker.cfa.types.c.CVoidType;
 import org.sosy_lab.cpachecker.cpa.local.LocalState.DataType;
 import org.sosy_lab.cpachecker.cpa.local.LocalTransferRelation;
-import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 
 
 
 public class StructureIdentifier extends SingleIdentifier{
-  private class TypedefConverter implements CTypeVisitor<CType, HandleCodeException> {
+  /*private class TypedefConverter implements CTypeVisitor<CType, HandleCodeException> {
 
     @Override
     public CType visit(CArrayType pArrayType) throws HandleCodeException {
@@ -100,7 +86,12 @@ public class StructureIdentifier extends SingleIdentifier{
       return pVoidType;
     }
 
-  }
+    @Override
+    public CType visit(CBitFieldType pCBitFieldType) throws HandleCodeException {
+      return null;
+    }
+
+  }*/
 
   protected AbstractIdentifier owner;
 
@@ -192,7 +183,7 @@ public class StructureIdentifier extends SingleIdentifier{
     return "s;" + name + ";" + dereference;
   }
 
-  private CType getStructureType() {
+  /*private CType getStructureType() {
     if (owner instanceof SingleIdentifier) {
       try {
         TypedefConverter visitor = new TypedefConverter();
@@ -208,7 +199,7 @@ public class StructureIdentifier extends SingleIdentifier{
       System.err.println("Can't create structureFieldId for " + this.toString());
       return null;
     }
-  }
+  }*/
 
   @Override
   public GeneralIdentifier getGeneralId() {

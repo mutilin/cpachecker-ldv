@@ -36,14 +36,14 @@ import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.cpa.arg.counterexamples.CounterexampleFilter;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractionManager;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateCPA;
-import org.sosy_lab.solver.SolverException;
+import org.sosy_lab.java_smt.api.SolverException;
 import org.sosy_lab.cpachecker.util.CPAs;
 import org.sosy_lab.cpachecker.util.predicates.AbstractionPredicate;
 import org.sosy_lab.cpachecker.util.predicates.smt.Solver;
-import org.sosy_lab.solver.api.BooleanFormula;
-import org.sosy_lab.solver.api.InterpolatingProverEnvironment;
+import org.sosy_lab.java_smt.api.BooleanFormula;
+import org.sosy_lab.java_smt.api.InterpolatingProverEnvironment;
 
-import com.google.common.base.Optional;
+import java.util.Optional;
 import com.google.common.collect.ImmutableSet;
 
 /**
@@ -98,18 +98,18 @@ public class InterpolantPredicatesCounterexampleFilter extends AbstractNegatedPa
       if (!itpProver.isUnsat()) {
         // Negated path is not infeasible, cannot produce interpolants.
         // No filtering possible.
-        return Optional.absent();
+        return Optional.empty();
       }
 
       Set<AbstractionPredicate> predicates = new HashSet<>();
       for (int i = 1; i < itpGroupIds.size(); i++) {
         BooleanFormula itp = itpProver.getInterpolant(itpGroupIds.subList(0, i));
-        predicates.addAll(predAbsMgr.extractPredicates(itp));
+        predicates.addAll(predAbsMgr.getPredicatesForAtomsOf(itp));
       }
       return Optional.of(ImmutableSet.copyOf(predicates));
     } catch (SolverException e) {
       logger.logUserException(Level.WARNING, e, "Interpolation failed on counterexample path, cannot filter this counterexample");
-      return Optional.absent();
+      return Optional.empty();
     }
   }
 }

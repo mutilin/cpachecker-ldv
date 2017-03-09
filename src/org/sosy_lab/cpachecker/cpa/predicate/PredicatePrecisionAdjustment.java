@@ -23,39 +23,31 @@
  */
 package org.sosy_lab.cpachecker.cpa.predicate;
 
-import static com.google.common.base.MoreObjects.firstNonNull;
-import static com.google.common.base.Preconditions.checkNotNull;
-
+import com.google.common.base.Function;
+import com.google.common.collect.Sets;
+import java.util.Optional;
 import java.util.Set;
 import java.util.logging.Level;
-
-import javax.annotation.Nullable;
-
 import org.sosy_lab.common.collect.PersistentMap;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
-import org.sosy_lab.cpachecker.core.algorithm.invariants.InvariantGenerator;
-import org.sosy_lab.cpachecker.core.algorithm.invariants.InvariantSupplier;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustment;
 import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustmentResult;
 import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
-import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState.ComputeAbstractionState;
+import org.sosy_lab.cpachecker.cpa.callstack.CallstackStateEqualsWrapper;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
+import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.predicates.AbstractionFormula;
 import org.sosy_lab.cpachecker.util.predicates.AbstractionPredicate;
+import org.sosy_lab.cpachecker.util.predicates.BlockOperator;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormula;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormulaManager;
-import org.sosy_lab.cpachecker.util.predicates.regions.Region;
 import org.sosy_lab.cpachecker.util.predicates.smt.FormulaManagerView;
-import org.sosy_lab.solver.SolverException;
-import org.sosy_lab.solver.api.BooleanFormula;
-
-import com.google.common.base.Function;
-import com.google.common.base.Optional;
-import com.google.common.collect.ImmutableSet;
+import org.sosy_lab.java_smt.api.BooleanFormula;
+import org.sosy_lab.java_smt.api.SolverException;
 
 public class PredicatePrecisionAdjustment implements PrecisionAdjustment {
 
@@ -64,27 +56,36 @@ public class PredicatePrecisionAdjustment implements PrecisionAdjustment {
   final Timer computingAbstractionTime = new Timer();
 
   int numAbstractions = 0;
+  int numTargetAbstractions = 0;
   int numAbstractionsFalse = 0;
   int maxBlockSize = 0;
 
   private final LogManager logger;
+  private final BlockOperator blk;
   private final PredicateAbstractionManager formulaManager;
   private final PathFormulaManager pathFormulaManager;
   private final FormulaManagerView fmgr;
 
-  private @Nullable InvariantGenerator invariantGenerator;
-  private InvariantSupplier invariants;
+  private PredicateCPAInvariantsManager invariants;
+  private final PredicateProvider predicateProvider;
 
-  public PredicatePrecisionAdjustment(PredicateCPA pCpa,
-      InvariantGenerator pInvariantGenerator) {
+  public PredicatePrecisionAdjustment(
+      LogManager pLogger,
+      FormulaManagerView pFmgr,
+      PathFormulaManager pPfmgr,
+      BlockOperator pBlk,
+      PredicateAbstractionManager pPredAbsManager,
+      PredicateCPAInvariantsManager pInvariantSupplier,
+      PredicateProvider pPredicateProvider) {
 
-    logger = pCpa.getLogger();
-    formulaManager = pCpa.getPredicateManager();
-    pathFormulaManager = pCpa.getPathFormulaManager();
-    fmgr = pCpa.getSolver().getFormulaManager();
+    logger = pLogger;
+    fmgr = pFmgr;
+    pathFormulaManager = pPfmgr;
+    blk = pBlk;
+    formulaManager = pPredAbsManager;
 
-    invariantGenerator = checkNotNull(pInvariantGenerator);
-    invariants = InvariantSupplier.TrivialInvariantSupplier.INSTANCE;
+    invariants = pInvariantSupplier;
+    predicateProvider = pPredicateProvider;
   }
 
   @Override
@@ -98,49 +99,82 @@ public class PredicatePrecisionAdjustment implements PrecisionAdjustment {
     totalPrecTime.start();
     try {
       PredicateAbstractState element = (PredicateAbstractState)pElement;
+      CFANode location = AbstractStates.extractLocation(fullState);
 
-      if (element instanceof ComputeAbstractionState) {
+      if (shouldComputeAbstraction(fullState, location, element)) {
         PredicatePrecision precision = (PredicatePrecision)pPrecision;
 
-        return computeAbstraction((ComputeAbstractionState)element, precision);
+        return computeAbstraction(element, precision, location, fullState);
       } else {
         return Optional.of(PrecisionAdjustmentResult.create(
             element, pPrecision, PrecisionAdjustmentResult.Action.CONTINUE));
       }
 
-
     } catch (SolverException e) {
-      throw new CPAException("Solver Failure", e);
+      throw new CPAException("Solver Failure: " + e.getMessage(), e);
     } finally {
       totalPrecTime.stop();
     }
+  }
+
+  private boolean shouldComputeAbstraction(
+      AbstractState fullState, CFANode location, PredicateAbstractState predicateState) {
+    if (predicateState.isAbstractionState()) {
+      return false;
+    }
+    if (blk.isBlockEnd(location, predicateState.getPathFormula().getLength())) {
+      return true;
+    }
+    if (AbstractStates.isTargetState(fullState)) {
+      numTargetAbstractions++;
+      return true;
+    }
+    return false;
   }
 
   /**
    * Compute an abstraction.
    */
   private Optional<PrecisionAdjustmentResult> computeAbstraction(
-      ComputeAbstractionState element,
-      PredicatePrecision precision)
+      PredicateAbstractState element,
+      PredicatePrecision precision,
+      CFANode loc,
+      AbstractState fullState)
       throws SolverException, CPAException, InterruptedException {
 
     AbstractionFormula abstractionFormula = element.getAbstractionFormula();
     PersistentMap<CFANode, Integer> abstractionLocations = element.getAbstractionLocationsOnPath();
     PathFormula pathFormula = element.getPathFormula();
-    CFANode loc = element.getLocation();
-    Integer newLocInstance = firstNonNull(abstractionLocations.get(loc), 0) + 1;
+    Integer newLocInstance = abstractionLocations.getOrDefault(loc, 0) + 1;
+    Optional<CallstackStateEqualsWrapper> callstackWrapper =
+        AbstractStates.extractOptionalCallstackWraper(fullState);
 
     numAbstractions++;
     logger.log(Level.FINEST, "Computing abstraction at instance", newLocInstance, "of node", loc, "in path.");
 
     maxBlockSize = Math.max(maxBlockSize, pathFormula.getLength());
 
-    // get invariants and add them
-    extractInvariants();
-    BooleanFormula invariant = invariants.getInvariantFor(loc, fmgr, pathFormulaManager);
-    if (invariant != null) {
+    // update/get invariants and add them, the need to be instantiated
+    // (we do only update global invariants (computed by a parallelalgorithm) here
+    // as everything else can only be computed during refinement)
+    invariants.updateGlobalInvariants();
+    BooleanFormula invariant;
+    if (invariants.appendToPathFormula()) {
+      invariant =
+          fmgr.instantiate(
+              invariants.getInvariantFor(loc, callstackWrapper, fmgr, pathFormulaManager, pathFormula),
+              pathFormula.getSsa());
+    } else {
+      invariant = fmgr.getBooleanFormulaManager().makeTrue();
+    }
+
+    // we don't want to add trivially true invariants
+    if (!fmgr.getBooleanFormulaManager().isTrue(invariant)) {
       pathFormula = pathFormulaManager.makeAnd(pathFormula, invariant);
     }
+
+    // get additional predicates
+    Set<AbstractionPredicate> additionalPredicates = predicateProvider.getPredicates(fullState);
 
     AbstractionFormula newAbstractionFormula = null;
 
@@ -148,41 +182,27 @@ public class PredicatePrecisionAdjustment implements PrecisionAdjustment {
     computingAbstractionTime.start();
     try {
       Set<AbstractionPredicate> preds = precision.getPredicates(loc, newLocInstance);
+      preds = Sets.union(preds, additionalPredicates);
 
       // compute a new abstraction with a precision based on `preds`
       newAbstractionFormula = formulaManager.buildAbstraction(
-          loc, abstractionFormula, pathFormula, preds);
+          loc, callstackWrapper, abstractionFormula, pathFormula, preds);
     } finally {
       computingAbstractionTime.stop();
-    }
-
-    for (BooleanFormula constraint : element.getConstraints()) {
-      // add constraint to the current abstraction, such that it can be used for further steps in the analysis.
-      // We manually set the SSA-indices for the constraint with the indices available in the current (new) abstractionFormula.
-      // TODO: check if we use identical BDD-nodes for identical atoms for different formulas
-      Region abs = formulaManager.buildRegionFromFormulaWithUnknownAtoms(constraint);
-      BooleanFormula symbolicAbs = constraint;
-      BooleanFormula instantiatedSymbolicAbs = fmgr.instantiate(constraint, newAbstractionFormula.getBlockFormula().getSsa());
-      PathFormula blockFormula = newAbstractionFormula.getBlockFormula(); // has to be equal for 'makeAnd'
-
-      AbstractionFormula constraintAbs = new AbstractionFormula(
-          fmgr, abs, symbolicAbs, instantiatedSymbolicAbs, blockFormula, ImmutableSet.<Integer>of());
-
-      newAbstractionFormula = formulaManager.makeAnd(constraintAbs, newAbstractionFormula);
     }
 
     // if the abstraction is false, return bottom (represented by empty set)
     if (newAbstractionFormula.isFalse()) {
       numAbstractionsFalse++;
       logger.log(Level.FINEST, "Abstraction is false, node is not reachable");
-      return Optional.absent();
+      return Optional.empty();
     }
 
     // create new empty path formula
     PathFormula newPathFormula = pathFormulaManager.makeEmptyPathFormula(pathFormula);
 
     // initialize path formula with current invariants
-    if (invariant != null) {
+    if (!fmgr.getBooleanFormulaManager().isTrue(invariant)) {
       newPathFormula = pathFormulaManager.makeAnd(newPathFormula, invariant);
     }
 
@@ -194,28 +214,5 @@ public class PredicatePrecisionAdjustment implements PrecisionAdjustment {
             newAbstractionFormula, abstractionLocations);
     return Optional.of(PrecisionAdjustmentResult.create(
         state, precision, PrecisionAdjustmentResult.Action.CONTINUE));
-  }
-
-  private void extractInvariants() throws CPAException, InterruptedException {
-    if (invariantGenerator == null) {
-      return; // already done
-    }
-
-    try {
-      invariants = invariantGenerator.get();
-
-    } catch (InterruptedException e) {
-      invariantGenerator.cancel();
-      throw e;
-
-    } finally {
-      invariantGenerator = null; // to allow GC'ing it and the ReachedSet
-    }
-  }
-
-  void setInitialLocation(CFANode initialLocation) {
-    if (invariantGenerator != null) {
-      invariantGenerator.start(initialLocation);
-    }
   }
 }

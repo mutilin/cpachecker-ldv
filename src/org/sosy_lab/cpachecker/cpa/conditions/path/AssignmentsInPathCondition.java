@@ -23,31 +23,33 @@
  */
 package org.sosy_lab.cpachecker.cpa.conditions.path;
 
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.Multimap;
 import java.io.PrintStream;
 import java.util.HashSet;
 import java.util.Set;
-
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.IntegerOption;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
+import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdgeType;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
+import org.sosy_lab.cpachecker.core.interfaces.Precision;
+import org.sosy_lab.cpachecker.core.interfaces.Reducer;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.interfaces.conditions.AvoidanceReportingState;
-import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
+import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
 import org.sosy_lab.cpachecker.cpa.value.type.Value;
 import org.sosy_lab.cpachecker.util.assumptions.PreventingHeuristic;
 import org.sosy_lab.cpachecker.util.predicates.smt.FormulaManagerView;
 import org.sosy_lab.cpachecker.util.states.MemoryLocation;
-import org.sosy_lab.solver.api.BooleanFormula;
-
-import com.google.common.collect.HashMultimap;
-import com.google.common.collect.Multimap;
+import org.sosy_lab.java_smt.api.BooleanFormula;
 
 /**
  * A {@link PathCondition} where the condition is based on the number of assignments (per identifier)
@@ -112,7 +114,7 @@ public class AssignmentsInPathCondition implements PathCondition, Statistics {
   }
 
   @Override
-  public void printStatistics(PrintStream out, Result result, ReachedSet reachedSet) {
+  public void printStatistics(PrintStream out, Result result, UnmodifiableReachedSet reachedSet) {
     out.println("Max. number of assignments: " + maxNumberOfAssignments);
   }
 
@@ -196,6 +198,47 @@ public class AssignmentsInPathCondition implements PathCondition, Statistics {
 
       return exceedingMemoryLocations;
     }
+  }
+
+  private class AssignementsInPathConditionReducer implements Reducer {
+
+    @Override
+    public AbstractState getVariableReducedState(AbstractState pExpandedState, Block pContext, CFANode pCallNode) {
+      return getInitialState(pCallNode);
+    }
+
+    @Override
+    public AbstractState getVariableExpandedState(AbstractState pRootState, Block pReducedContext, AbstractState pReducedState) {
+      return pRootState;
+    }
+
+    @Override
+    public Precision getVariableReducedPrecision(Precision pPrecision, Block pContext) {
+      return pPrecision;
+    }
+
+    @Override
+    public Precision getVariableExpandedPrecision(Precision pRootPrecision, Block pRootContext,
+        Precision pReducedPrecision) {
+      return pRootPrecision;
+    }
+
+    @Override
+    public Object getHashCodeForState(AbstractState pStateKey, Precision pPrecisionKey) {
+      return ((UniqueAssignmentsInPathConditionState)pStateKey).mapping;
+    }
+
+    @Override
+    public AbstractState rebuildStateAfterFunctionCall(AbstractState pRootState, AbstractState pEntryState,
+        AbstractState pExpandedState, FunctionExitNode pExitLocation) {
+      return pRootState;
+    }
+
+  }
+
+  @Override
+  public Reducer getReducer() {
+    return new AssignementsInPathConditionReducer();
   }
 
   /**

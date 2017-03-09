@@ -23,13 +23,14 @@
  */
 package org.sosy_lab.cpachecker.cpa.smg;
 
-import java.util.logging.Level;
-
 import org.sosy_lab.common.ShutdownNotifier;
 import org.sosy_lab.common.configuration.Configuration;
+import org.sosy_lab.common.configuration.FileOption;
+import org.sosy_lab.common.configuration.FileOption.Type;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
+import org.sosy_lab.common.io.PathTemplate;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
@@ -42,7 +43,6 @@ import org.sosy_lab.cpachecker.core.defaults.DelegateAbstractDomain;
 import org.sosy_lab.cpachecker.core.defaults.MergeSepOperator;
 import org.sosy_lab.cpachecker.core.defaults.StopNeverOperator;
 import org.sosy_lab.cpachecker.core.defaults.StopSepOperator;
-import org.sosy_lab.cpachecker.core.defaults.VariableTrackingPrecision;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractDomain;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.CPAFactory;
@@ -55,6 +55,10 @@ import org.sosy_lab.cpachecker.core.interfaces.StateSpacePartition;
 import org.sosy_lab.cpachecker.core.interfaces.StopOperator;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
+import org.sosy_lab.cpachecker.cpa.smg.refiner.SMGPrecision;
+import org.sosy_lab.cpachecker.util.predicates.BlockOperator;
+
+import java.util.logging.Level;
 
 @Options(prefix="cpa.smg")
 public class SMGCPA implements ConfigurableProgramAnalysis, ConfigurableProgramAnalysisWithConcreteCex {
@@ -62,6 +66,18 @@ public class SMGCPA implements ConfigurableProgramAnalysis, ConfigurableProgramA
   public static CPAFactory factory() {
     return AutomaticCPAFactory.forType(SMGCPA.class);
   }
+
+  @Option(secure=true, name = "exportSMG.file", description = "Filename format for SMG graph dumps")
+  @FileOption(Type.OUTPUT_FILE)
+  private PathTemplate exportSMGFilePattern = PathTemplate.ofFormatString("smg/smg-%s.dot");
+
+  @Option(secure=true, toUppercase=true, name = "exportSMGwhen", description = "Describes when SMG graphs should be dumped.")
+  private SMGExportLevel exportSMG = SMGExportLevel.NEVER;
+
+  public static enum SMGExportLevel {NEVER, LEAF, INTERESTING, EVERY}
+
+  @Option(secure = true, description = "with this option enabled, heap abstraction will be enabled.")
+  private boolean enableHeapAbstraction = false;
 
   @Option(secure=true, name="runtimeCheck", description = "Sets the level of runtime checking: NONE, HALF, FULL")
   private SMGRuntimeCheck runtimeCheck = SMGRuntimeCheck.NONE;
@@ -72,15 +88,32 @@ public class SMGCPA implements ConfigurableProgramAnalysis, ConfigurableProgramA
   @Option(secure=true, name="unknownOnUndefined", description = "Emit messages when we encounter non-target undefined behavior")
   private boolean unknownOnUndefined = true;
 
-  @Option(secure=true, name="stop", toUppercase=true, values={"SEP", "NEVER"},
+  @Option(secure=true, name="stop", toUppercase=true, values={"SEP", "NEVER", "END_BLOCK"},
       description="which stop operator to use for the SMGCPA")
   private String stopType = "SEP";
+
+  @Option(secure = true, name = "externalAllocationSize", description = "Default size of externally allocated memory")
+  private int externalAllocationSize = Integer.MAX_VALUE;
+
+  @Option(secure = true, name = "trackPredicates", description = "Enable track predicates on SMG state")
+  private boolean trackPredicates = false;
+
+  public int getExternalAllocationSize() {
+    return externalAllocationSize;
+  }
+
+  public boolean getTrackPredicates() {
+    return trackPredicates;
+  }
 
   private final AbstractDomain abstractDomain;
   private final MergeOperator mergeOperator;
   private final StopOperator stopOperator;
   private final TransferRelation transferRelation;
-  private SMGPrecisionAdjustment precisionAdjustment;
+
+  private final SMGPredicateManager smgPredicateManager;
+  private final BlockOperator blockOperator;
+  private final SMGPrecisionAdjustment precisionAdjustment;
 
   private final MachineModel machineModel;
 
@@ -90,41 +123,66 @@ public class SMGCPA implements ConfigurableProgramAnalysis, ConfigurableProgramA
   private final CFA cfa;
 
   private final AssumptionToEdgeAllocator assumptionToEdgeAllocator;
+  private final SMGExportDotOption exportOptions;
 
-  private VariableTrackingPrecision precision;
+  private SMGPrecision precision;
 
-  private SMGCPA(Configuration pConfig, LogManager pLogger, ShutdownNotifier pShutdownNotifier, CFA pCfa) throws InvalidConfigurationException {
+  private SMGCPA(Configuration pConfig, LogManager pLogger, ShutdownNotifier pShutdownNotifier,
+      CFA pCfa) throws InvalidConfigurationException {
     config = pConfig;
     config.inject(this);
     cfa = pCfa;
     machineModel = cfa.getMachineModel();
     logger = pLogger;
     shutdownNotifier = pShutdownNotifier;
+    exportOptions = new SMGExportDotOption(exportSMGFilePattern, exportSMG);
 
     assumptionToEdgeAllocator = new AssumptionToEdgeAllocator(config, logger, machineModel);
-    precisionAdjustment = new SMGPrecisionAdjustment();
 
-    abstractDomain = DelegateAbstractDomain.<SMGState>getInstance();
+    smgPredicateManager = new SMGPredicateManager(config, logger, pShutdownNotifier);
+    blockOperator = new BlockOperator();
+    pConfig.inject(blockOperator);
+    blockOperator.setCFA(cfa);
+    precisionAdjustment = new SMGPrecisionAdjustment(logger, exportOptions);
+
+    abstractDomain = DelegateAbstractDomain.<SMGState> getInstance();
     mergeOperator = MergeSepOperator.getInstance();
 
-    if(stopType.equals("NEVER")) {
+    if(stopType.equals("END_BLOCK")) {
+      stopOperator = new SMGStopOperator(abstractDomain);
+    } else if (stopType.equals("NEVER")) {
       stopOperator = new StopNeverOperator();
     } else {
       stopOperator = new StopSepOperator(abstractDomain);
     }
 
-    precision = initializePrecision(config, pCfa);
+    precision = initializePrecision();
 
-    transferRelation = new SMGTransferRelation(config, logger, machineModel);
+    transferRelation =
+        SMGTransferRelation.createTransferRelation(config, logger, machineModel,
+            exportOptions, smgPredicateManager, blockOperator);
   }
 
-  public void injectRefinablePrecision() throws InvalidConfigurationException {
+  public void setTransferRelationToRefinment(PathTemplate pNewPathTemplate) {
+    ((SMGTransferRelation) transferRelation).changeKindToRefinment();
+    exportOptions.changeToRefinment(pNewPathTemplate);
+  }
+
+  public void injectRefinablePrecision() {
     // replace the full precision with an empty, refinable precision
-    precision = VariableTrackingPrecision.createRefineablePrecision(config, precision);
+    precision = SMGPrecision.createRefineablePrecision(precision);
   }
 
   public MachineModel getMachineModel() {
     return machineModel;
+  }
+
+  public SMGExportLevel getExportSMGLevel() {
+    return exportSMG;
+  }
+
+  public PathTemplate getExportSMGFilePattern() {
+    return exportSMGFilePattern;
   }
 
   @Override
@@ -153,7 +211,8 @@ public class SMGCPA implements ConfigurableProgramAnalysis, ConfigurableProgramA
   }
 
   public SMGState getInitialState(CFANode pNode) {
-    SMGState initState = new SMGState(logger, machineModel, memoryErrors, unknownOnUndefined, runtimeCheck);
+    SMGState initState = new SMGState(logger, machineModel, memoryErrors, unknownOnUndefined,
+        runtimeCheck, externalAllocationSize, trackPredicates, enableHeapAbstraction);
 
     try {
       initState.performConsistencyCheck(SMGRuntimeCheck.FULL);
@@ -184,9 +243,8 @@ public class SMGCPA implements ConfigurableProgramAnalysis, ConfigurableProgramA
     return precision;
   }
 
-  private VariableTrackingPrecision initializePrecision(Configuration config, CFA cfa)
-      throws InvalidConfigurationException {
-    return VariableTrackingPrecision.createStaticPrecision(config, cfa.getVarClassification(), getClass());
+  private SMGPrecision initializePrecision() {
+    return SMGPrecision.createStaticPrecision(enableHeapAbstraction, logger, blockOperator);
   }
 
   @Override
@@ -207,8 +265,27 @@ public class SMGCPA implements ConfigurableProgramAnalysis, ConfigurableProgramA
     return cfa;
   }
 
+  public SMGPrecision getPrecision() {
+    return precision;
+  }
+
   public ShutdownNotifier getShutdownNotifier() {
     return shutdownNotifier;
   }
 
+  public SMGPredicateManager getPredicateManager() {
+    return smgPredicateManager;
+  }
+
+  public boolean isHeapAbstractionEnabled() {
+    return enableHeapAbstraction;
+  }
+
+  public BlockOperator getBlockOperator() {
+    return blockOperator;
+  }
+
+  public void nextRefinment() {
+    exportOptions.nextRefinment();
+  }
 }

@@ -23,8 +23,7 @@
  */
 package org.sosy_lab.cpachecker.cpa.statistics;
 
-import java.util.Collection;
-
+import org.sosy_lab.common.annotations.Unmaintained;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
@@ -32,36 +31,29 @@ import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.core.defaults.AbstractCPA;
 import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
-import org.sosy_lab.cpachecker.core.defaults.MergeJoinOperator;
-import org.sosy_lab.cpachecker.core.defaults.MergeSepOperator;
-import org.sosy_lab.cpachecker.core.defaults.SingletonPrecision;
-import org.sosy_lab.cpachecker.core.defaults.StaticPrecisionAdjustment;
-import org.sosy_lab.cpachecker.core.defaults.StopSepOperator;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractDomain;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.CPAFactory;
-import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.MergeOperator;
-import org.sosy_lab.cpachecker.core.interfaces.Precision;
-import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustment;
 import org.sosy_lab.cpachecker.core.interfaces.StateSpacePartition;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
-import org.sosy_lab.cpachecker.core.interfaces.StopOperator;
-import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.cpa.statistics.StatisticsState.StatisticsStateFactory;
 import org.sosy_lab.cpachecker.cpa.statistics.StatisticsState.StatisticsStateFactory.FactoryAnalysisType;
 import org.sosy_lab.cpachecker.cpa.statistics.provider.SimpleIntProviderFactory;
 import org.sosy_lab.cpachecker.cpa.statistics.provider.SimpleIntProviderFactory.MergeOption;
+
+import java.util.Collection;
 
 /**
  * Implementation of the StatisticsCPA for code analysis within the CPAchecker framework.
  * You can enable the analysis with cpa=cpa.statistics.StatisticsCPA.
  * All metrics can be enabled and disabled on an individual basus with the "cpa.statistics.metric.*" options.
  */
-@Options(prefix="cpa.statistics")
-public class StatisticsCPA implements StatisticsProvider, ConfigurableProgramAnalysis {
+@Options(prefix = "cpa.statistics")
+@Unmaintained
+public class StatisticsCPA extends AbstractCPA implements StatisticsProvider {
 
   private StatisticsStateFactory factory;
   private StatisticsCPAStatistics stats;
@@ -137,12 +129,6 @@ public class StatisticsCPA implements StatisticsProvider, ConfigurableProgramAna
       description="which merge operator to use for StatisticsCPA? Ignored when analysis is set to true")
   private String mergeType = "sep";
 
-
-  private final AbstractDomain abstractDomain;
-  private final MergeOperator mergeOperator;
-  private final StopOperator stopOperator;
-  private final TransferRelation transferRelation;
-
   public static CPAFactory factory() {
     AutomaticCPAFactory factory = AutomaticCPAFactory.forType(StatisticsCPA.class);
     return factory;
@@ -150,6 +136,7 @@ public class StatisticsCPA implements StatisticsProvider, ConfigurableProgramAna
 
   public StatisticsCPA(Configuration config, LogManager pLogger,
       CFA cfa) throws InvalidConfigurationException {
+    super("irrelevant", "sep", new StatisticsCPADomain(), new StatisticsTransferRelation());
     config.inject(this);
     FactoryAnalysisType analysisType = FactoryAnalysisType.MetricsQuery;
     if (isAnalysis) {
@@ -157,7 +144,6 @@ public class StatisticsCPA implements StatisticsProvider, ConfigurableProgramAna
     }
 
     this.factory = new StatisticsStateFactory(analysisType);
-    this.abstractDomain = new StatisticsCPADomain();
 
     // TODO: refactor this...
     MergeOption defMerge = MergeOption.Add;
@@ -217,18 +203,6 @@ public class StatisticsCPA implements StatisticsProvider, ConfigurableProgramAna
     }
 
     this.stats = new StatisticsCPAStatistics(config, pLogger, this);
-
-    MergeOperator mergeOp = null;
-    if (isAnalysis || mergeType.equals("sep")) {
-      mergeOp = MergeSepOperator.getInstance();
-    } else if (mergeType.equals("join")) {
-      mergeOp = new MergeJoinOperator(abstractDomain);
-    }
-
-    mergeOperator = mergeOp;
-    stopOperator = new StopSepOperator(abstractDomain);
-
-    this.transferRelation = new StatisticsTransferRelation();
   }
 
   public StatisticsStateFactory getFactory() {
@@ -249,34 +223,8 @@ public class StatisticsCPA implements StatisticsProvider, ConfigurableProgramAna
     statsCollection.add(stats);
   }
 
-
-  @Override
-  public AbstractDomain getAbstractDomain() {
-    return abstractDomain;
-  }
-
-  @Override
-  public Precision getInitialPrecision(CFANode pNode, StateSpacePartition pPartition) {
-    return SingletonPrecision.getInstance();
-  }
-
   @Override
   public MergeOperator getMergeOperator() {
-    return mergeOperator;
-  }
-
-  @Override
-  public PrecisionAdjustment getPrecisionAdjustment() {
-    return StaticPrecisionAdjustment.getInstance();
-  }
-
-  @Override
-  public StopOperator getStopOperator() {
-    return stopOperator;
-  }
-
-  @Override
-  public TransferRelation getTransferRelation() {
-    return transferRelation;
+    return buildMergeOperator(mergeType);
   }
 }

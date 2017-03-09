@@ -25,13 +25,12 @@ package org.sosy_lab.cpachecker.util.predicates.regions;
 
 import java.io.PrintStream;
 import java.util.ArrayList;
-import java.util.Set;
 
 import org.sosy_lab.cpachecker.util.Triple;
 import org.sosy_lab.cpachecker.util.predicates.PredicateOrderingStrategy;
 import org.sosy_lab.cpachecker.util.predicates.smt.FormulaManagerView;
-import org.sosy_lab.solver.SolverException;
-import org.sosy_lab.solver.api.BooleanFormula;
+import org.sosy_lab.java_smt.api.SolverException;
+import org.sosy_lab.java_smt.api.BooleanFormula;
 
 import com.google.common.base.Function;
 
@@ -55,12 +54,6 @@ public interface RegionManager extends RegionCreator {
    * @return a new predicate
    */
   public Region createPredicate();
-
-  /**
-   * Returns the set of all predicates that occur in the representation of this region.
-   * @return a set of regions where each region represents one predicate
-   */
-  public Set<Region> extractPredicates(Region f);
 
   /**
    * Convert a formula into a region.

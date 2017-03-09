@@ -32,14 +32,14 @@ import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.cpa.arg.counterexamples.CounterexampleFilter;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateCPA;
-import org.sosy_lab.solver.SolverException;
+import org.sosy_lab.java_smt.api.SolverException;
 import org.sosy_lab.cpachecker.util.CPAs;
 import org.sosy_lab.cpachecker.util.predicates.smt.Solver;
-import org.sosy_lab.solver.api.BooleanFormula;
-import org.sosy_lab.solver.api.ProverEnvironment;
-import org.sosy_lab.solver.api.SolverContext.ProverOptions;
+import org.sosy_lab.java_smt.api.BooleanFormula;
+import org.sosy_lab.java_smt.api.ProverEnvironment;
+import org.sosy_lab.java_smt.api.SolverContext.ProverOptions;
 
-import com.google.common.base.Optional;
+import java.util.Optional;
 import com.google.common.collect.ImmutableList;
 
 /**
@@ -81,14 +81,14 @@ public class UnsatCoreCounterexampleFilter extends AbstractNegatedPathCounterexa
       if (!thmProver.isUnsat()) {
         // Negated path is not infeasible, cannot produce unsat core.
         // No filtering possible.
-        return Optional.absent();
+        return Optional.empty();
       }
 
       return Optional.of(ImmutableList.copyOf(thmProver.getUnsatCore()));
 
     } catch (SolverException e) {
       logger.logUserException(Level.WARNING, e, "Solving failed on counterexample path, cannot filter this counterexample");
-      return Optional.absent();
+      return Optional.empty();
     }
   }
 }

@@ -23,7 +23,18 @@
  */
 package org.sosy_lab.cpachecker.core.algorithm.impact;
 
-import static com.google.common.base.Preconditions.*;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
+
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.core.defaults.AbstractSingleWrapperState;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
+import org.sosy_lab.cpachecker.util.AbstractStates;
+import org.sosy_lab.java_smt.api.BooleanFormula;
+import org.sosy_lab.java_smt.api.BooleanFormulaManager;
 
 import java.io.IOException;
 import java.io.NotSerializableException;
@@ -32,16 +43,6 @@ import java.util.Collections;
 import java.util.List;
 
 import javax.annotation.Nullable;
-
-import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
-import org.sosy_lab.cpachecker.cfa.model.CFANode;
-import org.sosy_lab.cpachecker.core.defaults.AbstractSingleWrapperState;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
-import org.sosy_lab.cpachecker.util.AbstractStates;
-import org.sosy_lab.solver.api.BooleanFormula;
-import org.sosy_lab.solver.api.BooleanFormulaManager;
-
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 /**
  * This class represents the vertices/abstract states used by the
@@ -65,14 +66,14 @@ class Vertex extends AbstractSingleWrapperState {
   private static int nextId = 0;
   private final int id = nextId++;
 
-  private final Vertex parent;
+  private final @Nullable Vertex parent;
   private final BooleanFormulaManager bfmgr;
 
   private final List<Vertex> children = new ArrayList<>(2);
 
   private BooleanFormula stateFormula;
 
-  private Vertex coveredBy = null;
+  private @Nullable Vertex coveredBy = null;
   private List<Vertex> coveredNodes = new ArrayList<>(0);
 
   public Vertex(BooleanFormulaManager bfmgr, BooleanFormula pStateFormula, AbstractState pElement) {

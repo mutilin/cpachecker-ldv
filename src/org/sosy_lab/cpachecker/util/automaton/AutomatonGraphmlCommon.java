@@ -23,12 +23,18 @@
  */
 package org.sosy_lab.cpachecker.util.automaton;
 
+import com.google.common.base.Charsets;
+import com.google.common.base.Preconditions;
+import com.google.common.collect.Maps;
+import com.google.common.io.CharStreams;
 import java.io.IOException;
-import java.io.Writer;
-import java.util.ArrayList;
-import java.util.List;
+import java.nio.file.Path;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.EnumSet;
+import java.util.Iterator;
 import java.util.Map;
-
+import java.util.Optional;
 import javax.annotation.Nullable;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -39,34 +45,30 @@ import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
-
-import org.sosy_lab.common.io.Path;
-import org.sosy_lab.common.io.Paths;
+import org.sosy_lab.common.io.MoreFiles;
 import org.sosy_lab.cpachecker.cfa.Language;
+import org.sosy_lab.cpachecker.cfa.ast.AAssignment;
+import org.sosy_lab.cpachecker.cfa.ast.AIdExpression;
+import org.sosy_lab.cpachecker.cfa.ast.ALeftHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.c.CDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CTypeDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CVariableDeclaration;
+import org.sosy_lab.cpachecker.cfa.model.AStatementEdge;
 import org.sosy_lab.cpachecker.cfa.model.BlankEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
 import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionReturnEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionSummaryStatementEdge;
 import org.sosy_lab.cpachecker.cfa.types.MachineModel;
 import org.sosy_lab.cpachecker.core.CPAchecker;
+import org.sosy_lab.cpachecker.util.CFAUtils;
+import org.sosy_lab.cpachecker.util.SpecificationProperty;
+import org.w3c.dom.DOMException;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
-import org.w3c.dom.Node;
-
-import com.google.common.base.Preconditions;
-import com.google.common.base.Splitter;
-import com.google.common.collect.Maps;
-import com.google.common.hash.HashCode;
-import com.google.common.hash.Hashing;
-import com.google.common.io.BaseEncoding;
-import com.google.common.io.ByteSource;
-import com.google.common.io.CharStreams;
-
 
 public class AutomatonGraphmlCommon {
 
@@ -94,48 +96,63 @@ public class AutomatonGraphmlCommon {
   }
 
   public static enum KeyDef {
-    INVARIANT("invariant", "node", "invariant", "string"),
-    INVARIANTSCOPE("invariant.scope", "node", "invariant.scope", "string"),
-    NAMED("named", "node", "namedValue", "string"),
-    NODETYPE("nodetype", "node", "nodeType", "string"),
-    ISFRONTIERNODE("frontier", "node", "isFrontierNode", "boolean"),
-    ISVIOLATIONNODE("violation", "node", "isViolationNode", "boolean"),
-    ISENTRYNODE("entry", "node", "isEntryNode", "boolean"),
-    ISSINKNODE("sink", "node", "isSinkNode", "boolean"),
-    VIOLATEDPROPERTY("violatedProperty", "node", "violatedProperty", "string"),
-    SOURCECODELANGUAGE("sourcecodelang", "graph", "sourcecodeLanguage", "string"),
-    PROGRAMFILE("programfile", "graph", "programFile", "string"),
-    PROGRAMHASH("programhash", "graph", "programHash", "string"),
-    SPECIFICATION("specification", "graph", "specification", "string"),
-    MEMORYMODEL("memorymodel", "graph", "memoryModel", "string"),
-    ARCHITECTURE("architecture", "graph", "architecture", "string"),
-    PRODUCER("producer", "graph", "producer", "string"),
-    SOURCECODE("sourcecode", "edge", "sourcecode", "string"),
-    ORIGINLINE("startline", "edge", "startline", "int"),
-    OFFSET("startoffset", "edge", "startoffset", "int"),
-    ORIGINFILE("originfile", "edge", "originFileName", "string"),
-    LINECOLS("lineCols", "edge", "lineColSet", "string"),
-    CONTROLCASE("control", "edge", "control", "string"),
-    ASSUMPTION("assumption", "edge", "assumption", "string"),
-    ASSUMPTIONSCOPE("assumption.scope", "edge", "assumption.scope", "string"),
-    FUNCTIONENTRY("enterFunction", "edge", "enterFunction", "string"),
-    FUNCTIONEXIT("returnFrom", "edge", "returnFromFunction", "string"),
-    CFAPREDECESSORNODE("predecessor", "edge", "predecessor", "string"),
-    CFASUCCESSORNODE("successor", "edge", "successor", "string"),
-    GRAPH_TYPE("type", "graph", "witness-type", "string"),
-    THREADIDENTIFIER("thread", "edge", "thread", "int"),
-    WARNING("warning", "edge", "warning", "string");
+    INVARIANT("invariant", ElementType.NODE, "invariant", "string"),
+    INVARIANTSCOPE("invariant.scope", ElementType.NODE, "invariant.scope", "string"),
+    NAMED("named", ElementType.NODE, "namedValue", "string"),
+    NODETYPE("nodetype", ElementType.NODE, "nodeType", "string", NodeType.ONPATH),
+    ISFRONTIERNODE("frontier", ElementType.NODE, "isFrontierNode", "boolean", false),
+    ISVIOLATIONNODE("violation", ElementType.NODE, "isViolationNode", "boolean", false),
+    ISENTRYNODE("entry", ElementType.NODE, "isEntryNode", "boolean", false),
+    ISSINKNODE("sink", ElementType.NODE, "isSinkNode", "boolean", false),
+    ENTERLOOPHEAD("enterLoopHead", ElementType.EDGE, "enterLoopHead", "boolean", false),
+    VIOLATEDPROPERTY("violatedProperty", ElementType.NODE, "violatedProperty", "string"),
+    THREADID("threadId", ElementType.EDGE, "threadId", "string"),
+    SOURCECODELANGUAGE("sourcecodelang", ElementType.GRAPH, "sourcecodeLanguage", "string"),
+    PROGRAMFILE("programfile", ElementType.GRAPH, "programFile", "string"),
+    PROGRAMHASH("programhash", ElementType.GRAPH, "programHash", "string"),
+    SPECIFICATION("specification", ElementType.GRAPH, "specification", "string"),
+    ARCHITECTURE("architecture", ElementType.GRAPH, "architecture", "string"),
+    PRODUCER("producer", ElementType.GRAPH, "producer", "string"),
+    CREATIONTIME("creationtime", ElementType.GRAPH, "creationTime", "string"),
+    SOURCECODE("sourcecode", ElementType.EDGE, "sourcecode", "string"),
+    STARTLINE("startline", ElementType.EDGE, "startline", "int"),
+    OFFSET("startoffset", ElementType.EDGE, "startoffset", "int"),
+    ORIGINFILE("originfile", ElementType.EDGE, "originFileName", "string"),
+    LINECOLS("lineCols", ElementType.EDGE, "lineColSet", "string"),
+    CONTROLCASE("control", ElementType.EDGE, "control", "string"),
+    ASSUMPTION("assumption", ElementType.EDGE, "assumption", "string"),
+    ASSUMPTIONRESULTFUNCTION("assumption.resultfunction", ElementType.EDGE, "assumption.resultfunction", "string"),
+    ASSUMPTIONSCOPE("assumption.scope", ElementType.EDGE, "assumption.scope", "string"),
+    FUNCTIONENTRY("enterFunction", ElementType.EDGE, "enterFunction", "string"),
+    FUNCTIONEXIT("returnFrom", ElementType.EDGE, "returnFromFunction", "string"),
+    CFAPREDECESSORNODE("predecessor", ElementType.EDGE, "predecessor", "string"),
+    CFASUCCESSORNODE("successor", ElementType.EDGE, "successor", "string"),
+    WITNESS_TYPE("witness-type", ElementType.GRAPH, "witness-type", "string"),
+    INPUTWITNESSHASH("inputwitnesshash", ElementType.GRAPH, "inputWitnessHash", "string"),
+    WARNING("warning", ElementType.EDGE, "warning", "string");
 
     public final String id;
-    public final String keyFor;
+    public final ElementType keyFor;
     public final String attrName;
     public final String attrType;
 
-    private KeyDef(String id, String keyFor, String attrName, String attrType) {
+    /** The defaultValue is non-null, iff existent. */
+    @Nullable public final String defaultValue;
+
+    private KeyDef(String id, ElementType pKeyFor, String attrName, String attrType) {
       this.id = id;
-      this.keyFor = keyFor;
+      this.keyFor = pKeyFor;
       this.attrName = attrName;
       this.attrType = attrType;
+      this.defaultValue = null;
+    }
+
+    private KeyDef(String id, ElementType pKeyFor, String attrName, String attrType, Object defaultValue) {
+      this.id = id;
+      this.keyFor = pKeyFor;
+      this.attrName = attrName;
+      this.attrType = attrType;
+      this.defaultValue = defaultValue.toString();
     }
 
     @Override
@@ -144,7 +161,22 @@ public class AutomatonGraphmlCommon {
     }
   }
 
-  public enum NodeFlag {
+  public static enum ElementType {
+    GRAPH,
+    EDGE,
+    NODE;
+
+    @Override
+    public String toString() {
+      return name().toLowerCase();
+    }
+
+    public static ElementType parse(String pElementType) {
+      return ElementType.valueOf(pElementType.toUpperCase());
+    }
+  }
+
+  public static enum NodeFlag {
     ISFRONTIER(KeyDef.ISFRONTIERNODE),
     ISVIOLATION(KeyDef.ISVIOLATIONNODE),
     ISENTRY(KeyDef.ISENTRYNODE),
@@ -159,7 +191,7 @@ public class AutomatonGraphmlCommon {
     private final static Map<String, NodeFlag> stringToFlagMap = Maps.newHashMap();
 
     static {
-      for (NodeFlag f: NodeFlag.values()) {
+      for (NodeFlag f : NodeFlag.values()) {
         stringToFlagMap.put(f.key.id, f);
       }
     }
@@ -170,13 +202,13 @@ public class AutomatonGraphmlCommon {
     }
   }
 
-  public enum GraphType {
-    ERROR_WITNESS("FALSE"),
-    PROOF_WITNESS("TRUE");
+  public enum WitnessType {
+    VIOLATION_WITNESS("violation_witness"),
+    CORRECTNESS_WITNESS("correctness_witness");
 
     public final String text;
 
-    private GraphType(String text) {
+    private WitnessType(String text) {
       this.text = text;
     }
 
@@ -185,13 +217,25 @@ public class AutomatonGraphmlCommon {
       return text;
     }
 
-    public static GraphType parse(String pTextualRepresentation) {
-      for (GraphType element : values()) {
+    public static Optional<WitnessType> tryParse(String pTextualRepresentation) {
+      for (WitnessType element : values()) {
         if (element.text.equals(pTextualRepresentation)) {
-          return element;
+          return Optional.of(element);
         }
       }
-      throw new IllegalArgumentException("No such enumeration element: " + pTextualRepresentation);
+      if (pTextualRepresentation.equals("FALSE")) {
+        return Optional.of(VIOLATION_WITNESS);
+      }
+      if (pTextualRepresentation.equals("TRUE")) {
+        return Optional.of(CORRECTNESS_WITNESS);
+      }
+      if (pTextualRepresentation.equals("false_witness")) {
+        return Optional.of(VIOLATION_WITNESS);
+      }
+      if (pTextualRepresentation.equals("true_witness")) {
+        return Optional.of(CORRECTNESS_WITNESS);
+      }
+      return Optional.empty();
     }
   }
 
@@ -217,7 +261,7 @@ public class AutomatonGraphmlCommon {
 
   public static final NodeType defaultNodeType = NodeType.ONPATH;
 
-  public enum GraphMlTag {
+  public enum GraphMLTag {
     NODE("node"),
     DATA("data"),
     KEY("key"),
@@ -227,7 +271,7 @@ public class AutomatonGraphmlCommon {
 
     public final String text;
 
-    private GraphMlTag(String text) {
+    private GraphMLTag(String text) {
       this.text = text;
     }
 
@@ -240,39 +284,112 @@ public class AutomatonGraphmlCommon {
   public static class GraphMlBuilder {
 
     private final Document doc;
-    private final Writer target;
+    private final Element graph;
 
-    public GraphMlBuilder(Appendable target) throws ParserConfigurationException {
+    public GraphMlBuilder(
+        WitnessType pGraphType,
+        String pDefaultSourceFileName,
+        Language pLanguage,
+        MachineModel pMachineModel,
+        VerificationTaskMetaData pVerificationTaskMetaData)
+        throws ParserConfigurationException, DOMException, IOException {
       DocumentBuilderFactory docFactory = DocumentBuilderFactory.newInstance();
       DocumentBuilder docBuilder = docFactory.newDocumentBuilder();
 
       this.doc = docBuilder.newDocument();
-      this.target = CharStreams.asWriter(target);
+      Element root = doc.createElement("graphml");
+      doc.appendChild(root);
+      root.setAttribute("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance");
+      root.setAttribute("xmlns", "http://graphml.graphdrawing.org/xmlns");
+
+      EnumSet<KeyDef> keyDefs = EnumSet.allOf(KeyDef.class);
+      root.appendChild(createKeyDefElement(KeyDef.ORIGINFILE, pDefaultSourceFileName));
+      keyDefs.remove(KeyDef.ORIGINFILE);
+      for (KeyDef keyDef : keyDefs) {
+        root.appendChild(createKeyDefElement(keyDef, keyDef.defaultValue));
+      }
+
+      graph = doc.createElement("graph");
+      root.appendChild(graph);
+      graph.setAttribute("edgedefault", "directed");
+      graph.appendChild(createDataElement(KeyDef.WITNESS_TYPE, pGraphType.toString()));
+      graph.appendChild(createDataElement(KeyDef.SOURCECODELANGUAGE, pLanguage.toString()));
+      graph.appendChild(
+          createDataElement(KeyDef.PRODUCER, "CPAchecker " + CPAchecker.getCPAcheckerVersion()));
+
+      for (SpecificationProperty property : pVerificationTaskMetaData.getProperties()) {
+        graph.appendChild(createDataElement(KeyDef.SPECIFICATION, property.toString()));
+      }
+
+      for (Path specFile : pVerificationTaskMetaData.getNonPropertySpecificationFiles()) {
+        graph.appendChild(
+            createDataElement(
+                KeyDef.SPECIFICATION, MoreFiles.toString(specFile, Charsets.UTF_8).trim()));
+      }
+      for (String inputWitnessHash : pVerificationTaskMetaData.getInputWitnessHashes()) {
+        graph.appendChild(createDataElement(KeyDef.INPUTWITNESSHASH, inputWitnessHash));
+      }
+
+      if (pVerificationTaskMetaData.getProgramNames().isPresent()) {
+        for (String programName : pVerificationTaskMetaData.getProgramNames().get()) {
+          graph.appendChild(createDataElement(KeyDef.PROGRAMFILE, programName));
+        }
+      }
+      if (pVerificationTaskMetaData.getProgramHashes().isPresent()) {
+        for (String programHash : pVerificationTaskMetaData.getProgramHashes().get()) {
+          graph.appendChild(createDataElement(KeyDef.PROGRAMHASH, programHash));
+        }
+      }
+
+      graph.appendChild(createDataElement(KeyDef.ARCHITECTURE, getArchitecture(pMachineModel)));
+      ZonedDateTime now = ZonedDateTime.now().withNano(0);
+      graph.appendChild(
+          createDataElement(
+              KeyDef.CREATIONTIME, now.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)));
     }
 
-    public Element createElement(GraphMlTag tag) {
+    private Element createElement(GraphMLTag tag) {
       return doc.createElement(tag.toString());
     }
 
-    public Element createDataElement(final KeyDef key, final String value) {
-      Element result = createElement(GraphMlTag.DATA);
+    private Element createDataElement(final KeyDef key, final String value) {
+      Element result = createElement(GraphMLTag.DATA);
       result.setAttribute("key", key.id);
       result.setTextContent(value);
       return result;
     }
 
     public Element createEdgeElement(final String from, final String to) {
-      Element result = createElement(GraphMlTag.EDGE);
+      Element result = createElement(GraphMLTag.EDGE);
       result.setAttribute("source", from);
       result.setAttribute("target", to);
+      graph.appendChild(result);
       return result;
     }
 
-    public Element createKeyDefElement(KeyDef keyDef, @Nullable String defaultValue) {
-      return createKeyDefElement(keyDef.id, keyDef.keyFor, keyDef.attrName, keyDef.attrType, defaultValue);
+    public Element createNodeElement(String nodeId, NodeType nodeType) {
+      Element result = createElement(GraphMLTag.NODE);
+      result.setAttribute("id", nodeId);
+
+      if (nodeType != defaultNodeType) {
+        addDataElementChild(result, KeyDef.NODETYPE, nodeType.toString());
+      }
+
+      graph.appendChild(result);
+
+      return result;
     }
 
-    public Element createKeyDefElement(String id, String keyFor, String attrName, String attrType,
+    private Element createKeyDefElement(KeyDef keyDef, @Nullable String defaultValue) {
+      return createKeyDefElement(
+          keyDef.id, keyDef.keyFor, keyDef.attrName, keyDef.attrType, defaultValue);
+    }
+
+    private Element createKeyDefElement(
+        String id,
+        ElementType keyFor,
+        String attrName,
+        String attrType,
         @Nullable String defaultValue) {
 
       Preconditions.checkNotNull(doc);
@@ -281,15 +398,15 @@ public class AutomatonGraphmlCommon {
       Preconditions.checkNotNull(attrName);
       Preconditions.checkNotNull(attrType);
 
-      Element result = createElement(GraphMlTag.KEY);
+      Element result = createElement(GraphMLTag.KEY);
 
       result.setAttribute("id", id);
-      result.setAttribute("for", keyFor);
+      result.setAttribute("for", keyFor.toString());
       result.setAttribute("attr.name", attrName);
       result.setAttribute("attr.type", attrType);
 
       if (defaultValue != null) {
-        Element defaultValueElement = createElement(GraphMlTag.DEFAULT);
+        Element defaultValueElement = createElement(GraphMLTag.DEFAULT);
         defaultValueElement.setTextContent(defaultValue);
         result.appendChild(defaultValueElement);
       }
@@ -297,106 +414,30 @@ public class AutomatonGraphmlCommon {
       return result;
     }
 
-    public Element createNodeElement(String nodeId, NodeType nodeType) {
-      Element result = createElement(GraphMlTag.NODE);
-      result.setAttribute("id", nodeId);
-
-      if (nodeType != defaultNodeType) {
-        addDataElementChild(result, KeyDef.NODETYPE, nodeType.toString());
-      }
-
-      return result;
-    }
-
-    public void appendNewNode(String nodeId, NodeType nodeType) {
-      Element result = createNodeElement(nodeId, nodeType);
-      appendToAppendable(result);
-    }
-
-    public Element addDataElementChild(Element childOf, final KeyDef key, final String value) {
+    public void addDataElementChild(Element childOf, final KeyDef key, final String value) {
       Element result = createDataElement(key, value);
       childOf.appendChild(result);
-      return result;
     }
 
-    public void appendDataElement(final KeyDef key, final String value) {
-      Element result = createDataElement(key, value);
-      appendToAppendable(result);
-    }
-
-    public void appendDocHeader() throws IOException {
-      target.append("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>\n");
-      target.append("<graphml xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns=\"http://graphml.graphdrawing.org/xmlns\">\n");
-    }
-
-    public void appendGraphHeader(GraphType pGraphType,
-        Language pLanguage,
-        Iterable<String> pSpecifications,
-        String pProgramNames,
-        String pMemoryModel,
-        MachineModel pMachineModel) throws IOException {
-      target.append("<graph edgedefault=\"directed\">");
-      appendDataElement(KeyDef.GRAPH_TYPE, pGraphType.toString());
-      appendDataElement(KeyDef.SOURCECODELANGUAGE, pLanguage.toString());
-      appendDataElement(KeyDef.PRODUCER, "CPAchecker " + CPAchecker.getCPAcheckerVersion());
-      for (String specification : pSpecifications) {
-        appendDataElement(KeyDef.SPECIFICATION, specification);
-      }
-
-      /*
-       * TODO: We should allow multiple program files here.
-       * As soon as we do, we should also hash each file separately.
-       */
-      appendDataElement(KeyDef.PROGRAMFILE, pProgramNames);
-      appendDataElement(KeyDef.PROGRAMHASH, computeProgramHash(pProgramNames));
-
-      appendDataElement(KeyDef.MEMORYMODEL, pMemoryModel);
-      switch (pMachineModel) {
-        case LINUX32:
-          appendDataElement(KeyDef.ARCHITECTURE, "32bit");
-          break;
-        case LINUX64:
-          appendDataElement(KeyDef.ARCHITECTURE, "64bit");
-          break;
-        default:
-          appendDataElement(KeyDef.ARCHITECTURE, pMachineModel.toString());
-          break;
-      }
-    }
-
-    private String computeProgramHash(String pProgramDenotations) throws IOException {
-      List<ByteSource> sources = new ArrayList<>(1);
-      Splitter commaSplitter = Splitter.on(',').omitEmptyStrings().trimResults();
-      for (String programDenotation : commaSplitter.split(pProgramDenotations)) {
-        Path programPath = Paths.get(programDenotation);
-        sources.add(programPath.asByteSource());
-      }
-      HashCode hash = ByteSource.concat(sources).hash(Hashing.sha1());
-      return BaseEncoding.base16().lowerCase().encode(hash.asBytes());
-    }
-
-    public void appendNewKeyDef(KeyDef keyDef, @Nullable String defaultValue) {
-      appendToAppendable(createKeyDefElement(keyDef, defaultValue));
-    }
-
-    public void appendToAppendable(Node n) {
+    public void appendTo(Appendable pTarget) throws IOException {
       try {
+        pTarget.append("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>\n");
+
         TransformerFactory tf = TransformerFactory.newInstance();
         Transformer transformer = tf.newTransformer();
         transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
         transformer.setOutputProperty(OutputKeys.METHOD, "xml");
         transformer.setOutputProperty(OutputKeys.INDENT, "yes");
+        transformer.setOutputProperty("{http://xml.apache.org/xslt}indent-amount", "1");
         transformer.setOutputProperty(OutputKeys.ENCODING, "UTF-8");
 
-        transformer.transform(new DOMSource(n), new StreamResult(target));
+        transformer.transform(new DOMSource(doc), new StreamResult(CharStreams.asWriter(pTarget)));
       } catch (TransformerException ex) {
-          throw new RuntimeException("Error while dumping program path", ex);
+        if (ex.getException() instanceof IOException) {
+          throw (IOException) ex.getException();
+        }
+        throw new RuntimeException("Error while writing witness.", ex);
       }
-    }
-
-    public void appendFooter() throws IOException {
-      target.append("</graph>\n");
-      target.append("</graphml>\n");
     }
 
   }
@@ -415,7 +456,7 @@ public class AutomatonGraphmlCommon {
     if (edge instanceof BlankEdge) {
       return !(edge.getSuccessor() instanceof FunctionExitNode);
     } else if (edge instanceof CFunctionReturnEdge) {
-      return true;
+      return false;
     } else if (edge instanceof CDeclarationEdge) {
       CDeclarationEdge declEdge = (CDeclarationEdge) edge;
       CDeclaration decl = declEdge.getDeclaration();
@@ -428,12 +469,52 @@ public class AutomatonGraphmlCommon {
         if (varDecl.getName().toUpperCase().startsWith("__CPACHECKER_TMP")) {
           return true; // Dirty hack; would be better if these edges had no file location
         }
+        CFANode successor = edge.getSuccessor();
+        Iterator<CFAEdge> leavingEdges = CFAUtils.allLeavingEdges(successor).iterator();
+        if (!leavingEdges.hasNext()) {
+          return false;
+        }
+        CFAEdge successorEdge = leavingEdges.next();
+        if (leavingEdges.hasNext()) {
+          return false;
+        }
+        if (successorEdge instanceof AStatementEdge) {
+          AStatementEdge statementEdge = (AStatementEdge) successorEdge;
+          if (statementEdge.getFileLocation().equals(edge.getFileLocation())
+              && statementEdge.getStatement() instanceof AAssignment) {
+            AAssignment assignment = (AAssignment) statementEdge.getStatement();
+            ALeftHandSide leftHandSide = assignment.getLeftHandSide();
+            if (leftHandSide instanceof AIdExpression) {
+              AIdExpression lhs = (AIdExpression) leftHandSide;
+              if (lhs.getDeclaration() != null && lhs.getDeclaration().equals(varDecl)) {
+                return true;
+              }
+            }
+          }
+        }
         return false;
       }
+    } else if (edge instanceof CFunctionSummaryStatementEdge) {
+      return true;
     }
 
     return false;
   }
 
+  public static String getArchitecture(MachineModel pMachineModel) {
+    final String architecture;
+    switch (pMachineModel) {
+      case LINUX32:
+        architecture = "32bit";
+        break;
+      case LINUX64:
+        architecture = "64bit";
+        break;
+      default:
+        architecture = pMachineModel.toString();
+        break;
+    }
+    return architecture;
+  }
 
 }

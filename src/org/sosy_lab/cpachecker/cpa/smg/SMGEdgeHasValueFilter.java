@@ -23,14 +23,15 @@
  */
 package org.sosy_lab.cpachecker.cpa.smg;
 
+import com.google.common.base.Predicate;
+
+import org.sosy_lab.cpachecker.cfa.types.c.CType;
+import org.sosy_lab.cpachecker.cpa.smg.graphs.SMGHasValueEdges;
+import org.sosy_lab.cpachecker.cpa.smg.objects.SMGObject;
+
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
-
-import org.sosy_lab.cpachecker.cfa.types.c.CType;
-import org.sosy_lab.cpachecker.cpa.smg.objects.SMGObject;
-
-import com.google.common.base.Predicate;
 
 public class SMGEdgeHasValueFilter {
 
@@ -75,6 +76,54 @@ public class SMGEdgeHasValueFilter {
     return this;
   }
 
+  public SMGObject filtersByObject() {
+    return object;
+  }
+
+  public Integer filtersHavingValue() {
+    if (valueComplement) {
+      return null;
+    } else {
+      return value;
+    }
+  }
+
+  public Integer filtersNotHavingValue() {
+    if (valueComplement) {
+      return value;
+    } else {
+      return null;
+    }
+  }
+
+  public Integer filtersAtOffset() {
+    return offset;
+  }
+
+  public CType filtersByType() {
+    return type;
+  }
+
+  public boolean isFilteringByObject() {
+    return object != null;
+  }
+
+  public boolean isFilteringHavingValue() {
+    return value != null && !valueComplement;
+  }
+
+  public boolean isFilteringNotHavingValue() {
+    return value != null && valueComplement;
+  }
+
+  public boolean isFilteringAtOffset() {
+    return offset != null;
+  }
+
+  public CType isFilteringAtType() {
+    return type;
+  }
+
   public boolean holdsFor(SMGEdgeHasValue pEdge) {
     if (object != null && object != pEdge.getObject()) {
       return false;
@@ -97,6 +146,24 @@ public class SMGEdgeHasValueFilter {
     }
 
     return true;
+  }
+
+  public Set<SMGEdgeHasValue> filterSet(SMGHasValueEdges pEdges) {
+    Set<SMGEdgeHasValue> returnSet = new HashSet<>();
+    Set<SMGEdgeHasValue> filtered;
+    if (object != null) {
+      filtered = pEdges.getEdgesForObject(object);
+    } else {
+      filtered = pEdges.getHvEdges();
+    }
+    if (filtered != null) {
+      for (SMGEdgeHasValue edge : filtered) {
+        if (holdsFor(edge)) {
+          returnSet.add(edge);
+        }
+      }
+    }
+    return returnSet;
   }
 
   public Set<SMGEdgeHasValue> filterSet(Set<SMGEdgeHasValue> pEdges) {
@@ -132,5 +199,10 @@ public class SMGEdgeHasValueFilter {
         return SMGEdgeHasValueFilter.this.holdsFor(pEdge);
       }
     };
+  }
+
+  public static SMGEdgeHasValueFilter valueFilter(Integer pValue) {
+
+    return new SMGEdgeHasValueFilter().filterHavingValue(pValue);
   }
 }

@@ -29,22 +29,17 @@ import org.sosy_lab.cpachecker.cfa.types.c.CArrayType;
 import org.sosy_lab.cpachecker.cfa.types.c.CTypeVisitor;
 
 class CSizeofVisitor extends BaseSizeofVisitor
-                                   implements CTypeVisitor<Integer, IllegalArgumentException> {
+    implements CTypeVisitor<Integer, IllegalArgumentException> {
 
-  public CSizeofVisitor(final MachineModel machineModel,
-                         final FormulaEncodingWithPointerAliasingOptions options) {
+  CSizeofVisitor(
+      final MachineModel machineModel, final FormulaEncodingWithPointerAliasingOptions options) {
     super(machineModel);
     this.options = options;
   }
 
   @Override
   public Integer visit(final CArrayType t) throws IllegalArgumentException {
-    Integer length = CTypeUtils.getArrayLength(t);
-
-    if (length == null) {
-      length = options.defaultArrayLength();
-    }
-
+    int length = t.getLengthAsInt().orElse(options.defaultArrayLength());
     final int sizeOfType = t.getType().accept(this);
     return length * sizeOfType;
   }

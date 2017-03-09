@@ -26,7 +26,6 @@ package org.sosy_lab.cpachecker.cpa.usagestatistics.refinement;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
@@ -122,14 +121,13 @@ public class RefinementBlockFactory {
 
           case PathIterator:
             currentBlock = new PathPairIterator((ConfigurableRefinementBlock<Pair<ExtendedARGPath, ExtendedARGPath>>) currentBlock,
-                subgraphStatesToReachedState, bamTransfer);
+                bamTransfer);
             currentBlockType = currentInnerBlockType.UsageInfo;
             break;
 
           case PredicateRefiner:
             currentBlock = new PredicateRefinerAdapter((ConfigurableRefinementBlock<Pair<ExtendedARGPath, ExtendedARGPath>>) currentBlock,
                 cpa, null);
-            subgraphStatesToReachedState = ((PredicateRefinerAdapter)currentBlock).getInternalMapForStates();
             break;
 
           case CallstackFilter:

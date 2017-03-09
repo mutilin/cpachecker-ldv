@@ -25,11 +25,10 @@ package org.sosy_lab.cpachecker.cpa.lockstatistics;
 
 import static com.google.common.collect.FluentIterable.from;
 
+import com.google.common.base.Function;
 import java.util.Map;
 import java.util.Set;
-
 import javax.annotation.Nullable;
-
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
@@ -41,8 +40,6 @@ import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState.LockStatisticsStateBuilder;
-
-import com.google.common.base.Function;
 
 @Options(prefix="cpa.lockstatistics")
 public class LockStatisticsReducer implements Reducer {
@@ -67,7 +64,7 @@ public class LockStatisticsReducer implements Reducer {
   }
 
   @Override
-  public AbstractState getVariableReducedState(AbstractState pExpandedElement, Block pContext, Block outerContext, CFANode pCallNode) {
+  public AbstractState getVariableReducedState(AbstractState pExpandedElement, Block pContext, CFANode pCallNode) {
     LockStatisticsState lockState = (LockStatisticsState) pExpandedElement;
     LockStatisticsStateBuilder builder = lockState.builder();
     builder.reduce();
@@ -84,7 +81,7 @@ public class LockStatisticsReducer implements Reducer {
   }
 
   @Override
-  public AbstractState getVariableExpandedState(AbstractState pRootElement, Block pReducedContext, Block outerSubtree,
+  public AbstractState getVariableExpandedState(AbstractState pRootElement, Block pReducedContext,
       AbstractState pReducedElement) {
 
     LockStatisticsState reducedState = (LockStatisticsState)pReducedElement;
@@ -119,7 +116,6 @@ public class LockStatisticsReducer implements Reducer {
     return getHashCodeForState(pElementKey);
   }
 
-  @Override
   public Object getHashCodeForState(AbstractState pElementKey) {
     LockStatisticsState elementKey = (LockStatisticsState)pElementKey;
 
@@ -129,18 +125,6 @@ public class LockStatisticsReducer implements Reducer {
   @Override
   public int measurePrecisionDifference(Precision pPrecision, Precision pOtherPrecision) {
     return 0;
-  }
-
-  @Override
-  public AbstractState getVariableReducedStateForProofChecking(AbstractState pExpandedState, Block pContext,
-      CFANode pCallNode) {
-    return getVariableReducedState(pExpandedState, pContext, null, pCallNode);
-  }
-
-  @Override
-  public AbstractState getVariableExpandedStateForProofChecking(AbstractState pRootState, Block pReducedContext,
-      AbstractState pReducedState) {
-    return getVariableExpandedState(pRootState, pReducedContext, null, pReducedState);
   }
 
   @Override

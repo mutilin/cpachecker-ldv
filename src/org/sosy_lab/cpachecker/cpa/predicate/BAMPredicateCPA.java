@@ -31,9 +31,12 @@ import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.blocks.BlockPartitioning;
+import org.sosy_lab.cpachecker.core.Specification;
 import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
 import org.sosy_lab.cpachecker.core.interfaces.CPAFactory;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysisWithBAM;
+import org.sosy_lab.cpachecker.core.reachedset.AggregatedReachedSets;
+import org.sosy_lab.cpachecker.cpa.predicate.relevantpredicates.AllRelevantPredicatesComputer;
 import org.sosy_lab.cpachecker.cpa.predicate.relevantpredicates.AuxiliaryComputer;
 import org.sosy_lab.cpachecker.cpa.predicate.relevantpredicates.CachingRelevantPredicatesComputer;
 import org.sosy_lab.cpachecker.cpa.predicate.relevantpredicates.RefineableOccurrenceComputer;
@@ -53,34 +56,51 @@ public class BAMPredicateCPA extends PredicateCPA implements ConfigurableProgram
     return AutomaticCPAFactory.forType(BAMPredicateCPA.class).withOptions(BAMBlockOperator.class);
   }
 
-  private final BAMPredicateReducer reducer;
   private final BAMBlockOperator blk;
   private RelevantPredicatesComputer relevantPredicatesComputer;
 
-  @Option (description="whether to reduce predicates, related to a function, when we leave it")
-  private boolean aggressiveReduce = false;
+  @Option(
+    description =
+        "which strategy/heuristic should be used to compute relevant predicates for a block-reduction?"
+            + "\nAUXILIARY: dependencies between variables."
+            + "\nOCCURENCE: occurence of variables in the block."
+            + "\nALL: all variables are relevant.",
+    secure = true,
+    values = {"AUXILIARY", "OCCURRENCE", "ALL"},
+    toUppercase = true
+  )
+  private String predicateComputer = "AUXILIARY";
 
-  @Option(secure=true, description="whether to use auxiliary predidates for reduction")
-  private boolean auxiliaryPredicateComputer = true;
-
-
-  private BAMPredicateCPA(Configuration config, LogManager logger,
-      BAMBlockOperator pBlk, CFA pCfa, ShutdownNotifier pShutdownNotifier)
-          throws InvalidConfigurationException, CPAException {
-    super(config, logger, pBlk, pCfa, pShutdownNotifier);
+  private BAMPredicateCPA(
+      Configuration config,
+      LogManager logger,
+      BAMBlockOperator pBlk,
+      CFA pCfa,
+      ShutdownNotifier pShutdownNotifier,
+      Specification pSpecification,
+      AggregatedReachedSets pAggregatedReachedSets)
+      throws InvalidConfigurationException, CPAException {
+    super(config, logger, pBlk, pCfa, pShutdownNotifier, pSpecification, pAggregatedReachedSets);
 
     config.inject(this, BAMPredicateCPA.class);
 
     FormulaManagerView fmgr = getSolver().getFormulaManager();
-    RelevantPredicatesComputer relevantPredicatesComputer;
-    if (auxiliaryPredicateComputer) {
-      relevantPredicatesComputer = new AuxiliaryComputer(fmgr);
-    } else {
-      relevantPredicatesComputer = new RefineableOccurrenceComputer(fmgr);
+    switch (predicateComputer) {
+      case "AUXILIARY":
+        relevantPredicatesComputer =
+            new CachingRelevantPredicatesComputer(new AuxiliaryComputer(fmgr));
+        break;
+      case "OCCURRENCE":
+        relevantPredicatesComputer =
+            new CachingRelevantPredicatesComputer(new RefineableOccurrenceComputer(fmgr));
+        break;
+      case "ALL":
+        relevantPredicatesComputer = AllRelevantPredicatesComputer.INSTANCE;
+        break;
+      default:
+        throw new AssertionError("unhandled case");
     }
-    this.relevantPredicatesComputer = new CachingRelevantPredicatesComputer(relevantPredicatesComputer);
 
-    reducer = new BAMPredicateReducer(fmgr.getBooleanFormulaManager(), this, aggressiveReduce);
     blk = pBlk;
   }
 
@@ -97,16 +117,18 @@ public class BAMPredicateCPA extends PredicateCPA implements ConfigurableProgram
   }
 
   @Override
-  public BAMPredicateReducer getReducer() {
-    return reducer;
+  public BAMPredicateReducer getReducer() throws InvalidConfigurationException {
+    return new BAMPredicateReducer(
+        getSolver().getFormulaManager().getBooleanFormulaManager(), this, config);
   }
 
+  @Override
   public void setPartitioning(BlockPartitioning partitioning) {
     blk.setPartitioning(partitioning);
   }
 
   public void clearAllCaches() {
-    reducer.clearCaches();
+    getPredicateManager().clear();
     relevantPredicatesComputer.clear();
     PathFormulaManager pamgr = getPathFormulaManager();
     pamgr.clearCaches();

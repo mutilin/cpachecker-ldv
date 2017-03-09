@@ -26,11 +26,13 @@ package org.sosy_lab.cpachecker.cfa.types;
 import static com.google.common.base.Preconditions.checkArgument;
 
 import java.math.BigInteger;
-
+import java.util.Iterator;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CIntegerLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.types.c.CArrayType;
 import org.sosy_lab.cpachecker.cfa.types.c.CBasicType;
+import org.sosy_lab.cpachecker.cfa.types.c.CBitFieldType;
+import org.sosy_lab.cpachecker.cfa.types.c.CComplexType.ComplexTypeKind;
 import org.sosy_lab.cpachecker.cfa.types.c.CCompositeType;
 import org.sosy_lab.cpachecker.cfa.types.c.CCompositeType.CCompositeTypeMemberDeclaration;
 import org.sosy_lab.cpachecker.cfa.types.c.CElaboratedType;
@@ -50,7 +52,7 @@ import org.sosy_lab.cpachecker.cfa.types.c.CVoidType;
  */
 public enum MachineModel {
   /**
-   * Machine model representing a 32bit Linux machine
+   * Machine model representing a 32bit Linux machine with alignment:
    */
   LINUX32(
       // numeric types
@@ -65,11 +67,25 @@ public enum MachineModel {
       // other
       1, // void
       1, // bool
-      4  // pointer
-      ),
+      4, // pointer
+
+      // alignof numeric types
+      2, // short
+      4, //int
+      4, //long int
+      8, // long long int
+      4, //float
+      4, //double
+      4, //long double
+
+      // alignof other
+      1, // void
+      1, //bool
+      4  //pointer
+  ),
 
   /**
-   * Machine model representing a 64bit Linux machine
+   * Machine model representing a 64bit Linux machine with alignment:
    */
   LINUX64(
       // numeric types
@@ -84,9 +100,22 @@ public enum MachineModel {
       // other
       1, // void
       1, // bool
-      8  // pointer
-      );
+      8, // pointer
 
+      //  alignof numeric types
+      2,  // short
+      4,  // int
+      8,  // long int
+      8,  // long long int
+      4,  // float
+      8,  // double
+      16, // long double
+
+      // alignof other
+      1, // void
+      1, // bool
+      8  // pointer
+  );
   // numeric types
   private final int     sizeofShort;
   private final int     sizeofInt;
@@ -101,16 +130,50 @@ public enum MachineModel {
   private final int     sizeofBool;
   private final int     sizeofPtr;
 
+
+  // alignof numeric types
+  private final int     alignofShort;
+  private final int     alignofInt;
+  private final int     alignofLongInt;
+  private final int     alignofLongLongInt;
+  private final int     alignofFloat;
+  private final int     alignofDouble;
+  private final int     alignofLongDouble;
+
+  // alignof other
+  private final int     alignofVoid;
+  private final int     alignofBool;
+  private final int     alignofPtr;
+
   // according to ANSI C, sizeof(char) is always 1
   private final int mSizeofChar = 1;
+  private final int mAlignofChar = 1;
 
   // a char is always a byte, but a byte doesn't have to be 8 bits
   private final int mSizeofCharInBits = 8;
   private final CSimpleType ptrEquivalent;
 
-  private MachineModel(int pSizeofShort, int pSizeofInt, int pSizeofLongInt,
-      int pSizeofLongLongInt, int pSizeofFloat, int pSizeofDouble,
-      int pSizeofLongDouble, int pSizeofVoid, int pSizeofBool, int pSizeOfPtr) {
+  private MachineModel(
+      int pSizeofShort,
+      int pSizeofInt,
+      int pSizeofLongInt,
+      int pSizeofLongLongInt,
+      int pSizeofFloat,
+      int pSizeofDouble,
+      int pSizeofLongDouble,
+      int pSizeofVoid,
+      int pSizeofBool,
+      int pSizeOfPtr,
+      int pAlignofShort,
+      int pAlignofInt,
+      int pAlignofLongInt,
+      int pAlignofLongLongInt,
+      int pAlignofFloat,
+      int pAlignofDouble,
+      int pAlignofLongDouble,
+      int pAlignofVoid,
+      int pAlignofBool,
+      int pAlignofPtr) {
     sizeofShort = pSizeofShort;
     sizeofInt = pSizeofInt;
     sizeofLongInt = pSizeofLongInt;
@@ -121,6 +184,17 @@ public enum MachineModel {
     sizeofVoid = pSizeofVoid;
     sizeofBool = pSizeofBool;
     sizeofPtr = pSizeOfPtr;
+
+    alignofShort = pAlignofShort;
+    alignofInt = pAlignofInt;
+    alignofLongInt = pAlignofLongInt;
+    alignofLongLongInt = pAlignofLongLongInt;
+    alignofFloat = pAlignofFloat;
+    alignofDouble = pAlignofDouble;
+    alignofLongDouble = pAlignofLongDouble;
+    alignofVoid = pAlignofVoid;
+    alignofBool = pAlignofBool;
+    alignofPtr = pAlignofPtr;
 
     if (sizeofPtr == sizeofInt) {
       ptrEquivalent = CNumericTypes.INT;
@@ -278,6 +352,77 @@ public enum MachineModel {
     return getSizeof(type) * getSizeofCharInBits();
   }
 
+  public int getAlignofShort() {
+    return alignofShort;
+  }
+
+  public int getAlignofInt() {
+    return alignofInt;
+  }
+
+  public int getAlignofLongInt() {
+    return alignofLongInt;
+  }
+
+  public int getAlignofLongLongInt() {
+    return alignofLongLongInt;
+  }
+
+  public int getAlignofFloat() {
+    return alignofFloat;
+  }
+
+  public int getAlignofDouble() {
+    return alignofDouble;
+  }
+
+  public int getAlignofLongDouble() {
+    return alignofLongDouble;
+  }
+
+  public int getAlignofVoid() {
+    return alignofVoid;
+  }
+
+  public int getAlignofBool() {
+    return alignofBool;
+  }
+
+  public int getAlignofChar() {
+    return mAlignofChar;
+  }
+
+  public int getAlignofPtr() {
+    return alignofPtr;
+  }
+
+  public int getAlignof(CSimpleType type) {
+    switch (type.getType()) {
+      case BOOL:        return getAlignofBool();
+      case CHAR:        return getAlignofChar();
+      case FLOAT:       return getAlignofFloat();
+      case UNSPECIFIED: // unspecified is the same as int
+      case INT:
+        if (type.isLongLong()) {
+          return getAlignofLongLongInt();
+        } else if (type.isLong()) {
+          return getAlignofLongInt();
+        } else if (type.isShort()) {
+          return getAlignofShort();
+        } else {
+          return getAlignofInt();
+        }
+      case DOUBLE:
+        if (type.isLong()) {
+          return getAlignofLongDouble();
+        } else {
+          return getAlignofDouble();
+        }
+      default:
+        throw new AssertionError("Unrecognized CBasicType " + type.getType());
+    }
+  }
+
   /** returns INT, if the type is smaller than INT, else the type itself. */
   public CSimpleType getPromotedCType(CSimpleType pType) {
 
@@ -330,7 +475,9 @@ public enum MachineModel {
     return result;
   }
 
-  private final CTypeVisitor<Integer, IllegalArgumentException> sizeofVisitor = new BaseSizeofVisitor(this);
+  @SuppressWarnings("ImmutableEnumChecker")
+  private final CTypeVisitor<Integer, IllegalArgumentException> sizeofVisitor =
+      new BaseSizeofVisitor(this);
 
   public static class BaseSizeofVisitor implements CTypeVisitor<Integer, IllegalArgumentException> {
     private final MachineModel model;
@@ -367,12 +514,50 @@ public enum MachineModel {
       }
     }
 
+    public int calculateByteSize(int pBitFieldsSize) {
+      if (pBitFieldsSize == 0) {
+        return 0;
+      }
+
+      int result = pBitFieldsSize / model.getSizeofCharInBits();
+      if (pBitFieldsSize % model.getSizeofCharInBits() > 0) {
+        result++;
+      }
+      return result;
+    }
+
     private Integer handleSizeOfStruct(CCompositeType pCompositeType) {
       int size = 0;
-      // TODO: Take possible padding into account
-      for (CCompositeTypeMemberDeclaration decl : pCompositeType.getMembers()) {
-        size += decl.getType().accept(this);
+      int bitFieldsSize = 0;
+      Iterator<CCompositeTypeMemberDeclaration> declIt = pCompositeType.getMembers().iterator();
+      while (declIt.hasNext()) {
+        CCompositeTypeMemberDeclaration decl = declIt.next();
+        if (decl.getType().isIncomplete() && !declIt.hasNext()) {
+          // Last member of a struct can be an incomplete array.
+          // In this case we need only padding according to the element type of the array and no size.
+          CType type = decl.getType().getCanonicalType();
+          if (type instanceof CArrayType) {
+            CType elementType = ((CArrayType) type).getType();
+            size += calculateByteSize(bitFieldsSize);
+            bitFieldsSize = 0;
+            size += model.getPadding(size, elementType);
+          } else {
+            throw new IllegalArgumentException(
+                "Cannot compute size of incomplete type " + decl.getType());
+          }
+        } else {
+          if (decl.getType() instanceof CBitFieldType) {
+              bitFieldsSize += ((CBitFieldType) decl.getType()).getBitFieldSize();
+          } else {
+            size += calculateByteSize(bitFieldsSize);
+            bitFieldsSize = 0;
+            size += model.getPadding(size, decl.getType());
+            size += decl.getType().accept(this);
+          }
+        }
       }
+      size += calculateByteSize(bitFieldsSize);
+      size += model.getPadding(size, pCompositeType);
       return size;
     }
 
@@ -394,18 +579,12 @@ public enum MachineModel {
         return def.accept(this);
       }
 
-      switch (pElaboratedType.getKind()) {
-      case ENUM:
-        return model.getSizeofInt();
-      case STRUCT:
-        // TODO: UNDEFINED
-        return model.getSizeofInt();
-      case UNION:
-        // TODO: UNDEFINED
-        return model.getSizeofInt();
-      default:
+      if (pElaboratedType.getKind() == ComplexTypeKind.ENUM) {
         return model.getSizeofInt();
       }
+
+      throw new IllegalArgumentException(
+          "Cannot compute size of incomplete type " + pElaboratedType);
     }
 
     @Override
@@ -444,13 +623,36 @@ public enum MachineModel {
     public Integer visit(CVoidType pVoidType) throws IllegalArgumentException {
       return model.getSizeofVoid();
     }
+
+    @Override
+    public Integer visit(CBitFieldType pCBitFieldType) throws IllegalArgumentException {
+      return calculateByteSize(pCBitFieldType.getBitFieldSize());
+    }
   }
 
   public int getSizeof(CType type) {
+    checkArgument(
+        type instanceof CVoidType || !type.isIncomplete(),
+        "Cannot compute size of incomplete type %s",
+        type);
     return type.accept(sizeofVisitor);
   }
 
-  private final CTypeVisitor<Integer, IllegalArgumentException> alignofVisitor = new BaseAlignofVisitor(this);
+  public int getBitSizeofPtr() {
+    return getSizeofPtr() * getSizeofCharInBits();
+  }
+
+  public int getBitSizeof(CType pType) {
+    if (pType instanceof CBitFieldType) {
+      return ((CBitFieldType) pType).getBitFieldSize();
+    } else {
+      return getSizeof(pType) * getSizeofCharInBits();
+    }
+  }
+
+  @SuppressWarnings("ImmutableEnumChecker")
+  private final CTypeVisitor<Integer, IllegalArgumentException> alignofVisitor =
+      new BaseAlignofVisitor(this);
 
   public static class BaseAlignofVisitor implements CTypeVisitor<Integer, IllegalArgumentException> {
     private final MachineModel model;
@@ -471,15 +673,14 @@ public enum MachineModel {
       switch (pCompositeType.getKind()) {
         case STRUCT:
         case UNION:
-
-          int size = 0;
-          int sizeOfType = 0;
+          int alignof = 1;
+          int alignOfType = 0;
           // TODO: Take possible padding into account
           for (CCompositeTypeMemberDeclaration decl : pCompositeType.getMembers()) {
-            sizeOfType = decl.getType().accept(this);
-            size = Math.max(size, sizeOfType);
+            alignOfType = decl.getType().accept(this);
+            alignof = Math.max(alignof, alignOfType);
           }
-          return size;
+          return alignof;
 
         case ENUM: // There is no such kind of Composite Type.
         default: throw new AssertionError();
@@ -488,13 +689,23 @@ public enum MachineModel {
 
     @Override
     public Integer visit(CElaboratedType pElaboratedType) throws IllegalArgumentException {
-      return pElaboratedType.getRealType().accept(this);
+      CType def = pElaboratedType.getRealType();
+      if (def != null) {
+        return def.accept(this);
+      }
+
+      if (pElaboratedType.getKind() == ComplexTypeKind.ENUM) {
+        return model.getSizeofInt();
+      }
+
+      throw new IllegalArgumentException(
+          "Cannot compute alignment of incomplete type " + pElaboratedType);
     }
 
     @Override
     public Integer visit(CEnumType pEnumType) throws IllegalArgumentException {
       // enums are always ints
-      return model.getSizeofInt();
+      return model.getAlignofInt();
     }
 
     @Override
@@ -505,8 +716,7 @@ public enum MachineModel {
 
     @Override
     public Integer visit(CPointerType pPointerType) throws IllegalArgumentException {
-      // for now we assume that for pointer types alignof has the same value as sizeof
-      return model.getSizeofPtr();
+      return model.getAlignofPtr();
     }
 
     @Override
@@ -516,8 +726,7 @@ public enum MachineModel {
 
     @Override
     public Integer visit(CSimpleType pSimpleType) throws IllegalArgumentException {
-      // for now we assume that for simple types alignof has the same values as sizeof
-      return model.getSizeof(pSimpleType);
+      return model.getAlignof(pSimpleType);
     }
 
     @Override
@@ -527,11 +736,25 @@ public enum MachineModel {
 
     @Override
     public Integer visit(CVoidType pVoidType) throws IllegalArgumentException {
-      return model.getSizeofVoid();
+      return model.getAlignofVoid();
+    }
+
+    @Override
+    public Integer visit(CBitFieldType pCBitFieldType) throws IllegalArgumentException {
+      return pCBitFieldType.getType().accept(this);
     }
   }
 
   public int getAlignof(CType type) {
     return type.accept(alignofVisitor);
+  }
+
+  public int getPadding(int pOffset, CType pType) {
+    int alignof = getAlignof(pType);
+    int padding = alignof - (pOffset % alignof);
+    if (padding < alignof) {
+      return padding;
+    }
+    return 0;
   }
 }

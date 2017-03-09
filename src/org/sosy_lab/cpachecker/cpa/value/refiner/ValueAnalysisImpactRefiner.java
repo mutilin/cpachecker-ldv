@@ -23,25 +23,26 @@
  */
 package org.sosy_lab.cpachecker.cpa.value.refiner;
 
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Multimap;
+import com.google.common.collect.Sets;
 import java.io.PrintStream;
 import java.util.Collection;
 import java.util.HashSet;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-
 import org.sosy_lab.common.ShutdownNotifier;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
-import org.sosy_lab.common.configuration.Option;
-import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
-import org.sosy_lab.cpachecker.core.defaults.VariableTrackingPrecision;
+import org.sosy_lab.cpachecker.core.defaults.precision.VariableTrackingPrecision;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
+import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGCPA;
 import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
 import org.sosy_lab.cpachecker.cpa.arg.ARGReachedSet;
@@ -54,7 +55,6 @@ import org.sosy_lab.cpachecker.cpa.value.refiner.utils.ValueAnalysisInterpolantM
 import org.sosy_lab.cpachecker.cpa.value.refiner.utils.ValueAnalysisPrefixProvider;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
-import org.sosy_lab.cpachecker.util.CPAs;
 import org.sosy_lab.cpachecker.util.Precisions;
 import org.sosy_lab.cpachecker.util.refinement.GenericPrefixProvider;
 import org.sosy_lab.cpachecker.util.refinement.GenericRefiner;
@@ -65,20 +65,9 @@ import org.sosy_lab.cpachecker.util.states.MemoryLocation;
 import org.sosy_lab.cpachecker.util.statistics.StatTimer;
 import org.sosy_lab.cpachecker.util.statistics.StatisticsWriter;
 
-import com.google.common.collect.HashMultimap;
-import com.google.common.collect.Iterables;
-import com.google.common.collect.Multimap;
-import com.google.common.collect.Sets;
-
-@Options(prefix = "cpa.value.refinement")
 public class ValueAnalysisImpactRefiner
   extends GenericRefiner<ValueAnalysisState, ValueAnalysisInterpolant>
   implements UnsoundRefiner {
-
-  @Option(
-      secure = true,
-      description = "whether to use the top-down interpolation strategy or the bottom-up interpolation strategy")
-  private boolean useTopDownInterpolationStrategy = true;
 
   // statistics
   private int restartCounter = 0;
@@ -90,15 +79,8 @@ public class ValueAnalysisImpactRefiner
   public static ValueAnalysisImpactRefiner create(final ConfigurableProgramAnalysis pCpa)
     throws InvalidConfigurationException {
 
-    final ARGCPA argCpa = CPAs.retrieveCPA(pCpa, ARGCPA.class);
-    if (argCpa == null) {
-      throw new InvalidConfigurationException(ValueAnalysisImpactRefiner.class.getSimpleName() + " needs to be wrapped in an ARGCPA");
-    }
-
-    final ValueAnalysisCPA valueAnalysisCpa = CPAs.retrieveCPA(pCpa, ValueAnalysisCPA.class);
-    if (valueAnalysisCpa == null) {
-      throw new InvalidConfigurationException(ValueAnalysisImpactRefiner.class.getSimpleName() + " needs a ValueAnalysisCPA");
-    }
+    final ARGCPA argCpa = retrieveCPA(pCpa, ARGCPA.class);
+    final ValueAnalysisCPA valueAnalysisCpa = retrieveCPA(pCpa, ValueAnalysisCPA.class);
 
     valueAnalysisCpa.injectRefinablePrecision();
 
@@ -147,8 +129,6 @@ public class ValueAnalysisImpactRefiner
         pPathExtractor,
         pConfig,
         pLogger);
-
-    pConfig.inject(this);
   }
 
   @Override
@@ -219,7 +199,7 @@ public class ValueAnalysisImpactRefiner
   }
 
   @Override
-  public void forceRestart(ReachedSet pReached) {
+  public void forceRestart(ReachedSet pReached) throws InterruptedException {
     restartCounter++;
     ARGState firstChild = Iterables.getOnlyElement(((ARGState)pReached.getFirstState()).getChildren());
 
@@ -333,8 +313,8 @@ public class ValueAnalysisImpactRefiner
   }
 
   @Override
-  protected void printAdditionalStatistics(PrintStream pOut, Result pResult, ReachedSet pReached) {
-    pOut.println("Total number of restarts:      " + String.format(Locale.US, "%9d", restartCounter));
+  protected void printAdditionalStatistics(PrintStream pOut, Result pResult, UnmodifiableReachedSet pReached) {
+    pOut.println("Total number of restarts:      " + String.format("%9d", restartCounter));
     StatisticsWriter w = StatisticsWriter.writingStatisticsTo(pOut);
     w.beginLevel()
       .put(timeStrengthen)

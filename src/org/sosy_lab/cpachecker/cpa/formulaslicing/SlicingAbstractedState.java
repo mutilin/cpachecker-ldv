@@ -1,15 +1,20 @@
 package org.sosy_lab.cpachecker.cpa.formulaslicing;
 
+import com.google.common.base.Joiner;
+import com.google.common.collect.ImmutableSet;
+
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.interfaces.FormulaReportingState;
 import org.sosy_lab.cpachecker.core.interfaces.Graphable;
-import org.sosy_lab.solver.api.BooleanFormula;
-import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormulaManager;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.SSAMap;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.pointeraliasing.PointerTargetSet;
 import org.sosy_lab.cpachecker.util.predicates.smt.FormulaManagerView;
+import org.sosy_lab.java_smt.api.BooleanFormula;
 
-import com.google.common.base.Optional;
+import java.util.HashSet;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 
 /**
  * Abstracted state, containing invariants obtained by slicing.
@@ -17,15 +22,13 @@ import com.google.common.base.Optional;
  * The invariant is universally true wrt the intermediate state
  * which was used for the abstraction.
  */
-public class SlicingAbstractedState extends SlicingState implements
-    FormulaReportingState, Graphable {
+class SlicingAbstractedState
+    extends SlicingState implements FormulaReportingState, Graphable {
 
   /**
-   * Slice with respect to the current loop.
-   * The slice does not contain any intermediate variables, and thus can be
-   * represented as an *un-instantiated* formula.
+   * Uninstantiated set of lemmas.
    */
-  private final BooleanFormula slice;
+  private final ImmutableSet<BooleanFormula> lemmas;
 
   /**
    * Expected starting {@link PointerTargetSet} and {@link SSAMap}.
@@ -34,7 +37,7 @@ public class SlicingAbstractedState extends SlicingState implements
   private final PointerTargetSet pointerTargetSet;
 
   /**
-   * Backpointer to the current {@link FormulaManagerView}, used for dumping
+   * Backpointer to the {@link FormulaManagerView} corresponding to this CPA, used for dumping
    * the formulas.
    */
   private final FormulaManagerView fmgr;
@@ -47,13 +50,23 @@ public class SlicingAbstractedState extends SlicingState implements
 
   private final CFANode node;
 
+  /**
+   * Under which paths this state is inductive.
+   */
+  private final ImmutableSet<PathFormulaWithStartSSA> inductiveUnder;
+
+  private transient int hashCache = 0;
+
   private SlicingAbstractedState(
-      BooleanFormula pSlice,
+      Set<BooleanFormula> pSlice,
       SSAMap pSsaMap,
       PointerTargetSet pPointerTargetSet,
       FormulaManagerView pFmgr,
-      Optional<SlicingIntermediateState> pGeneratingState, CFANode pNode) {
-    slice = pSlice;
+      Optional<SlicingIntermediateState> pGeneratingState,
+      CFANode pNode,
+      Iterable<PathFormulaWithStartSSA> pInductiveUnder) {
+    inductiveUnder = ImmutableSet.copyOf(pInductiveUnder);
+    lemmas = ImmutableSet.copyOf(pSlice);
     ssaMap = pSsaMap;
     pointerTargetSet = pPointerTargetSet;
     fmgr = pFmgr;
@@ -61,13 +74,40 @@ public class SlicingAbstractedState extends SlicingState implements
     node = pNode;
   }
 
-  public static SlicingAbstractedState of(BooleanFormula pSlice,
-      SSAMap pSsaMap, PointerTargetSet pPointerTargetSet,
-      FormulaManagerView pFmgr,
-      CFANode pNode,
-      Optional<SlicingIntermediateState> pGeneratingState) {
+  public Set<PathFormulaWithStartSSA> getInductiveUnder() {
+    return inductiveUnder;
+  }
+
+  public static SlicingAbstractedState ofClauses(Set<BooleanFormula> pSlice,
+                                          SSAMap pSsaMap, PointerTargetSet pPointerTargetSet,
+                                          FormulaManagerView pFmgr,
+                                          CFANode pNode,
+                                          Optional<SlicingIntermediateState> pGeneratingState) {
+    return new SlicingAbstractedState(
+        pSlice, pSsaMap, pPointerTargetSet, pFmgr,
+        pGeneratingState, pNode,
+        ImmutableSet.of());
+  }
+
+  public static SlicingAbstractedState makeSliced(Set<BooleanFormula> pSlice,
+                                          SSAMap pSsaMap, PointerTargetSet pPointerTargetSet,
+                                          FormulaManagerView pFmgr,
+                                          CFANode pNode,
+                                          Optional<SlicingIntermediateState> pGeneratingState,
+                                          Iterable<PathFormulaWithStartSSA> trace) {
     return new SlicingAbstractedState(pSlice, pSsaMap, pPointerTargetSet, pFmgr,
-        pGeneratingState, pNode);
+        pGeneratingState, pNode, trace);
+  }
+
+  public static SlicingAbstractedState copyOf(SlicingAbstractedState sliced) {
+    return new SlicingAbstractedState(
+        sliced.lemmas,
+        sliced.ssaMap,
+        sliced.pointerTargetSet,
+        sliced.fmgr,
+        sliced.generatingState,
+        sliced.node,
+        sliced.inductiveUnder);
   }
 
   public Optional<SlicingIntermediateState> getGeneratingState(){
@@ -82,25 +122,40 @@ public class SlicingAbstractedState extends SlicingState implements
     return pointerTargetSet;
   }
 
+  public boolean isInitial() {
+    return !generatingState.isPresent();
+  }
+
   public CFANode getNode() {
     return node;
   }
 
-  public BooleanFormula getAbstraction() {
-    return slice;
+  public Set<BooleanFormula> getAbstraction() {
+    return lemmas;
+  }
+
+  public Set<BooleanFormula> getInstantiatedAbstraction() {
+    Set<BooleanFormula> out = new HashSet<>(lemmas.size());
+    for (BooleanFormula f : lemmas) {
+      out.add(fmgr.instantiate(f, ssaMap));
+    }
+    return out;
   }
 
   public static SlicingAbstractedState empty(
       FormulaManagerView pFmgr,
       CFANode startingNode
   ) {
-    return SlicingAbstractedState.of(
-        pFmgr.getBooleanFormulaManager().makeBoolean(true),
+    return new SlicingAbstractedState(
+        ImmutableSet.of(),
         SSAMap.emptySSAMap(),
         PointerTargetSet.emptyPointerTargetSet(),
-        pFmgr, startingNode,
-        Optional.<SlicingIntermediateState>absent());
+        pFmgr,
+        Optional.empty(),
+        startingNode,
+        ImmutableSet.of());
   }
+
 
   @Override
   public boolean isAbstracted() {
@@ -108,18 +163,45 @@ public class SlicingAbstractedState extends SlicingState implements
   }
 
   @Override
-  public BooleanFormula getFormulaApproximation(FormulaManagerView manager,
-      PathFormulaManager pfmgr) {
-    return manager.parse(fmgr.dumpFormula(slice).toString());
+  public BooleanFormula getFormulaApproximation(FormulaManagerView manager) {
+    BooleanFormula constraint = fmgr.getBooleanFormulaManager().and(lemmas);
+    return manager.translateFrom(constraint, fmgr);
   }
 
   @Override
   public String toDOTLabel() {
-    return slice.toString();
+    return Joiner.on("\n---\n").join(lemmas);
   }
 
   @Override
   public boolean shouldBeHighlighted() {
     return false;
+  }
+
+  @Override
+  public String toString() {
+    return lemmas.toString();
+  }
+
+  @Override
+  public boolean equals(Object pO) {
+    if (this == pO) {
+      return true;
+    }
+    if (pO == null || getClass() != pO.getClass()) {
+      return false;
+    }
+    SlicingAbstractedState that = (SlicingAbstractedState) pO;
+    return Objects.equals(lemmas, that.lemmas) &&
+        Objects.equals(ssaMap, that.ssaMap) &&
+        Objects.equals(pointerTargetSet, that.pointerTargetSet);
+  }
+
+  @Override
+  public int hashCode() {
+    if (hashCache == 0) {
+      hashCache = Objects.hash(lemmas, ssaMap, pointerTargetSet);
+    }
+    return hashCache;
   }
 }

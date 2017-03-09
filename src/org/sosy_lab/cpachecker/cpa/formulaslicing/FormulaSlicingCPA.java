@@ -1,15 +1,11 @@
 package org.sosy_lab.cpachecker.cpa.formulaslicing;
 
+import com.google.common.base.Function;
 import java.util.Collection;
-import java.util.List;
-
-import javax.annotation.Nullable;
-
+import java.util.Optional;
 import org.sosy_lab.common.ShutdownNotifier;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
-import org.sosy_lab.common.configuration.Option;
-import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
@@ -34,63 +30,58 @@ import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
+import org.sosy_lab.cpachecker.util.predicates.RCNFManager;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.CachingPathFormulaManager;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormulaManager;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormulaManagerImpl;
 import org.sosy_lab.cpachecker.util.predicates.smt.FormulaManagerView;
 import org.sosy_lab.cpachecker.util.predicates.smt.Solver;
-
-import com.google.common.base.Function;
-import com.google.common.base.Optional;
+import org.sosy_lab.cpachecker.util.predicates.weakening.InductiveWeakeningManager;
 
 
-@Options(prefix="cpa.slicing")
 public class FormulaSlicingCPA extends SingleEdgeTransferRelation
   implements
     ConfigurableProgramAnalysis,
     AbstractDomain,
     PrecisionAdjustment,
-    StatisticsProvider, MergeOperator {
-
-  @Option(secure=true,
-      description="Cache formulas produced by path formula manager")
-  private boolean useCachingPathFormulaManager = true;
+    StatisticsProvider,
+    MergeOperator,
+    AutoCloseable {
 
   private final StopOperator stopOperator;
   private final IFormulaSlicingManager manager;
   private final MergeOperator mergeOperator;
-  private FormulaSlicingStatistics statistics;
+  private final InductiveWeakeningManager inductiveWeakeningManager;
+  private final RCNFManager RCNFManager;
+  private final Solver solver;
 
   private FormulaSlicingCPA(
       Configuration pConfiguration,
       LogManager pLogger,
-      ShutdownNotifier shutdownNotifier,
+      ShutdownNotifier pShutdownNotifier,
       CFA cfa
   ) throws InvalidConfigurationException {
-    pConfiguration.inject(this);
-
-    statistics = new FormulaSlicingStatistics();
-    Solver solver = Solver.create(pConfiguration, pLogger, shutdownNotifier);
+    solver = Solver.create(pConfiguration, pLogger, pShutdownNotifier);
     FormulaManagerView formulaManager = solver.getFormulaManager();
-    PathFormulaManager pathFormulaManager = new PathFormulaManagerImpl(
-        formulaManager, pConfiguration, pLogger, shutdownNotifier, cfa,
+    PathFormulaManager origPathFormulaManager = new PathFormulaManagerImpl(
+        formulaManager, pConfiguration, pLogger, pShutdownNotifier, cfa,
         AnalysisDirection.FORWARD);
 
-    if (useCachingPathFormulaManager) {
-      pathFormulaManager = new CachingPathFormulaManager(pathFormulaManager);
-    }
+    CachingPathFormulaManager pathFormulaManager = new CachingPathFormulaManager
+        (origPathFormulaManager);
 
-    LoopTransitionFinder ltf = new LoopTransitionFinder(
-        pConfiguration, cfa, pathFormulaManager, formulaManager, pLogger,
-        statistics, shutdownNotifier);
-
-    InductiveWeakeningManager pInductiveWeakeningManager =
-        new InductiveWeakeningManager(pConfiguration, formulaManager, solver, pLogger);
+    inductiveWeakeningManager = new InductiveWeakeningManager(pConfiguration, solver, pLogger,
+        pShutdownNotifier);
+    RCNFManager = new RCNFManager(pConfiguration);
     manager = new FormulaSlicingManager(
         pConfiguration,
-        pathFormulaManager, formulaManager, cfa, ltf,
-        pInductiveWeakeningManager, solver,
-        statistics);
+        pathFormulaManager,
+        formulaManager,
+        cfa,
+        inductiveWeakeningManager,
+        RCNFManager,
+        solver,
+        pLogger);
     stopOperator = new StopSepOperator(this);
     mergeOperator = this;
   }
@@ -138,14 +129,6 @@ public class FormulaSlicingCPA extends SingleEdgeTransferRelation
   }
 
   @Override
-  public Collection<? extends AbstractState> strengthen(AbstractState state,
-      List<AbstractState> otherStates, @Nullable CFAEdge cfaEdge,
-      Precision precision) throws CPATransferException, InterruptedException {
-    return manager.strengthen((SlicingState)state,
-        otherStates, cfaEdge);
-  }
-
-  @Override
   public AbstractState join(AbstractState state1, AbstractState state2)
       throws CPAException, InterruptedException {
     throw new UnsupportedOperationException("FormulaSlicingCPA should be used" +
@@ -160,13 +143,6 @@ public class FormulaSlicingCPA extends SingleEdgeTransferRelation
   }
 
   @Override
-  public Precision getInitialPrecision(CFANode node,
-      StateSpacePartition partition) {
-    // At the moment, precision is not used for formula slicing.
-    return new Precision() {};
-  }
-
-  @Override
   public Optional<PrecisionAdjustmentResult> prec(AbstractState state,
       Precision precision, UnmodifiableReachedSet states,
       Function<AbstractState, AbstractState> stateProjection,
@@ -176,12 +152,19 @@ public class FormulaSlicingCPA extends SingleEdgeTransferRelation
 
   @Override
   public void collectStatistics(Collection<Statistics> statsCollection) {
-    statsCollection.add(statistics);
+    manager.collectStatistics(statsCollection);
+    inductiveWeakeningManager.collectStatistics(statsCollection);
+    RCNFManager.collectStatistics(statsCollection);
   }
 
   @Override
   public AbstractState merge(AbstractState state1, AbstractState state2,
       Precision precision) throws CPAException, InterruptedException {
     return manager.merge((SlicingState) state1, (SlicingState) state2);
+  }
+
+  @Override
+  public void close() {
+    solver.close();
   }
 }

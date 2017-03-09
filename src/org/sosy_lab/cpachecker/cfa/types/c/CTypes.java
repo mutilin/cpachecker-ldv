@@ -32,6 +32,20 @@ public final class CTypes {
 
   private CTypes() { }
 
+  /**
+   * Check whether the given type is a pointer to a function.
+   */
+  public static boolean isFunctionPointer(CType type) {
+    type = type.getCanonicalType();
+    if (type instanceof CPointerType) {
+      CType innerType = ((CPointerType)type).getType();
+      if (innerType instanceof CFunctionType) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   private static class CanonicalCTypeEquivalence extends Equivalence<CType> {
     private static final CanonicalCTypeEquivalence INSTANCE = new CanonicalCTypeEquivalence();
 
@@ -195,6 +209,12 @@ public final class CTypes {
     public CType visit(CVoidType t) {
       return CVoidType.create(constValue, t.isVolatile());
     }
+
+    @Override
+    public CType visit(CBitFieldType pCBitFieldType) throws RuntimeException {
+      return new CBitFieldType(
+          pCBitFieldType.getType().accept(this), pCBitFieldType.getBitFieldSize());
+    }
   }
 
   private static enum ForceVolatileVisitor implements CTypeVisitor<CType, RuntimeException> {
@@ -257,6 +277,12 @@ public final class CTypes {
     @Override
     public CType visit(CVoidType t) {
       return CVoidType.create(t.isConst(), volatileValue);
+    }
+
+    @Override
+    public CType visit(CBitFieldType pCBitFieldType) throws RuntimeException {
+      return new CBitFieldType(
+          pCBitFieldType.getType().accept(this), pCBitFieldType.getBitFieldSize());
     }
   }
 }

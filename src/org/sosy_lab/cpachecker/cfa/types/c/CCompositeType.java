@@ -23,40 +23,54 @@
  */
 package org.sosy_lab.cpachecker.cfa.types.c;
 
-import static com.google.common.base.Preconditions.*;
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
 
+import com.google.common.base.Strings;
+import com.google.common.collect.ImmutableList;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-
 import javax.annotation.Nullable;
 
-import com.google.common.base.Strings;
-import com.google.common.collect.ImmutableList;
-
-public final class CCompositeType implements CComplexType, Serializable {
+public final class CCompositeType implements CComplexType {
 
   private static final long serialVersionUID = -839957929135012583L;
   private final CComplexType.ComplexTypeKind kind;
-  private transient List<CCompositeTypeMemberDeclaration> members;
+  private transient List<CCompositeTypeMemberDeclaration> members = null;
   private final String name;
   private final String origName;
-  private boolean   isConst;
-  private boolean   isVolatile;
+  private final boolean isConst;
+  private final boolean isVolatile;
 
-  public CCompositeType(final boolean pConst, final boolean pVolatile,
-      final CComplexType.ComplexTypeKind pKind, final List<CCompositeTypeMemberDeclaration> pMembers, final String pName, final String pOrigName) {
+  public CCompositeType(
+      final boolean pConst,
+      final boolean pVolatile,
+      final CComplexType.ComplexTypeKind pKind,
+      final String pName,
+      final String pOrigName) {
 
     checkNotNull(pKind);
     checkArgument(pKind == ComplexTypeKind.STRUCT || pKind == ComplexTypeKind.UNION);
     isConst= pConst;
     isVolatile=pVolatile;
     kind = pKind;
-    members = ImmutableList.copyOf(pMembers);
     name = pName.intern();
     origName = pOrigName.intern();
+  }
+
+  public CCompositeType(
+      final boolean pConst,
+      final boolean pVolatile,
+      final CComplexType.ComplexTypeKind pKind,
+      final List<CCompositeTypeMemberDeclaration> pMembers,
+      final String pName,
+      final String pOrigName) {
+    this(pConst, pVolatile, pKind, pName, pOrigName);
+    members = ImmutableList.copyOf(pMembers);
   }
 
   @Override
@@ -65,10 +79,12 @@ public final class CCompositeType implements CComplexType, Serializable {
   }
 
   public List<CCompositeTypeMemberDeclaration> getMembers() {
+    checkState(members != null, "list of CCompositeType members not yet initialized");
     return members;
   }
 
   public void setMembers(List<CCompositeTypeMemberDeclaration> list) {
+    checkState(members == null, "list of CCompositeType members already initialized");
     members = ImmutableList.copyOf(list);
   }
 
@@ -87,6 +103,10 @@ public final class CCompositeType implements CComplexType, Serializable {
     return origName;
   }
 
+  @Override
+  public boolean isIncomplete() {
+    return false;
+  }
 
   @Override
   public String toString() {
@@ -122,13 +142,17 @@ public final class CCompositeType implements CComplexType, Serializable {
     lASTString.append(' ');
     lASTString.append(name);
 
-    lASTString.append(" {\n");
-    for (CCompositeTypeMemberDeclaration lMember : members) {
-      lASTString.append("  ");
-      lASTString.append(lMember.toASTString());
-      lASTString.append("\n");
+    if (members == null) {
+      lASTString.append("/* missing member initialization */ ");
+    } else {
+      lASTString.append(" {\n");
+      for (CCompositeTypeMemberDeclaration lMember : members) {
+        lASTString.append("  ");
+        lASTString.append(lMember.toASTString());
+        lASTString.append("\n");
+      }
+      lASTString.append("} ");
     }
-    lASTString.append("} ");
     lASTString.append(pDeclarator);
 
     return lASTString.toString();
@@ -272,19 +296,34 @@ public final class CCompositeType implements CComplexType, Serializable {
 
   @Override
   public CCompositeType getCanonicalType(boolean pForceConst, boolean pForceVolatile) {
-    return new CCompositeType(isConst || pForceConst, isVolatile || pForceVolatile, kind, members, name, origName);
+    if ((isConst == pForceConst) && (isVolatile == pForceVolatile)) {
+      return this;
+    }
+    CCompositeType result = new CCompositeType(
+        isConst || pForceConst, isVolatile || pForceVolatile, kind, name, origName);
+    if (members != null) {
+      result.setMembers(members);
+    }
+    return result;
   }
 
   private void writeObject(java.io.ObjectOutputStream out) throws IOException {
     out.defaultWriteObject();
 
-    out.writeObject(new ArrayList<>(members));
+    if (members != null) {
+      out.writeObject(new ArrayList<>(members));
+    } else {
+      out.writeObject(null);
+    }
   }
 
   @SuppressWarnings("unchecked")
   private void readObject(java.io.ObjectInputStream in) throws IOException, ClassNotFoundException {
     in.defaultReadObject();
-    members = ImmutableList.copyOf((ArrayList<CCompositeTypeMemberDeclaration>)in.readObject());
+    Object serializedMembers = in.readObject();
+    if (serializedMembers != null) {
+      members = ImmutableList.copyOf((Iterable<CCompositeTypeMemberDeclaration>)serializedMembers);
+    }
   }
 
 }

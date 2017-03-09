@@ -23,44 +23,10 @@
  */
 package org.sosy_lab.cpachecker.util;
 
-import static org.sosy_lab.cpachecker.util.AbstractStates.*;
-
-import java.io.IOException;
-import java.io.PrintStream;
-import java.io.Writer;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.Set;
-import java.util.logging.Level;
-
-import org.sosy_lab.common.ShutdownNotifier;
-import org.sosy_lab.common.configuration.Configuration;
-import org.sosy_lab.common.configuration.FileOption;
-import org.sosy_lab.common.configuration.InvalidConfigurationException;
-import org.sosy_lab.common.configuration.Option;
-import org.sosy_lab.common.configuration.Options;
-import org.sosy_lab.common.io.Files;
-import org.sosy_lab.common.io.Path;
-import org.sosy_lab.common.log.LogManager;
-import org.sosy_lab.cpachecker.cfa.CFA;
-import org.sosy_lab.cpachecker.cfa.model.CFANode;
-import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
-import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
-import org.sosy_lab.cpachecker.core.AnalysisDirection;
-import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
-import org.sosy_lab.cpachecker.core.interfaces.FormulaReportingState;
-import org.sosy_lab.cpachecker.core.interfaces.Statistics;
-import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
-import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
-import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
-import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormulaManager;
-import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormulaManagerImpl;
-import org.sosy_lab.cpachecker.util.predicates.smt.BooleanFormulaManagerView;
-import org.sosy_lab.cpachecker.util.predicates.smt.FormulaManagerView;
-import org.sosy_lab.cpachecker.util.predicates.smt.Solver;
-import org.sosy_lab.solver.api.BooleanFormula;
+import static org.sosy_lab.cpachecker.util.AbstractStates.asIterable;
+import static org.sosy_lab.cpachecker.util.AbstractStates.extractLocation;
+import static org.sosy_lab.cpachecker.util.AbstractStates.filterLocation;
+import static org.sosy_lab.cpachecker.util.AbstractStates.projectToType;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Splitter;
@@ -70,6 +36,38 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.SetMultimap;
 import com.google.common.collect.Sets;
+import java.io.IOException;
+import java.io.PrintStream;
+import java.io.Writer;
+import java.nio.charset.Charset;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Set;
+import java.util.logging.Level;
+import org.sosy_lab.common.ShutdownNotifier;
+import org.sosy_lab.common.configuration.Configuration;
+import org.sosy_lab.common.configuration.FileOption;
+import org.sosy_lab.common.configuration.InvalidConfigurationException;
+import org.sosy_lab.common.configuration.Option;
+import org.sosy_lab.common.configuration.Options;
+import org.sosy_lab.common.io.MoreFiles;
+import org.sosy_lab.common.log.LogManager;
+import org.sosy_lab.cpachecker.cfa.CFA;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
+import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
+import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
+import org.sosy_lab.cpachecker.core.interfaces.FormulaReportingState;
+import org.sosy_lab.cpachecker.core.interfaces.Statistics;
+import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
+import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
+import org.sosy_lab.cpachecker.util.predicates.smt.BooleanFormulaManagerView;
+import org.sosy_lab.cpachecker.util.predicates.smt.FormulaManagerView;
+import org.sosy_lab.cpachecker.util.predicates.smt.Solver;
+import org.sosy_lab.java_smt.api.BooleanFormula;
 
 /**
  * This class allows to export the information of abstract states as SMT-formula.
@@ -104,9 +102,7 @@ public class StateToFormulaWriter implements StatisticsProvider {
   private static final Splitter LINE_SPLITTER = Splitter.on('\n').omitEmptyStrings();
   private static final Joiner LINE_JOINER = Joiner.on('\n');
 
-  private final Solver solver;
   private final FormulaManagerView fmgr;
-  private final PathFormulaManager pfmgr;
   private final LogManager logger;
   private final CFA cfa;
 
@@ -121,34 +117,34 @@ public class StateToFormulaWriter implements StatisticsProvider {
       ShutdownNotifier shutdownNotifier, CFA pCfa)
           throws InvalidConfigurationException {
     config.inject(this);
-    solver = Solver.create(config, pLogger, shutdownNotifier);
+    Solver solver = Solver.create(config, pLogger, shutdownNotifier);
     logger = pLogger;
     fmgr = solver.getFormulaManager();
-    pfmgr = new PathFormulaManagerImpl(fmgr, config, logger,
-        shutdownNotifier, pCfa, AnalysisDirection.FORWARD);
     cfa = pCfa;
   }
 
   @Override
   public void collectStatistics(Collection<Statistics> pStatsCollection) {
-    pStatsCollection.add(new Statistics() {
+    pStatsCollection.add(
+        new Statistics() {
 
-      @Override
-      public void printStatistics(PrintStream pOut, Result pResult, ReachedSet pReached) {
-        if (exportFile != null) {
-          try (Writer w = Files.openOutputFile(exportFile)) {
-            write(pReached, w);
-          } catch (IOException e) {
-            logger.logUserException(Level.WARNING, e, "Could not write formulas to file");
+          @Override
+          public void printStatistics(
+              PrintStream pOut, Result pResult, UnmodifiableReachedSet pReached) {
+            if (exportFile != null) {
+              try (Writer w = MoreFiles.openOutputFile(exportFile, Charset.defaultCharset())) {
+                write(pReached, w);
+              } catch (IOException e) {
+                logger.logUserException(Level.WARNING, e, "Could not write formulas to file");
+              }
+            }
           }
-        }
-      }
 
-      @Override
-      public String getName() {
-        return null;
-      }
-    });
+          @Override
+          public String getName() {
+            return null;
+          }
+        });
   }
 
 
@@ -203,21 +199,20 @@ public class StateToFormulaWriter implements StatisticsProvider {
 
     // fill the above set and map
     for (CFANode cfaNode : pStates.keySet()) {
-      List<BooleanFormula> formulas = getFormulasForNode(pStates.get(cfaNode), cfaNode);
+      List<BooleanFormula> formulas = getFormulasForNode(pStates.get(cfaNode));
       extractPredicatesAndDefinitions(cfaNode, definitions, cfaNodeToPredicate, formulas);
     }
 
     writeFormulas(pAppendable, definitions, cfaNodeToPredicate);
   }
 
-  /** get formulas representing the abstract states at the cfaNode. */
-  private List<BooleanFormula> getFormulasForNode(Set<FormulaReportingState> states, CFANode cfaNode) {
+  private List<BooleanFormula> getFormulasForNode(Set<FormulaReportingState> states) {
     final List<BooleanFormula> formulas = new ArrayList<>();
     final BooleanFormulaManagerView bfmgr = fmgr.getBooleanFormulaManager();
 
     List<BooleanFormula> stateFormulas = new ArrayList<>();
     for (FormulaReportingState state : states) {
-      stateFormulas.add(state.getFormulaApproximation(fmgr, pfmgr));
+      stateFormulas.add(state.getFormulaApproximation(fmgr));
     }
 
     switch (splitFormulas) {

@@ -43,8 +43,8 @@ public class SMGJoinSubSMGsTest {
     SMG smg2 = new SMG(MachineModel.LINUX64);
     SMG destSmg = new SMG(MachineModel.LINUX64);
 
-    SMGObject obj1 = new SMGRegion(8, "Test object 1");
-    SMGObject obj2 = new SMGRegion(8, "Test object 2");
+    SMGObject obj1 = new SMGRegion(64, "Test object 1");
+    SMGObject obj2 = new SMGRegion(64, "Test object 2");
 
     smg1.addObject(obj1);
     smg2.addObject(obj2);
@@ -52,7 +52,8 @@ public class SMGJoinSubSMGsTest {
     SMGNodeMapping mapping1 = new SMGNodeMapping();
     SMGNodeMapping mapping2 = new SMGNodeMapping();
 
-    jssDefined = new SMGJoinSubSMGs(SMGJoinStatus.EQUAL, smg1, smg2, destSmg, mapping1, mapping2, obj1, obj2, null);
+    SMGLevelMapping levelMapping = SMGLevelMapping.createDefaultLevelMap();
+    jssDefined = new SMGJoinSubSMGs(SMGJoinStatus.EQUAL, smg1, smg2, destSmg, mapping1, mapping2, levelMapping, obj1, obj2, null, 0, false, null, null);
   }
 
   @Test

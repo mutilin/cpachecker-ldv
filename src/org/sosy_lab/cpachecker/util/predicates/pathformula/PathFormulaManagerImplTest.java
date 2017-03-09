@@ -25,18 +25,17 @@ package org.sosy_lab.cpachecker.util.predicates.pathformula;
 
 import static org.junit.Assert.assertEquals;
 
-import java.math.BigInteger;
-import java.util.Collections;
-import java.util.SortedMap;
-import java.util.TreeMap;
+import com.google.common.collect.SortedSetMultimap;
+import com.google.common.collect.TreeMultimap;
+
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.sosy_lab.common.ShutdownNotifier;
-import org.sosy_lab.cpachecker.util.Triple;
 import org.sosy_lab.common.configuration.Configuration;
-import org.sosy_lab.common.log.TestLogManager;
+import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.Language;
 import org.sosy_lab.cpachecker.cfa.MutableCFA;
 import org.sosy_lab.cpachecker.cfa.ast.FileLocation;
@@ -66,22 +65,25 @@ import org.sosy_lab.cpachecker.cfa.types.c.CStorageClass;
 import org.sosy_lab.cpachecker.core.AnalysisDirection;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCCodeException;
-import org.sosy_lab.cpachecker.util.VariableClassification;
+import org.sosy_lab.cpachecker.util.Triple;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.pointeraliasing.PointerTargetSet;
 import org.sosy_lab.cpachecker.util.predicates.smt.FormulaManagerView;
 import org.sosy_lab.cpachecker.util.predicates.smt.NumeralFormulaManagerView;
-import org.sosy_lab.solver.api.BooleanFormula;
-import org.sosy_lab.solver.api.NumeralFormula;
-import org.sosy_lab.solver.api.NumeralFormula.RationalFormula;
-import org.sosy_lab.solver.test.SolverBasedTest0;
+import org.sosy_lab.java_smt.api.BooleanFormula;
+import org.sosy_lab.java_smt.api.NumeralFormula;
+import org.sosy_lab.java_smt.api.NumeralFormula.RationalFormula;
+import org.sosy_lab.java_smt.test.SolverBasedTest0;
 
-import com.google.common.base.Optional;
-import com.google.common.collect.SortedSetMultimap;
-import com.google.common.collect.TreeMultimap;
+import java.math.BigInteger;
+import java.util.Collections;
+import java.util.Optional;
+import java.util.SortedMap;
+import java.util.TreeMap;
 
 /**
  * Testing the custom SSA implementation.
  */
+@SuppressFBWarnings("NP_NONNULL_FIELD_NOT_INITIALIZED_IN_CONSTRUCTOR")
 public class PathFormulaManagerImplTest extends SolverBasedTest0 {
 
   @SuppressWarnings("hiding")
@@ -99,33 +101,33 @@ public class PathFormulaManagerImplTest extends SolverBasedTest0 {
         .build();
 
     fmgr = new FormulaManagerView(
-        context.getFormulaManager(), config, TestLogManager.getInstance());
+        context.getFormulaManager(), config, LogManager.createTestLogManager());
 
     pfmgrFwd =
         new PathFormulaManagerImpl(
             fmgr,
             config,
-            TestLogManager.getInstance(),
+            LogManager.createTestLogManager(),
             ShutdownNotifier.createDummy(),
             MachineModel.LINUX32,
-            Optional.<VariableClassification>absent(),
+            Optional.empty(),
             AnalysisDirection.FORWARD);
 
     pfmgrBwd =
         new PathFormulaManagerImpl(
             fmgr,
             configBackwards,
-            TestLogManager.getInstance(),
+            LogManager.createTestLogManager(),
             ShutdownNotifier.createDummy(),
             MachineModel.LINUX32,
-            Optional.<VariableClassification>absent(),
+            Optional.empty(),
             AnalysisDirection.BACKWARD);
   }
 
   private Triple<CFAEdge, CFAEdge, MutableCFA> createCFA() throws UnrecognizedCCodeException {
 
     CBinaryExpressionBuilder expressionBuilder = new CBinaryExpressionBuilder(
-        MachineModel.LINUX32, TestLogManager.getInstance()
+        MachineModel.LINUX32, LogManager.createTestLogManager()
     );
 
     String fName = "main";
@@ -250,8 +252,7 @@ public class PathFormulaManagerImplTest extends SolverBasedTest0 {
             Collections.<CParameterDeclaration>emptyList()
         ),
         new FunctionExitNode(name),
-        Collections.<String>emptyList(),
-        Optional.<CVariableDeclaration>absent()
+        Optional.empty()
     );
 
     return main;
@@ -263,11 +264,10 @@ public class PathFormulaManagerImplTest extends SolverBasedTest0 {
     CFAEdge a_to_b = data.getFirst();
 
     int customIdx = 1337;
-    PathFormula p = makePathFormulaWithCustomIdx(
-        a_to_b, customIdx);
+    PathFormula p = makePathFormulaWithCustomIdx(a_to_b, customIdx);
 
     // The SSA index should be incremented by one (= DEFAULT_INCREMENT) by the edge "x := x + 1".
-    Assert.assertEquals(customIdx + FreshValueProvider.DefaultFreshValueProvider.DEFAULT_INCREMENT, p.getSsa().getIndex("x"));
+    Assert.assertEquals(customIdx + FreshValueProvider.DEFAULT_INCREMENT, p.getSsa().getIndex("x"));
   }
 
   @Test
@@ -353,7 +353,7 @@ public class PathFormulaManagerImplTest extends SolverBasedTest0 {
   public void testEmpty() {
     PathFormula empty = pfmgrFwd.makeEmptyPathFormula();
     PathFormula expected = new PathFormula(
-        fmgr.getBooleanFormulaManager().makeBoolean(true),
+        fmgr.getBooleanFormulaManager().makeTrue(),
         SSAMap.emptySSAMap(),
         PointerTargetSet.emptyPointerTargetSet(),
         0);

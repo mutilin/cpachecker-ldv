@@ -50,7 +50,7 @@ public class Equal<ConstantType> implements BooleanFormula<ConstantType> {
    */
   private Equal(NumeralFormula<ConstantType> pOperand1,
       NumeralFormula<ConstantType> pOperand2) {
-    Preconditions.checkArgument(pOperand1.getBitVectorInfo().equals(pOperand2.getBitVectorInfo()));
+    Preconditions.checkArgument(pOperand1.getTypeInfo().equals(pOperand2.getTypeInfo()));
     this.operand1 = pOperand1;
     this.operand2 = pOperand2;
   }
@@ -70,8 +70,10 @@ public class Equal<ConstantType> implements BooleanFormula<ConstantType> {
     }
     if (o instanceof Equal) {
       Equal<?> other = (Equal<?>) o;
-      return getOperand1().equals(other.getOperand1()) && getOperand2().equals(other.getOperand2())
-          || getOperand1().equals(other.getOperand2()) && getOperand2().equals(other.getOperand1());
+      return (getOperand1().equals(other.getOperand1())
+              && getOperand2().equals(other.getOperand2()))
+          || (getOperand1().equals(other.getOperand2())
+              && getOperand2().equals(other.getOperand1()));
     }
     return false;
   }

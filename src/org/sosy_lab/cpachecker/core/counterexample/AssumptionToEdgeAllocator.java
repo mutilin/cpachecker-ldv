@@ -23,18 +23,28 @@
  */
 package org.sosy_lab.cpachecker.core.counterexample;
 
+import com.google.common.base.Joiner;
+import com.google.common.base.Preconditions;
+import com.google.common.base.Predicates;
+import com.google.common.collect.FluentIterable;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.logging.Level;
-
 import javax.annotation.Nullable;
-
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
@@ -42,8 +52,10 @@ import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.log.LogManagerWithoutDuplicates;
 import org.sosy_lab.common.rationals.Rational;
+import org.sosy_lab.cpachecker.cfa.ast.AExpression;
 import org.sosy_lab.cpachecker.cfa.ast.AExpressionStatement;
 import org.sosy_lab.cpachecker.cfa.ast.ALiteralExpression;
+import org.sosy_lab.cpachecker.cfa.ast.AParameterDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.ASimpleDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.AStatement;
 import org.sosy_lab.cpachecker.cfa.ast.FileLocation;
@@ -67,7 +79,6 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CIntegerLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CLeftHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.c.CLeftHandSideVisitor;
 import org.sosy_lab.cpachecker.cfa.ast.c.CLiteralExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CParameterDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CPointerExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CSimpleDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CTypeDeclaration;
@@ -81,15 +92,15 @@ import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdgeType;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
-import org.sosy_lab.cpachecker.cfa.model.FunctionCallEdge;
+import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
 import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
-import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
-import org.sosy_lab.cpachecker.cfa.model.c.CFunctionEntryNode;
 import org.sosy_lab.cpachecker.cfa.types.MachineModel;
+import org.sosy_lab.cpachecker.cfa.types.MachineModel.BaseSizeofVisitor;
 import org.sosy_lab.cpachecker.cfa.types.Type;
 import org.sosy_lab.cpachecker.cfa.types.c.CArrayType;
 import org.sosy_lab.cpachecker.cfa.types.c.CBasicType;
+import org.sosy_lab.cpachecker.cfa.types.c.CBitFieldType;
 import org.sosy_lab.cpachecker.cfa.types.c.CComplexType;
 import org.sosy_lab.cpachecker.cfa.types.c.CComplexType.ComplexTypeKind;
 import org.sosy_lab.cpachecker.cfa.types.c.CCompositeType;
@@ -107,18 +118,12 @@ import org.sosy_lab.cpachecker.cfa.types.c.CVoidType;
 import org.sosy_lab.cpachecker.cfa.types.c.DefaultCTypeVisitor;
 import org.sosy_lab.cpachecker.core.defaults.ForwardingTransferRelation;
 import org.sosy_lab.cpachecker.cpa.value.AbstractExpressionValueVisitor;
+import org.sosy_lab.cpachecker.cpa.value.ExpressionValueVisitor;
 import org.sosy_lab.cpachecker.cpa.value.type.NumericValue;
 import org.sosy_lab.cpachecker.cpa.value.type.Value;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCCodeException;
 import org.sosy_lab.cpachecker.util.Pair;
-
-import com.google.common.base.Joiner;
-import com.google.common.base.Preconditions;
-import com.google.common.base.Predicate;
-import com.google.common.base.Predicates;
-import com.google.common.collect.FluentIterable;
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Sets;
+import org.sosy_lab.cpachecker.util.automaton.AutomatonGraphmlCommon;
 
 /**
  * Creates assumption along an error path based on a given {@link CFAEdge} edge
@@ -195,7 +200,7 @@ public class AssumptionToEdgeAllocator {
    */
   public CFAEdgeWithAssumptions allocateAssumptionsToEdge(CFAEdge pCFAEdge, ConcreteState pConcreteState) {
 
-    List<AExpressionStatement> assignmentsAtEdge = createAssignmentsAtEdge(pCFAEdge, pConcreteState);
+    Collection<AExpressionStatement> assignmentsAtEdge = createAssignmentsAtEdge(pCFAEdge, pConcreteState);
     String comment = createComment(pCFAEdge, pConcreteState);
 
     return new CFAEdgeWithAssumptions(pCFAEdge, assignmentsAtEdge, comment);
@@ -204,7 +209,7 @@ public class AssumptionToEdgeAllocator {
 
   private String createComment(CFAEdge pCfaEdge, ConcreteState pConcreteState) {
     if (pCfaEdge.getEdgeType() == CFAEdgeType.AssumeEdge) {
-      return handleAssume((AssumeEdge) pCfaEdge, pConcreteState);
+      return handleAssumeComment((AssumeEdge) pCfaEdge, pConcreteState);
     } else if (pCfaEdge.getEdgeType() == CFAEdgeType.DeclarationEdge) {
       return handleDclComment((ADeclarationEdge)pCfaEdge, pConcreteState);
     } else if(pCfaEdge.getEdgeType() == CFAEdgeType.ReturnStatementEdge) {
@@ -215,9 +220,9 @@ public class AssumptionToEdgeAllocator {
   }
 
   private String handleReturnStatementComment(AReturnStatementEdge pCfaEdge, ConcreteState pConcreteState) {
-
-    if (pCfaEdge.getExpression() instanceof CExpression) {
-      CExpression returnExp = (CExpression) pCfaEdge.getExpression();
+    Optional<? extends AExpression> returnExpression = pCfaEdge.getExpression();
+    if (returnExpression.isPresent() && returnExpression.get() instanceof CExpression) {
+      CExpression returnExp = (CExpression) returnExpression.get();
 
       if (returnExp instanceof CLiteralExpression) {
         /*boring expression*/
@@ -267,9 +272,9 @@ public class AssumptionToEdgeAllocator {
   }
 
   @Nullable
-  private List<AExpressionStatement> createAssignmentsAtEdge(CFAEdge pCFAEdge, ConcreteState pConcreteState) {
+  private Collection<AExpressionStatement> createAssignmentsAtEdge(CFAEdge pCFAEdge, ConcreteState pConcreteState) {
 
-    List<AExpressionStatement> result = new ArrayList<>();
+    Set<AExpressionStatement> result = new LinkedHashSet<>();
 
     // Get all Assumptions of this edge
     if (pCFAEdge.getEdgeType() == CFAEdgeType.DeclarationEdge) {
@@ -281,37 +286,28 @@ public class AssumptionToEdgeAllocator {
       List<AExpressionStatement> stmtAssumptions =
           handleStatement(pCFAEdge, ((AStatementEdge) pCFAEdge).getStatement(), pConcreteState);
       result.addAll(stmtAssumptions);
-    } else if (pCFAEdge.getEdgeType() == CFAEdgeType.MultiEdge) {
-      throw new AssertionError("Multi-edges should be resolved by this point.");
     }
 
-    // Get Assumptions of the formal parameters, if the previous edge was a function call edge
-    CFANode predNode = pCFAEdge.getPredecessor();
-
-    if (predNode.getNumEnteringEdges() <= 0) {
-      return result;
-    }
-
-    CFAEdge predEdge = predNode.getEnteringEdge(FIRST);
-
-    if (predEdge instanceof FunctionCallEdge) {
-      List<AExpressionStatement> formalVarsAssumption = handleFunctionCall((FunctionCallEdge) predEdge, pConcreteState);
-      result.addAll(formalVarsAssumption);
+    if (pCFAEdge.getEdgeType() == CFAEdgeType.BlankEdge
+        || !AutomatonGraphmlCommon.handleAsEpsilonEdge(pCFAEdge)) {
+      List<AExpressionStatement> parameterAssumptions =
+          handleFunctionEntry(pCFAEdge, pConcreteState);
+      result.addAll(parameterAssumptions);
     }
 
     return result;
   }
 
-  private String handleAssume(AssumeEdge pCfaEdge, ConcreteState pConcreteState) {
+  private String handleAssumeComment(AssumeEdge pCfaEdge, ConcreteState pConcreteState) {
 
     if (pCfaEdge instanceof CAssumeEdge) {
-      return handleAssume((CAssumeEdge)pCfaEdge, pConcreteState);
+      return handleAssumeComment((CAssumeEdge) pCfaEdge, pConcreteState);
     }
 
     return "";
   }
 
-  private String handleAssume(CAssumeEdge pCFAEdge, ConcreteState pConcreteState) {
+  private String handleAssumeComment(CAssumeEdge pCFAEdge, ConcreteState pConcreteState) {
 
     CExpression pCExpression = pCFAEdge.getExpression();
 
@@ -384,25 +380,44 @@ public class AssumptionToEdgeAllocator {
     return v.evaluateNumericalValue(pOp1);
   }
 
-  private List<AExpressionStatement> handleFunctionCall(FunctionCallEdge pFunctionCallEdge, ConcreteState pConcreteState) {
+  private List<AExpressionStatement> handleFunctionEntry(
+      CFAEdge pEdge, ConcreteState pConcreteState) {
 
-    if (!(pFunctionCallEdge instanceof CFunctionCallEdge)) {
+    CFANode predecessor = pEdge.getPredecessor();
+
+    // For the program entry function, we must be careful not to create
+    // expressions before the global initializations
+    if (predecessor.getNumEnteringEdges() <= 0) {
       return Collections.emptyList();
     }
 
-    CFunctionCallEdge functionCallEdge = (CFunctionCallEdge) pFunctionCallEdge;
-
-    CFunctionEntryNode functionEntryNode = functionCallEdge.getSuccessor();
-
-    List<CParameterDeclaration> dcls = functionEntryNode.getFunctionParameters();
-
-    List<AExpressionStatement> assignments = new ArrayList<>();
-
-    for (CParameterDeclaration dcl : dcls) {
-      assignments.addAll(handleDeclaration(dcl, pFunctionCallEdge.getSuccessor().getFunctionName(), pConcreteState));
+    // Handle program entry function
+    String function = predecessor.getFunctionName();
+    while (!(predecessor instanceof FunctionEntryNode)) {
+      if (predecessor.getNumEnteringEdges() != 1
+          || !predecessor.getFunctionName().equals(function)) {
+        return Collections.emptyList();
+      }
+      CFAEdge enteringEdge = predecessor.getEnteringEdge(0);
+      if (!AutomatonGraphmlCommon.handleAsEpsilonEdge(enteringEdge)) {
+        return Collections.emptyList();
+      }
+      predecessor = enteringEdge.getPredecessor();
     }
 
-    return assignments;
+    FunctionEntryNode entryNode = (FunctionEntryNode) predecessor;
+
+    String functionName = entryNode.getFunctionDefinition().getName();
+
+    List<? extends AParameterDeclaration> parameterDeclarations = entryNode.getFunctionParameters();
+    if (parameterDeclarations.isEmpty()) {
+      return Collections.emptyList();
+    }
+    List<AExpressionStatement> result = new ArrayList<>(parameterDeclarations.size());
+    for (AParameterDeclaration parameterDeclaration : parameterDeclarations) {
+      result.addAll(handleDeclaration(parameterDeclaration, functionName, pConcreteState));
+    }
+    return result;
   }
 
   @Nullable
@@ -556,21 +571,11 @@ public class AssumptionToEdgeAllocator {
               CPointerType.class));
     }
 
-    boolean leftIsAccepted = equalTypes || acceptedTypes.anyMatch(new Predicate<Class<? extends CType>>() {
+    boolean leftIsAccepted = equalTypes || acceptedTypes.anyMatch(
+        pArg0 -> pArg0.isAssignableFrom(leftType.getClass()));
 
-      @Override
-      public boolean apply(Class<? extends CType> pArg0) {
-        return pArg0.isAssignableFrom(leftType.getClass());
-      }
-    });
-
-    boolean rightIsAccepted = equalTypes || acceptedTypes.anyMatch(new Predicate<Class<? extends CType>>() {
-
-      @Override
-      public boolean apply(Class<? extends CType> pArg0) {
-        return pArg0.isAssignableFrom(rightType.getClass());
-      }
-    });
+    boolean rightIsAccepted = equalTypes || acceptedTypes.anyMatch(
+        pArg0 -> pArg0.isAssignableFrom(rightType.getClass()));
 
     if (!includeConstantsForPointers && (!leftIsAccepted || !rightIsAccepted)) {
       return null;
@@ -789,55 +794,10 @@ public class AssumptionToEdgeAllocator {
       return null;
     }
 
-    private BigDecimal getFieldOffset(CFieldReference fieldReference) {
+    private BigInteger getFieldOffsetInBits(CFieldReference fieldReference) {
       CType fieldOwnerType = fieldReference.getFieldOwner().getExpressionType().getCanonicalType();
-      return getFieldOffset(fieldOwnerType, fieldReference.getFieldName());
-    }
-
-    private BigDecimal getFieldOffset(CType ownerType, String fieldName) {
-
-      if (ownerType instanceof CElaboratedType) {
-
-        CType realType = ((CElaboratedType) ownerType).getRealType();
-
-        if (realType == null) {
-          return null;
-        }
-
-        return getFieldOffset(realType.getCanonicalType(), fieldName);
-      } else if (ownerType instanceof CCompositeType) {
-        return getFieldOffset((CCompositeType) ownerType, fieldName);
-      } else if (ownerType instanceof CPointerType) {
-
-        /* We do not explicitly transform x->b,
-        so when we try to get the field b the ownerType of x
-        is a pointer type.*/
-
-        CType type = ((CPointerType) ownerType).getType().getCanonicalType();
-
-        return getFieldOffset(type, fieldName);
-      }
-
-      throw new AssertionError();
-    }
-
-    private BigDecimal getFieldOffset(CCompositeType ownerType, String fieldName) {
-
-      List<CCompositeTypeMemberDeclaration> membersOfType = ownerType.getMembers();
-
-      int offset = 0;
-
-      for (CCompositeTypeMemberDeclaration typeMember : membersOfType) {
-        String memberName = typeMember.getName();
-        if (memberName.equals(fieldName)) {
-          return BigDecimal.valueOf(offset);
-        }
-
-        if (!(ownerType.getKind() == ComplexTypeKind.UNION)) {
-          offset = offset + machineModel.getSizeof(typeMember.getType().getCanonicalType());
-        }
-      }
-      return null;
+      return AssumptionToEdgeAllocator.getFieldOffsetInBits(
+          fieldOwnerType, fieldReference.getFieldName(), machineModel);
     }
 
     @Override
@@ -991,7 +951,10 @@ public class AssumptionToEdgeAllocator {
           subscriptValue = new BigDecimal(subscriptValueNumber.toString());
         }
 
-        BigDecimal typeSize = BigDecimal.valueOf(machineModel.getSizeof(pIastArraySubscriptExpression.getExpressionType().getCanonicalType()));
+        BigDecimal typeSize =
+            BigDecimal.valueOf(
+                machineModel.getBitSizeof(
+                    pIastArraySubscriptExpression.getExpressionType().getCanonicalType()));
 
         BigDecimal subscriptOffset = subscriptValue.multiply(typeSize);
 
@@ -1003,20 +966,20 @@ public class AssumptionToEdgeAllocator {
 
         CExpression fieldOwner = pIastFieldReference.getFieldOwner();
 
-      //This works because arrays and structs evaluate to their addresses.
+        //This works because arrays and structs evaluate to their addresses.
         Address fieldOwnerAddress = evaluateNumericalValueAsAddress(fieldOwner);
 
         if (fieldOwnerAddress.isUnknown() || fieldOwnerAddress.isSymbolic()) {
           return lookupReferenceAddress(pIastFieldReference);
         }
 
-        BigDecimal fieldOffset = getFieldOffset(pIastFieldReference);
+        BigInteger fieldOffset = getFieldOffsetInBits(pIastFieldReference);
 
         if (fieldOffset == null) {
           return lookupReferenceAddress(pIastFieldReference);
         }
 
-        Address address = fieldOwnerAddress.addOffset(fieldOffset);
+        Address address = fieldOwnerAddress.addOffset(new BigDecimal(fieldOffset));
 
         if (address.isUnknown()) {
           return lookupReferenceAddress(pIastFieldReference);
@@ -1065,7 +1028,39 @@ public class AssumptionToEdgeAllocator {
       }
 
       @Override
+      public Value visit(CCastExpression cast) throws UnrecognizedCCodeException {
+
+        if (concreteState.getAnalysisConcreteExpressionEvaluation().shouldEvaluateExpressionWithThisEvaluator(cast)) {
+          Value op = cast.getOperand().accept(this);
+
+          if (op.isUnknown()) {
+            return op;
+          }
+
+          return concreteState.getAnalysisConcreteExpressionEvaluation().evaluate(cast, op);
+        }
+
+        return super.visit(cast);
+      }
+
+      @Override
       public Value visit(CBinaryExpression binaryExp) throws UnrecognizedCCodeException {
+
+        if (concreteState.getAnalysisConcreteExpressionEvaluation().shouldEvaluateExpressionWithThisEvaluator(binaryExp)) {
+          Value op1 = binaryExp.getOperand1().accept(this);
+
+          if (op1.isUnknown()) {
+            return op1;
+          }
+
+          Value op2 = binaryExp.getOperand2().accept(this);
+
+          if (op2.isUnknown()) {
+            return op2;
+          }
+
+          return concreteState.getAnalysisConcreteExpressionEvaluation().evaluate(binaryExp, op1, op2);
+        }
 
         CExpression lVarInBinaryExp = binaryExp.getOperand1();
         CExpression rVarInBinaryExp = binaryExp.getOperand2();
@@ -1151,7 +1146,7 @@ public class AssumptionToEdgeAllocator {
 
           BigDecimal offsetValue = new BigDecimal(offsetValueNumber.toString());
 
-          BigDecimal typeSize = BigDecimal.valueOf(getSizeof(elementType));
+              BigDecimal typeSize = BigDecimal.valueOf(getBitSizeof(elementType));
 
           BigDecimal pointerOffsetValue = offsetValue.multiply(typeSize);
 
@@ -1177,6 +1172,18 @@ public class AssumptionToEdgeAllocator {
 
       @Override
       public Value visit(CUnaryExpression pUnaryExpression) throws UnrecognizedCCodeException {
+
+        if (concreteState.getAnalysisConcreteExpressionEvaluation().shouldEvaluateExpressionWithThisEvaluator(pUnaryExpression)) {
+
+          Value operand = pUnaryExpression.getOperand().accept(this);
+
+          if (operand.isUnknown() && (pUnaryExpression.getOperator() == UnaryOperator.MINUS
+              || pUnaryExpression.getOperator() == UnaryOperator.TILDE)) {
+            return operand;
+          }
+
+          return concreteState.getAnalysisConcreteExpressionEvaluation().evaluate(pUnaryExpression, operand);
+        }
 
         if (pUnaryExpression.getOperator() == UnaryOperator.AMPER) {
 
@@ -1289,7 +1296,7 @@ public class AssumptionToEdgeAllocator {
         return createUnknownValueLiterals();
       }
 
-      ValueLiteral valueLiteral = ExplicitValueLiteral.valueOf(address);
+      ValueLiteral valueLiteral = ExplicitValueLiteral.valueOf(address, machineModel);
 
       ValueLiterals valueLiterals = new ValueLiterals(valueLiteral);
 
@@ -1310,7 +1317,7 @@ public class AssumptionToEdgeAllocator {
         return createUnknownValueLiterals();
       }
 
-      valueLiteral = ExplicitValueLiteral.valueOf(address);
+      valueLiteral = ExplicitValueLiteral.valueOf(address, machineModel);
 
       ValueLiterals valueLiterals = new ValueLiterals(valueLiteral);
 
@@ -1353,6 +1360,11 @@ public class AssumptionToEdgeAllocator {
     }
 
     @Override
+    public ValueLiterals visit(CBitFieldType pCBitFieldType) throws RuntimeException {
+      return pCBitFieldType.getType().accept(this);
+    }
+
+    @Override
     public ValueLiterals visit(CProblemType pT) {
       return createUnknownValueLiterals();
     }
@@ -1375,7 +1387,7 @@ public class AssumptionToEdgeAllocator {
         return createUnknownValueLiterals();
       }
 
-      ValueLiteral valueLiteral = ExplicitValueLiteral.valueOf(address);
+      ValueLiteral valueLiteral = ExplicitValueLiteral.valueOf(address, machineModel);
 
       ValueLiterals valueLiterals = new ValueLiterals(valueLiteral);
 
@@ -1416,6 +1428,10 @@ public class AssumptionToEdgeAllocator {
 
       if (pValue instanceof Rational) {
         double val = ((Rational) pValue).doubleValue();
+        if (Double.isInfinite(val) || Double.isNaN(val)) {
+          // TODO return correct value
+          return UnknownValueLiteral.getInstance();
+        }
         return ExplicitValueLiteral.valueOf(new BigDecimal(val), pType);
 
       } else if (pValue instanceof Double) {
@@ -1488,16 +1504,15 @@ public class AssumptionToEdgeAllocator {
     }
 
     /**
-     * Creates a value literal for the given value and adds a cast if the value
-     * does not fit into the specified type.
+     * Creates a value literal for the given value or computes its wrap-around if it does not fit
+     * into the specified type.
      *
      * @param pIntegerValue the value.
      * @param pType the type.
-     *
      * @return the value literal.
      */
-    private ValueLiteral handlePotentialIntegerOverflow(BigInteger pIntegerValue, CSimpleType pType) {
-      ValueLiteral result = ExplicitValueLiteral.valueOf(pIntegerValue, pType);
+    private ValueLiteral handlePotentialIntegerOverflow(
+        BigInteger pIntegerValue, CSimpleType pType) {
 
       BigInteger lowerInclusiveBound = machineModel.getMinimalIntegerValue(pType);
       BigInteger upperInclusiveBound = machineModel.getMaximalIntegerValue(pType);
@@ -1509,10 +1524,28 @@ public class AssumptionToEdgeAllocator {
         if (assumeLinearArithmetics) {
           return UnknownValueLiteral.getInstance();
         }
-        result = result.addCast(pType);
+        LogManagerWithoutDuplicates logManager =
+            logger instanceof LogManagerWithoutDuplicates
+                ? (LogManagerWithoutDuplicates) logger
+                : new LogManagerWithoutDuplicates(logger);
+        Value value =
+            ExpressionValueVisitor.castCValue(
+                new NumericValue(pIntegerValue),
+                pType,
+                machineModel,
+                logManager,
+                FileLocation.DUMMY);
+        Number number = value.asNumericValue().getNumber();
+        final BigInteger valueAsBigInt;
+        if (number instanceof BigInteger) {
+          valueAsBigInt = (BigInteger) number;
+        } else {
+          valueAsBigInt = BigInteger.valueOf(number.longValue());
+        }
+        return ExplicitValueLiteral.valueOf(valueAsBigInt, pType);
       }
 
-      return result;
+      return ExplicitValueLiteral.valueOf(pIntegerValue, pType);
     }
 
     /**
@@ -1577,6 +1610,11 @@ public class AssumptionToEdgeAllocator {
       }
 
       @Override
+      public Void visit(CBitFieldType pCBitFieldType) throws RuntimeException {
+        return pCBitFieldType.getType().accept(this);
+      }
+
+      @Override
       public Void visit(CCompositeType compType) {
 
         if (compType.getKind() == ComplexTypeKind.ENUM) {
@@ -1595,20 +1633,18 @@ public class AssumptionToEdgeAllocator {
       }
 
       private void handleStruct(CCompositeType pCompType) {
-
         Address fieldAddress = address;
+        if (!fieldAddress.isConcrete()) {
+          return;
+        }
 
-        for (CCompositeType.CCompositeTypeMemberDeclaration memberType : pCompType
-            .getMembers()) {
+        Map<CCompositeTypeMemberDeclaration, BigInteger> offsets =
+            getFieldOffsetsInBits(pCompType, machineModel, Function.identity());
 
-          handleMemberField(memberType, fieldAddress);
-          int offsetToNextField = machineModel.getSizeof(memberType.getType());
-
-          if (fieldAddress.isConcrete()) {
-            fieldAddress = fieldAddress.addOffset(BigInteger.valueOf(offsetToNextField));
-          } else {
-            return;
-          }
+        for (Map.Entry<CCompositeTypeMemberDeclaration, BigInteger> memberOffset :
+            offsets.entrySet()) {
+          CCompositeTypeMemberDeclaration memberType = memberOffset.getKey();
+          handleMemberField(memberType, address.addOffset(memberOffset.getValue()));
         }
       }
 
@@ -1659,7 +1695,7 @@ public class AssumptionToEdgeAllocator {
             return;
           }
 
-          valueLiteral = ExplicitValueLiteral.valueOf(valueAddress);
+          valueLiteral = ExplicitValueLiteral.valueOf(valueAddress, machineModel);
         }
 
         Pair<CType, Address> visits = Pair.of(expectedType, fieldAddress);
@@ -1700,14 +1736,20 @@ public class AssumptionToEdgeAllocator {
       private boolean handleArraySubscript(Address pArrayAddress,
           int pSubscript, CType pExpectedType,
           CArrayType pArrayType) {
+        if (!pArrayAddress.isConcrete()) {
+          return false;
+        }
 
-        int typeSize = machineModel.getSizeof(pExpectedType);
+        int typeSize = machineModel.getBitSizeof(pExpectedType);
         int subscriptOffset = pSubscript * typeSize;
-        int arraySize = machineModel.getSizeof(pArrayType);
 
-        // check if we are already out of array bound
+        // Check if we are already out of array bound, if we have an array length.
         // FIXME Imprecise due to imprecise getSizeOf method
-        if (!pArrayAddress.isConcrete() || arraySize <= subscriptOffset) {
+        if (!pArrayType.isIncomplete()
+            && machineModel.getBitSizeof(pArrayType) <= subscriptOffset) {
+          return false;
+        }
+        if (pArrayType.getLength() == null) {
           return false;
         }
 
@@ -1744,7 +1786,7 @@ public class AssumptionToEdgeAllocator {
             return false;
           }
 
-          valueLiteral = ExplicitValueLiteral.valueOf(valueAddress);
+          valueLiteral = ExplicitValueLiteral.valueOf(valueAddress, machineModel);
         }
 
         if (!valueLiteral.isUnknown()) {
@@ -1805,7 +1847,7 @@ public class AssumptionToEdgeAllocator {
             return null;
           }
 
-          valueLiteral = ExplicitValueLiteral.valueOf(valueAddress);
+          valueLiteral = ExplicitValueLiteral.valueOf(valueAddress, machineModel);
         }
 
         if (!valueLiteral.isUnknown()) {
@@ -1879,6 +1921,11 @@ public class AssumptionToEdgeAllocator {
       }
 
       @Override
+      public Void visit(CBitFieldType pCBitFieldType) throws RuntimeException {
+        return pCBitFieldType.getType().accept(this);
+      }
+
+      @Override
       public Void visit(CCompositeType compType) {
 
         if (compType.getKind() == ComplexTypeKind.ENUM) {
@@ -1928,7 +1975,7 @@ public class AssumptionToEdgeAllocator {
             return;
           }
 
-          valueLiteral = ExplicitValueLiteral.valueOf(valueAddress);
+          valueLiteral = ExplicitValueLiteral.valueOf(valueAddress, machineModel);
         }
 
 
@@ -1940,9 +1987,10 @@ public class AssumptionToEdgeAllocator {
         valueLiterals.addSubExpressionValueLiteral(subExpression);
       }
     }
+
   }
 
-  public final static class ValueLiterals {
+  private final static class ValueLiterals {
 
     /*Contains values for possible sub expressions */
     private final List<SubExpressionValueLiteral> subExpressionValueLiterals = new ArrayList<>();
@@ -1955,10 +2003,6 @@ public class AssumptionToEdgeAllocator {
 
     public ValueLiterals(ValueLiteral valueLiteral) {
       expressionValueLiteral = valueLiteral;
-    }
-
-    public ValueLiteral getExpressionValueLiteral() {
-      return expressionValueLiteral;
     }
 
     public CExpression getExpressionValueLiteralAsCExpression() {
@@ -1992,7 +2036,7 @@ public class AssumptionToEdgeAllocator {
     }
   }
 
-  public static interface ValueLiteral {
+  private static interface ValueLiteral {
 
     public CExpression getValueLiteral();
     public boolean isUnknown();
@@ -2000,7 +2044,7 @@ public class AssumptionToEdgeAllocator {
     public ValueLiteral addCast(CSimpleType pType);
   }
 
-  public static class UnknownValueLiteral implements ValueLiteral {
+  private static class UnknownValueLiteral implements ValueLiteral {
 
     private static final UnknownValueLiteral instance = new UnknownValueLiteral();
 
@@ -2031,7 +2075,7 @@ public class AssumptionToEdgeAllocator {
     }
   }
 
-  public static class ExplicitValueLiteral implements ValueLiteral {
+  private static class ExplicitValueLiteral implements ValueLiteral {
 
     private final CLiteralExpression explicitValueLiteral;
 
@@ -2039,7 +2083,7 @@ public class AssumptionToEdgeAllocator {
       explicitValueLiteral = pValueLiteral;
     }
 
-    public static ValueLiteral valueOf(Address address) {
+    public static ValueLiteral valueOf(Address address, MachineModel pMachineModel) {
 
       if (address.isUnknown() || address.isSymbolic()) {
         return UnknownValueLiteral.getInstance();
@@ -2047,8 +2091,14 @@ public class AssumptionToEdgeAllocator {
 
       BigInteger value = address.getAddressValue();
 
-      CLiteralExpression lit = new CIntegerLiteralExpression(
-          FileLocation.DUMMY, CNumericTypes.LONG_LONG_INT, value);
+      CSimpleType type = CNumericTypes.LONG_LONG_INT;
+
+      BigInteger upperInclusiveBound = pMachineModel.getMaximalIntegerValue(type);
+      if (upperInclusiveBound.compareTo(value) < 0) {
+        type = CNumericTypes.UNSIGNED_LONG_LONG_INT;
+      }
+
+      CLiteralExpression lit = new CIntegerLiteralExpression(FileLocation.DUMMY, type, value);
       return new ExplicitValueLiteral(lit);
     }
 
@@ -2077,10 +2127,6 @@ public class AssumptionToEdgeAllocator {
       return explicitValueLiteral;
     }
 
-    public CLiteralExpression getExplicitValueLiteral() {
-      return explicitValueLiteral;
-    }
-
     @Override
     public boolean isUnknown() {
       return false;
@@ -2092,7 +2138,7 @@ public class AssumptionToEdgeAllocator {
     }
   }
 
-  public static final class CastedExplicitValueLiteral extends ExplicitValueLiteral {
+  private static final class CastedExplicitValueLiteral extends ExplicitValueLiteral {
 
     private final CCastExpression castExpression;
 
@@ -2107,7 +2153,7 @@ public class AssumptionToEdgeAllocator {
     }
   }
 
-  public static final class SubExpressionValueLiteral {
+  private static final class SubExpressionValueLiteral {
 
     private final ValueLiteral valueLiteral;
     private final CLeftHandSide subExpression;
@@ -2121,13 +2167,87 @@ public class AssumptionToEdgeAllocator {
       return valueLiteral.getValueLiteral();
     }
 
-    public ValueLiteral getValueLiteral() {
-      return valueLiteral;
-    }
-
     public CLeftHandSide getSubExpression() {
       return subExpression;
     }
+  }
+
+  private static @Nullable BigInteger getFieldOffsetInBits(
+      CCompositeType ownerType, String fieldName, MachineModel pMachineModel) {
+    return getFieldOffsetsInBits(ownerType, pMachineModel, CCompositeTypeMemberDeclaration::getName)
+        .get(fieldName);
+  }
+
+  private static <K> Map<K, BigInteger> getFieldOffsetsInBits(
+      CCompositeType ownerType,
+      MachineModel pMachineModel,
+      Function<CCompositeTypeMemberDeclaration, K> pKeyFunction) {
+
+    List<CCompositeTypeMemberDeclaration> membersOfType = ownerType.getMembers();
+    Map<K, BigInteger> result = Maps.newLinkedHashMapWithExpectedSize(membersOfType.size());
+
+    BigInteger bitOffset = BigInteger.ZERO;
+
+    if (ownerType.getKind() == ComplexTypeKind.STRUCT) {
+      BigInteger sizeOfConsecutiveBitFields = BigInteger.ZERO;
+      BaseSizeofVisitor sizeofVisitor = new BaseSizeofVisitor(pMachineModel);
+
+      for (CCompositeTypeMemberDeclaration typeMember : membersOfType) {
+        result.put(pKeyFunction.apply(typeMember), bitOffset.add(sizeOfConsecutiveBitFields));
+
+        CType type = typeMember.getType();
+        if (type.isIncomplete()) {
+          return result;
+        }
+
+        BigInteger fieldSizeInBits = BigInteger.valueOf(pMachineModel.getBitSizeof(type));
+
+        if (typeMember.getType() instanceof CBitFieldType) {
+          sizeOfConsecutiveBitFields = sizeOfConsecutiveBitFields.add(fieldSizeInBits);
+        } else {
+          bitOffset = bitOffset.add(sizeOfConsecutiveBitFields);
+          sizeOfConsecutiveBitFields = BigInteger.ZERO;
+          int byteSize = sizeofVisitor.calculateByteSize(bitOffset.intValue());
+          BigInteger padding =
+              BigInteger.valueOf(pMachineModel.getPadding(byteSize, typeMember.getType()));
+          bitOffset = bitOffset.add(padding);
+          bitOffset = bitOffset.add(fieldSizeInBits);
+        }
+      }
+    } else if (ownerType.getKind() == ComplexTypeKind.UNION) {
+      for (CCompositeTypeMemberDeclaration typeMember : membersOfType) {
+        result.put(pKeyFunction.apply(typeMember), BigInteger.ZERO);
+      }
+    }
+    return result;
+  }
+
+  private static @Nullable BigInteger getFieldOffsetInBits(
+      CType ownerType, String fieldName, MachineModel pMachineModel) {
+
+    if (ownerType instanceof CElaboratedType) {
+
+      CType realType = ((CElaboratedType) ownerType).getRealType();
+
+      if (realType == null) {
+        return null;
+      }
+
+      return getFieldOffsetInBits(realType.getCanonicalType(), fieldName, pMachineModel);
+    } else if (ownerType instanceof CCompositeType) {
+      return getFieldOffsetInBits((CCompositeType) ownerType, fieldName, pMachineModel);
+    } else if (ownerType instanceof CPointerType) {
+
+      /* We do not explicitly transform x->b,
+      so when we try to get the field b the ownerType of x
+      is a pointer type.*/
+
+      CType type = ((CPointerType) ownerType).getType().getCanonicalType();
+
+      return getFieldOffsetInBits(type, fieldName, pMachineModel);
+    }
+
+    throw new AssertionError();
   }
 
 }

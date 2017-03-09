@@ -23,10 +23,6 @@
  */
 package org.sosy_lab.cpachecker.pcc.strategy.partialcertificate;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
@@ -42,6 +38,10 @@ import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.CPAs;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 
 
 public class ARGBasedPartialReachedSetConstructionAlgorithm extends
@@ -83,8 +83,10 @@ public class ARGBasedPartialReachedSetConstructionAlgorithm extends
       if (!isToAdd && !pNode.isCovered()) {
         if (handlePredicateStates) {
           CFANode loc = AbstractStates.extractLocation(pNode);
-          isToAdd = isPredicateAbstractionState(pNode)
-              || loc.getNumEnteringEdges() > 0 && !(loc instanceof FunctionEntryNode || loc instanceof FunctionExitNode);
+          isToAdd =
+              isPredicateAbstractionState(pNode)
+                  || (loc.getNumEnteringEdges() > 0
+                      && !(loc instanceof FunctionEntryNode || loc instanceof FunctionExitNode));
         } else {
           for (ARGState parent : pNode.getParents()) {
             if (!isTransferSuccessor(parent, pNode)) {
@@ -100,8 +102,17 @@ public class ARGBasedPartialReachedSetConstructionAlgorithm extends
     private boolean isTransferSuccessor(ARGState pPredecessor, ARGState pChild) {
       CFAEdge edge = pPredecessor.getEdgeToChild(pChild);
       try {
-        Collection<AbstractState> successors = new ArrayList<>(
-            cpa.getTransferRelation().getAbstractSuccessorsForEdge(pPredecessor.getWrappedState(), precision, edge));
+        Collection<AbstractState> successors;
+        if (edge == null) {
+          successors =
+              new ArrayList<>(cpa.getTransferRelation().getAbstractSuccessors(
+                  pPredecessor.getWrappedState(), precision));
+        } else {
+          successors =
+              new ArrayList<>(
+                  cpa.getTransferRelation().getAbstractSuccessorsForEdge(
+                      pPredecessor.getWrappedState(), precision, edge));
+        }
         // check if child is the successor computed by transfer relation
         if (successors.contains(pChild.getWrappedState())) { return true; }
         // check if check only failed because it is not the same object

@@ -26,7 +26,6 @@ package org.sosy_lab.cpachecker.cfa.simplification;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.logging.Level;
-
 import org.sosy_lab.common.log.LogManagerWithoutDuplicates;
 import org.sosy_lab.cpachecker.cfa.ast.FileLocation;
 import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression;
@@ -191,6 +190,11 @@ public class ExpressionSimplificationVisitor extends DefaultCExpressionVisitor
       return new CIntegerLiteralExpression(expr.getFileLocation(),
               expr.getExpressionType(), BigInteger.valueOf(size));
 
+      case ALIGNOF:
+        int alignment = machineModel.getAlignof(innerType);
+        return new CIntegerLiteralExpression(
+            expr.getFileLocation(), expr.getExpressionType(), BigInteger.valueOf(alignment));
+
     default: // TODO support more operators
       return visitDefault(expr);
     }
@@ -229,7 +233,13 @@ public class ExpressionSimplificationVisitor extends DefaultCExpressionVisitor
           return new CIntegerLiteralExpression(loc, exprType, BigInteger.valueOf(negatedValue.longValue()));
         case FLOAT:
         case DOUBLE:
-          return new CFloatLiteralExpression(loc, exprType, BigDecimal.valueOf(negatedValue.doubleValue()));
+          double v = negatedValue.doubleValue();
+          // Check if v is -0.0; if so, we cannot simplify it,
+          // because we cannot represent it with BigDecimal
+          if (v == 0 && 1 / v < 0) {
+            return new CUnaryExpression(loc, exprType, op, unaryOperator);
+          }
+          return new CFloatLiteralExpression(loc, exprType, BigDecimal.valueOf(v));
         default:
           // fall-through and return the original expression
         }

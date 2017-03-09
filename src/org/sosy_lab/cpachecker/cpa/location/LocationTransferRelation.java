@@ -23,20 +23,16 @@
  */
 package org.sosy_lab.cpachecker.cpa.location;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
-import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
-import org.sosy_lab.cpachecker.cpa.location.LocationState.LocationStateFactory;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.CFAUtils;
+
+import java.util.Collection;
+import java.util.Collections;
 
 public class LocationTransferRelation implements TransferRelation {
 
@@ -50,19 +46,10 @@ public class LocationTransferRelation implements TransferRelation {
   public Collection<LocationState> getAbstractSuccessorsForEdge(
       AbstractState element, Precision prec, CFAEdge cfaEdge) {
 
-    LocationState inputElement = (LocationState) element;
-    CFANode node = inputElement.getLocationNode();
+    CFANode node = ((LocationState) element).getLocationNode();
 
     if (CFAUtils.allLeavingEdges(node).contains(cfaEdge)) {
       return Collections.singleton(factory.getState(cfaEdge.getSuccessor()));
-
-    } else if (node.getNumLeavingEdges() == 1
-        && node.getLeavingEdge(0) instanceof MultiEdge) {
-      // maybe we are "entering" a MultiEdge via it's first component edge
-      MultiEdge multiEdge = (MultiEdge)node.getLeavingEdge(0);
-      if (multiEdge.getEdges().get(0).equals(cfaEdge)) {
-        return Collections.singleton(factory.getState(cfaEdge.getSuccessor()));
-      }
     }
 
     return Collections.emptySet();
@@ -72,20 +59,7 @@ public class LocationTransferRelation implements TransferRelation {
   public Collection<LocationState> getAbstractSuccessors(AbstractState element,
       Precision prec) throws CPATransferException {
 
-    CFANode node = ((LocationState)element).getLocationNode();
-
-    List<LocationState> allSuccessors = new ArrayList<>(node.getNumLeavingEdges());
-
-    for (CFANode successor : CFAUtils.successorsOf(node)) {
-      allSuccessors.add(factory.getState(successor));
-    }
-
-    return allSuccessors;
-  }
-
-  @Override
-  public Collection<? extends AbstractState> strengthen(AbstractState element,
-      List<AbstractState> otherElements, CFAEdge cfaEdge, Precision precision) {
-    return null;
+    CFANode node = ((LocationState) element).getLocationNode();
+    return CFAUtils.successorsOf(node).transform(n -> factory.getState(n)).toList();
   }
 }

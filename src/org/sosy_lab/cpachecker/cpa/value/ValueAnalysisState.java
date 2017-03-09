@@ -25,25 +25,35 @@ package org.sosy_lab.cpachecker.cpa.value;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import com.google.common.base.Joiner;
+import com.google.common.base.Preconditions;
+import com.google.common.collect.Multimap;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.Serializable;
+import java.math.BigInteger;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
-
+import javax.annotation.Nullable;
 import org.sosy_lab.common.collect.PathCopyingPersistentTreeMap;
 import org.sosy_lab.common.collect.PersistentMap;
 import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
+import org.sosy_lab.cpachecker.cfa.types.MachineModel;
 import org.sosy_lab.cpachecker.cfa.types.Type;
 import org.sosy_lab.cpachecker.cfa.types.c.CNumericTypes;
+import org.sosy_lab.cpachecker.cfa.types.c.CSimpleType;
 import org.sosy_lab.cpachecker.core.defaults.LatticeAbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractQueryableState;
 import org.sosy_lab.cpachecker.core.interfaces.FormulaReportingState;
 import org.sosy_lab.cpachecker.core.interfaces.Graphable;
+import org.sosy_lab.cpachecker.core.interfaces.PseudoPartitionable;
 import org.sosy_lab.cpachecker.cpa.value.refiner.ValueAnalysisInterpolant;
 import org.sosy_lab.cpachecker.cpa.value.symbolic.type.ConstantSymbolicExpression;
 import org.sosy_lab.cpachecker.cpa.value.symbolic.type.SymbolicIdentifier;
@@ -51,23 +61,22 @@ import org.sosy_lab.cpachecker.cpa.value.symbolic.type.SymbolicValue;
 import org.sosy_lab.cpachecker.cpa.value.type.NumericValue;
 import org.sosy_lab.cpachecker.cpa.value.type.Value;
 import org.sosy_lab.cpachecker.exceptions.InvalidQueryException;
-import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormulaManager;
+import org.sosy_lab.cpachecker.util.predicates.smt.BitvectorFormulaManagerView;
+import org.sosy_lab.cpachecker.util.predicates.smt.FloatingPointFormulaManagerView;
 import org.sosy_lab.cpachecker.util.predicates.smt.FormulaManagerView;
 import org.sosy_lab.cpachecker.util.refinement.ForgetfulState;
 import org.sosy_lab.cpachecker.util.states.MemoryLocation;
-import org.sosy_lab.solver.api.BooleanFormula;
-import org.sosy_lab.solver.api.BooleanFormulaManager;
-import org.sosy_lab.solver.api.IntegerFormulaManager;
-import org.sosy_lab.solver.api.NumeralFormula.IntegerFormula;
+import org.sosy_lab.java_smt.api.BitvectorFormula;
+import org.sosy_lab.java_smt.api.BooleanFormula;
+import org.sosy_lab.java_smt.api.BooleanFormulaManager;
+import org.sosy_lab.java_smt.api.FloatingPointFormula;
+import org.sosy_lab.java_smt.api.FormulaType;
+import org.sosy_lab.java_smt.api.FormulaType.FloatingPointType;
 
-import com.google.common.base.Joiner;
-import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Multimap;
-
-public class ValueAnalysisState implements AbstractQueryableState, FormulaReportingState,
-    ForgetfulState<ValueAnalysisInformation>, Serializable, Graphable,
-    LatticeAbstractState<ValueAnalysisState> {
+public class ValueAnalysisState
+    implements AbstractQueryableState, FormulaReportingState,
+        ForgetfulState<ValueAnalysisInformation>, Serializable, Graphable,
+        LatticeAbstractState<ValueAnalysisState>, PseudoPartitionable {
 
   private static final long serialVersionUID = -3152134511524554357L;
 
@@ -82,19 +91,35 @@ public class ValueAnalysisState implements AbstractQueryableState, FormulaReport
    */
   private PersistentMap<MemoryLocation, Value> constantsMap;
 
+  private final @Nullable MachineModel machineModel;
+
   private transient PersistentMap<MemoryLocation, Type> memLocToType = PathCopyingPersistentTreeMap.of();
 
-  public ValueAnalysisState() {
-    constantsMap = PathCopyingPersistentTreeMap.of();
+  public ValueAnalysisState(MachineModel pMachineModel) {
+    this(
+        checkNotNull(pMachineModel),
+        PathCopyingPersistentTreeMap.of(),
+        PathCopyingPersistentTreeMap.of());
   }
 
-  public ValueAnalysisState(PersistentMap<MemoryLocation, Value> pConstantsMap, PersistentMap<MemoryLocation, Type> pLocToTypeMap) {
-    this.constantsMap = pConstantsMap;
-    this.memLocToType = pLocToTypeMap;
+  public ValueAnalysisState(
+      Optional<MachineModel> pMachineModel,
+      PersistentMap<MemoryLocation, Value> pConstantsMap,
+      PersistentMap<MemoryLocation, Type> pLocToTypeMap) {
+    this(pMachineModel.orElse(null), pConstantsMap, pLocToTypeMap);
+  }
+
+  private ValueAnalysisState(
+      @Nullable MachineModel pMachineModel,
+      PersistentMap<MemoryLocation, Value> pConstantsMap,
+      PersistentMap<MemoryLocation, Type> pLocToTypeMap) {
+    machineModel = pMachineModel;
+    constantsMap = checkNotNull(pConstantsMap);
+    memLocToType = checkNotNull(pLocToTypeMap);
   }
 
   public static ValueAnalysisState copyOf(ValueAnalysisState state) {
-    return new ValueAnalysisState(state.constantsMap, state.memLocToType);
+    return new ValueAnalysisState(state.machineModel, state.constantsMap, state.memLocToType);
   }
 
   /**
@@ -161,16 +186,6 @@ public class ValueAnalysisState implements AbstractQueryableState, FormulaReport
   }
 
   /**
-   * This method removes a variable from the underlying map and returns the removed value.
-   *
-   * @param variableName the name of the variable to remove
-   * @return the value of the removed variable
-   */
-  public ValueAnalysisInformation forget(String variableName) {
-    return forget(MemoryLocation.valueOf(variableName));
-  }
-
-  /**
    * This method removes a memory location from the underlying map and returns the removed value.
    *
    * @param pMemoryLocation the name of the memory location to remove
@@ -188,16 +203,14 @@ public class ValueAnalysisState implements AbstractQueryableState, FormulaReport
     constantsMap = constantsMap.removeAndCopy(pMemoryLocation);
     memLocToType = memLocToType.removeAndCopy(pMemoryLocation);
 
-    Map<MemoryLocation, Type> typeAssignment;
-
-    if (type == null) {
-      typeAssignment = Collections.emptyMap();
-    } else {
-      typeAssignment = ImmutableMap.of(pMemoryLocation, type);
+    PersistentMap<MemoryLocation, Type> typeAssignment = PathCopyingPersistentTreeMap.of();
+    if (type != null) {
+      typeAssignment = typeAssignment.putAndCopy(pMemoryLocation, type);
     }
+    PersistentMap<MemoryLocation, Value> valueAssignment = PathCopyingPersistentTreeMap.of();
+    valueAssignment = valueAssignment.putAndCopy(pMemoryLocation, value);
 
-    return new ValueAnalysisInformation(ImmutableMap.of(pMemoryLocation, value),
-                                        typeAssignment);
+    return new ValueAnalysisInformation(valueAssignment, typeAssignment);
   }
 
   @Override
@@ -246,17 +259,6 @@ public class ValueAnalysisState implements AbstractQueryableState, FormulaReport
    * @throws NullPointerException - if no value is present in this state for the given variable
    * @return the value associated with the given variable
    */
-  public Value getValueFor(String variableName) {
-    return getValueFor(MemoryLocation.valueOf(variableName));
-  }
-
-  /**
-   * This method returns the value for the given variable.
-   *
-   * @param variableName the name of the variable for which to get the value
-   * @throws NullPointerException - if no value is present in this state for the given variable
-   * @return the value associated with the given variable
-   */
   public Value getValueFor(MemoryLocation variableName) {
     Value value = constantsMap.get(variableName);
 
@@ -272,16 +274,6 @@ public class ValueAnalysisState implements AbstractQueryableState, FormulaReport
    */
   public Type getTypeForMemoryLocation(MemoryLocation loc) {
     return memLocToType.get(loc);
-  }
-
-  /**
-   * This method checks whether or not the given variable is contained in this state.
-   *
-   * @param variableName the name of variable to check for
-   * @return true, if the variable is contained, else false
-   */
-  public boolean contains(String variableName) {
-    return contains(MemoryLocation.valueOf(variableName));
   }
 
   /**
@@ -346,7 +338,7 @@ public class ValueAnalysisState implements AbstractQueryableState, FormulaReport
     if (newConstantsMap.size() == reachedState.constantsMap.size()) {
       return reachedState;
     } else {
-      return new ValueAnalysisState(newConstantsMap, newlocToTypeMap);
+      return new ValueAnalysisState(machineModel, newConstantsMap, newlocToTypeMap);
     }
   }
 
@@ -514,7 +506,8 @@ public class ValueAnalysisState implements AbstractQueryableState, FormulaReport
           throw new InvalidQueryException(statement + " should end with \")\"");
         }
 
-        String varName = statement.substring("deletevalues(".length(), statement.length() - 1);
+        MemoryLocation varName = MemoryLocation.valueOf(
+            statement.substring("deletevalues(".length(), statement.length() - 1));
 
         if (contains(varName)) {
           forget(varName);
@@ -554,24 +547,64 @@ public class ValueAnalysisState implements AbstractQueryableState, FormulaReport
   }
 
   @Override
-  public BooleanFormula getFormulaApproximation(FormulaManagerView manager, PathFormulaManager pfmgr) {
+  public BooleanFormula getFormulaApproximation(FormulaManagerView manager) {
     BooleanFormulaManager bfmgr = manager.getBooleanFormulaManager();
-    IntegerFormulaManager nfmgr = manager.getIntegerFormulaManager();
-    BooleanFormula formula = bfmgr.makeBoolean(true);
+    if (machineModel == null) {
+      return bfmgr.makeTrue();
+    }
+
+    List<BooleanFormula> result = new ArrayList<>();
+    BitvectorFormulaManagerView bitvectorFMGR = manager.getBitvectorFormulaManager();
+    FloatingPointFormulaManagerView floatFMGR = manager.getFloatingPointFormulaManager();
 
     for (Map.Entry<MemoryLocation, Value> entry : constantsMap.entrySet()) {
       NumericValue num = entry.getValue().asNumericValue();
+
       if (num != null) {
-        // TODO explicit-float: handle the case that it's not a long
-        IntegerFormula var = nfmgr.makeVariable(entry.getKey().getAsSimpleString());
-        IntegerFormula val = nfmgr.makeNumber(num.longValue());
-        formula = bfmgr.and(formula, nfmgr.equal(var, val));
+        MemoryLocation memoryLocation = entry.getKey();
+        Type type = getTypeForMemoryLocation(memoryLocation);
+        if (!memoryLocation.isReference() && type instanceof CSimpleType) {
+          CSimpleType simpleType = (CSimpleType) type;
+          if (simpleType.getType().isIntegerType()) {
+            int bitSize = machineModel.getSizeof(simpleType) * machineModel.getSizeofCharInBits();
+            BitvectorFormula var =
+                bitvectorFMGR.makeVariable(bitSize, entry.getKey().getAsSimpleString());
+
+            Number value = num.getNumber();
+            final BitvectorFormula val;
+            if (value instanceof BigInteger) {
+              val = bitvectorFMGR.makeBitvector(bitSize, (BigInteger) value);
+            } else {
+              val = bitvectorFMGR.makeBitvector(bitSize, num.longValue());
+            }
+            result.add(bitvectorFMGR.equal(var, val));
+          } else if (simpleType.getType().isFloatingPointType()) {
+            final FloatingPointType fpType;
+            switch (simpleType.getType()) {
+            case FLOAT:
+              fpType = FormulaType.getSinglePrecisionFloatingPointType();
+              break;
+            case DOUBLE:
+              fpType = FormulaType.getDoublePrecisionFloatingPointType();
+              break;
+            default:
+              throw new AssertionError("Unsupported floating point type: " + simpleType);
+            }
+            FloatingPointFormula var = floatFMGR.makeVariable(entry.getKey().getAsSimpleString(), fpType);
+            FloatingPointFormula val = floatFMGR.makeNumber(num.doubleValue(), fpType);
+            result.add(floatFMGR.equalWithFPSemantics(var, val));
+          } else {
+            // ignore in formula-approximation
+          }
+        } else {
+          // ignore in formula-approximation
+        }
       } else {
         // ignore in formula-approximation
       }
     }
 
-    return formula;
+    return bfmgr.and(result);
   }
 
   /**
@@ -722,8 +755,8 @@ public class ValueAnalysisState implements AbstractQueryableState, FormulaReport
 
       } else if (functionExit.getEntryNode().getReturnVariable().isPresent() &&
           functionExit.getEntryNode().getReturnVariable().get().getQualifiedName().equals(trackedVar.getAsSimpleString())) {
-        assert (!rebuildState.contains(trackedVar)) :
-                "calling function should not contain return-variable of called function: " + trackedVar;
+        /*assert (!rebuildState.contains(trackedVar)) :
+                "calling function should not contain return-variable of called function: " + trackedVar;*/
         if (this.contains(trackedVar)) {
           rebuildState.assignConstant(trackedVar, this.getValueFor(trackedVar), this.getTypeForMemoryLocation(trackedVar));
         }
@@ -740,5 +773,15 @@ public class ValueAnalysisState implements AbstractQueryableState, FormulaReport
       throw new IOException("",e);
     }
     memLocToType = PathCopyingPersistentTreeMap.of();
+  }
+
+  @Override
+  public Comparable<?> getPseudoPartitionKey() {
+    return getSize();
+  }
+
+  @Override
+  public Object getPseudoHashCode() {
+    return this;
   }
 }

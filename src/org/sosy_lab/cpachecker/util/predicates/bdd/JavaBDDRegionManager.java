@@ -23,12 +23,17 @@
  */
 package org.sosy_lab.cpachecker.util.predicates.bdd;
 
-import static com.google.common.base.Preconditions.*;
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkState;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.sosy_lab.cpachecker.util.statistics.StatisticsWriter.writingStatisticsTo;
 
+import com.google.common.base.Function;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Maps;
 import java.io.PrintStream;
 import java.lang.ref.PhantomReference;
+import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -36,9 +41,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.logging.Level;
-
+import net.sf.javabdd.BDD;
+import net.sf.javabdd.BDDFactory;
+import net.sf.javabdd.JFactory;
 import org.sosy_lab.common.ShutdownNotifier;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.IntegerOption;
@@ -56,21 +62,12 @@ import org.sosy_lab.cpachecker.util.predicates.smt.FormulaManagerView;
 import org.sosy_lab.cpachecker.util.statistics.StatInt;
 import org.sosy_lab.cpachecker.util.statistics.StatKind;
 import org.sosy_lab.cpachecker.util.statistics.StatTimer;
-import org.sosy_lab.solver.api.BooleanFormula;
-import org.sosy_lab.solver.api.BooleanFormulaManager;
-import org.sosy_lab.solver.api.Formula;
-import org.sosy_lab.solver.api.FuncDecl;
-import org.sosy_lab.solver.api.QuantifiedFormulaManager.Quantifier;
-import org.sosy_lab.solver.visitors.BooleanFormulaVisitor;
-
-import com.google.common.base.Function;
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Iterables;
-import com.google.common.collect.Maps;
-
-import net.sf.javabdd.BDD;
-import net.sf.javabdd.BDDFactory;
-import net.sf.javabdd.JFactory;
+import org.sosy_lab.java_smt.api.BooleanFormula;
+import org.sosy_lab.java_smt.api.BooleanFormulaManager;
+import org.sosy_lab.java_smt.api.Formula;
+import org.sosy_lab.java_smt.api.FunctionDeclaration;
+import org.sosy_lab.java_smt.api.QuantifiedFormulaManager.Quantifier;
+import org.sosy_lab.java_smt.api.visitors.BooleanFormulaVisitor;
 /**
  * A wrapper for the javabdd (http://javabdd.sf.net) package.
  *
@@ -92,7 +89,7 @@ class JavaBDDRegionManager implements RegionManager {
   private final ReferenceQueue<JavaBDDRegion> referenceQueue =
       new ReferenceQueue<>();
   // In this map we store the info which BDD to free after a JavaBDDRegion object was GCed.
-  private final Map<PhantomReference<JavaBDDRegion>, BDD> referenceMap = Maps
+  private final Map<Reference<? extends JavaBDDRegion>, BDD> referenceMap = Maps
       .newIdentityHashMap();
 
   @Option(secure = true, description = "Initial size of the BDD node table in percentage of available Java heap memory (only used if initTableSize is 0).")
@@ -141,20 +138,20 @@ class JavaBDDRegionManager implements RegionManager {
     try {
       Method gcCallback =
           JavaBDDRegionManager.class.getDeclaredMethod("gcCallback",
-              new Class[]{Integer.class, BDDFactory.GCStats.class});
+              Integer.class, BDDFactory.GCStats.class);
       gcCallback.setAccessible(true);
       factory.registerGCCallback(this, gcCallback);
 
       Method resizeCallback =
           JavaBDDRegionManager.class.getDeclaredMethod("resizeCallback",
-              new Class[]{Integer.class, Integer.class});
+              Integer.class, Integer.class);
       resizeCallback.setAccessible(true);
       factory.registerResizeCallback(this, resizeCallback);
 
       Method reorderCallback =
           JavaBDDRegionManager.class
-              .getDeclaredMethod("reorderCallback", new Class[]{
-                  Integer.class, BDDFactory.ReorderStats.class});
+              .getDeclaredMethod("reorderCallback", Integer.class,
+                  BDDFactory.ReorderStats.class);
       reorderCallback.setAccessible(true);
       factory.registerReorderCallback(this, reorderCallback);
 
@@ -229,7 +226,6 @@ class JavaBDDRegionManager implements RegionManager {
           .putIf(cacheSize >= 0, "Size of BDD cache", cacheSize)
           .put(cleanupQueueSize)
           .put(cleanupTimer)
-
           .put(
               "Time for BDD garbage collection",
               TimeSpan.ofMillis(stats.sumtime).formatAs(SECONDS)
@@ -281,7 +277,7 @@ class JavaBDDRegionManager implements RegionManager {
 
   private BDD createNewVar() {
     if (nextvar >= varcount) {
-      varcount *= 1.5;
+      varcount = (int) (varcount * 1.5);
       factory.setVarNum(varcount);
     }
     BDD ret = factory.ithVar(nextvar++);
@@ -308,9 +304,8 @@ class JavaBDDRegionManager implements RegionManager {
     cleanupTimer.start();
     try {
       int count = 0;
-      PhantomReference<? extends JavaBDDRegion> ref;
-      while ((ref =
-          (PhantomReference<? extends JavaBDDRegion>)referenceQueue
+      Reference<? extends JavaBDDRegion> ref;
+      while ((ref = referenceQueue
               .poll()) != null) {
         count++;
 
@@ -428,7 +423,7 @@ class JavaBDDRegionManager implements RegionManager {
   public Region makeExists(Region pF1, Region... pF2) {
     cleanupReferences();
 
-    if (pF2.length == 0) {
+    if (pF2.length == 0 || pF1.isTrue() || pF1.isFalse()) {
       return pF1;
     }
 
@@ -441,23 +436,6 @@ class JavaBDDRegionManager implements RegionManager {
     f.free();
 
     return result;
-  }
-
-  @Override
-  public Set<Region> extractPredicates(Region pF) {
-    cleanupReferences();
-
-    BDD f = unwrap(pF);
-    int[] vars = f.scanSet();
-    if (vars == null) {
-      return ImmutableSet.of();
-    }
-
-    ImmutableSet.Builder<Region> predicateBuilder = ImmutableSet.builder();
-    for (int var : vars) {
-      predicateBuilder.add(wrap(factory.ithVar(var)));
-    }
-    return predicateBuilder.build();
   }
 
   @Override
@@ -481,7 +459,7 @@ class JavaBDDRegionManager implements RegionManager {
 
     try (FormulaToRegionConverter converter =
              new FormulaToRegionConverter(fmgr, atomToRegion)) {
-      return wrap(bfmgr.visit(converter, pF));
+      return wrap(bfmgr.visit(pF, converter));
     }
   }
 
@@ -660,13 +638,8 @@ class JavaBDDRegionManager implements RegionManager {
     }
 
     @Override
-    public BDD visitTrue() {
-      return factory.one();
-    }
-
-    @Override
-    public BDD visitFalse() {
-      return factory.zero();
+    public BDD visitConstant(boolean value) {
+      return value ? factory.one() : factory.zero();
     }
 
     @Override
@@ -675,14 +648,14 @@ class JavaBDDRegionManager implements RegionManager {
     }
 
     @Override
-    public BDD visitAtom(BooleanFormula pAtom, FuncDecl decl) {
+    public BDD visitAtom(BooleanFormula pAtom, FunctionDeclaration<BooleanFormula> decl) {
       return ((JavaBDDRegion)atomToRegion.apply(pAtom)).getBDD().id();
     }
 
     private BDD convert(BooleanFormula pOperand) {
       BDD operand = cache.get(pOperand);
       if (operand == null) {
-        operand = bfmgr.visit(this, pOperand);
+        operand = bfmgr.visit(pOperand, this);
         cache.put(pOperand, operand);
       }
       return operand.id(); // copy BDD so the one in the cache won't be consumed
@@ -769,7 +742,8 @@ class JavaBDDRegionManager implements RegionManager {
     }
 
     @Override
-    public BDD visitQuantifier(Quantifier q, List<Formula> args, BooleanFormula pBody) {
+    public BDD visitQuantifier(Quantifier q, BooleanFormula quantifiedAST, List<Formula> args,
+                               BooleanFormula pBody) {
       throw new UnsupportedOperationException();
     }
   }

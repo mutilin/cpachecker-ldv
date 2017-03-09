@@ -23,11 +23,11 @@
  */
 package org.sosy_lab.cpachecker.cpa.sign;
 
+import com.google.common.collect.ImmutableMap;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.logging.Level;
-
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.ast.AAssignment;
 import org.sosy_lab.cpachecker.cfa.ast.ADeclaration;
@@ -43,6 +43,7 @@ import org.sosy_lab.cpachecker.cfa.ast.AParameterDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.ARightHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.AStatement;
 import org.sosy_lab.cpachecker.cfa.ast.AVariableDeclaration;
+import org.sosy_lab.cpachecker.cfa.ast.c.CArraySubscriptExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression.BinaryOperator;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
@@ -62,13 +63,8 @@ import org.sosy_lab.cpachecker.cfa.types.c.CSimpleType;
 import org.sosy_lab.cpachecker.cfa.types.c.CTypedefType;
 import org.sosy_lab.cpachecker.core.defaults.ForwardingTransferRelation;
 import org.sosy_lab.cpachecker.core.defaults.SingletonPrecision;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
-import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCodeException;
-
-import com.google.common.base.Optional;
-import com.google.common.collect.ImmutableMap;
 
 
 public class SignTransferRelation extends ForwardingTransferRelation<SignState, SignState, SingletonPrecision> {
@@ -86,18 +82,12 @@ public class SignTransferRelation extends ForwardingTransferRelation<SignState, 
   }
 
   @Override
-  public Collection<? extends AbstractState> strengthen(AbstractState pState, List<AbstractState> pOtherStates,
-      CFAEdge pCfaEdge, Precision pPrecision) throws CPATransferException, InterruptedException {
-    return null;
-  }
-
-  @Override
   protected SignState handleReturnStatementEdge(CReturnStatementEdge pCfaEdge)
       throws CPATransferException {
 
-    CExpression expression = pCfaEdge.getExpression().or(CIntegerLiteralExpression.ZERO); // 0 is the default in C
+    CExpression expression = pCfaEdge.getExpression().orElse(CIntegerLiteralExpression.ZERO); // 0 is the default in C
     String assignedVar = getScopedVariableNameForNonGlobalVariable(FUNC_RET_VAR, functionName);
-    return handleAssignmentToVariable(state, assignedVar, expression);
+    return handleAssignmentToVariable(state, assignedVar, expression, pCfaEdge);
   }
 
   @Override
@@ -114,7 +104,7 @@ public class SignTransferRelation extends ForwardingTransferRelation<SignState, 
         throw new UnrecognizedCodeException("Unsupported code found", pCfaEdge);
       }
       String scopedVarId = getScopedVariableNameForNonGlobalVariable(pParameters.get(i).getName(), pCalledFunctionName);
-      mapBuilder.put(scopedVarId, ((CRightHandSide)exp).accept(new SignCExpressionVisitor(edge, state, this)));
+      mapBuilder.put(scopedVarId, ((CRightHandSide)exp).accept(new SignCExpressionVisitor(pCfaEdge, state, this)));
     }
     ImmutableMap<String, SIGN> argumentMap = mapBuilder.build();
     logger.log(Level.FINE, "Entering function " + pCalledFunctionName + " with arguments " + argumentMap);
@@ -159,39 +149,20 @@ public class SignTransferRelation extends ForwardingTransferRelation<SignState, 
     }
   }
 
-  private BinaryOperator negateComparisonOperator(BinaryOperator pOp) {
-    switch (pOp) {
-    case LESS_THAN:
-      return BinaryOperator.GREATER_EQUAL;
-    case LESS_EQUAL:
-      return BinaryOperator.GREATER_THAN;
-    case GREATER_THAN:
-      return BinaryOperator.LESS_EQUAL;
-    case GREATER_EQUAL:
-      return BinaryOperator.LESS_THAN;
-    case EQUALS:
-      return BinaryOperator.NOT_EQUALS;
-    case NOT_EQUALS:
-      return BinaryOperator.EQUALS;
-     default:
-       throw new IllegalArgumentException("Cannot negate given operator");
-    }
-  }
-
   private Optional<IdentifierValuePair> evaluateAssumption(CBinaryExpression pAssumeExp, boolean truthAssumption, CFAEdge pCFAEdge)  {
     Optional<CExpression> optStrongestId = getStrongestIdentifier(pAssumeExp, pCFAEdge);
     if (!optStrongestId.isPresent()) {
-      return Optional.absent(); // No refinement possible, since no strongest identifier was found
+      return Optional.empty(); // No refinement possible, since no strongest identifier was found
     }
     CExpression strongestId = optStrongestId.get();
     logger.log(Level.FINER, "Filtered strongest identifier " + strongestId + " from assume expression" + pAssumeExp);
     CExpression refinementExpression = getRefinementExpression(strongestId, pAssumeExp);
-    BinaryOperator resultOp = !truthAssumption ? negateComparisonOperator(pAssumeExp.getOperator()) : pAssumeExp.getOperator();
+    BinaryOperator resultOp = truthAssumption ? pAssumeExp.getOperator() : pAssumeExp.getOperator().getOppositLogicalOperator();
     SIGN resultSign;
     try {
       resultSign = refinementExpression.accept(new SignCExpressionVisitor(pCFAEdge, state, this));
     } catch (UnrecognizedCodeException e) {
-      return Optional.absent();
+      return Optional.empty();
     }
     return evaluateAssumption(strongestId, resultOp, resultSign, isLeftOperand(strongestId, pAssumeExp));
   }
@@ -246,7 +217,7 @@ public class SignTransferRelation extends ForwardingTransferRelation<SignState, 
     default:
       // nothing to do here
     }
-    return Optional.absent();
+    return Optional.empty();
   }
 
   private CExpression getRefinementExpression(CExpression pStrongestIdent, CBinaryExpression pBinExp) {
@@ -272,7 +243,7 @@ public class SignTransferRelation extends ForwardingTransferRelation<SignState, 
   private Optional<CExpression> getStrongestIdentifier(CBinaryExpression pAssumeExp, CFAEdge pCFAEdge) {
     List<CExpression> result = filterIdentifier(pAssumeExp); // TODO
     if (result.isEmpty()) {
-      return Optional.absent();
+      return Optional.empty();
     }
     if (result.size() == 1) {
       return Optional.of(result.get(0));
@@ -286,7 +257,7 @@ public class SignTransferRelation extends ForwardingTransferRelation<SignState, 
         return Optional.of(result.get(1));
       }
     } catch (UnrecognizedCodeException ex) {
-      return Optional.absent();
+      return Optional.empty();
     }
   }
 
@@ -327,7 +298,7 @@ public class SignTransferRelation extends ForwardingTransferRelation<SignState, 
     logger.log(Level.FINE, "Declaration: " + scopedId);
     // type x = expression;
     if (init instanceof AInitializerExpression) {
-      return handleAssignmentToVariable(state, scopedId, ((AInitializerExpression)init).getExpression());
+      return handleAssignmentToVariable(state, scopedId, ((AInitializerExpression)init).getExpression(), pCfaEdge);
     }
     // type x;
     // since it is C, we assume it may have any value here
@@ -338,7 +309,7 @@ public class SignTransferRelation extends ForwardingTransferRelation<SignState, 
   protected SignState handleStatementEdge(AStatementEdge pCfaEdge, AStatement pStatement) throws CPATransferException {
     // expression is a binary expression e.g. a = b.
     if (pStatement instanceof AAssignment) {
-      return handleAssignment((AAssignment)pStatement);
+      return handleAssignment((AAssignment)pStatement, pCfaEdge);
     }
 
     // only expression expr; does not change state
@@ -350,10 +321,10 @@ public class SignTransferRelation extends ForwardingTransferRelation<SignState, 
     if (pStatement instanceof AFunctionCallStatement) {
       return state;
     }
-      throw new UnrecognizedCodeException("only assignments are supported at this time", edge);
+      throw new UnrecognizedCodeException("only assignments are supported at this time", pCfaEdge);
   }
 
-  private SignState handleAssignment(AAssignment pAssignExpr)
+  private SignState handleAssignment(AAssignment pAssignExpr, CFAEdge edge)
       throws CPATransferException {
     AExpression left = pAssignExpr.getLeftHandSide();
     // a = ...
@@ -362,18 +333,24 @@ public class SignTransferRelation extends ForwardingTransferRelation<SignState, 
         return state;
       }
       String scopedId = getScopedVariableName(left, functionName);
-      return handleAssignmentToVariable(state, scopedId, pAssignExpr.getRightHandSide());
+      return handleAssignmentToVariable(state, scopedId, pAssignExpr.getRightHandSide(), edge);
     }
     // TODO become more precise, handle &x, (int *) x on right hand side, deal with int* x = s;
     // p->x = .., c.x =
     if (left instanceof CFieldReference) {
       String scopedId = getScopedVariableName(left, functionName);
-      return handleAssignmentToVariable(state, scopedId, pAssignExpr.getRightHandSide());
+      return handleAssignmentToVariable(state, scopedId, pAssignExpr.getRightHandSide(), edge);
+    }
+
+    // x[index] = ..,
+    if(left instanceof CArraySubscriptExpression) {
+      // currently only overapproximate soundly and assume any value
+      return state.assignSignToVariable(getScopedVariableName(((CArraySubscriptExpression) left).getArrayExpression(), functionName), SIGN.ALL);
     }
     throw new UnrecognizedCodeException("left operand has to be an id expression", edge);
   }
 
-  private SignState handleAssignmentToVariable(SignState pState, String pVarIdent, ARightHandSide pRightExpr)
+  private SignState handleAssignmentToVariable(SignState pState, String pVarIdent, ARightHandSide pRightExpr, CFAEdge edge)
       throws CPATransferException {
     if (pRightExpr instanceof CRightHandSide) {
       CRightHandSide right = (CRightHandSide)pRightExpr;

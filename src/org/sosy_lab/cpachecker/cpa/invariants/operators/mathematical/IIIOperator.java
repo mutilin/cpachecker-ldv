@@ -23,12 +23,14 @@
  */
 package org.sosy_lab.cpachecker.cpa.invariants.operators.mathematical;
 
-import java.math.BigInteger;
-
-import javax.annotation.Nullable;
+import com.google.common.base.Preconditions;
 
 import org.sosy_lab.cpachecker.cpa.invariants.SimpleInterval;
 import org.sosy_lab.cpachecker.cpa.invariants.operators.Operator;
+
+import java.math.BigInteger;
+
+import javax.annotation.Nullable;
 
 /**
  * Instances of implementations of this interface are operators that can
@@ -120,9 +122,11 @@ public enum IIIOperator implements Operator<SimpleInterval, SimpleInterval, Simp
       }
       // Any bound that is infinite will stay infinite (but may change sign)
       boolean negInf =
-          !pFirstOperand.hasLowerBound() && pSecondOperand.containsPositive() || !pFirstOperand.hasUpperBound() && pSecondOperand.containsNegative();
+          (!pFirstOperand.hasLowerBound() && pSecondOperand.containsPositive())
+              || (!pFirstOperand.hasUpperBound() && pSecondOperand.containsNegative());
       boolean posInf =
-          !pFirstOperand.hasLowerBound() && pSecondOperand.containsNegative() || !pFirstOperand.hasUpperBound() && pSecondOperand.containsPositive();
+          (!pFirstOperand.hasLowerBound() && pSecondOperand.containsNegative())
+              || (!pFirstOperand.hasUpperBound() && pSecondOperand.containsPositive());
       if (negInf && posInf) {
         return SimpleInterval.infinite();
       }
@@ -211,7 +215,97 @@ public enum IIIOperator implements Operator<SimpleInterval, SimpleInterval, Simp
       if (!pSecondOperand.hasLowerBound() || !pSecondOperand.hasUpperBound()) {
         return pFirstOperand;
       }
-      return ISIOperator.MODULO.apply(pFirstOperand, pSecondOperand.getLowerBound().abs().max(pSecondOperand.getUpperBound().abs()));
+      if (pSecondOperand.isSingleton()) {
+        return ISIOperator.MODULO.apply(pFirstOperand, pSecondOperand.getLowerBound());
+      }
+      SimpleInterval result = null;
+      if (pFirstOperand.containsNegative()) {
+        BigInteger negUB = pFirstOperand.closestNegativeToZero();
+        SimpleInterval asPositive =
+            pFirstOperand.hasLowerBound()
+                ? SimpleInterval.of(negUB.negate(), pFirstOperand.getLowerBound().negate())
+                : SimpleInterval.singleton(negUB.negate()).extendToPositiveInfinity();
+        result = applyPositiveUnknown(asPositive, pSecondOperand).negate();
+      }
+
+      if (pFirstOperand.containsPositive()) {
+        BigInteger posLB = pFirstOperand.closestPositiveToZero();
+        SimpleInterval positivePart =
+            pFirstOperand.hasUpperBound()
+                ? SimpleInterval.of(posLB, pFirstOperand.getUpperBound())
+                : SimpleInterval.singleton(posLB).extendToPositiveInfinity();
+        SimpleInterval posResult = applyPositiveUnknown(positivePart, pSecondOperand);
+        result = result == null ? posResult : SimpleInterval.span(result, posResult);
+      }
+
+      assert result != null;
+      return result;
+    }
+
+    private SimpleInterval applyPositiveUnknown(
+        SimpleInterval pFirstOperand, SimpleInterval pSecondOperand) {
+      if (pSecondOperand.isSingleton()) {
+        return ISIOperator.MODULO.apply(pFirstOperand, pSecondOperand.getLowerBound());
+      }
+
+      Preconditions.checkArgument(!pFirstOperand.containsNegative());
+      Preconditions.checkArgument(!pFirstOperand.containsZero());
+
+      SimpleInterval result = null;
+      if (pSecondOperand.containsNegative()) {
+        BigInteger negUB = pSecondOperand.closestNegativeToZero();
+        SimpleInterval asPositive =
+            pSecondOperand.hasLowerBound()
+                ? SimpleInterval.of(negUB.negate(), pSecondOperand.getLowerBound().negate())
+                : SimpleInterval.singleton(negUB.negate()).extendToPositiveInfinity();
+        result = applyPositivePositive(pFirstOperand, asPositive);
+      }
+
+      if (pSecondOperand.containsPositive()) {
+        BigInteger posLB = pSecondOperand.closestPositiveToZero();
+        SimpleInterval positivePart =
+            pSecondOperand.hasUpperBound()
+                ? SimpleInterval.of(posLB, pSecondOperand.getUpperBound())
+                : SimpleInterval.singleton(posLB).extendToPositiveInfinity();
+        SimpleInterval posResult = applyPositivePositive(pFirstOperand, positivePart);
+        result = result == null ? posResult : SimpleInterval.span(result, posResult);
+      }
+
+      assert result != null;
+      return result;
+    }
+
+    private SimpleInterval applyPositivePositive(
+        SimpleInterval pFirstOperand, SimpleInterval pSecondOperand) {
+      if (pSecondOperand.isSingleton()) {
+        return ISIOperator.MODULO.apply(pFirstOperand, pSecondOperand.getLowerBound());
+      }
+
+      Preconditions.checkArgument(!pFirstOperand.containsNegative());
+      Preconditions.checkArgument(!pFirstOperand.containsZero());
+      Preconditions.checkArgument(!pSecondOperand.containsNegative());
+      Preconditions.checkArgument(!pSecondOperand.containsZero());
+
+      if (pFirstOperand.hasUpperBound()
+          && pSecondOperand.getLowerBound().compareTo(pFirstOperand.getUpperBound()) > 0) {
+        return pFirstOperand;
+      }
+      BigInteger resultUpperBound;
+      if (pFirstOperand.hasUpperBound()) {
+        if (pSecondOperand.hasUpperBound()) {
+          resultUpperBound =
+              pFirstOperand
+                  .getUpperBound()
+                  .min(pSecondOperand.getUpperBound().subtract(BigInteger.ONE));
+        } else {
+          resultUpperBound = pFirstOperand.getUpperBound();
+        }
+      } else if (pSecondOperand.hasUpperBound()) {
+        resultUpperBound = pSecondOperand.getUpperBound().subtract(BigInteger.ONE);
+      } else {
+        return SimpleInterval.singleton(BigInteger.ZERO).extendToPositiveInfinity();
+      }
+      return SimpleInterval.of(BigInteger.ZERO, resultUpperBound);
     }
 
   },
@@ -397,8 +491,9 @@ public enum IIIOperator implements Operator<SimpleInterval, SimpleInterval, Simp
        * identity is returned. The same applies for shifting [0] (a
        * singleton interval of zero) or shifting anything by 0.
        */
-      if (pFirstOperand.isTop() || pSecondOperand.isSingleton() && pSecondOperand.containsZero()
-          || pFirstOperand.isSingleton() && pFirstOperand.containsZero()) {
+      if (pFirstOperand.isTop()
+          || (pSecondOperand.isSingleton() && pSecondOperand.containsZero())
+          || (pFirstOperand.isSingleton() && pFirstOperand.containsZero())) {
         return pFirstOperand;
       }
       SimpleInterval result = null;
@@ -468,8 +563,9 @@ public enum IIIOperator implements Operator<SimpleInterval, SimpleInterval, Simp
        * identity is returned. The same applies for shifting [0] (a
        * singleton interval of zero) or shifting anything by 0.
        */
-      if (pFirstOperand.isTop() || pSecondOperand.isSingleton() && pSecondOperand.containsZero()
-          || pFirstOperand.isSingleton() && pFirstOperand.containsZero()) {
+      if (pFirstOperand.isTop()
+          || (pSecondOperand.isSingleton() && pSecondOperand.containsZero())
+          || (pFirstOperand.isSingleton() && pFirstOperand.containsZero())) {
         return pFirstOperand;
       }
       SimpleInterval result = null;

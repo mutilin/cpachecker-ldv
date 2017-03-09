@@ -23,13 +23,18 @@
  */
 package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Collection;
-
 import org.sosy_lab.common.configuration.Configuration;
+import org.sosy_lab.common.configuration.FileOption;
+import org.sosy_lab.common.configuration.FileOption.Type;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
+import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
+import org.sosy_lab.cpachecker.cfa.blocks.BlockPartitioning;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.defaults.AbstractSingleWrapperCPA;
 import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
@@ -54,6 +59,8 @@ import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsCPA;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsTransferRelation;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsageContainer;
 import org.sosy_lab.cpachecker.util.CPAs;
+
+@Options
 public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements ConfigurableProgramAnalysisWithBAM {
 
   private final UsageStatisticsDomain abstractDomain;
@@ -73,12 +80,14 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
     return AutomaticCPAFactory.forType(UsageStatisticsCPA.class);
   }
 
-  private String outputFileName = "output/localsave";
+  @Option(description="A path to precision", name="precision.path")
+  @FileOption(Type.OUTPUT_FILE)
+  private Path outputFileName = Paths.get("localsave");
 
   private UsageStatisticsCPA(ConfigurableProgramAnalysis pCpa, CFA pCfa, LogManager pLogger,
       Configuration pConfig) throws InvalidConfigurationException {
     super(pCpa);
-    //pConfig.inject(this);
+    pConfig.inject(this);
     this.cfa = pCfa;
     this.abstractDomain = new UsageStatisticsDomain(pCpa.getAbstractDomain());
     this.mergeOperator = initializeMergeOperator();
@@ -103,10 +112,6 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
     this.transferRelation = new UsageStatisticsTransferRelation(pCpa.getTransferRelation(), pConfig, pLogger, statistics
         , (CallstackTransferRelation) (CPAs.retrieveCPA(this, CallstackCPA.class)).getTransferRelation());
 
-    String tmpString = pConfig.getProperty("precision.path");
-    if (tmpString != null) {
-      outputFileName = tmpString;
-    }
   }
 
   private MergeOperator initializeMergeOperator() {
@@ -143,9 +148,9 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
   }
 
   @Override
-  public Precision getInitialPrecision(CFANode pNode, StateSpacePartition p) {
+  public Precision getInitialPrecision(CFANode pNode, StateSpacePartition p) throws InterruptedException {
     precision = new UsageStatisticsPrecision(this.getWrappedCpa().getInitialPrecision(pNode, p));
-    PresisionParser parser = new PresisionParser(outputFileName, cfa);
+    PresisionParser parser = new PresisionParser(outputFileName.toString(), cfa);
     parser.parse(precision);
     return precision;
   }
@@ -170,7 +175,14 @@ public class UsageStatisticsCPA extends AbstractSingleWrapperCPA implements Conf
   }
 
   @Override
-  public AbstractState getInitialState(CFANode pNode, StateSpacePartition pPartition) {
+  public AbstractState getInitialState(CFANode pNode, StateSpacePartition pPartition) throws InterruptedException {
     return new UsageStatisticsState(getWrappedCpa().getInitialState(pNode, pPartition), container);
+  }
+
+  @Override
+  public void setPartitioning(BlockPartitioning pPartitioning) {
+    ConfigurableProgramAnalysis cpa = getWrappedCpa();
+    assert cpa instanceof ConfigurableProgramAnalysisWithBAM;
+    ((ConfigurableProgramAnalysisWithBAM) cpa).setPartitioning(pPartitioning);
   }
 }

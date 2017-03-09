@@ -1,5 +1,3 @@
-package org.sosy_lab.cpachecker.cfa.postprocessing.function;
-
 /*
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
@@ -24,12 +22,10 @@ package org.sosy_lab.cpachecker.cfa.postprocessing.function;
  *    http://cpachecker.sosy-lab.org
  */
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+package org.sosy_lab.cpachecker.cfa.postprocessing.function;
 
+import java.util.HashSet;
+import java.util.Set;
 import org.sosy_lab.cpachecker.cfa.ast.c.CArraySubscriptExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CCastExpression;
@@ -48,7 +44,6 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CInitializer;
 import org.sosy_lab.cpachecker.cfa.ast.c.CInitializerExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CInitializerList;
 import org.sosy_lab.cpachecker.cfa.ast.c.CInitializerVisitor;
-import org.sosy_lab.cpachecker.cfa.ast.c.CLeftHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.c.CPointerExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CRightHandSideVisitor;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStatementVisitor;
@@ -60,20 +55,7 @@ import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CReturnStatementEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
-import org.sosy_lab.cpachecker.cfa.types.c.CArrayType;
-import org.sosy_lab.cpachecker.cfa.types.c.CCompositeType;
-import org.sosy_lab.cpachecker.cfa.types.c.CCompositeType.CCompositeTypeMemberDeclaration;
-import org.sosy_lab.cpachecker.cfa.types.c.CElaboratedType;
 import org.sosy_lab.cpachecker.cfa.types.c.CFunctionType;
-import org.sosy_lab.cpachecker.cfa.types.c.CPointerType;
-import org.sosy_lab.cpachecker.cfa.types.c.CType;
-import org.sosy_lab.cpachecker.cfa.types.c.CTypedefType;
-import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
-import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
-import org.sosy_lab.cpachecker.util.identifiers.GlobalVariableIdentifier;
-import org.sosy_lab.cpachecker.util.identifiers.IdentifierCreator;
-import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
-import org.sosy_lab.cpachecker.util.identifiers.StructureIdentifier;
 
 
 /**
@@ -83,19 +65,15 @@ import org.sosy_lab.cpachecker.util.identifiers.StructureIdentifier;
  */
 class CReferencedFunctionsCollector {
 
-  private final Set<String> collectedFunctions = new HashSet<>();
-  private final CollectFunctionsVisitor collector = new CollectFunctionsVisitor();
+  final Set<String> collectedFunctions = new HashSet<>();
+  private final CollectFunctionsVisitor collector;
+
+  public CReferencedFunctionsCollector() {
+    collector = new CollectFunctionsVisitor(collectedFunctions);
+  }
 
   public Set<String> getCollectedFunctions() {
     return collectedFunctions;
-  }
-
-  public Map<String, Set<String>> getFieldAssignement() {
-    return collector.funcToField;
-  }
-
-  public Map<String, Set<String>> getGlobalAssignement() {
-    return collector.funcToGlobal;
   }
 
   public void visitEdge(CFAEdge edge) {
@@ -107,22 +85,10 @@ class CReferencedFunctionsCollector {
     case BlankEdge:
       //nothing to do
       break;
-    case CallToReturnEdge:
-      //nothing to do
-      assert false;
-      break;
     case DeclarationEdge:
       CDeclaration declaration = ((CDeclarationEdge)edge).getDeclaration();
       if (declaration instanceof CVariableDeclaration) {
-        CInitializer init = ((CVariableDeclaration)declaration).getInitializer();
-        if (init != null) {
-          int num = collector.collectedFunctions.size();
-          init.accept(collector);
-          if (num < collector.collectedFunctions.size()) {
-            saveDeclaration(declaration.getType(), init, null);
-          }
-        }
-
+        visitDeclaration((CVariableDeclaration) declaration);
       }
       break;
     case ReturnStatementEdge:
@@ -135,13 +101,9 @@ class CReferencedFunctionsCollector {
       CStatementEdge statementEdge = (CStatementEdge)edge;
       statementEdge.getStatement().accept(collector);
       break;
-    case MultiEdge:
-      //TODO
-      assert false;
-      break;
+
     default:
-      assert false;
-      break;
+      throw new AssertionError();
     }
     collectedFunctions.addAll(collector.collectedFunctions);
     collector.collectedFunctions.clear();
@@ -149,105 +111,26 @@ class CReferencedFunctionsCollector {
 
   public void visitDeclaration(CVariableDeclaration decl) {
     if (decl.getInitializer() != null) {
-      int num = collector.collectedFunctions.size();
       decl.getInitializer().accept(collector);
-      if (num < collector.collectedFunctions.size()) {
-        saveDeclaration(decl.getType(), decl.getInitializer(), decl.isGlobal() ? decl.getName() : null);
-      }
     }
     collectedFunctions.addAll(collector.collectedFunctions);
     collector.collectedFunctions.clear();
   }
 
-  private void saveDeclaration(CType type, CInitializer init, String name) {
-    if (init instanceof CInitializerList) {
-      //Only structures
-      if (type instanceof CArrayType) {
-        for (CInitializer cInit : ((CInitializerList)init).getInitializers()) {
-          saveDeclaration(((CArrayType)type).getType(), cInit, name);
-        }
-      } else if (type instanceof CElaboratedType) {
-        saveDeclaration(type.getCanonicalType(), init, name);
-      } else if (type instanceof CCompositeType) {
-        //Structure
-        List<CCompositeTypeMemberDeclaration> list = ((CCompositeType) type).getMembers();
-        List<CInitializer> initList = ((CInitializerList)init).getInitializers();
-        for (int i = 0; i < list.size(); i++) {
-          CCompositeTypeMemberDeclaration decl = list.get(i);
-          CInitializer cInit = initList.get(i);
-          saveInitializerExpression(collector.funcToField, cInit, decl.getName());
-        }
-      } else if (type instanceof CTypedefType) {
-        saveDeclaration(((CTypedefType) type).getRealType(), init, name);
-      }
-    } else {
-      //Assignement to global id
-      saveInitializerExpression(collector.funcToGlobal, init, name);
-    }
-  }
+  static class CollectFunctionsVisitor extends DefaultCExpressionVisitor<Void, RuntimeException>
+      implements CRightHandSideVisitor<Void, RuntimeException>,
+          CStatementVisitor<Void, RuntimeException>, CInitializerVisitor<Void, RuntimeException> {
 
-  private void saveInitializerExpression(Map<String, Set<String>> map, CInitializer cInit, String fieldName) {
+    final Set<String> collectedFunctions;
 
-    if (cInit instanceof CInitializerExpression) {
-      CInitializerExpression init = (CInitializerExpression) cInit;
-      CExpression initExpression = init.getExpression();
-      if (initExpression instanceof CCastExpression) {
-        // (void*) (&f)
-        initExpression = ((CCastExpression)initExpression).getOperand();
-      }
-
-      CType type = initExpression.getExpressionType().getCanonicalType();
-      if (type instanceof CPointerType) {
-        type = ((CPointerType) type).getType();
-
-        if (type instanceof CFunctionType) {
-          IdentifierCreator creator = new IdentifierCreator();
-          try {
-            AbstractIdentifier id = initExpression.accept(creator);
-
-            if (id instanceof SingleIdentifier) {
-              String lastFunction = ((SingleIdentifier) id).getName();
-              saveInfoIntoMap(map, lastFunction, fieldName);
-            }
-          } catch (HandleCodeException e) {
-            e.printStackTrace();
-          }
-        }
-      }
-    }
-  }
-
-  private static void saveInfoIntoMap(Map<String, Set<String>> map, String funcName, String info) {
-    Set<String> result;
-    if (map.containsKey(funcName)) {
-      result = map.get(funcName);
-    } else {
-      result = new HashSet<>();
-      map.put(funcName, result);
-    }
-    result.add(info);
-  }
-
-  private static class CollectFunctionsVisitor extends DefaultCExpressionVisitor<Void, RuntimeException>
-                                               implements CRightHandSideVisitor<Void, RuntimeException>,
-                                                          CStatementVisitor<Void, RuntimeException>,
-                                                          CInitializerVisitor<Void, RuntimeException> {
-
-    private final Set<String> collectedFunctions = new HashSet<>();
-    public final Map<String, Set<String>> funcToField = new HashMap<>();
-    public final Map<String, Set<String>> funcToGlobal = new HashMap<>();
-    private String lastFunction;
-
-    private IdentifierCreator idCreator = new IdentifierCreator();
-
-    public CollectFunctionsVisitor() {
+    public CollectFunctionsVisitor(Set<String> pCollectedVars) {
+      collectedFunctions = pCollectedVars;
     }
 
     @Override
     public Void visit(CIdExpression pE) {
       if (pE.getExpressionType() instanceof CFunctionType) {
         collectedFunctions.add(pE.getName());
-        lastFunction = pE.getName();
       }
       return null;
     }
@@ -343,12 +226,8 @@ class CReferencedFunctionsCollector {
 
     @Override
     public Void visit(CExpressionAssignmentStatement pIastExpressionAssignmentStatement) {
-      int num = collectedFunctions.size();
       pIastExpressionAssignmentStatement.getLeftHandSide().accept(this);
       pIastExpressionAssignmentStatement.getRightHandSide().accept(this);
-      if (num < collectedFunctions.size()) {
-        saveAssignement(pIastExpressionAssignmentStatement.getLeftHandSide());
-      }
       return null;
     }
 
@@ -363,24 +242,6 @@ class CReferencedFunctionsCollector {
     public Void visit(CFunctionCallStatement pIastFunctionCallStatement) {
       pIastFunctionCallStatement.getFunctionCallExpression().accept(this);
       return null;
-    }
-
-    private void saveAssignement(CLeftHandSide left) {
-      try {
-        AbstractIdentifier id = left.accept(idCreator);
-        Map<String, Set<String>> targetMap;
-        if (id instanceof StructureIdentifier) {
-          targetMap = funcToField;
-        } else if (id instanceof GlobalVariableIdentifier) {
-          targetMap = funcToGlobal;
-        } else {
-          return;
-        }
-
-        saveInfoIntoMap(targetMap, lastFunction, ((SingleIdentifier) id).getName());
-      } catch (HandleCodeException e) {
-        e.printStackTrace();
-      }
     }
   }
 }

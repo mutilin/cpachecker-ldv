@@ -23,15 +23,19 @@
  */
 package org.sosy_lab.cpachecker.pcc.strategy;
 
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.Multimap;
+import com.google.common.collect.Sets;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
-
+import javax.annotation.Nullable;
 import org.sosy_lab.common.ShutdownNotifier;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
@@ -49,10 +53,6 @@ import org.sosy_lab.cpachecker.pcc.strategy.partitioning.PartitionChecker;
 import org.sosy_lab.cpachecker.pcc.strategy.partitioning.PartitioningIOHelper;
 import org.sosy_lab.cpachecker.pcc.strategy.partitioning.PartitioningUtils;
 
-import com.google.common.collect.HashMultimap;
-import com.google.common.collect.Multimap;
-import com.google.common.collect.Sets;
-
 
 public class PartitionedReachedSetStrategy extends AbstractStrategy {
 
@@ -60,9 +60,14 @@ public class PartitionedReachedSetStrategy extends AbstractStrategy {
   private final PropertyCheckerCPA cpa;
   private final ShutdownNotifier shutdownNotifier;
 
-  public PartitionedReachedSetStrategy(final Configuration pConfig, final LogManager pLogger,
-      final ShutdownNotifier pShutdownNotifier, final PropertyCheckerCPA pCpa) throws InvalidConfigurationException {
-    super(pConfig, pLogger);
+  public PartitionedReachedSetStrategy(
+      final Configuration pConfig,
+      final LogManager pLogger,
+      final ShutdownNotifier pShutdownNotifier,
+      final Path pProofFile,
+      final @Nullable PropertyCheckerCPA pCpa)
+      throws InvalidConfigurationException {
+    super(pConfig, pLogger, pProofFile);
 
     ioHelper = new PartitioningIOHelper(pConfig, pLogger, pShutdownNotifier);
     cpa = pCpa;

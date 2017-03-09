@@ -23,21 +23,22 @@
  */
 package org.sosy_lab.cpachecker.util.predicates.pathformula.ctoformula;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
-
-import org.sosy_lab.common.io.Path;
-import org.sosy_lab.common.io.Paths;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.SSAMap.SSAMapBuilder;
 import org.sosy_lab.cpachecker.util.predicates.smt.BooleanFormulaManagerView;
 import org.sosy_lab.cpachecker.util.predicates.smt.FormulaManagerView;
-import org.sosy_lab.solver.api.BooleanFormula;
-import org.sosy_lab.solver.api.Formula;
-import org.sosy_lab.solver.api.FormulaType;
+import org.sosy_lab.java_smt.api.BooleanFormula;
+import org.sosy_lab.java_smt.api.Formula;
+import org.sosy_lab.java_smt.api.FormulaType;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
 
 
 public class ExternModelLoader {
@@ -70,14 +71,15 @@ public class ExternModelLoader {
    * @return BooleanFormula
    */
   private BooleanFormula loadExternalFormula(Path pModelFile, SSAMapBuilder ssa) {
-    if (! pModelFile.getName().endsWith(".dimacs")) {
+    Path fileName = pModelFile.getFileName();
+    if (fileName == null || !fileName.toString().endsWith(".dimacs")) {
       throw new UnsupportedOperationException("Sorry, we can only load dimacs models.");
     }
-    try (BufferedReader br =  pModelFile.asCharSource(StandardCharsets.UTF_8).openBufferedStream()) {
+    try (BufferedReader br = Files.newBufferedReader(pModelFile, StandardCharsets.UTF_8)) {
       ArrayList<String> predicates = new ArrayList<>(10000);
       //var ids in dimacs files start with 1, so we want the first var at position 1
       predicates.add("RheinDummyVar");
-      BooleanFormula externalModel = bfmgr.makeBoolean(true);
+      BooleanFormula externalModel = bfmgr.makeTrue();
       Formula zero = fmgr.makeNumber(FormulaType.getBitvectorTypeWithSize(32), 0);
 
       String line = "";
@@ -101,7 +103,7 @@ public class ExternModelLoader {
         } else if (line.trim().length()>0) {
           //-17552 -11882 1489 48905 0
           // constraints
-          BooleanFormula constraint = bfmgr.makeBoolean(false);
+          BooleanFormula constraint = bfmgr.makeFalse();
           String[] parts = line.split(" ");
           for (String elementStr : parts) {
             if (!elementStr.equals("0") && !elementStr.isEmpty()) {

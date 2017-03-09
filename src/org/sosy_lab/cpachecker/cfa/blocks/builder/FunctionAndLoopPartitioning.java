@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2014  Dirk Beyer
+ *  Copyright (C) 2007-2017  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,41 +23,22 @@
  */
 package org.sosy_lab.cpachecker.cfa.blocks.builder;
 
-import java.util.Set;
-
+import org.sosy_lab.common.configuration.Configuration;
+import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
-import org.sosy_lab.cpachecker.cfa.model.CFANode;
 
 
 /**
  * <code>PartitioningHeuristic</code> that creates blocks for each loop- and function-body.
  */
-public class FunctionAndLoopPartitioning extends PartitioningHeuristic {
+public class FunctionAndLoopPartitioning extends CompositePartitioning {
 
-  private FunctionPartitioning functionPartitioning;
-  private LoopPartitioning loopPartitioning;
-
-  public FunctionAndLoopPartitioning(LogManager pLogger, CFA pCfa) {
-    super(pLogger, pCfa);
-    functionPartitioning = new FunctionPartitioning(pLogger, pCfa);
-    loopPartitioning = new LoopPartitioning(pLogger, pCfa);
+  public FunctionAndLoopPartitioning(LogManager pLogger, CFA pCfa, Configuration pConfig)
+      throws InvalidConfigurationException {
+    super(pLogger, pCfa, pConfig,
+        new FunctionPartitioning(pLogger, pCfa, pConfig),
+        new LoopPartitioning(pLogger, pCfa, pConfig));
   }
 
-  @Override
-  protected boolean shouldBeCached(CFANode pNode) {
-    return functionPartitioning.shouldBeCached(pNode) || loopPartitioning.shouldBeCached(pNode);
-  }
-
-  @Override
-  protected Set<CFANode> getBlockForNode(CFANode pNode) {
-    // TODO what to do if both want to cache it?
-    if (functionPartitioning.shouldBeCached(pNode)) {
-      return functionPartitioning.getBlockForNode(pNode);
-    } else if (loopPartitioning.shouldBeCached(pNode)) {
-      return loopPartitioning.getBlockForNode(pNode);
-    } else {
-      throw new AssertionError("node should not be cached: " + pNode);
-    }
-  }
 }

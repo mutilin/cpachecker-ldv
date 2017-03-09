@@ -23,13 +23,15 @@
  */
 package org.sosy_lab.cpachecker.cpa.invariants.operators.bitvector;
 
-import java.math.BigInteger;
+import com.google.common.base.Preconditions;
 
 import org.sosy_lab.cpachecker.cpa.invariants.BitVectorInfo;
 import org.sosy_lab.cpachecker.cpa.invariants.BitVectorInterval;
 import org.sosy_lab.cpachecker.cpa.invariants.CompoundBitVectorInterval;
 import org.sosy_lab.cpachecker.cpa.invariants.OverflowEventHandler;
 import org.sosy_lab.cpachecker.cpa.invariants.operators.Operator;
+
+import java.math.BigInteger;
 
 /**
  * Instances of implementations of this interface are operators that can
@@ -54,24 +56,136 @@ public enum IICOperatorFactory {
     return new Operator<BitVectorInterval, BitVectorInterval, CompoundBitVectorInterval>() {
 
       @Override
-      public CompoundBitVectorInterval apply(BitVectorInterval pFirstOperand, BitVectorInterval pSecondOperand) {
-        BitVectorInterval result = IIIOperatorFactory.INSTANCE.getDivide(pAllowSignedWrapAround, pOverflowEventHandler).apply(pFirstOperand, pSecondOperand);
+      public CompoundBitVectorInterval apply(
+          BitVectorInterval pFirstOperand, BitVectorInterval pSecondOperand) {
+        BitVectorInterval result =
+            IIIOperatorFactory.INSTANCE
+                .getDivide(pAllowSignedWrapAround, pOverflowEventHandler)
+                .apply(pFirstOperand, pSecondOperand);
         return result == null
-            ? CompoundBitVectorInterval.bottom(pFirstOperand.getBitVectorInfo())
+            ? CompoundBitVectorInterval.bottom(pFirstOperand.getTypeInfo())
             : CompoundBitVectorInterval.of(result);
       }
-
     };
   }
 
   public Operator<BitVectorInterval, BitVectorInterval, CompoundBitVectorInterval> getModulo(final boolean pAllowSignedWrapAround, final OverflowEventHandler pOverflowEventHandler) {
-      return new Operator<BitVectorInterval, BitVectorInterval, CompoundBitVectorInterval>() {
+    return new Operator<BitVectorInterval, BitVectorInterval, CompoundBitVectorInterval>() {
 
       @Override
-      public CompoundBitVectorInterval apply(BitVectorInterval pFirstOperand, BitVectorInterval pSecondOperand) {
-        return CompoundBitVectorInterval.of(pFirstOperand).modulo(pSecondOperand.getLowerBound().abs().max(pSecondOperand.getUpperBound().abs()), pAllowSignedWrapAround, pOverflowEventHandler);
+      public CompoundBitVectorInterval apply(
+          BitVectorInterval pFirstOperand, BitVectorInterval pSecondOperand) {
+        if (pSecondOperand.isSingleton()) {
+          return CompoundBitVectorInterval.of(pFirstOperand)
+              .modulo(
+                  pSecondOperand.getLowerBound(), pAllowSignedWrapAround, pOverflowEventHandler);
+        }
+
+        BitVectorInfo info = pFirstOperand.getTypeInfo();
+        CompoundBitVectorInterval result = CompoundBitVectorInterval.bottom(info);
+
+        if (pFirstOperand.containsNegative()) {
+          BigInteger negUB = pFirstOperand.closestNegativeToZero();
+          BitVectorInterval asPositive =
+              pFirstOperand.hasLowerBound()
+                  ? pFirstOperand.getLowerBound().equals(info.getMinValue())
+                      ? BitVectorInterval.of(info, negUB.negate(), info.getMaxValue())
+                      : BitVectorInterval.of(
+                          info, negUB.negate(), pFirstOperand.getLowerBound().negate())
+                  : BitVectorInterval.singleton(info, negUB.negate()).extendToMaxValue();
+          result =
+              result.unionWith(
+                  applyPositiveUnknown(asPositive, pSecondOperand)
+                      .negate(pAllowSignedWrapAround, pOverflowEventHandler));
+        }
+
+        if (pFirstOperand.containsPositive()) {
+          BigInteger posLB = pFirstOperand.closestPositiveToZero();
+          BitVectorInterval positivePart =
+              pFirstOperand.hasUpperBound()
+                  ? BitVectorInterval.of(info, posLB, pFirstOperand.getUpperBound())
+                  : BitVectorInterval.singleton(info, posLB).extendToMaxValue();
+          result = result.unionWith(applyPositiveUnknown(positivePart, pSecondOperand));
+        }
+
+        assert result != null;
+        return result;
       }
 
+      private CompoundBitVectorInterval applyPositiveUnknown(
+          BitVectorInterval pFirstOperand, BitVectorInterval pSecondOperand) {
+        if (pSecondOperand.isSingleton()) {
+          Operator<BitVectorInterval, BigInteger, BitVectorInterval> operator =
+              ISIOperatorFactory.INSTANCE.getModulo(pAllowSignedWrapAround, pOverflowEventHandler);
+          return CompoundBitVectorInterval.of(
+              operator.apply(pFirstOperand, pSecondOperand.getLowerBound()));
+        }
+
+        Preconditions.checkArgument(!pFirstOperand.containsNegative());
+        Preconditions.checkArgument(!pFirstOperand.containsZero());
+
+        BitVectorInfo info = pFirstOperand.getTypeInfo();
+        CompoundBitVectorInterval result = CompoundBitVectorInterval.bottom(info);
+
+        if (pSecondOperand.containsNegative()) {
+          BigInteger negUB = pSecondOperand.closestNegativeToZero();
+          BitVectorInterval asPositive =
+              pSecondOperand.hasLowerBound()
+                  ? pSecondOperand.getLowerBound().equals(info.getMinValue())
+                      ? BitVectorInterval.of(info, negUB.negate(), info.getMaxValue())
+                      : BitVectorInterval.of(
+                          info, negUB.negate(), pSecondOperand.getLowerBound().negate())
+                  : BitVectorInterval.singleton(info, negUB.negate()).extendToMaxValue();
+          result = result.unionWith(applyPositivePositive(pFirstOperand, asPositive));
+        }
+
+        if (pSecondOperand.containsPositive()) {
+          BigInteger posLB = pSecondOperand.closestPositiveToZero();
+          BitVectorInterval positivePart =
+              pSecondOperand.hasUpperBound()
+                  ? BitVectorInterval.of(info, posLB, pSecondOperand.getUpperBound())
+                  : BitVectorInterval.singleton(info, posLB).extendToMaxValue();
+          result = result.unionWith(applyPositivePositive(pFirstOperand, positivePart));
+        }
+
+        return result;
+      }
+
+      private BitVectorInterval applyPositivePositive(
+          BitVectorInterval pFirstOperand, BitVectorInterval pSecondOperand) {
+        if (pSecondOperand.isSingleton()) {
+          Operator<BitVectorInterval, BigInteger, BitVectorInterval> operator =
+              ISIOperatorFactory.INSTANCE.getModulo(pAllowSignedWrapAround, pOverflowEventHandler);
+          return operator.apply(pFirstOperand, pSecondOperand.getLowerBound());
+        }
+
+        Preconditions.checkArgument(!pFirstOperand.containsNegative());
+        Preconditions.checkArgument(!pFirstOperand.containsZero());
+        Preconditions.checkArgument(!pSecondOperand.containsNegative());
+        Preconditions.checkArgument(!pSecondOperand.containsZero());
+
+        if (pFirstOperand.hasUpperBound()
+            && pSecondOperand.getLowerBound().compareTo(pFirstOperand.getUpperBound()) > 0) {
+          return pFirstOperand;
+        }
+        BitVectorInfo info = pFirstOperand.getTypeInfo();
+        BigInteger resultUpperBound;
+        if (pFirstOperand.hasUpperBound()) {
+          if (pSecondOperand.hasUpperBound()) {
+            resultUpperBound =
+                pFirstOperand
+                    .getUpperBound()
+                    .min(pSecondOperand.getUpperBound().subtract(BigInteger.ONE));
+          } else {
+            resultUpperBound = pFirstOperand.getUpperBound();
+          }
+        } else if (pSecondOperand.hasUpperBound()) {
+          resultUpperBound = pSecondOperand.getUpperBound().subtract(BigInteger.ONE);
+        } else {
+          return BitVectorInterval.singleton(info, BigInteger.ZERO).extendToMaxValue();
+        }
+        return BitVectorInterval.of(info, BigInteger.ZERO, resultUpperBound);
+      }
     };
   }
 
@@ -90,17 +204,19 @@ public enum IICOperatorFactory {
     return new Operator<BitVectorInterval, BitVectorInterval, CompoundBitVectorInterval>() {
 
       @Override
-      public CompoundBitVectorInterval apply(BitVectorInterval pFirstOperand, BitVectorInterval pSecondOperand) {
+      public CompoundBitVectorInterval apply(
+          BitVectorInterval pFirstOperand, BitVectorInterval pSecondOperand) {
         /*
          * If this is top, it will stay top after any kind of shift, so the
          * identity is returned. The same applies for shifting [0] (a
          * singleton interval of zero) or shifting anything by 0.
          */
-        if (pFirstOperand.isTop() || pSecondOperand.isSingleton() && pSecondOperand.containsZero()
-            || pFirstOperand.isSingleton() && pFirstOperand.containsZero()) {
+        if (pFirstOperand.isTop()
+            || (pSecondOperand.isSingleton() && pSecondOperand.containsZero())
+            || (pFirstOperand.isSingleton() && pFirstOperand.containsZero())) {
           return CompoundBitVectorInterval.of(pFirstOperand);
         }
-        BitVectorInfo bitVectorInfo = pFirstOperand.getBitVectorInfo();
+        BitVectorInfo bitVectorInfo = pFirstOperand.getTypeInfo();
         CompoundBitVectorInterval result = CompoundBitVectorInterval.bottom(bitVectorInfo);
         /*
          * If zero is one of the possible shift distances, this interval is
@@ -115,7 +231,10 @@ public enum IICOperatorFactory {
          * the result is undefined.
          */
         if (pSecondOperand.containsNegative()
-            || pSecondOperand.intersectsWith(BitVectorInterval.singleton(bitVectorInfo, BigInteger.valueOf(bitVectorInfo.getSize())).extendToMaxValue())) {
+            || pSecondOperand.intersectsWith(
+                BitVectorInterval.singleton(
+                        bitVectorInfo, BigInteger.valueOf(bitVectorInfo.getSize()))
+                    .extendToMaxValue())) {
           return CompoundBitVectorInterval.of(bitVectorInfo.getRange());
         }
         /*
@@ -125,20 +244,34 @@ public enum IICOperatorFactory {
          * in the overall result.
          */
         if (pSecondOperand.containsPositive()) {
-          BitVectorInterval posPart = pSecondOperand.intersectWith(BitVectorInterval.cast(pFirstOperand.getBitVectorInfo(), BigInteger.ONE, pAllowSignedWrapAround, pOverflowEventHandler).extendToMaxValue());
+          BitVectorInterval posPart =
+              pSecondOperand.intersectWith(
+                  BitVectorInterval.cast(
+                          pFirstOperand.getTypeInfo(),
+                          BigInteger.ONE,
+                          pAllowSignedWrapAround,
+                          pOverflowEventHandler)
+                      .extendToMaxValue());
           /*
            * Shift this interval by the lower bound, then by the upper bound of
            * the positive part and span over the results.
            */
-          CompoundBitVectorInterval posPartResult = ISCOperatorFactory.INSTANCE.getShiftLeft(pAllowSignedWrapAround, pOverflowEventHandler).apply(pFirstOperand, posPart.getLowerBound());
+          CompoundBitVectorInterval posPartResult =
+              ISCOperatorFactory.INSTANCE
+                  .getShiftLeft(pAllowSignedWrapAround, pOverflowEventHandler)
+                  .apply(pFirstOperand, posPart.getLowerBound());
 
-          posPartResult = CompoundBitVectorInterval.span(posPartResult, ISCOperatorFactory.INSTANCE.getShiftLeft(pAllowSignedWrapAround, pOverflowEventHandler).apply(pFirstOperand, posPart.getUpperBound()));
+          posPartResult =
+              CompoundBitVectorInterval.span(
+                  posPartResult,
+                  ISCOperatorFactory.INSTANCE
+                      .getShiftLeft(pAllowSignedWrapAround, pOverflowEventHandler)
+                      .apply(pFirstOperand, posPart.getUpperBound()));
 
           result = result.unionWith(posPartResult);
         }
         return result;
       }
-
     };
   }
 
@@ -146,17 +279,19 @@ public enum IICOperatorFactory {
     return new Operator<BitVectorInterval, BitVectorInterval, CompoundBitVectorInterval>() {
 
       @Override
-      public CompoundBitVectorInterval apply(BitVectorInterval pFirstOperand, BitVectorInterval pSecondOperand) {
+      public CompoundBitVectorInterval apply(
+          BitVectorInterval pFirstOperand, BitVectorInterval pSecondOperand) {
         /*
          * If this is top, it will stay top after any kind of shift, so the
          * identity is returned. The same applies for shifting [0] (a
          * singleton interval of zero) or shifting anything by 0.
          */
-        if (pFirstOperand.isTop() || pSecondOperand.isSingleton() && pSecondOperand.containsZero()
-            || pFirstOperand.isSingleton() && pFirstOperand.containsZero()) {
+        if (pFirstOperand.isTop()
+            || (pSecondOperand.isSingleton() && pSecondOperand.containsZero())
+            || (pFirstOperand.isSingleton() && pFirstOperand.containsZero())) {
           return CompoundBitVectorInterval.of(pFirstOperand);
         }
-        BitVectorInfo bitVectorInfo = pFirstOperand.getBitVectorInfo();
+        BitVectorInfo bitVectorInfo = pFirstOperand.getTypeInfo();
         CompoundBitVectorInterval result = CompoundBitVectorInterval.bottom(bitVectorInfo);
         /*
          * If zero is one of the possible shift distances, this interval is
@@ -171,7 +306,10 @@ public enum IICOperatorFactory {
          * the result is undefined.
          */
         if (pSecondOperand.containsNegative()
-            || pSecondOperand.intersectsWith(BitVectorInterval.singleton(bitVectorInfo, BigInteger.valueOf(bitVectorInfo.getSize())).extendToMaxValue())) {
+            || pSecondOperand.intersectsWith(
+                BitVectorInterval.singleton(
+                        bitVectorInfo, BigInteger.valueOf(bitVectorInfo.getSize()))
+                    .extendToMaxValue())) {
           return CompoundBitVectorInterval.of(bitVectorInfo.getRange());
         }
         /*
@@ -186,15 +324,22 @@ public enum IICOperatorFactory {
            * Shift this interval by the lower bound, then by the upper bound of
            * the positive part and span over the results.
            */
-          CompoundBitVectorInterval posPartResult = ISCOperatorFactory.INSTANCE.getShiftRight(pAllowSignedWrapAround, pOverflowEventHandler).apply(pFirstOperand, posPart.getLowerBound());
+          CompoundBitVectorInterval posPartResult =
+              ISCOperatorFactory.INSTANCE
+                  .getShiftRight(pAllowSignedWrapAround, pOverflowEventHandler)
+                  .apply(pFirstOperand, posPart.getLowerBound());
 
-          posPartResult = CompoundBitVectorInterval.span(posPartResult, ISCOperatorFactory.INSTANCE.getShiftRight(pAllowSignedWrapAround, pOverflowEventHandler).apply(pFirstOperand, posPart.getUpperBound()));
+          posPartResult =
+              CompoundBitVectorInterval.span(
+                  posPartResult,
+                  ISCOperatorFactory.INSTANCE
+                      .getShiftRight(pAllowSignedWrapAround, pOverflowEventHandler)
+                      .apply(pFirstOperand, posPart.getUpperBound()));
 
           result = result.unionWith(posPartResult);
         }
         return result;
       }
-
     };
   }
 

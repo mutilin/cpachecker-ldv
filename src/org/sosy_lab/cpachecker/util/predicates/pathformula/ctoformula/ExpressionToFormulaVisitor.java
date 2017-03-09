@@ -30,8 +30,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.logging.Level;
-
-import org.sosy_lab.cpachecker.cfa.ast.c.*;
+import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression.BinaryOperator;
 import org.sosy_lab.cpachecker.cfa.ast.c.CCastExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CCharLiteralExpression;
@@ -49,7 +48,9 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CSimpleDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CStringLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CTypeIdExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CTypeIdExpression.TypeIdOperator;
+import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression.UnaryOperator;
+import org.sosy_lab.cpachecker.cfa.ast.c.DefaultCExpressionVisitor;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.types.c.CEnumType.CEnumerator;
 import org.sosy_lab.cpachecker.cfa.types.c.CNumericTypes;
@@ -63,11 +64,11 @@ import org.sosy_lab.cpachecker.util.predicates.pathformula.SSAMap.SSAMapBuilder;
 import org.sosy_lab.cpachecker.util.predicates.smt.BooleanFormulaManagerView;
 import org.sosy_lab.cpachecker.util.predicates.smt.FloatingPointFormulaManagerView;
 import org.sosy_lab.cpachecker.util.predicates.smt.FormulaManagerView;
-import org.sosy_lab.solver.api.BooleanFormula;
-import org.sosy_lab.solver.api.FloatingPointFormula;
-import org.sosy_lab.solver.api.Formula;
-import org.sosy_lab.solver.api.FormulaType;
-import org.sosy_lab.solver.api.FormulaType.FloatingPointType;
+import org.sosy_lab.java_smt.api.BooleanFormula;
+import org.sosy_lab.java_smt.api.FloatingPointFormula;
+import org.sosy_lab.java_smt.api.Formula;
+import org.sosy_lab.java_smt.api.FormulaType;
+import org.sosy_lab.java_smt.api.FormulaType.FloatingPointType;
 
 public class ExpressionToFormulaVisitor extends DefaultCExpressionVisitor<Formula, UnrecognizedCCodeException>
                                         implements CRightHandSideVisitor<Formula, UnrecognizedCCodeException> {
@@ -79,9 +80,13 @@ public class ExpressionToFormulaVisitor extends DefaultCExpressionVisitor<Formul
   protected final FormulaManagerView mgr;
   protected final SSAMapBuilder ssa;
 
-  public ExpressionToFormulaVisitor(CtoFormulaConverter pCtoFormulaConverter,
-      FormulaManagerView pFmgr, CFAEdge pEdge, String pFunction,
-      SSAMapBuilder pSsa, Constraints pConstraints) {
+  public ExpressionToFormulaVisitor(
+      CtoFormulaConverter pCtoFormulaConverter,
+      FormulaManagerView pFmgr,
+      CFAEdge pEdge,
+      String pFunction,
+      SSAMapBuilder pSsa,
+      Constraints pConstraints) {
 
     conv = pCtoFormulaConverter;
     edge = pEdge;
@@ -263,7 +268,7 @@ public class ExpressionToFormulaVisitor extends DefaultCExpressionVisitor<Formul
           result= mgr.makeLessOrEqual(f1, f2, signed);
           break;
         case EQUALS:
-          result= mgr.makeEqual(f1, f2);
+          result= handleEquals(exp, f1, f2);
           break;
         case NOT_EQUALS:
           result= conv.bfmgr.not(mgr.makeEqual(f1, f2));
@@ -293,6 +298,32 @@ public class ExpressionToFormulaVisitor extends DefaultCExpressionVisitor<Formul
     return castedResult;
   }
 
+  private BooleanFormula handleEquals(CBinaryExpression exp, Formula f1, Formula f2)
+      throws UnrecognizedCCodeException {
+    assert exp.getOperator() == BinaryOperator.EQUALS;
+    CExpression e1 = exp.getOperand1();
+    CExpression e2 = exp.getOperand2();
+    if (e2.equals(CIntegerLiteralExpression.ZERO)
+        && e1 instanceof CBinaryExpression
+        && ((CBinaryExpression) e1).getOperator() == BinaryOperator.BINARY_OR) {
+      // This is code like "(a | b) == 0".
+      // According to LDV, GCC sometimes produces this during weaving,
+      // but for non-bitprecise analysis it can be handled in a better way as (a == 0) || (b == 0).
+      // TODO Maybe refactor AutomatonASTComparator into something generic
+      // and use this to match such cases.
+
+      final CBinaryExpression or = (CBinaryExpression) e1;
+      final Formula zero = f2;
+      final Formula a =
+          processOperand(or.getOperand1(), exp.getCalculationType(), exp.getExpressionType());
+      final Formula b =
+          processOperand(or.getOperand2(), exp.getCalculationType(), exp.getExpressionType());
+
+      return conv.bfmgr.and(mgr.makeEqual(a, zero), mgr.makeEqual(b, zero));
+    }
+    return mgr.makeEqual(f1, f2);
+  }
+
   /**
    * Some solvers (Mathsat, Princess) do not support MODULO and replace it with an UF.
    * Thus, we limit the result of the UF with additional constraints.
@@ -314,25 +345,12 @@ public class ExpressionToFormulaVisitor extends DefaultCExpressionVisitor<Formul
 
     // Sign of the remainder is set by the sign of the
     // numerator, and it is bounded by the numerator.
-    BooleanFormula signAndNumBound = bfmgr.ifThenElse(
-        mgr.makeGreaterOrEqual(f1, zero, signed),
-        bfmgr.and(
-
-            // Remainder positive or zero.
-            mgr.makeGreaterOrEqual(ret, zero, signed),
-
-            // Remainder is bounded above by the numerator (both positive)
-            mgr.makeLessOrEqual(ret, f1, signed)
-        ),
-        bfmgr.and(
-
-            // Remainder negative or zero.
-            mgr.makeLessOrEqual(ret, zero, signed),
-
-            // Remainder is bounded below by the numerator (both negative)
-            mgr.makeGreaterOrEqual(ret, f1, signed)
-        )
-    );
+    BooleanFormula signAndNumBound =
+        bfmgr.ifThenElse(
+            mgr.makeGreaterOrEqual(f1, zero, signed),
+            mgr.makeRangeConstraint(ret, zero, f1, signed), // ret in [zero, f1] (both positive)
+            mgr.makeRangeConstraint(ret, f1, zero, signed) // ret in [f1, zero] (both negative)
+            );
 
     BooleanFormula denomBound = bfmgr.ifThenElse(
         mgr.makeGreaterOrEqual(f2, zero, signed),
@@ -374,7 +392,10 @@ public class ExpressionToFormulaVisitor extends DefaultCExpressionVisitor<Formul
       }
     }
 
-    return conv.makeVariable(idExp.getDeclaration().getQualifiedName(), idExp.getExpressionType(), ssa);
+    return conv.makeVariable(
+        idExp.getDeclaration().getQualifiedName(),
+        idExp.getExpressionType(),
+        ssa);
   }
 
   @Override
@@ -456,6 +477,9 @@ public class ExpressionToFormulaVisitor extends DefaultCExpressionVisitor<Formul
 
       CType returnType = exp.getExpressionType();
       FormulaType<?> returnFormulaType = conv.getFormulaTypeFromCType(returnType);
+      if (!returnFormulaType.equals(mgr.getFormulaType(ret))) {
+        ret = conv.makeCast(t, returnType, ret, constraints, edge);
+      }
       assert returnFormulaType.equals(mgr.getFormulaType(ret))
             : "Returntype and Formulatype do not match in visit(CUnaryExpression)";
       return ret;
@@ -707,7 +731,7 @@ public class ExpressionToFormulaVisitor extends DefaultCExpressionVisitor<Formul
 
       final CType realReturnType = conv.getReturnType(e, edge);
       final FormulaType<?> resultFormulaType = conv.getFormulaTypeFromCType(realReturnType);
-      return conv.ffmgr.declareAndCallUninterpretedFunction(functionName, resultFormulaType, arguments);
+      return conv.ffmgr.declareAndCallUF(functionName, resultFormulaType, arguments);
     }
   }
 

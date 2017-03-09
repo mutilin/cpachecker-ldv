@@ -23,21 +23,22 @@
  */
 package org.sosy_lab.cpachecker.cpa.bam;
 
-import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
+import org.sosy_lab.cpachecker.util.statistics.StatTimer;
+import org.sosy_lab.cpachecker.util.statistics.StatTimerWithMoreOutput;
 
 
 class TimedReducer implements Reducer {
 
-  final Timer reduceTime = new Timer();
-  final Timer expandTime = new Timer();
-  final Timer reducePrecisionTime = new Timer();
-  final Timer expandPrecisionTime = new Timer();
+  final StatTimer reduceTime = new StatTimerWithMoreOutput("Time for reducing abstract states");
+  final StatTimer expandTime = new StatTimerWithMoreOutput("Time for expanding abstract states");
+  final StatTimer reducePrecisionTime = new StatTimerWithMoreOutput("Time for reducing precisions");
+  final StatTimer expandPrecisionTime = new StatTimerWithMoreOutput("Time for expanding precisions");
 
   private final Reducer wrappedReducer;
 
@@ -48,7 +49,7 @@ class TimedReducer implements Reducer {
   @Override
   public AbstractState getVariableReducedState(
       AbstractState pExpandedState, Block pContext, Block outerContext,
-      CFANode pCallNode) {
+      CFANode pCallNode) throws InterruptedException {
 
     reduceTime.start();
     try {
@@ -59,9 +60,22 @@ class TimedReducer implements Reducer {
   }
 
   @Override
+  public AbstractState getVariableReducedState(
+      AbstractState pExpandedState, Block pContext,
+      CFANode pCallNode) throws InterruptedException {
+
+    reduceTime.start();
+    try {
+      return wrappedReducer.getVariableReducedState(pExpandedState, pContext, pCallNode);
+    } finally {
+      reduceTime.stop();
+    }
+  }
+
+  @Override
   public AbstractState getVariableExpandedState(
       AbstractState pRootState, Block pReducedContext, Block outerSubtree,
-      AbstractState pReducedState) {
+      AbstractState pReducedState) throws InterruptedException {
 
     expandTime.start();
     try {
@@ -72,13 +86,21 @@ class TimedReducer implements Reducer {
   }
 
   @Override
-  public Object getHashCodeForState(AbstractState pElementKey, Precision pPrecisionKey) {
-    return wrappedReducer.getHashCodeForState(pElementKey, pPrecisionKey);
+  public AbstractState getVariableExpandedState(
+      AbstractState pRootState, Block pReducedContext,
+      AbstractState pReducedState) throws InterruptedException {
+
+    expandTime.start();
+    try {
+      return wrappedReducer.getVariableExpandedState(pRootState, pReducedContext, pReducedState);
+    } finally {
+      expandTime.stop();
+    }
   }
 
   @Override
-  public Object getHashCodeForState(AbstractState pElementKey) {
-    return wrappedReducer.getHashCodeForState(pElementKey);
+  public Object getHashCodeForState(AbstractState pElementKey, Precision pPrecisionKey) {
+    return wrappedReducer.getHashCodeForState(pElementKey, pPrecisionKey);
   }
 
   @Override
@@ -109,15 +131,15 @@ class TimedReducer implements Reducer {
   }
 
   @Override
-  public AbstractState getVariableReducedStateForProofChecking(AbstractState pExpandedState, Block pContext,
-      CFANode pCallNode) {
+  public AbstractState getVariableReducedStateForProofChecking(
+      AbstractState pExpandedState, Block pContext, CFANode pCallNode) throws InterruptedException {
     return wrappedReducer.getVariableReducedStateForProofChecking(pExpandedState, pContext, pCallNode);
 
   }
 
   @Override
   public AbstractState getVariableExpandedStateForProofChecking(AbstractState pRootState, Block pReducedContext,
-      AbstractState pReducedState) {
+      AbstractState pReducedState) throws InterruptedException {
     return wrappedReducer.getVariableExpandedStateForProofChecking(pRootState, pReducedContext, pReducedState);
   }
 

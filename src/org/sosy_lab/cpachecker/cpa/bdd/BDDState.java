@@ -23,17 +23,17 @@
  */
 package org.sosy_lab.cpachecker.cpa.bdd;
 
-import javax.annotation.Nullable;
+import com.google.common.base.Joiner;
 
 import org.sosy_lab.cpachecker.core.defaults.LatticeAbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractQueryableState;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.InvalidQueryException;
-import org.sosy_lab.solver.SolverException;
 import org.sosy_lab.cpachecker.util.predicates.regions.NamedRegionManager;
 import org.sosy_lab.cpachecker.util.predicates.regions.Region;
+import org.sosy_lab.java_smt.api.SolverException;
 
-import com.google.common.base.Joiner;
+import javax.annotation.Nullable;
 
 public class BDDState implements AbstractQueryableState,
     LatticeAbstractState<BDDState> {
@@ -108,26 +108,18 @@ public class BDDState implements AbstractQueryableState,
   }
 
   @Override
-  public boolean checkProperty(String pProperty) throws InvalidQueryException {
-    throw new InvalidQueryException("BDDCPA Element cannot check anything");
-  }
-
-  @Override
   public Object evaluateProperty(String pProperty) throws InvalidQueryException {
-    if (pProperty.equals("VALUES")) {
-      return manager.dumpRegion(this.currentState).toString();
-    } else if (pProperty.equals("VARSET")) {
-      return "(" + Joiner.on(", ").join(manager.getPredicates()) + ")";
-    } else if (pProperty.equals("VARSETSIZE")) {
-      return manager.getPredicates().size();
-    } else {
-      throw new InvalidQueryException("BDDCPA Element can only return the current values (\"VALUES\")");
+    switch (pProperty) {
+      case "VALUES":
+        return manager.dumpRegion(this.currentState).toString();
+      case "VARSET":
+        return "(" + Joiner.on(", ").join(manager.getPredicates()) + ")";
+      case "VARSETSIZE":
+        return manager.getPredicates().size();
+      default:
+        throw new InvalidQueryException(
+            "BDDCPA Element can only return the current values (\"VALUES\")");
     }
-  }
-
-  @Override
-  public void modifyProperty(String pModification) throws InvalidQueryException {
-    throw new InvalidQueryException("BDDCPA Element cannot be modified");
   }
 
   /** this.state = this.state.and(pConstraint);

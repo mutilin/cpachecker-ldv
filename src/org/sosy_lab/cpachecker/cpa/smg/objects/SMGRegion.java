@@ -23,22 +23,27 @@
  */
 package org.sosy_lab.cpachecker.cpa.smg.objects;
 
+import java.util.Map;
+import org.sosy_lab.cpachecker.cpa.smg.SMGValueFactory;
+import org.sosy_lab.cpachecker.cpa.smg.objects.generic.SMGObjectTemplate;
 
-
-
-public final class SMGRegion extends SMGObject {
+public final class SMGRegion extends SMGObject implements SMGObjectTemplate {
 
   public SMGRegion(int pSize, String pLabel) {
-    super(pSize, pLabel);
+    super(pSize, pLabel, SMGObjectKind.REG);
   }
 
   public SMGRegion(SMGRegion pOther) {
     super(pOther);
   }
 
+  public SMGRegion(int pSize, String pLabel, int pLevel) {
+    super(pSize, pLabel, pLevel, SMGObjectKind.REG);
+  }
+
   @Override
   public String toString() {
-    return "REGION( "+ getLabel() + ", " + getSize() + "b)";
+    return "REGION("+ getLabel() + ", " + getSize() + "b)\n" + "level=" + getLevel();
   }
 
   public boolean propertiesEqual(SMGRegion pOther) {
@@ -74,14 +79,36 @@ public final class SMGRegion extends SMGObject {
   }
 
   @Override
-  public SMGObject join(SMGObject pOther) {
+  public SMGObject join(SMGObject pOther, int pDestLevel) {
     if (pOther.isAbstract()) {
       // I am concrete, and the other is abstract: the abstraction should
       // know how to join with me
-      return pOther.join(this);
+      return pOther.join(this, pDestLevel);
     } else if (getSize() == pOther.getSize()) {
-      return new SMGRegion(this);
+      return new SMGRegion(getSize(), getLabel(), pDestLevel);
     }
+
     throw new UnsupportedOperationException("join() called on incompatible SMGObjects");
+  }
+
+  @Override
+  public SMGRegion createConcreteObject(Map<Integer, Integer> pAbstractToConcretePointerMap) {
+    return new SMGRegion(getSize(), getLabel() + " ID " + SMGValueFactory.getNewValue());
+  }
+
+  @Override
+  public SMGObject copy() {
+    return new SMGRegion(this);
+  }
+
+  @Override
+  public SMGObject copy(int pNewLevel) {
+    return new SMGRegion(getSize(), "ID" + SMGValueFactory.getNewValue() + " Copy", pNewLevel);
+  }
+
+  @Override
+  public boolean isMoreGeneral(SMGObject pOther) {
+    /*There exists no object that is less general than a region.*/
+    return false;
   }
 }

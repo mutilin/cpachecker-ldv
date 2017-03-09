@@ -28,6 +28,10 @@ import static com.google.common.collect.FluentIterable.from;
 import static com.google.common.collect.Iterables.concat;
 import static org.sosy_lab.cpachecker.util.AbstractStates.extractLocations;
 
+import com.google.common.base.Joiner;
+import com.google.common.collect.FluentIterable;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -36,43 +40,28 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.Stack;
-
 import org.sosy_lab.common.Appender;
 import org.sosy_lab.common.Appenders;
-import org.sosy_lab.cpachecker.cfa.ast.c.CAstNode;
+import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCall;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallAssignmentStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallStatement;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
-import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionEntryNode;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionReturnEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionSummaryEdge;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
 import org.sosy_lab.cpachecker.cpa.arg.ARGPath.PathIterator;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 
-import com.google.common.base.Function;
-import com.google.common.base.Joiner;
-import com.google.common.collect.FluentIterable;
-import com.google.common.collect.Iterables;
-import com.google.common.collect.Lists;
-
 
 public abstract class PathTranslator {
-
-  private static Function<CAstNode, String> RAW_SIGNATURE_FUNCTION = new Function<CAstNode, String>() {
-
-    @Override
-    public String apply(CAstNode pArg0) {
-      return pArg0.toASTString();
-    }
-  };
 
   protected final static CFunctionEntryNode extractFunctionCallLocation(ARGState state) {
     // We assume, that each node has one location.
@@ -116,7 +105,7 @@ public abstract class PathTranslator {
   protected void translateSinglePath0(ARGPath pPath, EdgeVisitor callback) {
     assert pPath.size() >= 1;
 
-    PathIterator pathIt = pPath.pathIterator();
+    PathIterator pathIt = pPath.fullPathIterator();
     ARGState firstElement = pathIt.getAbstractState();
 
     Stack<FunctionBody> functionStack = new Stack<>();
@@ -128,7 +117,12 @@ public abstract class PathTranslator {
       pathIt.advance();
 
       CFAEdge currentCFAEdge = pathIt.getIncomingEdge();
-      ARGState childElement = pathIt.getAbstractState();
+      ARGState childElement;
+      if (pathIt.isPositionWithState()) {
+        childElement = pathIt.getAbstractState();
+      } else {
+        childElement = pathIt.getPreviousAbstractState();
+      }
 
       callback.visit(childElement, currentCFAEdge, functionStack);
     }
@@ -233,7 +227,15 @@ public abstract class PathTranslator {
     // for every element
     functionStack = cloneStack(functionStack);
 
-    callback.visit(childElement, edge, functionStack);
+    // we do not have a single edge, instead a dynamic multi-edge
+    if (edge == null) {
+      List<CFAEdge> edges = nextEdge.getParentState().getEdgesToChild(childElement);
+      for (CFAEdge inner : edges) {
+        callback.visit(childElement, inner, functionStack);
+      }
+    } else {
+      callback.visit(childElement, edge, functionStack);
+    }
 
     // how many parents does the child have?
     // ignore parents not on the error path
@@ -289,13 +291,14 @@ public abstract class PathTranslator {
     // find the next elements to add to the waitlist
 
     List<ARGState> relevantChildrenOfElement = from(currentElement.getChildren()).filter(in(elementsOnPath)).toList();
+    relevantChildrenOfElement = chooseIfArbitrary(currentElement, relevantChildrenOfElement);
 
     // if there is only one child on the path
     if (relevantChildrenOfElement.size() == 1) {
       // get the next ARG state, create a new edge using the same stack and add it to the waitlist
       ARGState elem = Iterables.getOnlyElement(relevantChildrenOfElement);
       CFAEdge e = currentElement.getEdgeToChild(elem);
-      Edge newEdge = new Edge(elem, e, functionStack);
+      Edge newEdge = new Edge(elem, currentElement, e, functionStack);
       return Collections.singleton(newEdge);
 
     } else if (relevantChildrenOfElement.size() > 1) {
@@ -319,7 +322,7 @@ public abstract class PathTranslator {
         } else if (ind == 1) {
           cond = "else if ";
         } else {
-          assert false;
+          throw new AssertionError();
         }
         ind++;
 
@@ -332,12 +335,48 @@ public abstract class PathTranslator {
         // create a new block starting with this condition
         currentFunction.enterBlock(currentElement.getStateId(), assumeEdge, cond);
 
-        Edge newEdge = new Edge(elem, e, newStack);
+        Edge newEdge = new Edge(elem, currentElement, e, newStack);
         result.add(newEdge);
       }
       return result;
     }
     return Collections.emptyList();
+  }
+
+  private List<ARGState> chooseIfArbitrary(ARGState parent, List<ARGState> pRelevantChildrenOfElement) {
+    if (pRelevantChildrenOfElement.size() <= 1) {
+      return pRelevantChildrenOfElement;
+    }
+    List<ARGState> relevantChildrenOfElement = new ArrayList<>(pRelevantChildrenOfElement);
+    Collections.sort(
+        relevantChildrenOfElement,
+        (a, b) -> Integer.compare(b.getChildren().size(), a.getChildren().size()));
+    List<ARGState> result = new ArrayList<>(2);
+    for (ARGState candidate : relevantChildrenOfElement) {
+      boolean valid = true;
+      if (!result.isEmpty()) {
+        Set<AbstractState> candidateChildren =
+            FluentIterable.from(candidate.getChildren())
+                .transform(ARGState.getUnwrapFunction())
+                .toSet();
+        for (ARGState chosen : result) {
+          if (parent.getEdgesToChild(chosen).equals(parent.getEdgesToChild(candidate))) {
+            Set<AbstractState> chosenChildren =
+                FluentIterable.from(chosen.getChildren())
+                    .transform(ARGState.getUnwrapFunction())
+                    .toSet();
+            if (chosenChildren.containsAll(candidateChildren)) {
+              valid = false;
+              break;
+            }
+          }
+        }
+      }
+      if (valid) {
+        result.add(candidate);
+      }
+    }
+    return result;
   }
 
   private static FunctionBody processIncomingStacks(
@@ -347,12 +386,8 @@ public abstract class PathTranslator {
     int maxSizeOfStack = 0;
 
     for (FunctionBody stack : pIncomingStacks) {
-      while (true) {
-        if (stack.getCurrentBlock().isClosedBefore()) {
-          stack.leaveBlock();
-        } else {
-          break;
-        }
+      while (stack.getCurrentBlock().isClosedBefore()) {
+        stack.leaveBlock();
       }
       if (stack.size() > maxSizeOfStack) {
         maxStack = stack;
@@ -396,15 +431,6 @@ public abstract class PathTranslator {
       }
     }
 
-    case MultiEdge: {
-      StringBuilder sb = new StringBuilder();
-
-      for (CFAEdge edge : (MultiEdge) pCFAEdge) {
-        sb.append(processSimpleEdge(edge, currentBlock));
-      }
-      return sb.toString();
-    }
-
     default:
       throw new AssertionError("Unexpected edge " + pCFAEdge + " of type " + pCFAEdge.getEdgeType());
     }
@@ -414,7 +440,7 @@ public abstract class PathTranslator {
 
     CFunctionCallEdge lFunctionCallEdge = (CFunctionCallEdge) pCFAEdge;
 
-    List<String> lArguments = Lists.transform(lFunctionCallEdge.getArguments(), RAW_SIGNATURE_FUNCTION);
+    List<String> lArguments = Lists.transform(lFunctionCallEdge.getArguments(), CExpression::toASTString);
     String lArgumentString = "(" + Joiner.on(", ").join(lArguments) + ")";
 
     CFunctionSummaryEdge summaryEdge = lFunctionCallEdge.getSummaryEdge();

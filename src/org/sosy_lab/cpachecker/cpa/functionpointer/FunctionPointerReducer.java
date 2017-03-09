@@ -35,7 +35,7 @@ import org.sosy_lab.cpachecker.util.Pair;
 public class FunctionPointerReducer implements Reducer {
 
   @Override
-  public AbstractState getVariableReducedState(AbstractState pExpandedState, Block pContext, Block outerContext, CFANode pCallNode) {
+  public AbstractState getVariableReducedState(AbstractState pExpandedState, Block pContext, CFANode pCallNode) {
     FunctionPointerState state = (FunctionPointerState) pExpandedState;
     FunctionPointerState.Builder builder = state.createBuilder();
     builder.clearVariablesExceptPrefix(pCallNode.getFunctionName());
@@ -43,8 +43,7 @@ public class FunctionPointerReducer implements Reducer {
   }
 
   @Override
-  public AbstractState getVariableExpandedState(AbstractState pRootState, Block pReducedContext, Block outerSubtree,
-      AbstractState pReducedState) {
+  public AbstractState getVariableExpandedState(AbstractState pRootState, Block pReducedContext, AbstractState pReducedState) {
     FunctionPointerState state = (FunctionPointerState) pRootState;
     FunctionPointerState.Builder builder = state.createBuilder();
     builder.addGlobalVariables((FunctionPointerState)pReducedState);
@@ -66,11 +65,6 @@ public class FunctionPointerReducer implements Reducer {
   @Override
   public Object getHashCodeForState(AbstractState pStateKey, Precision pPrecisionKey) {
     return Pair.of(pStateKey, pPrecisionKey);
-  }
-
-  @Override
-  public Object getHashCodeForState(AbstractState pStateKey) {
-    return pStateKey;
   }
 
   @Override

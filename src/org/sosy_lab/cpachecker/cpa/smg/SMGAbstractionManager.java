@@ -23,38 +23,129 @@
  */
 package org.sosy_lab.cpachecker.cpa.smg;
 
-import java.util.ArrayList;
-import java.util.List;
+import com.google.common.collect.ImmutableSet;
 
+import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cpa.smg.graphs.CLangSMG;
+import org.sosy_lab.cpachecker.cpa.smg.objects.dls.SMGDoublyLinkedListCandidateFinder;
 import org.sosy_lab.cpachecker.cpa.smg.objects.sll.SMGSingleLinkedListFinder;
 
-public class SMGAbstractionManager {
-  private CLangSMG smg;
-  private List<SMGAbstractionCandidate> abstractionCandidates = new ArrayList<>();
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.logging.Level;
 
-  public SMGAbstractionManager(CLangSMG pSMG) {
-    smg = new CLangSMG(pSMG);
+public class SMGAbstractionManager {
+
+  private final LogManager logger;
+  private final CLangSMG smg;
+  private final SMGState smgState;
+
+  private final List<SMGAbstractionCandidate> abstractionCandidates = new ArrayList<>();
+  private final Set<SMGAbstractionBlock> blocks;
+  private final SMGDoublyLinkedListCandidateFinder dllCandidateFinder;
+  private final SMGSingleLinkedListFinder sllCandidateFinder;
+
+  public SMGAbstractionManager(LogManager pLogger, CLangSMG pSMG, SMGState pSMGstate) {
+    smg = pSMG;
+    smgState = pSMGstate;
+    logger = pLogger;
+    blocks = ImmutableSet.of();
+    dllCandidateFinder = new SMGDoublyLinkedListCandidateFinder();
+    sllCandidateFinder = new SMGSingleLinkedListFinder();
   }
 
-  private boolean hasCandidates() {
-    SMGSingleLinkedListFinder sllCandidateFinder = new SMGSingleLinkedListFinder();
-    abstractionCandidates.addAll(sllCandidateFinder.traverse(smg));
+  public SMGAbstractionManager(LogManager pLogger, CLangSMG pSMG, SMGState pSMGstate,
+      Set<SMGAbstractionBlock> pBlocks) {
+    smg = pSMG;
+    smgState = pSMGstate;
+    logger = pLogger;
+    blocks = pBlocks;
+    dllCandidateFinder = new SMGDoublyLinkedListCandidateFinder();
+    sllCandidateFinder = new SMGSingleLinkedListFinder();
+  }
 
-    return (! abstractionCandidates.isEmpty());
+  public SMGAbstractionManager(LogManager pLogger, CLangSMG pSMG, SMGState pSMGstate,
+      Set<SMGAbstractionBlock> pBlocks, int equalSeq, int entailSeq, int incSeq) {
+    smg = pSMG;
+    smgState = pSMGstate;
+    logger = pLogger;
+    blocks = pBlocks;
+    dllCandidateFinder = new SMGDoublyLinkedListCandidateFinder(equalSeq, entailSeq, incSeq);
+    sllCandidateFinder = new SMGSingleLinkedListFinder(equalSeq, entailSeq, incSeq);
+  }
+
+  private boolean hasCandidates() throws SMGInconsistentException {
+
+    Set<SMGAbstractionCandidate> candidates = dllCandidateFinder.traverse(smg, smgState, blocks);
+    abstractionCandidates.addAll(candidates);
+    abstractionCandidates.addAll(sllCandidateFinder.traverse(smg, smgState, blocks));
+
+    return (!abstractionCandidates.isEmpty());
   }
 
   private SMGAbstractionCandidate getBestCandidate() {
-    return abstractionCandidates.get(0);
+
+    SMGAbstractionCandidate bestCandidate = abstractionCandidates.get(0);
+
+    for (SMGAbstractionCandidate candidate : abstractionCandidates) {
+      if (candidate.getScore() > bestCandidate.getScore()) {
+        bestCandidate = candidate;
+      }
+    }
+
+    return bestCandidate;
   }
 
-  public CLangSMG execute() {
-    while (hasCandidates()) {
-      SMGAbstractionCandidate best = getBestCandidate();
-      smg = best.execute(smg);
-      invalidateCandidates();
+  public boolean execute() throws SMGInconsistentException {
+
+    SMGAbstractionCandidate currentAbstraction = executeOneStep();
+
+    if (currentAbstraction.isEmpty()) {
+      return false;
     }
-    return smg;
+
+    while (!currentAbstraction.isEmpty()) {
+      currentAbstraction = executeOneStep();
+    }
+
+    return true;
+  }
+
+  public SMGAbstractionCandidate executeOneStep() throws SMGInconsistentException {
+
+    if (hasCandidates()) {
+      SMGAbstractionCandidate best = getBestCandidate();
+      logger.log(Level.ALL, "Execute abstraction of ", best);
+      best.execute(smg, smgState);
+      invalidateCandidates();
+      logger.log(Level.ALL, "Finish executing abstraction of ", best);
+      return best;
+    } else {
+      return new SMGAbstractionCandidate() {
+
+        @Override
+        public boolean isEmpty() {
+          return true;
+        }
+
+        @Override
+        public int getScore() {
+          return 0;
+        }
+
+        @Override
+        public CLangSMG execute(CLangSMG pSMG, SMGState pSmgState) throws SMGInconsistentException {
+          return pSMG;
+        }
+
+        @Override
+        public SMGAbstractionBlock createAbstractionBlock(SMGState pSmgState) {
+          throw new IllegalArgumentException(
+              "Can't create abstraction block of empty abstraction candidate.");
+        }
+      };
+    }
   }
 
   private void invalidateCandidates() {

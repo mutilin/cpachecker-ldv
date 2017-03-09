@@ -23,33 +23,40 @@
  */
 package org.sosy_lab.cpachecker.cpa.smg.graphs;
 
-import java.util.ArrayDeque;
-import java.util.Collections;
-import java.util.Deque;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Queue;
-import java.util.Set;
-
-import javax.annotation.Nullable;
+import com.google.common.collect.Collections2;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Sets;
 
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionDeclaration;
 import org.sosy_lab.cpachecker.cfa.types.MachineModel;
-import org.sosy_lab.cpachecker.cfa.types.c.CType;
 import org.sosy_lab.cpachecker.core.counterexample.IDExpression;
 import org.sosy_lab.cpachecker.cpa.smg.CLangStackFrame;
 import org.sosy_lab.cpachecker.cpa.smg.SMGEdgeHasValue;
 import org.sosy_lab.cpachecker.cpa.smg.SMGEdgeHasValueFilter;
 import org.sosy_lab.cpachecker.cpa.smg.SMGEdgePointsTo;
+import org.sosy_lab.cpachecker.cpa.smg.SMGEdgePointsToFilter;
 import org.sosy_lab.cpachecker.cpa.smg.SMGStateInformation;
-import org.sosy_lab.cpachecker.cpa.smg.SMGTransferRelation.SMGAddress;
 import org.sosy_lab.cpachecker.cpa.smg.objects.SMGObject;
 import org.sosy_lab.cpachecker.cpa.smg.objects.SMGRegion;
+import org.sosy_lab.cpachecker.cpa.smg.refiner.SMGMemoryPath;
 import org.sosy_lab.cpachecker.util.states.MemoryLocation;
 
-import com.google.common.collect.Sets;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Deque;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Queue;
+import java.util.Set;
+
+import javax.annotation.Nullable;
 
 /**
  * Extending SMG with notions specific for programs in C language:
@@ -151,6 +158,10 @@ public class CLangSMG extends SMG {
     }
     heap_objects.add(pObject);
     addObject(pObject);
+  }
+
+  public Set<SMGEdgePointsTo> getPointerToObject(SMGObject obj) {
+    return getPtEdges(SMGEdgePointsToFilter.targetObjectFilter(obj));
   }
 
   /**
@@ -298,9 +309,26 @@ public class CLangSMG extends SMG {
      * TODO: Refactor into generic methods for substracting SubSMGs (see above)
      */
     Set<SMGObject> stray_objects = new HashSet<>(Sets.difference(getObjects(), seen));
+
+    // Mark all reachable from ExternallyAllocated objects as safe for remove
+    workqueue.addAll(stray_objects);
+    while ( ! workqueue.isEmpty()) {
+      SMGObject processed = workqueue.remove();
+      if (isObjectExternallyAllocated(processed)) {
+        filter.filterByObject(processed);
+        for (SMGEdgeHasValue outbound : getHVEdges(filter)) {
+          SMGObject pointedObject = getObjectPointedBy(outbound.getValue());
+          if (stray_objects.contains(pointedObject) && !isObjectExternallyAllocated(pointedObject)) {
+            setExternallyAllocatedFlag(pointedObject, true);
+            workqueue.add(pointedObject);
+          }
+        }
+      }
+    }
+
     for (SMGObject stray_object : stray_objects) {
       if (stray_object.notNull()) {
-        if (isObjectValid(stray_object)) {
+        if (isObjectValid(stray_object) && !isObjectExternallyAllocated(stray_object)) {
           setMemoryLeak();
         }
         removeObjectAndEdges(stray_object);
@@ -344,12 +372,15 @@ public class CLangSMG extends SMG {
 
   private Map<MemoryLocation, Integer> getMapOfMemoryLocationsWithValue() {
 
-    Set<MemoryLocation> memlocs = getTrackedMemoryLocations();
+    Set<MemoryLocation> memlocs = getMemoryLocations();
     Map<MemoryLocation, Integer> result = new HashMap<>();
 
     for (MemoryLocation memloc : memlocs) {
       Set<SMGEdgeHasValue> edge = getHVEdgeFromMemoryLocation(memloc);
-      result.put(memloc, edge.iterator().next().getValue());
+
+      if (!edge.isEmpty()) {
+        result.put(memloc, edge.iterator().next().getValue());
+      }
     }
 
     return result;
@@ -499,7 +530,9 @@ public class CLangSMG extends SMG {
 
     SMGEdgeHasValueFilter filter = SMGEdgeHasValueFilter.objectFilter(objectAtLocation);
 
-    filter.filterAtOffset((int) pLocation.getOffset());
+    if (pLocation.isReference()) {
+      filter.filterAtOffset((int) pLocation.getOffset());
+    }
 
     // Remember, edges may overlap with different types
     Set<SMGEdgeHasValue> edgesToForget = getHVEdges(filter);
@@ -540,19 +573,81 @@ public class CLangSMG extends SMG {
     }
   }
 
-  public SMGStateInformation forget(MemoryLocation pLocation) {
+  public Optional<SMGEdgeHasValue> getHVEdgeFromMemoryLocation(SMGMemoryPath pLocation) {
 
-    Set<SMGEdgeHasValue> edgesToForget = getHVEdgeFromMemoryLocation(pLocation);
+    Optional<SMGObject> initialRegion = getInitialRegion(pLocation);
 
-    if(edgesToForget.isEmpty()) {
-      return SMGStateInformation.of();
+    if (!initialRegion.isPresent()) {
+      return Optional.empty();
     }
 
-    for(SMGEdgeHasValue edgeToForget : edgesToForget) {
-      removeHasValueEdge(edgeToForget);
+    SMGObject object = initialRegion.get();
+    List<Integer> offsets = pLocation.getPathOffset();
+    SMGEdgeHasValue hve;
+    Iterator<Integer> it = offsets.iterator();
+
+    while (it.hasNext()) {
+
+      int offset = it.next();
+      Set<SMGEdgeHasValue> hves =
+          getHVEdges(SMGEdgeHasValueFilter.objectFilter(object).filterAtOffset(offset));
+
+      if (hves.isEmpty()) {
+        return Optional.empty();
+      }
+
+      hve = Iterables.getOnlyElement(hves);
+
+      int value = hve.getValue();
+
+      if (!it.hasNext()) {
+        return Optional.of(hve);
+      }
+
+      if (!isPointer(value)) {
+        return Optional.empty();
+      }
+
+      SMGEdgePointsTo ptE = getPointer(value);
+      object = ptE.getObject();
     }
 
-    return SMGStateInformation.of(edgesToForget, getPTEdges());
+    throw new AssertionError();
+  }
+
+  private Optional<SMGObject> getInitialRegion(SMGMemoryPath pLocation) {
+
+    String initalVarName = pLocation.getVariableName();
+
+    if (pLocation.startsWithGlobalVariable()) {
+      if (global_objects.containsKey(initalVarName)) {
+        SMGObject initialRegion = global_objects.get(initalVarName);
+        return Optional.of(initialRegion);
+      } else {
+        return Optional.empty();
+      }
+    } else {
+
+      String functionName = pLocation.getFunctionName();
+      int locationOnStack = pLocation.getLocationOnStack();
+
+      if (stack_objects.size() <= locationOnStack) {
+        return Optional.empty();
+      }
+      CLangStackFrame frame = Iterables.get(stack_objects, locationOnStack);
+
+      if (!frame.getFunctionDeclaration().getName()
+          .equals(functionName)) {
+        return Optional.empty();
+      }
+
+      if (frame.containsVariable(initalVarName)) {
+        SMGObject initialObject = frame.getVariable(initalVarName);
+        return Optional.of(initialObject);
+      } else {
+        return Optional.empty();
+      }
+    }
   }
 
   private SMGObject getHeapObjectWithId(String pLocId) {
@@ -607,39 +702,7 @@ public class CLangSMG extends SMG {
     throw new AssertionError("No stack frame " + pFunctionName + " exists.");
   }
 
-  public void remember(MemoryLocation pLocation, SMGStateInformation pForgottenInformation) {
-    for(SMGEdgeHasValue edge : pForgottenInformation.getHvEdges()) {
-      if(!getHVEdges().contains(edge)) {
-        rememberHasValueEdge(edge, pForgottenInformation.getPtEdges(), pLocation);
-      }
-    }
-  }
-
-  private void rememberHasValueEdge(SMGEdgeHasValue pEdge, Map<Integer, SMGEdgePointsTo> pPtEdges,
-      MemoryLocation pLocation) {
-    SMGObject edgeObject = pEdge.getObject();
-    Integer value = pEdge.getValue();
-
-    assert getObjectFromMemoryLocation(pLocation) == edgeObject : "SMG object at location "
-        + pLocation.getAsSimpleString() + " is unexpected object";
-
-    if (!getValues().contains(value)) {
-      addValue(value);
-    }
-
-    addHasValueEdge(pEdge);
-
-    if (pPtEdges.containsKey(value)) {
-      SMGEdgePointsTo ptEdge = pPtEdges.get(value);
-
-      // FIXME does not keep consistency
-      if (!getPTEdges().containsKey(value)) {
-        addPointsToEdge(ptEdge);
-      }
-    }
-  }
-
-  public Set<MemoryLocation> getTrackedMemoryLocations() {
+  public Set<MemoryLocation> getMemoryLocations() {
 
     Set<MemoryLocation> result = new HashSet<>();
 
@@ -683,25 +746,391 @@ public class CLangSMG extends SMG {
     throw new AssertionError("object " + pObject.getLabel() + " is not on a function stack");
   }
 
-  public MemoryLocation resolveMemLoc(SMGAddress pValue, String pFunctionName) {
-    SMGObject object = pValue.getObject();
-    long offset = pValue.getOffset().getAsLong();
+  @Override
+  public boolean equals(Object pObj) {
+    /*
+     * A Clang Smg is equal to a CLang smg
+     * iff their super classes are equal to another.
+     */
 
-    if (global_objects.containsValue(object) || isHeapObject(object)) {
-      return MemoryLocation.valueOf(object.getLabel(), offset);
-    } else {
-      return MemoryLocation.valueOf(pFunctionName, object.getLabel(), offset);
+    return super.equals(pObj);
+  }
+
+  @Override
+  public int hashCode() {
+    return super.hashCode();
+  }
+
+  public Set<SMGMemoryPath> getMemoryPaths() {
+
+    Set<SMGMemoryPath> result = new HashSet<>();
+    Set<SMGObject> reached = new HashSet<>();
+
+    getMemoryPathsFromGlobalVariables(result, reached);
+
+    getMemoryPathsFromStack(result, reached);
+
+    return result;
+  }
+
+  private void getMemoryPathsFromStack(Set<SMGMemoryPath> pResult, Set<SMGObject> pReached) {
+
+    int pLocationOnStack = 0;
+
+    for (CLangStackFrame frame : stack_objects) {
+      List<String> stackVariables = new ArrayList<>(frame.getVariables().keySet());
+      Collections.sort(stackVariables);
+      String functionName = frame.getFunctionDeclaration().getName();
+
+      for (String variable : stackVariables) {
+        SMGObject smgObject = frame.getVariable(variable);
+        getMemoryPathsFromObject(smgObject, pResult, pReached, SMGObjectPosition.STACK, null,
+            functionName, pLocationOnStack, variable);
+      }
+
+      if (frame.getReturnObject() != null) {
+        getMemoryPathsFromObject(frame.getReturnObject(), pResult, pReached,
+            SMGObjectPosition.STACK,
+            null, functionName, pLocationOnStack, frame.getReturnObject().getLabel());
+      }
+
+      pLocationOnStack = pLocationOnStack + 1;
     }
   }
 
-  @Nullable
-  public CType getTypeForMemoryLocation(MemoryLocation pMemoryLocation) {
-    Set<SMGEdgeHasValue> edgesToForget = getHVEdgeFromMemoryLocation(pMemoryLocation);
+  private void getMemoryPathsFromGlobalVariables(Set<SMGMemoryPath> pResult,
+      Set<SMGObject> pReached) {
+    List<String> globalVariables = new ArrayList<>(global_objects.keySet());
+    Collections.sort(globalVariables);
 
-    if(edgesToForget.isEmpty()) {
-      return null;
+    for (String variable : globalVariables) {
+      SMGRegion varObject = global_objects.get(variable);
+      getMemoryPathsFromObject(varObject, pResult, pReached, SMGObjectPosition.GLOBAL, null, null, null, variable);
+    }
+  }
+
+  private void getMemoryPathsFromObject(SMGObject pSmgObject, Set<SMGMemoryPath> pResult,
+      Set<SMGObject> pReached, SMGObjectPosition pPos, SMGMemoryPath pParent, String pFunctionName,
+      Integer pLocationOnStack, String pVariableName) {
+
+    Set<SMGEdgeHasValue> objectHves = getHVEdges(SMGEdgeHasValueFilter.objectFilter(pSmgObject));
+    List<Integer> offsets = new ArrayList<>();
+    Map<Integer, SMGObject> offsetToRegion = new HashMap<>();
+    Map<Integer, SMGMemoryPath> offsetToParent = new HashMap<>();
+
+
+    for (SMGEdgeHasValue objectHve : objectHves) {
+      Integer value = objectHve.getValue();
+      Integer offset = objectHve.getOffset();
+
+      SMGMemoryPath path =
+          getSMGMemoryPath(pVariableName, offset, pPos, pFunctionName, pLocationOnStack, pParent);
+      pResult.add(path);
+
+      if (isPointer(value)) {
+        SMGObject rObject = getObjectPointedBy(value);
+
+        if (isHeapObject(rObject) && !pReached.contains(rObject)) {
+          pReached.add(rObject);
+          offsets.add(offset);
+          offsetToRegion.put(offset, rObject);
+          offsetToParent.put(offset, path);
+        }
+      }
     }
 
-    return edgesToForget.iterator().next().getType();
+    Collections.sort(offsets);
+
+    for (Integer offset : offsets) {
+
+      SMGObject smgObject = offsetToRegion.get(offset);
+      SMGMemoryPath currentPath = offsetToParent.get(offset);
+      getMemoryPathsFromObject(smgObject, pResult, pReached, SMGObjectPosition.HEAP, currentPath,
+          null, null, null);
+    }
+  }
+
+  private SMGMemoryPath getSMGMemoryPath(String pVariableName, Integer pOffset,
+      SMGObjectPosition pPos, String pFunctionName, Integer pLocationOnStack,
+      SMGMemoryPath pParent) {
+
+    switch (pPos) {
+      case GLOBAL:
+        return SMGMemoryPath.valueOf(pVariableName, pOffset);
+      case STACK:
+        return SMGMemoryPath.valueOf(pVariableName, pFunctionName, pOffset, pLocationOnStack);
+      case HEAP:
+        return SMGMemoryPath.valueOf(pParent, pOffset);
+      default:
+        throw new AssertionError();
+    }
+  }
+
+  private static enum SMGObjectPosition {
+    STACK,
+    HEAP,
+    GLOBAL;
+  }
+
+  /**
+   * Remove all values and every edge from the smg.
+   */
+  public void clearValues() {
+    clearValuesHvePte();
+  }
+
+  @Override
+  public void clearObjects() {
+    global_objects.clear();
+    heap_objects.clear();
+    super.clearObjects();
+
+    for (CLangStackFrame frame : stack_objects) {
+      frame.clearStackVariables();
+
+      if(frame.getReturnObject() != null) {
+        addObject(frame.getReturnObject());
+      }
+    }
+
+    /*May not remove null object.*/
+    heap_objects.add(getNullObject());
+  }
+
+  public Map<SMGObject, SMGMemoryPath> getHeapObjectMemoryPaths() {
+
+    Map<SMGObject, SMGMemoryPath> result = new HashMap<>();
+    Set<SMGObject> reached = new HashSet<>();
+
+    getHeapObjectMemoryPathsFromGlobalVariables(result, reached);
+
+    getHeapObjectMemoryPathsFromStack(result, reached);
+
+    return result;
+  }
+
+  private void getHeapObjectMemoryPathsFromGlobalVariables(Map<SMGObject, SMGMemoryPath> pResult,
+      Set<SMGObject> pReached) {
+    List<String> globalVariables = new ArrayList<>(global_objects.keySet());
+    Collections.sort(globalVariables);
+
+    for (String variable : globalVariables) {
+      SMGRegion varObject = global_objects.get(variable);
+      getHeapObjectMemoryPathsFromObject(varObject, pResult, pReached, SMGObjectPosition.GLOBAL, null, null, null, variable);
+    }
+  }
+
+  private void getHeapObjectMemoryPathsFromStack(Map<SMGObject, SMGMemoryPath> pResult, Set<SMGObject> pReached) {
+
+    int pLocationOnStack = 0;
+
+    for (CLangStackFrame frame : stack_objects) {
+      List<String> stackVariables = new ArrayList<>(frame.getVariables().keySet());
+      Collections.sort(stackVariables);
+      String functionName = frame.getFunctionDeclaration().getName();
+
+      for (String variable : stackVariables) {
+        SMGObject smgObject = frame.getVariable(variable);
+        getHeapObjectMemoryPathsFromObject(smgObject, pResult, pReached, SMGObjectPosition.STACK, null,
+            functionName, pLocationOnStack, variable);
+      }
+
+      if (frame.getReturnObject() == null) {
+        continue;
+      }
+
+      getHeapObjectMemoryPathsFromObject(frame.getReturnObject(), pResult, pReached, SMGObjectPosition.STACK,
+          null, functionName, pLocationOnStack, frame.getReturnObject().getLabel());
+      pLocationOnStack = pLocationOnStack + 1;
+    }
+  }
+
+  private void getHeapObjectMemoryPathsFromObject(SMGObject pSmgObject, Map<SMGObject, SMGMemoryPath> pResult,
+      Set<SMGObject> pReached, SMGObjectPosition pPos, SMGMemoryPath pParent, String pFunctionName,
+      Integer pLocationOnStack, String pVariableName) {
+
+    Set<SMGEdgeHasValue> objectHves = getHVEdges(SMGEdgeHasValueFilter.objectFilter(pSmgObject));
+    List<Integer> offsets = new ArrayList<>();
+    Map<Integer, SMGObject> offsetToRegion = new HashMap<>();
+    Map<Integer, SMGMemoryPath> offsetToParent = new HashMap<>();
+
+
+    for (SMGEdgeHasValue objectHve : objectHves) {
+      Integer value = objectHve.getValue();
+
+      if (!isPointer(value)) {
+        continue;
+      }
+
+      SMGObject rObject = getObjectPointedBy(value);
+      Integer offset = objectHve.getOffset();
+
+      if (!isHeapObject(rObject) || pReached.contains(rObject)) {
+        continue;
+      }
+
+      pReached.add(rObject);
+      offsets.add(offset);
+      offsetToRegion.put(offset, rObject);
+
+      SMGMemoryPath path =
+          getSMGMemoryPath(pVariableName, offset, pPos, pFunctionName, pLocationOnStack, pParent);
+
+      offsetToParent.put(offset, path);
+      pResult.put(rObject, path);
+    }
+
+    Collections.sort(offsets);
+
+    for (Integer offset : offsets) {
+
+      SMGObject smgObject = offsetToRegion.get(offset);
+      SMGMemoryPath currentPath = offsetToParent.get(offset);
+      getHeapObjectMemoryPathsFromObject(smgObject, pResult, pReached, SMGObjectPosition.HEAP, currentPath,
+          null, null, null);
+    }
+  }
+
+  public void removeGlobalVariableAndEdges(String pVariable) {
+
+    if (!global_objects.containsKey(pVariable)) {
+      return;
+    }
+
+    SMGObject obj = global_objects.get(pVariable);
+    global_objects.remove(pVariable);
+
+    removeObjectAndEdges(obj);
+  }
+
+  public void removeStackVariableAndEdges(String pVariable, CLangStackFrame frame) {
+
+    if (!frame.containsVariable(pVariable)) {
+      return;
+    }
+
+    SMGObject obj = frame.getVariable(pVariable);
+    frame.removeVariable(pVariable);
+
+    removeObjectAndEdges(obj);
+  }
+
+  public Optional<SMGEdgeHasValue> forget(SMGMemoryPath pLocation) {
+
+    Optional<SMGEdgeHasValue> edgeToForget = getHVEdgeFromMemoryLocation(pLocation);
+
+    if (!edgeToForget.isPresent()) {
+      return Optional.empty();
+    }
+
+    removeHasValueEdge(edgeToForget.get());
+
+    return edgeToForget;
+  }
+
+  public SMGStateInformation forgetStackVariable(MemoryLocation pMemoryLocation) {
+
+    if (pMemoryLocation.isOnFunctionStack()) {
+      return forgetFunctionStackVariable(pMemoryLocation);
+    } else {
+      return forgetGlobalVariable(pMemoryLocation);
+    }
+  }
+
+  private SMGStateInformation forgetGlobalVariable(MemoryLocation pMemoryLocation) {
+
+    String varName = pMemoryLocation.getIdentifier();
+
+    if (!global_objects.containsKey(varName)) {
+      return SMGStateInformation.of();
+    }
+
+    SMGObject globalObject = global_objects.get(varName);
+
+    SMGStateInformation info = createStateInfo(globalObject);
+
+    removeGlobalVariableAndEdges(varName);
+    return info;
+  }
+
+  private SMGStateInformation createStateInfo(SMGObject pObj) {
+
+    Set<SMGEdgeHasValue> hves = getHVEdges(SMGEdgeHasValueFilter.objectFilter(pObj));
+    Set<SMGEdgePointsTo> ptes = getPtEdges(SMGEdgePointsToFilter.targetObjectFilter(pObj));
+    Set<SMGEdgePointsTo> resultPtes = new HashSet<>();
+    resultPtes.addAll(ptes);
+
+    for (SMGEdgeHasValue edge : hves) {
+      if (isPointer(edge.getValue())) {
+        resultPtes.add(getPointer(edge.getValue()));
+      }
+    }
+
+    return SMGStateInformation.of(hves, resultPtes, isObjectValid(pObj),
+        isObjectExternallyAllocated(pObj));
+  }
+
+  private SMGStateInformation forgetFunctionStackVariable(MemoryLocation pMemoryLocation) {
+
+    CLangStackFrame frame = getFrame(pMemoryLocation);
+    String variableName = pMemoryLocation.getIdentifier();
+
+    if (!frame.containsVariable(variableName)) {
+      return SMGStateInformation.of();
+    }
+
+    SMGObject reg = frame.getVariable(variableName);
+
+    SMGStateInformation info = createStateInfo(reg);
+    removeStackVariableAndEdges(variableName, frame);
+
+    return info;
+  }
+
+  private CLangStackFrame getFrame(final MemoryLocation pMemoryLocation) {
+
+    Collection<CLangStackFrame> result =
+        Collections2.filter(stack_objects, (CLangStackFrame frame) -> {
+          return frame.getFunctionDeclaration().getName().equals(pMemoryLocation.getFunctionName());
+        });
+    return Iterables.getOnlyElement(result);
+  }
+
+  public void remember(MemoryLocation pMemoryLocation, SMGRegion pRegion,
+      SMGStateInformation pInfo) {
+
+    rememberRegion(pMemoryLocation, pRegion, pInfo);
+    rememberEdges(pInfo);
+  }
+
+  public void rememberEdges(SMGStateInformation pForgottenInformation) {
+    for(SMGEdgeHasValue edge : pForgottenInformation.getHvEdges()) {
+      if(!getHVEdges().contains(edge)) {
+        addHasValueEdge(edge);
+      }
+    }
+
+    for (SMGEdgePointsTo pte : pForgottenInformation.getPtEdges()) {
+      if (!isPointer(pte.getValue())) {
+        addPointsToEdge(pte);
+      }
+    }
+  }
+
+  private void rememberRegion(MemoryLocation pMemoryLocation, SMGRegion pRegion,
+      SMGStateInformation pInfo) {
+
+    if (pMemoryLocation.isOnFunctionStack()) {
+      CLangStackFrame frame = getFrame(pMemoryLocation);
+      frame.addStackVariable(pMemoryLocation.getIdentifier(), pRegion);
+    } else {
+      global_objects.put(pRegion.getLabel(), pRegion);
+    }
+
+    addObject(pRegion, pInfo.isValid(), pInfo.isExternal());
+  }
+
+  public void unknownWrite() {
+    clearValues();
   }
 }

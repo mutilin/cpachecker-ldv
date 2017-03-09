@@ -23,11 +23,13 @@
  */
 package org.sosy_lab.cpachecker.cpa.value;
 
-import static com.google.common.base.Preconditions.checkNotNull;
 import static org.sosy_lab.cpachecker.util.statistics.StatisticsWriter.writingStatisticsTo;
 
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import java.io.PrintStream;
-import java.math.BigInteger;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -35,10 +37,10 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Set;
-
 import javax.annotation.Nullable;
-
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
@@ -53,6 +55,7 @@ import org.sosy_lab.cpachecker.cfa.ast.AExpression;
 import org.sosy_lab.cpachecker.cfa.ast.AExpressionStatement;
 import org.sosy_lab.cpachecker.cfa.ast.AFunctionCall;
 import org.sosy_lab.cpachecker.cfa.ast.AFunctionCallAssignmentStatement;
+import org.sosy_lab.cpachecker.cfa.ast.AFunctionCallExpression;
 import org.sosy_lab.cpachecker.cfa.ast.AFunctionCallStatement;
 import org.sosy_lab.cpachecker.cfa.ast.AIdExpression;
 import org.sosy_lab.cpachecker.cfa.ast.AInitializer;
@@ -61,16 +64,13 @@ import org.sosy_lab.cpachecker.cfa.ast.ALeftHandSide;
 import org.sosy_lab.cpachecker.cfa.ast.AParameterDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.APointerExpression;
 import org.sosy_lab.cpachecker.cfa.ast.ARightHandSide;
-import org.sosy_lab.cpachecker.cfa.ast.ASimpleDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.AStatement;
 import org.sosy_lab.cpachecker.cfa.ast.AVariableDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CArraySubscriptExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CAssignment;
-import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression.BinaryOperator;
-import org.sosy_lab.cpachecker.cfa.ast.c.CCastExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFieldReference;
+import org.sosy_lab.cpachecker.cfa.ast.c.CFloatLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCall;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallAssignmentStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallExpression;
@@ -100,7 +100,6 @@ import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionReturnEdge;
 import org.sosy_lab.cpachecker.cfa.model.FunctionSummaryEdge;
-import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionSummaryEdge;
@@ -108,10 +107,12 @@ import org.sosy_lab.cpachecker.cfa.model.c.CReturnStatementEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
 import org.sosy_lab.cpachecker.cfa.types.MachineModel;
 import org.sosy_lab.cpachecker.cfa.types.Type;
+import org.sosy_lab.cpachecker.cfa.types.c.CBasicType;
 import org.sosy_lab.cpachecker.cfa.types.c.CComplexType.ComplexTypeKind;
 import org.sosy_lab.cpachecker.cfa.types.c.CCompositeType;
 import org.sosy_lab.cpachecker.cfa.types.c.CNumericTypes;
 import org.sosy_lab.cpachecker.cfa.types.c.CPointerType;
+import org.sosy_lab.cpachecker.cfa.types.c.CSimpleType;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
 import org.sosy_lab.cpachecker.cfa.types.java.JArrayType;
 import org.sosy_lab.cpachecker.cfa.types.java.JBasicType;
@@ -120,12 +121,12 @@ import org.sosy_lab.cpachecker.cfa.types.java.JSimpleType;
 import org.sosy_lab.cpachecker.cfa.types.java.JType;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.defaults.ForwardingTransferRelation;
-import org.sosy_lab.cpachecker.core.defaults.VariableTrackingPrecision;
+import org.sosy_lab.cpachecker.core.defaults.precision.VariableTrackingPrecision;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
-import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
+import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
 import org.sosy_lab.cpachecker.cpa.automaton.AutomatonState;
 import org.sosy_lab.cpachecker.cpa.constraints.domain.ConstraintsState;
 import org.sosy_lab.cpachecker.cpa.pointer2.PointerState;
@@ -134,13 +135,8 @@ import org.sosy_lab.cpachecker.cpa.pointer2.util.ExplicitLocationSet;
 import org.sosy_lab.cpachecker.cpa.pointer2.util.LocationSet;
 import org.sosy_lab.cpachecker.cpa.rtt.NameProvider;
 import org.sosy_lab.cpachecker.cpa.rtt.RTTState;
-import org.sosy_lab.cpachecker.cpa.smg.SMGState;
-import org.sosy_lab.cpachecker.cpa.smg.SMGTransferRelation.SMGAddressValue;
 import org.sosy_lab.cpachecker.cpa.value.symbolic.ConstraintsStrengthenOperator;
 import org.sosy_lab.cpachecker.cpa.value.symbolic.SymbolicValueAssigner;
-import org.sosy_lab.cpachecker.cpa.value.symbolic.type.ConstantSymbolicExpression;
-import org.sosy_lab.cpachecker.cpa.value.symbolic.type.SymbolicIdentifier;
-import org.sosy_lab.cpachecker.cpa.value.symbolic.type.SymbolicValue;
 import org.sosy_lab.cpachecker.cpa.value.type.ArrayValue;
 import org.sosy_lab.cpachecker.cpa.value.type.BooleanValue;
 import org.sosy_lab.cpachecker.cpa.value.type.NullValue;
@@ -151,18 +147,13 @@ import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCCodeException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCodeException;
 import org.sosy_lab.cpachecker.exceptions.UnsupportedCCodeException;
+import org.sosy_lab.cpachecker.util.BuiltinFloatFunctions;
 import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.states.MemoryLocation;
 import org.sosy_lab.cpachecker.util.states.MemoryLocationValueHandler;
 import org.sosy_lab.cpachecker.util.statistics.StatCounter;
-import org.sosy_lab.cpachecker.util.statistics.StatisticsUtils;
 import org.sosy_lab.cpachecker.util.statistics.StatisticsWriter;
 
-import com.google.common.base.Optional;
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
-
-@Options(prefix="cpa.value")
 public class ValueAnalysisTransferRelation
     extends ForwardingTransferRelation<ValueAnalysisState, ValueAnalysisState, VariableTrackingPrecision>
     implements StatisticsProvider {
@@ -171,27 +162,60 @@ public class ValueAnalysisTransferRelation
   private static final Map<String, String> UNSUPPORTED_FUNCTIONS
       = ImmutableMap.of();
 
-  @Option(secure=true, description = "if there is an assumption like (x!=0), "
-      + "this option sets unknown (uninitialized) variables to 1L, "
-      + "when the true-branch is handled.")
-  private boolean initAssumptionVars = false;
+  @Options(prefix = "cpa.value")
+  static class ValueTransferOptions {
 
-  @Option(secure=true, description = "Whether to replace symbolic values with a concrete value"
-      + " when only one value is possible for an assumption to be true"
-      + " (e.g. for (x == 1) set x to 1, even if x is a symbolic expression).")
-  private boolean assignSymbolicAssumptionVars = false;
+    @Option(
+      secure = true,
+      description =
+          "if there is an assumption like (x!=0), "
+              + "this option sets unknown (uninitialized) variables to 1L, "
+              + "when the true-branch is handled."
+    )
+    private boolean initAssumptionVars = false;
 
-  @Option(secure=true, description = "Process the Automaton ASSUMEs as if they were statements, not as if they were"
-      + " assumptions.")
-  private boolean automatonAssumesAsStatements = false;
+    @Option(
+      secure = true,
+      description =
+          "Whether to replace symbolic values with a concrete value"
+              + " when only one value is possible for an assumption to be true"
+              + " (e.g. for (x == 1) set x to 1, even if x is a symbolic expression)."
+    )
+    private boolean assignSymbolicAssumptionVars = false;
 
-  @Option(secure=true, description = "Assume that variables used only in a boolean context are either zero or one.")
-  private boolean optimizeBooleanVariables = true;
+    @Option(
+      secure = true,
+      description = "Assume that variables used only in a boolean context are either zero or one."
+    )
+    private boolean optimizeBooleanVariables = true;
 
-  @Option(secure=true, description = "Track Java array values in explicit value analysis. " +
-      "This may be costly if the verified program uses big or lots of arrays. " +
-      "Arrays in C programs will always be tracked, even if this value is false.")
-  private boolean trackJavaArrayValues = true;
+    @Option(
+      secure = true,
+      description =
+          "Track Java array values in explicit value analysis. "
+              + "This may be costly if the verified program uses big or lots of arrays. "
+              + "Arrays in C programs will always be tracked, even if this value is false."
+    )
+    private boolean trackJavaArrayValues = true;
+
+    ValueTransferOptions(Configuration config) throws InvalidConfigurationException {
+      config.inject(this);
+    }
+
+    boolean isInitAssumptionVars() {
+      return initAssumptionVars;
+    }
+
+    boolean isAssignSymbolicAssumptionVars() {
+      return assignSymbolicAssumptionVars;
+    }
+
+    boolean isOptimizeBooleanVariables() {
+      return optimizeBooleanVariables;
+    }
+  }
+
+  private final ValueTransferOptions options;
 
   private final ConstraintsStrengthenOperator constraintsStrengthenOperator;
 
@@ -233,19 +257,20 @@ public class ValueAnalysisTransferRelation
   private final Collection<String> addressedVariables;
   private final Collection<String> booleanVariables;
 
+  private int currentNumberOfIterations = 0;
+
   private StatCounter totalAssumptions = new StatCounter("Number of Assumptions");
   private StatCounter deterministicAssumptions = new StatCounter("Number of deterministic Assumptions");
 
   private Statistics transferStatistics = new Statistics() {
 
     @Override
-    public void printStatistics(PrintStream out, Result result, ReachedSet reached) {
+    public void printStatistics(PrintStream out, Result result, UnmodifiableReachedSet reached) {
       StatisticsWriter writer = writingStatisticsTo(out);
 
       writer.put(totalAssumptions)
             .put(deterministicAssumptions)
-            .put("Level of Determinism", StatisticsUtils.toPercent(deterministicAssumptions.getValue(),
-                                                                        totalAssumptions.getValue()));
+            .put("Level of Determinism", getCurrentLevelOfDeterminism() + "%");
     }
 
     @Override
@@ -255,7 +280,7 @@ public class ValueAnalysisTransferRelation
   };
 
   public ValueAnalysisTransferRelation(Configuration config, LogManager pLogger, CFA pCfa) throws InvalidConfigurationException {
-    config.inject(this);
+    options = new ValueTransferOptions(config);
     machineModel = pCfa.getMachineModel();
     logger = new LogManagerWithoutDuplicates(pLogger);
 
@@ -271,14 +296,26 @@ public class ValueAnalysisTransferRelation
     constraintsStrengthenOperator = new ConstraintsStrengthenOperator(config);
   }
 
+  int getCurrentNumberOfIterations() {
+    return currentNumberOfIterations;
+  }
+
+  int getCurrentLevelOfDeterminism() {
+    if (totalAssumptions.getValue() == 0) {
+      return 100;
+    } else {
+      return (int) Math.round((deterministicAssumptions.getValue() * 100) / (double)totalAssumptions.getValue());
+    }
+  }
+
   @Override
-  protected Collection<ValueAnalysisState> postProcessing(ValueAnalysisState successor) {
+  protected Collection<ValueAnalysisState> postProcessing(ValueAnalysisState successor, CFAEdge edge) {
     // always return a new state (requirement for strengthening states with interpolants)
     if (successor != null) {
       successor = ValueAnalysisState.copyOf(successor);
     }
 
-    return super.postProcessing(successor);
+    return super.postProcessing(successor, edge);
   }
 
 
@@ -293,6 +330,7 @@ public class ValueAnalysisTransferRelation
     // it is more secure.
     missingInformationList = new ArrayList<>(5);
     oldState = (ValueAnalysisState)pAbstractState;
+    currentNumberOfIterations++;
   }
 
   @Override
@@ -324,7 +362,7 @@ public class ValueAnalysisTransferRelation
       String paramName = param.getName();
       Type paramType = param.getType();
 
-      MemoryLocation formalParamName = MemoryLocation.valueOf(calledFunctionName, paramName, 0);
+      MemoryLocation formalParamName = MemoryLocation.valueOf(calledFunctionName, paramName);
 
       if (value.isUnknown()) {
         if (isMissingCExpressionInformation(visitor, exp)) {
@@ -372,7 +410,7 @@ public class ValueAnalysisTransferRelation
     state = ValueAnalysisState.copyOf(state);
     state.dropFrame(functionName);
 
-    AExpression expression = returnEdge.getExpression().orNull();
+    AExpression expression = returnEdge.getExpression().orElse(null);
     if (expression == null && returnEdge instanceof CReturnStatementEdge) {
       expression = CIntegerLiteralExpression.ZERO; // this is the default in C
     }
@@ -383,7 +421,7 @@ public class ValueAnalysisTransferRelation
         = functionEntryNode.getReturnVariable();
     MemoryLocation functionReturnVar = null;
 
-    if(optionalReturnVarDeclaration.isPresent()) {
+    if (optionalReturnVarDeclaration.isPresent()) {
       functionReturnVar = MemoryLocation.valueOf(optionalReturnVarDeclaration.get().getQualifiedName());
     }
 
@@ -413,7 +451,7 @@ public class ValueAnalysisTransferRelation
 
     Optional<? extends AVariableDeclaration> returnVarName = functionReturnEdge.getFunctionEntry().getReturnVariable();
     MemoryLocation functionReturnVar = null;
-    if(returnVarName.isPresent()) {
+    if (returnVarName.isPresent()) {
       functionReturnVar = MemoryLocation.valueOf(returnVarName.get().getQualifiedName());
     }
 
@@ -439,10 +477,10 @@ public class ValueAnalysisTransferRelation
         JArraySubscriptExpression arraySubscriptExpression = (JArraySubscriptExpression) op1;
 
         ArrayValue assignedArray = getInnerMostArray(arraySubscriptExpression);
-        Optional<Integer> maybeIndex = getIndex(arraySubscriptExpression);
+        OptionalInt maybeIndex = getIndex(arraySubscriptExpression);
 
         if (maybeIndex.isPresent() && assignedArray != null && valueExists) {
-          assignedArray.setValue(newValue, maybeIndex.get());
+          assignedArray.setValue(newValue, maybeIndex.getAsInt());
 
         } else {
           assignUnknownValueToEnclosingInstanceOfArray(arraySubscriptExpression);
@@ -452,7 +490,7 @@ public class ValueAnalysisTransferRelation
         // We can handle all types below "casually", so just get the memory location for the
         // left hand side and assign the function's return value
 
-        Optional<MemoryLocation> memLoc = Optional.absent();
+        Optional<MemoryLocation> memLoc = Optional.empty();
 
         // get memory location for left hand side
         if (op1 instanceof CLeftHandSide) {
@@ -495,7 +533,7 @@ public class ValueAnalysisTransferRelation
       }
     }
 
-    if(returnVarName.isPresent()) {
+    if (returnVarName.isPresent()) {
       newElement.forget(functionReturnVar);
     }
 
@@ -514,7 +552,7 @@ public class ValueAnalysisTransferRelation
       if (pValueVisitor.hasMissingPointer()) {
         addMissingInformation(pExpression, pRightHandSideValue);
       }
-      return Optional.absent();
+      return Optional.empty();
 
     } else {
       return Optional.of(assignedVarName);
@@ -528,14 +566,14 @@ public class ValueAnalysisTransferRelation
         && !((JFieldDeclaration) declaration).isStatic();
   }
 
-  private Optional<Integer> getIndex(JArraySubscriptExpression pExpression) {
+  private OptionalInt getIndex(JArraySubscriptExpression pExpression) {
     final ExpressionValueVisitor evv = getVisitor();
     final Value indexValue = pExpression.getSubscriptExpression().accept(evv);
 
     if (indexValue.isUnknown()) {
-      return Optional.absent();
+      return OptionalInt.empty();
     } else {
-      return Optional.of((int) ((NumericValue) indexValue).longValue());
+      return OptionalInt.of((int) ((NumericValue) indexValue).longValue());
     }
   }
 
@@ -563,6 +601,11 @@ public class ValueAnalysisTransferRelation
   @Override
   protected ValueAnalysisState handleAssumption(AssumeEdge cfaEdge, AExpression expression, boolean truthValue)
     throws UnrecognizedCCodeException {
+    return handleAssumption(expression, truthValue);
+  }
+
+  private ValueAnalysisState handleAssumption(AExpression expression, boolean truthValue)
+      throws UnrecognizedCCodeException {
 
     totalAssumptions.inc();
 
@@ -576,14 +619,23 @@ public class ValueAnalysisTransferRelation
     // get the value of the expression (either true[1L], false[0L], or unknown[null])
     Value value = getExpressionValue(expression, booleanType, evv);
 
-    if(value.isExplicitlyKnown()) {
+    if (value.isExplicitlyKnown()) {
       deterministicAssumptions.inc();
     }
 
     if (!value.isExplicitlyKnown()) {
       ValueAnalysisState element = ValueAnalysisState.copyOf(state);
 
-      AssigningValueVisitor avv = new AssigningValueVisitor(element, truthValue, booleanVariables);
+      AssigningValueVisitor avv =
+          new AssigningValueVisitor(
+              element,
+              truthValue,
+              booleanVariables,
+              functionName,
+              state,
+              machineModel,
+              logger,
+              options);
 
       if (expression instanceof JExpression && ! (expression instanceof CExpression)) {
 
@@ -685,9 +737,9 @@ public class ValueAnalysisTransferRelation
 
     // assign initial value if necessary
     if (decl.isGlobal()) {
-      memoryLocation = MemoryLocation.valueOf(varName,0);
+      memoryLocation = MemoryLocation.valueOf(varName);
     } else {
-      memoryLocation = MemoryLocation.valueOf(functionName, varName, 0);
+      memoryLocation = MemoryLocation.valueOf(functionName, varName);
     }
 
     if (addressedVariables.contains(decl.getQualifiedName())
@@ -939,16 +991,18 @@ public class ValueAnalysisTransferRelation
   }
 
   private boolean isTrackedType(Type pType) {
-    return !(pType instanceof JType) || trackJavaArrayValues || !(pType instanceof JArrayType);
+    return !(pType instanceof JType)
+        || options.trackJavaArrayValues
+        || !(pType instanceof JArrayType);
   }
 
   private MemoryLocation getMemoryLocation(AIdExpression pIdExpression) {
     String varName = pIdExpression.getName();
 
     if (isGlobal(pIdExpression)) {
-      return MemoryLocation.valueOf(varName, 0);
+      return MemoryLocation.valueOf(varName);
     } else {
-      return MemoryLocation.valueOf(functionName, varName, 0);
+      return MemoryLocation.valueOf(functionName, varName);
     }
   }
 
@@ -1065,10 +1119,13 @@ public class ValueAnalysisTransferRelation
 
   private MemoryLocation createFieldMemoryLocation(MemoryLocation pStruct, int pOffset) {
 
+    long baseOffset = pStruct.isReference() ? pStruct.getOffset() : 0;
+
     if (pStruct.isOnFunctionStack()) {
-      return MemoryLocation.valueOf(pStruct.getFunctionName(), pStruct.getIdentifier(), pStruct.getOffset() + pOffset);
+      return MemoryLocation.valueOf(
+          pStruct.getFunctionName(), pStruct.getIdentifier(), baseOffset + pOffset);
     } else {
-      return MemoryLocation.valueOf(pStruct.getIdentifier(), pStruct.getOffset() + pOffset);
+      return MemoryLocation.valueOf(pStruct.getIdentifier(), baseOffset + pOffset);
     }
   }
 
@@ -1101,7 +1158,7 @@ public class ValueAnalysisTransferRelation
       JSimpleDeclaration arrayDeclaration = ((JIdExpression) arrayExpression).getDeclaration();
 
       if (arrayDeclaration != null) {
-        String idName = arrayDeclaration.getQualifiedName();
+        MemoryLocation idName = MemoryLocation.valueOf(arrayDeclaration.getQualifiedName());
 
         if (state.contains(idName)) {
           Value idValue = state.getValueFor(idName);
@@ -1117,12 +1174,12 @@ public class ValueAnalysisTransferRelation
       // the array enclosing the array specified in the given array subscript expression
       ArrayValue enclosingArray = getInnerMostArray(arraySubscriptExpression);
 
-      Optional<Integer> maybeIndex = getIndex(arraySubscriptExpression);
+      OptionalInt maybeIndex = getIndex(arraySubscriptExpression);
       int index;
 
       if (maybeIndex.isPresent() && enclosingArray != null) {
 
-        index = maybeIndex.get();
+        index = maybeIndex.getAsInt();
 
       } else {
         return null;
@@ -1156,10 +1213,10 @@ public class ValueAnalysisTransferRelation
     } else {
       JArraySubscriptExpression enclosingSubscriptExpression = (JArraySubscriptExpression) enclosingExpression;
       ArrayValue enclosingArray = getInnerMostArray(enclosingSubscriptExpression);
-      Optional<Integer> maybeIndex = getIndex(enclosingSubscriptExpression);
+      OptionalInt maybeIndex = getIndex(enclosingSubscriptExpression);
 
       if (maybeIndex.isPresent() && enclosingArray != null) {
-        enclosingArray.setValue(UnknownValue.getInstance(), maybeIndex.get());
+        enclosingArray.setValue(UnknownValue.getInstance(), maybeIndex.getAsInt());
 
       }
       // if the index of unknown array in the enclosing array is also unknown, we assign unknown at this array's
@@ -1174,275 +1231,6 @@ public class ValueAnalysisTransferRelation
   public void collectStatistics(Collection<Statistics> statsCollection) {
     statsCollection.add(transferStatistics);
     statsCollection.add(constraintsStrengthenOperator);
-  }
-
-  /**
-   * Visitor that derives further information from an assume edge
-   */
-  private class AssigningValueVisitor extends ExpressionValueVisitor {
-
-    private ValueAnalysisState assignableState;
-
-    private Collection<String> booleans;
-
-    protected boolean truthValue = false;
-
-    public AssigningValueVisitor(ValueAnalysisState assignableState, boolean truthValue, Collection<String> booleanVariables) {
-      super(state, functionName, machineModel, logger);
-      this.assignableState  = assignableState;
-      this.booleans         = booleanVariables;
-      this.truthValue       = truthValue;
-    }
-
-    private AExpression unwrap(AExpression expression) {
-      // is this correct for e.g. [!a != !(void*)(int)(!b)] !?!?!
-
-      if (expression instanceof CCastExpression) {
-        CCastExpression exp = (CCastExpression)expression;
-        expression = exp.getOperand();
-
-        expression = unwrap(expression);
-      }
-
-      return expression;
-    }
-
-    @Override
-    public Value visit(CBinaryExpression pE) throws UnrecognizedCCodeException {
-      BinaryOperator binaryOperator = pE.getOperator();
-      CExpression lVarInBinaryExp   = (CExpression) unwrap(pE.getOperand1());
-      CExpression rVarInBinaryExp   = pE.getOperand2();
-
-      Value leftValue   = lVarInBinaryExp.accept(this);
-      Value rightValue  = rVarInBinaryExp.accept(this);
-
-      if (isEqualityAssumption(binaryOperator)) {
-        if (isEligibleForAssignment(leftValue) && rightValue.isExplicitlyKnown() && isAssignable(lVarInBinaryExp)) {
-          assignConcreteValue(lVarInBinaryExp, leftValue, rightValue, pE.getExpressionType());
-
-        } else if (isEligibleForAssignment(rightValue) && leftValue.isExplicitlyKnown() && isAssignable(rVarInBinaryExp)) {
-          assignConcreteValue(rVarInBinaryExp, rightValue, leftValue, pE.getExpressionType());
-        }
-      }
-
-      if (isNonEqualityAssumption(binaryOperator)) {
-        if (assumingUnknownToBeZero(leftValue, rightValue) && isAssignable(lVarInBinaryExp)) {
-          MemoryLocation leftMemLoc = getMemoryLocation(lVarInBinaryExp);
-
-          if (optimizeBooleanVariables && (booleans.contains(leftMemLoc.getAsSimpleString()) || initAssumptionVars)) {
-            assignableState.assignConstant(leftMemLoc, new NumericValue(1L), pE.getExpressionType());
-          }
-
-        } else if (optimizeBooleanVariables && (assumingUnknownToBeZero(rightValue, leftValue) && isAssignable(rVarInBinaryExp))) {
-          MemoryLocation rightMemLoc = getMemoryLocation(rVarInBinaryExp);
-
-          if (booleans.contains(rightMemLoc.getAsSimpleString()) || initAssumptionVars) {
-            assignableState.assignConstant(rightMemLoc, new NumericValue(1L), pE.getExpressionType());
-          }
-        }
-      }
-
-      return super.visit(pE);
-    }
-
-    private boolean isEligibleForAssignment(final Value pValue) {
-      return pValue.isUnknown() || (!pValue.isExplicitlyKnown() && assignSymbolicAssumptionVars);
-    }
-
-    private void assignConcreteValue(
-        final CExpression pVarInBinaryExp,
-        final Value pOldValue,
-        final Value pNewValue,
-        final CType pValueType
-    ) throws UnrecognizedCCodeException {
-      if (pOldValue instanceof SymbolicValue) {
-        SymbolicIdentifier id = null;
-
-        if (pOldValue instanceof SymbolicIdentifier) {
-          id = (SymbolicIdentifier) pOldValue;
-        } else if (pOldValue instanceof ConstantSymbolicExpression) {
-          Value innerVal = ((ConstantSymbolicExpression)pOldValue).getValue();
-
-          if (innerVal instanceof SymbolicValue) {
-            assert innerVal instanceof SymbolicIdentifier;
-            id = (SymbolicIdentifier) innerVal;
-          }
-        }
-
-        if (id != null) {
-          assignableState.assignConstant(id, pNewValue);
-        }
-      }
-
-      assignableState.assignConstant(getMemoryLocation(pVarInBinaryExp), pNewValue, pValueType);
-    }
-
-    private boolean assumingUnknownToBeZero(Value value1, Value value2) {
-      return value1.isUnknown() && value2.equals(new NumericValue(BigInteger.ZERO));
-    }
-
-    private boolean isEqualityAssumption(BinaryOperator binaryOperator) {
-      return (binaryOperator == BinaryOperator.EQUALS && truthValue)
-          || (binaryOperator == BinaryOperator.NOT_EQUALS && !truthValue);
-    }
-
-    private boolean isNonEqualityAssumption(BinaryOperator binaryOperator) {
-      return (binaryOperator == BinaryOperator.EQUALS && !truthValue)
-          || (binaryOperator == BinaryOperator.NOT_EQUALS && truthValue);
-    }
-
-    @Override
-    public Value visit(JBinaryExpression pE) {
-      JBinaryExpression.BinaryOperator binaryOperator = pE.getOperator();
-
-      JExpression lVarInBinaryExp = pE.getOperand1();
-
-      lVarInBinaryExp = (JExpression) unwrap(lVarInBinaryExp);
-
-      JExpression rVarInBinaryExp = pE.getOperand2();
-
-      Value leftValueV = lVarInBinaryExp.accept(this);
-      Value rightValueV = rVarInBinaryExp.accept(this);
-
-      if ((binaryOperator == JBinaryExpression.BinaryOperator.EQUALS && truthValue)
-          || (binaryOperator == JBinaryExpression.BinaryOperator.NOT_EQUALS && !truthValue)) {
-
-        if (leftValueV.isUnknown() && rightValueV.isExplicitlyKnown()
-            && isAssignableVariable(lVarInBinaryExp)) {
-          assignValueToState((AIdExpression) lVarInBinaryExp, rightValueV);
-
-        } else if (rightValueV.isUnknown() && leftValueV.isExplicitlyKnown()
-            && isAssignableVariable(rVarInBinaryExp)) {
-          assignValueToState((AIdExpression) rVarInBinaryExp, leftValueV);
-        }
-      }
-
-      if (initAssumptionVars) {
-        // x is unknown, a binaryOperation (x!=0), true-branch: set x=1L
-        // x is unknown, a binaryOperation (x==0), false-branch: set x=1L
-        if ((binaryOperator == JBinaryExpression.BinaryOperator.NOT_EQUALS && truthValue)
-            || (binaryOperator == JBinaryExpression.BinaryOperator.EQUALS && !truthValue)) {
-
-          if (leftValueV.isUnknown() && rightValueV.isExplicitlyKnown()
-              && isAssignableVariable(lVarInBinaryExp)) {
-
-            // we only want BooleanValue objects for boolean values in the future
-            assert rightValueV instanceof BooleanValue;
-            BooleanValue booleanValueRight = BooleanValue.valueOf(rightValueV).get();
-
-            if (!booleanValueRight.isTrue()) {
-              assignValueToState((AIdExpression) lVarInBinaryExp, BooleanValue.valueOf(true));
-            }
-
-          } else if (rightValueV.isUnknown() && leftValueV.isExplicitlyKnown()
-              && isAssignableVariable(rVarInBinaryExp)) {
-
-            // we only want BooleanValue objects for boolean values in the future
-            assert leftValueV instanceof BooleanValue;
-            BooleanValue booleanValueLeft = BooleanValue.valueOf(leftValueV).get();
-
-            if (!booleanValueLeft.isTrue()) {
-              assignValueToState((AIdExpression) rVarInBinaryExp, BooleanValue.valueOf(true));
-            }
-          }
-        }
-      }
-      return super.visit(pE);
-    }
-
-    // Assign the given value of the given IdExpression to the state of this TransferRelation
-    private void assignValueToState(AIdExpression pIdExpression, Value pValue) {
-      ASimpleDeclaration declaration = pIdExpression.getDeclaration();
-
-      if (declaration != null) {
-        assignableState.assignConstant(declaration.getQualifiedName(), pValue);
-      } else {
-        MemoryLocation memLoc = MemoryLocation.valueOf(getFunctionName(), pIdExpression.getName(),
-            0);
-        assignableState.assignConstant(memLoc, pValue, pIdExpression.getExpressionType());
-      }
-    }
-
-    protected MemoryLocation getMemoryLocation(CExpression pLValue) throws UnrecognizedCCodeException {
-      ExpressionValueVisitor v = getVisitor();
-      assert pLValue instanceof CLeftHandSide;
-      return checkNotNull(v.evaluateMemoryLocation(pLValue));
-    }
-
-    protected boolean isAssignableVariable(JExpression expression) {
-
-      boolean result = false;
-
-      if (expression instanceof JIdExpression) {
-        JSimpleDeclaration decl = ((JIdExpression) expression).getDeclaration();
-
-        if (decl == null) {
-          result = false;
-        } else if (decl instanceof JFieldDeclaration) {
-          result = ((JFieldDeclaration) decl).isStatic();
-        } else {
-          result = true;
-        }
-      }
-
-      return result;
-    }
-
-
-
-    protected boolean isAssignable(CExpression expression) throws UnrecognizedCCodeException  {
-
-      if (expression instanceof CIdExpression) {
-        return true;
-      }
-
-      if (expression instanceof CFieldReference || expression instanceof CArraySubscriptExpression) {
-        ExpressionValueVisitor evv = getVisitor();
-        return evv.canBeEvaluated(expression);
-      }
-
-      return false;
-    }
-  }
-
-
-  private class SMGAssigningValueVisitor extends AssigningValueVisitor {
-
-    private final ValueAnalysisSMGCommunicator expressionEvaluator;
-    @SuppressWarnings("unused")
-    private final SMGState smgState;
-
-    public SMGAssigningValueVisitor(
-        ValueAnalysisState pAssignableState,
-        boolean pTruthValue,
-        Collection<String> booleanVariables,
-        SMGState pSmgState) {
-
-      super(pAssignableState, pTruthValue, booleanVariables);
-      checkNotNull(pSmgState);
-      expressionEvaluator = new ValueAnalysisSMGCommunicator(pAssignableState, functionName,
-          pSmgState, machineModel, logger, edge);
-      smgState = pSmgState;
-    }
-
-    @Override
-    protected boolean isAssignable(CExpression pExpression) throws UnrecognizedCCodeException {
-
-      //TODO Ugly, Refactor
-      if (pExpression instanceof CLeftHandSide) {
-        MemoryLocation memLoc =
-            expressionEvaluator.evaluateLeftHandSide(pExpression);
-
-        return memLoc != null;
-      }
-
-      return false;
-    }
-
-    @Override
-    protected MemoryLocation getMemoryLocation(CExpression pLValue) throws UnrecognizedCCodeException {
-      return expressionEvaluator.evaluateLeftHandSide(pLValue);
-    }
   }
 
   private class  FieldAccessExpressionValueVisitor extends ExpressionValueVisitor {
@@ -1475,7 +1263,7 @@ public class ValueAnalysisTransferRelation
     @Override
     public Value visit(JIdExpression idExp) {
 
-      String varName = handleIdExpression(idExp);
+      MemoryLocation varName = MemoryLocation.valueOf(handleIdExpression(idExp));
 
       if (readableState.contains(varName)) {
         return readableState.getValueFor(varName);
@@ -1523,20 +1311,7 @@ public class ValueAnalysisTransferRelation
         result.clear();
         for (ValueAnalysisState state : toStrengthen) {
           super.setInfo(element, precision, cfaEdge);
-          Collection<ValueAnalysisState> ret = strengthen((RTTState)ae);
-          if (ret == null) {
-            result.add(state);
-          } else {
-            result.addAll(ret);
-          }
-        }
-        toStrengthen.clear();
-        toStrengthen.addAll(result);
-      } else if (ae instanceof SMGState) {
-        result.clear();
-        for (ValueAnalysisState state : toStrengthen) {
-          super.setInfo(element, precision, cfaEdge);
-          Collection<ValueAnalysisState> ret = strengthen((SMGState)ae);
+          Collection<ValueAnalysisState> ret = strengthen((RTTState)ae, cfaEdge);
           if (ret == null) {
             result.add(state);
           } else {
@@ -1550,8 +1325,7 @@ public class ValueAnalysisTransferRelation
         for (ValueAnalysisState state : toStrengthen) {
           super.setInfo(element, precision, cfaEdge);
           AutomatonState autoState = (AutomatonState) ae;
-          Collection<ValueAnalysisState> ret = automatonAssumesAsStatements ?
-              strengthenAutomatonStatement(autoState, state, cfaEdge) : strengthenAutomatonAssume(autoState, state, cfaEdge);
+          Collection<ValueAnalysisState> ret = strengthenAutomatonAssume(autoState, state, cfaEdge);
           if (ret == null) {
             result.add(state);
           } else {
@@ -1579,10 +1353,6 @@ public class ValueAnalysisTransferRelation
       } else if (ae instanceof PointerState) {
 
         CFAEdge edge = cfaEdge;
-        if (edge instanceof MultiEdge) {
-          MultiEdge multiEdge = (MultiEdge) edge;
-          edge = multiEdge.getEdges().get(multiEdge.getEdges().size() - 1);
-        }
 
         ARightHandSide rightHandSide = getRightHandSide(edge);
         ALeftHandSide leftHandSide = getLeftHandSide(edge);
@@ -1595,7 +1365,10 @@ public class ValueAnalysisTransferRelation
         for (ValueAnalysisState state : toStrengthen) {
           super.setInfo(element, precision, cfaEdge);
           ValueAnalysisState newState =
-              strengthenWithPointerInformation(state, pointerState, rightHandSide, leftHandType, leftHandSide, leftHandVariable);
+              strengthenWithPointerInformation(state, pointerState, rightHandSide, leftHandType, leftHandSide, leftHandVariable, UnknownValue.getInstance());
+
+          newState = handleModf(rightHandSide, pointerState, newState);
+
           result.add(newState);
         }
         toStrengthen.clear();
@@ -1611,7 +1384,7 @@ public class ValueAnalysisTransferRelation
       if (rawResult == element) {
         postProcessedResult.add(element);
       } else {
-        postProcessedResult.addAll(postProcessing(rawResult));
+        postProcessedResult.addAll(postProcessing(rawResult, cfaEdge));
       }
     }
 
@@ -1621,50 +1394,135 @@ public class ValueAnalysisTransferRelation
     return postProcessedResult;
   }
 
+  /**
+   * Handle a special built-in library function that required pointer-alias handling while computing
+   * a floating-point operation.
+   *
+   * @param pRightHandSide the right-hand side of an assignment edge.
+   * @param pPointerState the current pointer-alias information.
+   * @param pState the state to strengthen.
+   * @return the strengthened state.
+   * @throws UnrecognizedCCodeException if the C code involved is not recognized.
+   */
+  private ValueAnalysisState handleModf(
+      ARightHandSide pRightHandSide, PointerState pPointerState, ValueAnalysisState pState)
+      throws UnrecognizedCCodeException, AssertionError {
+    ValueAnalysisState state = pState;
+    if (pRightHandSide instanceof AFunctionCallExpression) {
+      AFunctionCallExpression functionCallExpression = (AFunctionCallExpression) pRightHandSide;
+      AExpression functionNameExpression = functionCallExpression.getFunctionNameExpression();
+      if (functionNameExpression instanceof AIdExpression) {
+        String functionName = ((AIdExpression) functionNameExpression).getName();
+        if (BuiltinFloatFunctions.matchesModf(functionName)) {
+          List<? extends AExpression> parameters = functionCallExpression.getParameterExpressions();
+          if (parameters.size() == 2 && parameters.get(1) instanceof CExpression) {
+            AExpression exp = parameters.get(0);
+            CExpression targetPointer = (CExpression) parameters.get(1);
+            CLeftHandSide target =
+                new CPointerExpression(
+                    targetPointer.getFileLocation(),
+                    targetPointer.getExpressionType(),
+                    targetPointer);
+            ExpressionValueVisitor evv = getVisitor();
+            Value value;
+            if (exp instanceof JRightHandSide) {
+              value = evv.evaluate((JRightHandSide) exp, (JType) exp.getExpressionType());
+            } else if (exp instanceof CRightHandSide) {
+              value = evv.evaluate((CRightHandSide) exp, (CType) exp.getExpressionType());
+            } else {
+              throw new AssertionError("unknown righthandside-expression: " + exp);
+            }
+            if (value.isExplicitlyKnown()) {
+              NumericValue numericValue = value.asNumericValue();
+              CSimpleType paramType =
+                  BuiltinFloatFunctions.getTypeOfBuiltinFloatFunction(functionName);
+              if (ImmutableList.of(CBasicType.FLOAT, CBasicType.DOUBLE)
+                  .contains(paramType.getType())) {
+                final BigDecimal integralPartValue;
+                switch (paramType.getType()) {
+                  case FLOAT:
+                    integralPartValue = BigDecimal.valueOf((float) ((long) numericValue.floatValue()));
+                    break;
+                  case DOUBLE:
+                    integralPartValue = BigDecimal.valueOf((double) ((long) numericValue.doubleValue()));
+                    break;
+                  default:
+                    throw new AssertionError("Unsupported float type: " + paramType);
+                }
+                CFloatLiteralExpression integralPart =
+                    new CFloatLiteralExpression(
+                        functionCallExpression.getFileLocation(),
+                        paramType,
+                        integralPartValue);
+                state =
+                    strengthenWithPointerInformation(
+                        state,
+                        pPointerState,
+                        integralPart,
+                        target.getExpressionType(),
+                        target,
+                        null,
+                        new NumericValue(integralPartValue));
+              }
+            }
+          }
+        }
+      }
+    }
+    return state;
+  }
+
   private ValueAnalysisState strengthenWithPointerInformation(
       ValueAnalysisState pValueState,
       PointerState pPointerInfo,
       ARightHandSide pRightHandSide,
-      Type pLeftHandType,
+      Type pTargetType,
       ALeftHandSide pLeftHandSide,
-      String pLeftHandVariable) throws UnrecognizedCCodeException {
+      String pLeftHandVariable,
+      Value pValue)
+      throws UnrecognizedCCodeException {
 
     ValueAnalysisState newState = pValueState;
 
-    Value value = UnknownValue.getInstance();
+    Value value = pValue;
     MemoryLocation target = null;
     if (pLeftHandVariable != null) {
       target = MemoryLocation.valueOf(pLeftHandVariable);
     }
-    Type type = pLeftHandType;
+    Type type = pTargetType;
     boolean shouldAssign = false;
 
     if (target == null && pLeftHandSide instanceof CPointerExpression) {
       CPointerExpression pointerExpression = (CPointerExpression) pLeftHandSide;
-      CExpression addressExpression = pointerExpression.getOperand();
 
-      LocationSet fullSet = PointerTransferRelation.asLocations(addressExpression, pPointerInfo);
+      LocationSet directLocation =
+          PointerTransferRelation.asLocations(pointerExpression, pPointerInfo);
 
-      if (fullSet instanceof ExplicitLocationSet) {
-        ExplicitLocationSet explicitSet = (ExplicitLocationSet) fullSet;
-        if (explicitSet.getSize() == 1) {
-          MemoryLocation variable = explicitSet.iterator().next();
-          LocationSet pointsToSet = pPointerInfo.getPointsToSet(variable);
-          if (pointsToSet instanceof ExplicitLocationSet) {
-            ExplicitLocationSet explicitPointsToSet = (ExplicitLocationSet) pointsToSet;
-            Iterator<MemoryLocation> pointsToIterator = explicitPointsToSet.iterator();
-            MemoryLocation otherVariable = pointsToIterator.next();
-            if (!pointsToIterator.hasNext()) {
-              target = otherVariable;
-              shouldAssign = true;
-            }
+      if (!(directLocation instanceof ExplicitLocationSet)) {
+        CExpression addressExpression = pointerExpression.getOperand();
+        LocationSet indirectLocation =
+            PointerTransferRelation.asLocations(addressExpression, pPointerInfo);
+        if (indirectLocation instanceof ExplicitLocationSet) {
+          ExplicitLocationSet explicitSet = (ExplicitLocationSet) indirectLocation;
+          if (explicitSet.getSize() == 1) {
+            MemoryLocation variable = explicitSet.iterator().next();
+            directLocation = pPointerInfo.getPointsToSet(variable);
           }
+        }
+      }
+      if (directLocation instanceof ExplicitLocationSet) {
+        ExplicitLocationSet explicitDirectLocation = (ExplicitLocationSet) directLocation;
+        Iterator<MemoryLocation> locationIterator = explicitDirectLocation.iterator();
+        MemoryLocation otherVariable = locationIterator.next();
+        if (!locationIterator.hasNext()) {
+          target = otherVariable;
+          shouldAssign = true;
         }
       }
 
     }
 
-    if (pRightHandSide instanceof CPointerExpression) {
+    if (!value.isExplicitlyKnown() && pRightHandSide instanceof CPointerExpression) {
       if (target == null) {
         return pValueState;
       }
@@ -1692,10 +1550,11 @@ public class ValueAnalysisTransferRelation
                 Value otherVariableValue = pValueState.getValueFor(otherVariableLocation);
                 if (otherVariableValue != null) {
                   if (variableType.equals(otherVariableType)
-                      || variableType.equals(CNumericTypes.FLOAT)
-                      && otherVariableType.equals(CNumericTypes.UNSIGNED_INT)
-                      && otherVariableValue.isExplicitlyKnown()
-                      && Long.valueOf(0).equals(otherVariableValue.asLong(CNumericTypes.UNSIGNED_INT))) {
+                      || (variableType.equals(CNumericTypes.FLOAT)
+                          && otherVariableType.equals(CNumericTypes.UNSIGNED_INT)
+                          && otherVariableValue.isExplicitlyKnown()
+                          && Long.valueOf(0)
+                              .equals(otherVariableValue.asLong(CNumericTypes.UNSIGNED_INT)))) {
                     value = otherVariableValue;
                     shouldAssign = true;
                   }
@@ -1792,39 +1651,12 @@ public class ValueAnalysisTransferRelation
     return null;
   }
 
-  private Collection<ValueAnalysisState> strengthenAutomatonStatement(AutomatonState pAutomatonState, ValueAnalysisState pState, CFAEdge pCfaEdge) throws CPATransferException {
-
-    List<CStatementEdge> statementEdges = pAutomatonState.getAsStatementEdges(
-        pCfaEdge.getPredecessor().getFunctionName());
-
-    ValueAnalysisState state = pState;
-
-    for (CStatementEdge stmtEdge : statementEdges) {
-      state = handleStatementEdge((AStatementEdge)stmtEdge, (AStatement)stmtEdge.getStatement());
-
-      if (state == null) {
-        break;
-      } else {
-        setInfo(state, precision, pCfaEdge);
-      }
-    }
-
-    if (state == null) {
-      return Collections.emptyList();
-    } else {
-      return Collections.singleton(state);
-    }
-  }
-
   private Collection<ValueAnalysisState> strengthenAutomatonAssume(AutomatonState pAutomatonState, ValueAnalysisState pState, CFAEdge pCfaEdge) throws CPATransferException {
 
-    List<AssumeEdge> assumeEdges = pAutomatonState.getAsAssumeEdges(pCfaEdge.getPredecessor().getFunctionName());
-
     ValueAnalysisState state = pState;
 
-
-    for (AssumeEdge assumeEdge : assumeEdges) {
-      state = this.handleAssumption(assumeEdge, assumeEdge.getExpression(), assumeEdge.getTruthAssumption());
+    for (AExpression assumption : pAutomatonState.getAssumptions()) {
+      state = handleAssumption(assumption, true);
 
       if (state == null) {
         break;
@@ -1840,201 +1672,7 @@ public class ValueAnalysisTransferRelation
     }
   }
 
-  private Collection<ValueAnalysisState> strengthen(SMGState smgState) throws UnrecognizedCCodeException {
-
-    ValueAnalysisState newElement = ValueAnalysisState.copyOf(state);
-
-    //TODO Refactor
-
-    for (MissingInformation missingInformation : missingInformationList) {
-      if (missingInformation.isMissingAssumption()) {
-        newElement = resolvingAssumption(newElement, smgState, missingInformation);
-      } else if (missingInformation.isMissingAssignment()) {
-        if (isRelevant(missingInformation)) {
-          newElement = resolvingAssignment(newElement, smgState, missingInformation);
-        } else {
-          // We have to forget Nonrelevant Information to not contradict SMGState.
-          newElement = forgetMemLoc(newElement, missingInformation, smgState);
-        }
-      } else if (missingInformation.isFreeInvocation()) {
-        newElement = resolveFree(newElement, smgState, missingInformation);
-      }
-    }
-
-    //TODO More common handling of missing information (erase missing Information if other cpas solved it).
-    missingInformationList.clear();
-
-    if (newElement == null) {
-      return new HashSet<>();
-    }
-
-    return state.equals(newElement) ? null : Collections.singleton(newElement);
-  }
-
-  private ValueAnalysisState resolveFree(ValueAnalysisState pNewElement, SMGState pSmgState,
-      MissingInformation pMissingInformation) throws UnrecognizedCCodeException {
-
-    CFunctionCallExpression functionCall = pMissingInformation.getMissingFreeInvocation();
-
-    CExpression pointerExp;
-
-    try {
-      pointerExp = functionCall.getParameterExpressions().get(0);
-    } catch (IndexOutOfBoundsException e) {
-      logger.logDebugException(e);
-      throw new UnrecognizedCCodeException("Built in function free has no parameter", edge, functionCall);
-    }
-
-    ValueAnalysisSMGCommunicator cc = new ValueAnalysisSMGCommunicator(pNewElement, functionName, pSmgState,
-        machineModel, logger, edge);
-
-    SMGAddressValue address;
-    try {
-      address = cc.evaluateSMGAddressExpression(pointerExp);
-    } catch (CPATransferException e) {
-      logger.logDebugException(e);
-      throw new UnrecognizedCCodeException("Error while evaluating free pointer exception.", edge, functionCall);
-    }
-
-    if (address.isUnknown()) {
-      //TODO if sound Option is implemented, here every heap value has to be erased.
-      return pNewElement;
-    }
-
-    pNewElement.forgetValuesWithIdentifier(address.getObject().getLabel());
-
-    return pNewElement;
-  }
-
-  private ValueAnalysisState forgetMemLoc(ValueAnalysisState pNewElement, MissingInformation pMissingInformation,
-      SMGState pSmgState) throws UnrecognizedCCodeException {
-
-    MemoryLocation memoryLocation = null;
-
-    if (pMissingInformation.hasKnownMemoryLocation()) {
-      memoryLocation = pMissingInformation.getcLeftMemoryLocation();
-    } else if (pMissingInformation.hasUnknownMemoryLocation()) {
-      memoryLocation = resolveMemoryLocation(pSmgState,
-          pMissingInformation.getMissingCLeftMemoryLocation());
-    }
-
-    if (memoryLocation == null) {
-      // Always return the new Element
-      // if you want to interrupt the calculation
-      // in case it was changed before
-      return pNewElement;
-    } else {
-      pNewElement.forget(memoryLocation);
-      return pNewElement;
-    }
-  }
-
-  private boolean isRelevant(MissingInformation missingInformation) {
-
-    CRightHandSide value;
-
-    if (missingInformation.hasUnknownMemoryLocation()) {
-      value = missingInformation.getMissingCLeftMemoryLocation();
-    } else if (missingInformation.hasUnknownValue()) {
-      value = missingInformation.getMissingCExpressionInformation();
-    } else {
-      return false;
-    }
-
-    CType type = value.getExpressionType().getCanonicalType();
-
-    return !(type instanceof CPointerType);
-  }
-
-  //TODO Better Name, these are not just Assignments, but also calls, etc
-  private ValueAnalysisState resolvingAssignment(ValueAnalysisState pNewElement,
-      SMGState pSmgState, MissingInformation pMissingInformation) throws UnrecognizedCCodeException {
-
-    MemoryLocation memoryLocation = null;
-
-    if (pMissingInformation.hasKnownMemoryLocation()) {
-      memoryLocation = pMissingInformation.getcLeftMemoryLocation();
-    } else if (pMissingInformation.hasUnknownMemoryLocation()) {
-      memoryLocation = resolveMemoryLocation(pSmgState,
-          pMissingInformation.getMissingCLeftMemoryLocation());
-    }
-
-    if (memoryLocation == null) {
-      // Always return the new Element
-      // if you want to interrupt the calculation
-      // in case it was changed before
-      return pNewElement;
-    }
-
-    Value value = Value.UnknownValue.getInstance();
-
-    if (pMissingInformation.hasKnownValue()) {
-      value = pMissingInformation.getcExpressionValue();
-    } else if (pMissingInformation.hasUnknownValue()) {
-      value = resolveValue(pSmgState, pMissingInformation.getMissingCExpressionInformation());
-    }
-
-    if (value.isUnknown()) {
-      // Always return the new Element
-      // if you want to interrupt the calculation
-      // in case it was changed before
-      if (pNewElement.contains(memoryLocation)) {
-        pNewElement.forget(memoryLocation);
-      }
-      return pNewElement;
-    }
-
-    pNewElement.assignConstant(memoryLocation, value, pNewElement.getTypeForMemoryLocation(memoryLocation));
-
-    return pNewElement;
-  }
-
-  private Value resolveValue(SMGState pSmgState, CExpression rValue)
-      throws UnrecognizedCCodeException {
-
-    ValueAnalysisSMGCommunicator cc = new ValueAnalysisSMGCommunicator(oldState, functionName,
-        pSmgState, machineModel, logger, edge);
-
-    return cc.evaluateExpression(rValue);
-  }
-
-  private MemoryLocation resolveMemoryLocation(SMGState pSmgState, CExpression lValue)
-      throws UnrecognizedCCodeException {
-
-    ValueAnalysisSMGCommunicator cc =
-        new ValueAnalysisSMGCommunicator(oldState, functionName, pSmgState, machineModel, logger, edge);
-
-    return cc.evaluateLeftHandSide(lValue);
-  }
-
-  private ValueAnalysisState resolvingAssumption(ValueAnalysisState pNewElement,
-      SMGState pSmgState, MissingInformation pMissingInformation) throws UnrecognizedCCodeException {
-
-    Boolean bTruthValue = pMissingInformation.getTruthAssumption();
-
-    long truthValue = bTruthValue ? 1 : 0;
-
-    Value value = resolveValue(pSmgState, pMissingInformation.getMissingCExpressionInformation());
-
-    if (value.isExplicitlyKnown() && !value.equals(new NumericValue(truthValue))) {
-      return null;
-    } else {
-
-      if (!value.isExplicitlyKnown()) {
-
-        // Try deriving further Information
-        ValueAnalysisState element = ValueAnalysisState.copyOf(pNewElement);
-        SMGAssigningValueVisitor avv = new SMGAssigningValueVisitor(element, bTruthValue, booleanVariables, pSmgState);
-        pMissingInformation.getMissingCExpressionInformation().accept(avv);
-
-        return element;
-      }
-
-      return pNewElement;
-    }
-  }
-
-  private Collection<ValueAnalysisState> strengthen(RTTState rttState) {
+  private Collection<ValueAnalysisState> strengthen(RTTState rttState, CFAEdge edge) {
 
     ValueAnalysisState newElement = ValueAnalysisState.copyOf(oldState);
 
@@ -2068,7 +1706,7 @@ public class ValueAnalysisTransferRelation
       missingAssumeInformation = false;
       missingInformationRightJExpression = null;
 
-      boolean truthAssumption = ((AssumeEdge) edge).getTruthAssumption();
+      boolean truthAssumption = ((AssumeEdge)edge).getTruthAssumption();
       if (value == null || !value.isExplicitlyKnown()) {
         return null;
       } else if (representsBoolean(value, truthAssumption)) {
@@ -2087,7 +1725,7 @@ public class ValueAnalysisTransferRelation
         return Collections.singleton(newElement);
       } else {
         if (missingInformationLeftJVariable != null) {
-          newElement.forget(missingInformationLeftJVariable);
+          newElement.forget(MemoryLocation.valueOf(missingInformationLeftJVariable));
         }
         missingInformationRightJExpression = null;
         missingInformationLeftJVariable = null;
@@ -2124,7 +1762,7 @@ public class ValueAnalysisTransferRelation
        newElement.assignConstant(scopedFieldName, value);
        return newElement;
      } else {
-       newElement.forget(scopedFieldName);
+       newElement.forget(MemoryLocation.valueOf(scopedFieldName));
        return newElement;
      }
    } else {
@@ -2132,179 +1770,6 @@ public class ValueAnalysisTransferRelation
    }
 
 
-  }
-
-
-  private static class MissingInformation {
-
-    /**
-     * This field stores the Expression of the Memory Location that
-     * could not be evaluated.
-     */
-    private final CExpression missingCLeftMemoryLocation;
-
-    /**
-     *  This expression stores the Memory Location
-     *  to be assigned.
-     */
-    private final MemoryLocation cLeftMemoryLocation;
-
-    /**
-     * Expression could not be evaluated due to missing information. (e.g.
-     * missing pointer alias).
-     */
-    private final CExpression missingCExpressionInformation;
-
-    /**
-     * Expression could not be evaluated due to missing information. (e.g.
-     * missing pointer alias).
-     */
-    private final Value cExpressionValue;
-
-    /**
-     * The truth Assumption made in this assume edge.
-     */
-    private final Boolean truthAssumption;
-
-    private CFunctionCallExpression missingFreeInvocation = null;
-
-    @SuppressWarnings("unused")
-    public MissingInformation(CExpression pMissingCLeftMemoryLocation,
-        CExpression pMissingCExpressionInformation) {
-      missingCExpressionInformation = pMissingCExpressionInformation;
-      missingCLeftMemoryLocation = pMissingCLeftMemoryLocation;
-      cExpressionValue = null;
-      cLeftMemoryLocation = null;
-      truthAssumption = null;
-    }
-
-    //TODO Better checks...don't be lazy, just because class
-    // will likely change.
-
-    public boolean hasUnknownValue() {
-      return missingCExpressionInformation != null;
-    }
-
-    public boolean hasKnownValue() {
-      return cExpressionValue != null;
-    }
-
-    public boolean hasUnknownMemoryLocation() {
-      return missingCLeftMemoryLocation != null;
-    }
-
-    public boolean hasKnownMemoryLocation() {
-      return cLeftMemoryLocation != null;
-    }
-
-    public boolean isMissingAssignment() {
-      // TODO Better Name for this method.
-      // Checks if a variable needs to be assigned a value,
-      // but to evaluate the MemoryLocation, or the value,
-      // we lack information.
-
-      return (missingCExpressionInformation != null
-              || missingCLeftMemoryLocation != null)
-          && truthAssumption == null;
-    }
-
-    public boolean isMissingAssumption() {
-      return truthAssumption != null && missingCExpressionInformation != null;
-    }
-
-    public MissingInformation(CExpression pMissingCLeftMemoryLocation,
-        Value pCExpressionValue) {
-      missingCExpressionInformation = null;
-      missingCLeftMemoryLocation = pMissingCLeftMemoryLocation;
-      cExpressionValue = pCExpressionValue;
-      cLeftMemoryLocation = null;
-      truthAssumption = null;
-    }
-
-    public MissingInformation(MemoryLocation pCLeftMemoryLocation,
-        CExpression pMissingCExpressionInformation) {
-      missingCExpressionInformation = pMissingCExpressionInformation;
-      missingCLeftMemoryLocation = null;
-      cExpressionValue = null;
-      cLeftMemoryLocation = pCLeftMemoryLocation;
-      truthAssumption = null;
-    }
-
-    public MissingInformation(AExpression pMissingCLeftMemoryLocation,
-        ARightHandSide pMissingCExpressionInformation) {
-      // This constructor casts to CExpression, just to have as few
-      // as possible pieces of code for communication cluttering
-      // up the transfer relation.
-      // Especially, since this class will later be used to
-      // communicate missing Information independent of language
-
-      missingCExpressionInformation = (CExpression) pMissingCExpressionInformation;
-      missingCLeftMemoryLocation = (CExpression) pMissingCLeftMemoryLocation;
-      cExpressionValue = null;
-      cLeftMemoryLocation = null;
-      truthAssumption = null;
-    }
-
-    public MissingInformation(Boolean pTruthAssumption,
-        ARightHandSide pMissingCExpressionInformation) {
-      // This constructor casts to CExpression, just to have as few
-      // as possible pieces of code for communication cluttering
-      // up the transfer relation.
-      // Especially, since this class will later be used to
-      // communicate missing Information independent of language
-
-      missingCExpressionInformation = (CExpression) pMissingCExpressionInformation;
-      missingCLeftMemoryLocation = null;
-      cExpressionValue = null;
-      cLeftMemoryLocation = null;
-      truthAssumption = pTruthAssumption;
-    }
-
-    public MissingInformation(CFunctionCallExpression pFunctionCallExpression) {
-      missingFreeInvocation = pFunctionCallExpression;
-      missingCExpressionInformation = null;
-      missingCLeftMemoryLocation = null;
-      cExpressionValue = null;
-      cLeftMemoryLocation = null;
-      truthAssumption = null;
-
-    }
-
-    public boolean isFreeInvocation() {
-      return missingFreeInvocation != null;
-    }
-
-    public Value getcExpressionValue() {
-      checkNotNull(cExpressionValue);
-      return cExpressionValue;
-    }
-
-    public MemoryLocation getcLeftMemoryLocation() {
-      checkNotNull(cLeftMemoryLocation);
-      return cLeftMemoryLocation;
-    }
-
-    @SuppressWarnings("unused")
-    public CExpression getMissingCExpressionInformation() {
-      checkNotNull(missingCExpressionInformation);
-      return missingCExpressionInformation;
-    }
-
-    @SuppressWarnings("unused")
-    public CExpression getMissingCLeftMemoryLocation() {
-      checkNotNull(missingCLeftMemoryLocation);
-      return missingCLeftMemoryLocation;
-    }
-
-    @SuppressWarnings("unused")
-    public Boolean getTruthAssumption() {
-      checkNotNull(truthAssumption);
-      return truthAssumption;
-    }
-
-    public CFunctionCallExpression getMissingFreeInvocation() {
-      return missingFreeInvocation;
-    }
   }
 
   /** returns an initialized, empty visitor */

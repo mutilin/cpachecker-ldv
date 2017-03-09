@@ -25,6 +25,11 @@ package org.sosy_lab.cpachecker.cfa.parser.eclipse.c;
 
 import static com.google.common.collect.FluentIterable.from;
 
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Sets;
+import com.google.common.collect.SortedSetMultimap;
+import com.google.common.collect.TreeMultimap;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -32,9 +37,7 @@ import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.logging.Level;
-
 import javax.annotation.Nullable;
-
 import org.eclipse.cdt.core.dom.ast.ASTVisitor;
 import org.eclipse.cdt.core.dom.ast.IASTASMDeclaration;
 import org.eclipse.cdt.core.dom.ast.IASTDeclaration;
@@ -45,13 +48,8 @@ import org.eclipse.cdt.core.dom.ast.IASTProblemDeclaration;
 import org.eclipse.cdt.core.dom.ast.IASTSimpleDeclSpecifier;
 import org.eclipse.cdt.core.dom.ast.IASTSimpleDeclaration;
 import org.eclipse.cdt.core.dom.ast.IASTTranslationUnit;
-import org.sosy_lab.cpachecker.util.Pair;
-import org.sosy_lab.cpachecker.util.Triple;
-import org.sosy_lab.common.configuration.Configuration;
-import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.log.LogManagerWithoutDuplicates;
-import org.sosy_lab.cpachecker.cfa.CSourceOriginMapping;
 import org.sosy_lab.cpachecker.cfa.Language;
 import org.sosy_lab.cpachecker.cfa.ParseResult;
 import org.sosy_lab.cpachecker.cfa.ast.ADeclaration;
@@ -66,21 +64,18 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CTypeDefDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CVariableDeclaration;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
+import org.sosy_lab.cpachecker.cfa.parser.Scope;
+import org.sosy_lab.cpachecker.cfa.parser.eclipse.EclipseParsers.EclipseCParserOptions;
 import org.sosy_lab.cpachecker.cfa.types.MachineModel;
 import org.sosy_lab.cpachecker.exceptions.CParserException;
-
-import com.google.common.base.Function;
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
-import com.google.common.collect.SortedSetMultimap;
-import com.google.common.collect.TreeMultimap;
+import org.sosy_lab.cpachecker.util.Pair;
+import org.sosy_lab.cpachecker.util.Triple;
 
 /**
  * Builder to traverse AST.
  *
  * After instantiating this class,
- * call {@link #analyzeTranslationUnit(IASTTranslationUnit, String)}
+ * call {@link #analyzeTranslationUnit(IASTTranslationUnit, String, Scope)}
  * once for each translation unit that should be used
  * and finally call {@link #createCFA()}.
  */
@@ -101,30 +96,28 @@ class CFABuilder extends ASTVisitor {
 
 
   private GlobalScope fileScope = new GlobalScope();
+  private Scope artificialScope;
   private ProgramDeclarations programDeclarations = new ProgramDeclarations();
   private ASTConverter astCreator;
-  private final Function<String, String> niceFileNameFunction;
-  private final CSourceOriginMapping sourceOriginMapping;
+  private final ParseContext parseContext;
 
+  private final EclipseCParserOptions options;
   private final MachineModel machine;
   private final LogManagerWithoutDuplicates logger;
   private final CheckBindingVisitor checkBinding;
 
-  private final Configuration config;
-
   private boolean encounteredAsm = false;
   private Sideassignments sideAssignmentStack = null;
 
-  public CFABuilder(Configuration pConfig, LogManager pLogger,
-      Function<String, String> pNiceFileNameFunction,
-      CSourceOriginMapping pSourceOriginMapping,
+  public CFABuilder(
+      EclipseCParserOptions pOptions,
+      LogManager pLogger,
+      ParseContext pParseContext,
       MachineModel pMachine) {
-
+    options = pOptions;
     logger = new LogManagerWithoutDuplicates(pLogger);
-    niceFileNameFunction = pNiceFileNameFunction;
-    sourceOriginMapping = pSourceOriginMapping;
+    parseContext = pParseContext;
     machine = pMachine;
-    config = pConfig;
 
     checkBinding = new CheckBindingVisitor(pLogger);
 
@@ -134,16 +127,29 @@ class CFABuilder extends ASTVisitor {
     shouldVisitTranslationUnit = true;
   }
 
-  public void analyzeTranslationUnit(IASTTranslationUnit ast, String staticVariablePrefix) throws InvalidConfigurationException {
+  public void analyzeTranslationUnit(
+      IASTTranslationUnit ast, String staticVariablePrefix, Scope pFallbackScope) {
     sideAssignmentStack = new Sideassignments();
-    fileScope = new GlobalScope(new HashMap<String, CSimpleDeclaration>(),
-                                new HashMap<String, CSimpleDeclaration>(),
-                                new HashMap<String, CFunctionDeclaration>(),
-                                new HashMap<String, CComplexTypeDeclaration>(),
-                                new HashMap<String, CTypeDefDeclaration>(),
-                                programDeclarations,
-                                staticVariablePrefix);
-    astCreator = new ASTConverter(config, fileScope, logger, niceFileNameFunction, sourceOriginMapping, machine, staticVariablePrefix, sideAssignmentStack);
+    artificialScope = pFallbackScope;
+    fileScope =
+        new GlobalScope(
+            new HashMap<>(),
+            new HashMap<>(),
+            new HashMap<>(),
+            new HashMap<>(),
+            new HashMap<>(),
+            programDeclarations,
+            staticVariablePrefix,
+            artificialScope);
+    astCreator =
+        new ASTConverter(
+            options,
+            fileScope,
+            logger,
+            parseContext,
+            machine,
+            staticVariablePrefix,
+            sideAssignmentStack);
     functionDeclarations.add(Triple.of((List<IASTFunctionDefinition>)new ArrayList<IASTFunctionDefinition>(), staticVariablePrefix, fileScope));
 
     ast.accept(this);
@@ -167,7 +173,7 @@ class CFABuilder extends ASTVisitor {
       CFunctionDeclaration functionDefinition = astCreator.convert(fd);
       if (sideAssignmentStack.hasPreSideAssignments()
           || sideAssignmentStack.hasPostSideAssignments()) {
-        throw new CFAGenerationRuntimeException("Function definition has side effect", fd, niceFileNameFunction);
+        throw parseContext.parseError("Function definition has side effect", fd);
       }
 
       fileScope.registerFunctionDeclaration(functionDefinition);
@@ -206,8 +212,8 @@ class CFABuilder extends ASTVisitor {
       return PROCESS_SKIP;
 
     } else {
-      throw new CFAGenerationRuntimeException("Unknown declaration type "
-          + declaration.getClass().getSimpleName(), declaration, niceFileNameFunction);
+      throw parseContext.parseError(
+          "Unknown declaration type " + declaration.getClass().getSimpleName(), declaration);
     }
   }
 
@@ -224,7 +230,7 @@ class CFABuilder extends ASTVisitor {
 
     if (sideAssignmentStack.hasConditionalExpression()
         || sideAssignmentStack.hasPostSideAssignments()) {
-      throw new CFAGenerationRuntimeException("Initializer of global variable has side effect", sd, niceFileNameFunction);
+      throw parseContext.parseError("Initializer of global variable has side effect", sd);
     }
 
     String rawSignature = sd.getRawSignature();
@@ -243,11 +249,11 @@ class CFABuilder extends ASTVisitor {
           globalDeclarations.add(Triple.of((ADeclaration)astNode, rawSignature, fileScope));
           globalDecls.add(Pair.of((ADeclaration)astNode, rawSignature));
         } else {
-          throw new CFAGenerationRuntimeException("Initializer of global variable has side effect", sd, niceFileNameFunction);
+          throw parseContext.parseError("Initializer of global variable has side effect", sd);
         }
 
       } else {
-        throw new CFAGenerationRuntimeException("Initializer of global variable has side effect", sd, niceFileNameFunction);
+        throw parseContext.parseError("Initializer of global variable has side effect", sd);
       }
     }
 
@@ -262,8 +268,8 @@ class CFABuilder extends ASTVisitor {
 
           // save global initialized variable in map to check duplicates
           if (!globalInitializedVariables.add(newD.getName())) {
-            throw new CFAGenerationRuntimeException("Variable " + newD.getName()
-                + " initialized for the second time", newD);
+            throw parseContext.parseError(
+                "Variable " + newD.getName() + " initialized for the second time", newD);
           }
         }
 
@@ -293,7 +299,7 @@ class CFABuilder extends ASTVisitor {
    */
   @Override
   public int visit(IASTProblem problem) {
-    throw new CFAGenerationRuntimeException(problem, niceFileNameFunction);
+    throw parseContext.parseError(problem);
   }
 
   public ParseResult createCFA() throws CParserException {
@@ -352,17 +358,18 @@ class CFABuilder extends ASTVisitor {
                                         ImmutableMap<String, CTypeDefDeclaration> typedefs,
                                         ImmutableMap<String, CSimpleDeclaration> globalVars) {
 
-    FunctionScope localScope = new FunctionScope(functions, types, typedefs, globalVars, fileName);
-    CFAFunctionBuilder functionBuilder;
-
-    try {
-      functionBuilder = new CFAFunctionBuilder(config, logger, localScope, niceFileNameFunction,
-          sourceOriginMapping,
-          machine, fileName, sideAssignmentStack, checkBinding);
-    } catch (InvalidConfigurationException e) {
-      throw new CFAGenerationRuntimeException("Invalid configuration");
-    }
-
+    FunctionScope localScope =
+        new FunctionScope(functions, types, typedefs, globalVars, fileName, artificialScope);
+    CFAFunctionBuilder functionBuilder =
+        new CFAFunctionBuilder(
+            options,
+            logger,
+            localScope,
+            parseContext,
+            machine,
+            fileName,
+            sideAssignmentStack,
+            checkBinding);
     declaration.accept(functionBuilder);
 
     FunctionEntryNode startNode = functionBuilder.getStartNode();
@@ -374,12 +381,10 @@ class CFABuilder extends ASTVisitor {
     }
     cfas.put(functionName, startNode);
     cfaNodes.putAll(functionName, functionBuilder.getCfaNodes());
-    globalDeclarations.addAll(from(functionBuilder.getGlobalDeclarations()).transform(new Function<Pair<ADeclaration, String>, Triple<ADeclaration, String, GlobalScope>>() {
-
-      @Override
-      public Triple<ADeclaration, String, GlobalScope> apply(Pair<ADeclaration, String> pInput) {
-        return Triple.of(pInput.getFirst(), pInput.getSecond(), actScope);
-      }}).toList());
+    globalDeclarations.addAll(
+        from(functionBuilder.getGlobalDeclarations())
+            .transform(pInput -> Triple.of(pInput.getFirst(), pInput.getSecond(), actScope))
+            .toList());
     globalDecls.addAll(functionBuilder.getGlobalDeclarations());
 
     encounteredAsm |= functionBuilder.didEncounterAsm();

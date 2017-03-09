@@ -23,14 +23,7 @@
  */
 package org.sosy_lab.cpachecker.util.ci.translators;
 
-import java.io.IOException;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
+import com.google.common.truth.Truth;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -39,15 +32,16 @@ import org.sosy_lab.common.collect.PathCopyingPersistentTreeMap;
 import org.sosy_lab.common.collect.PersistentMap;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
-import org.sosy_lab.common.log.BasicLogManager;
 import org.sosy_lab.common.log.LogManager;
-import org.sosy_lab.common.log.TestLogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.types.MachineModel;
 import org.sosy_lab.cpachecker.cfa.types.Type;
 import org.sosy_lab.cpachecker.cfa.types.c.CBasicType;
 import org.sosy_lab.cpachecker.cfa.types.c.CSimpleType;
+import org.sosy_lab.cpachecker.core.Specification;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
+import org.sosy_lab.cpachecker.core.reachedset.AggregatedReachedSets;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSetFactory;
 import org.sosy_lab.cpachecker.cpa.interval.Interval;
 import org.sosy_lab.cpachecker.cpa.interval.IntervalAnalysisState;
@@ -73,14 +67,21 @@ import org.sosy_lab.cpachecker.util.predicates.regions.SymbolicRegionManager;
 import org.sosy_lab.cpachecker.util.predicates.smt.FormulaManagerView;
 import org.sosy_lab.cpachecker.util.states.MemoryLocation;
 import org.sosy_lab.cpachecker.util.test.TestDataTools;
-import org.sosy_lab.solver.api.BooleanFormula;
-import org.sosy_lab.solver.api.BooleanFormulaManager;
-import org.sosy_lab.solver.api.IntegerFormulaManager;
+import org.sosy_lab.java_smt.api.BooleanFormula;
+import org.sosy_lab.java_smt.api.BooleanFormulaManager;
+import org.sosy_lab.java_smt.api.IntegerFormulaManager;
 
-import com.google.common.truth.Truth;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
 
 public class TranslatorTest {
 
+  private final MachineModel machineModel = MachineModel.LINUX32;
   private String[] varNames = {"var1", "var2", "var3", "fun::var1", "fun::varB", "fun::varC"};
   private CSimpleType integervariable = new CSimpleType(false, false, CBasicType.INT, false, false, false, false, false, false, false);
   private SSAMap ssaTest;
@@ -106,10 +107,11 @@ public class TranslatorTest {
 
     Truth.assertThat(constantsMap).hasSize(4);
 
-    ValueAnalysisState vStateTest = new ValueAnalysisState(constantsMap, locToTypeMap);
+    ValueAnalysisState vStateTest =
+        new ValueAnalysisState(Optional.of(machineModel), constantsMap, locToTypeMap);
     Truth.assertThat(vStateTest.getConstantsMapView()).isNotEmpty();
     ValueRequirementsTranslator vReqTransTest =
-        new ValueRequirementsTranslator(TestLogManager.getInstance());
+        new ValueRequirementsTranslator(LogManager.createTestLogManager());
 
     // Test of method getVarsInRequirements()
     List<String> varsInRequirements = vReqTransTest.getVarsInRequirements(vStateTest);
@@ -140,7 +142,7 @@ public class TranslatorTest {
     sStateTest = sStateTest.assignSignToVariable("fun::varB", SIGN.PLUS0);
     sStateTest = sStateTest.assignSignToVariable("fun::varC", SIGN.MINUS0);
     SignRequirementsTranslator sReqTransTest =
-        new SignRequirementsTranslator(TestLogManager.getInstance());
+        new SignRequirementsTranslator(LogManager.createTestLogManager());
 
     // Test method getVarsInRequirements()
     List<String> varsInReq = sReqTransTest.getVarsInRequirements(sStateTest);
@@ -173,9 +175,8 @@ public class TranslatorTest {
     Truth.assertThat(listOfIndepententReq).containsExactlyElementsIn(content);
   }
 
-  @SuppressWarnings("unchecked")
   @Test
-  public void testIntervalAndCartesianTranslator() throws NoSuchMethodException, SecurityException, IllegalAccessException, IllegalArgumentException, InvocationTargetException {
+  public void testIntervalAndCartesianTranslator() {
     PersistentMap<String, Interval> intervals = PathCopyingPersistentTreeMap.of();
     PersistentMap<String, Integer> referenceMap = PathCopyingPersistentTreeMap.of();
 
@@ -188,7 +189,7 @@ public class TranslatorTest {
 
     IntervalAnalysisState iStateTest = new IntervalAnalysisState(intervals, referenceMap);
     IntervalRequirementsTranslator iReqTransTest =
-        new IntervalRequirementsTranslator(TestLogManager.getInstance());
+        new IntervalRequirementsTranslator(LogManager.createTestLogManager());
 
     // Test method getVarsInRequirements()
     List<String> varsInRequirements = iReqTransTest.getVarsInRequirements(iStateTest);
@@ -220,13 +221,13 @@ public class TranslatorTest {
     Truth.assertThat(listOfIndependentRequirements).containsExactlyElementsIn(content);
 
     // Test method writeVarDefinition()
-    Method writeVarDefinition = CartesianRequirementsTranslator.class.getDeclaredMethod("writeVarDefinition", new Class[]{List.class, SSAMap.class, Collection.class});
-    writeVarDefinition.setAccessible(true);
-    @SuppressWarnings("unchecked")
-    List<String> varDefinition = (List<String>) writeVarDefinition.invoke(iReqTransTest, Arrays.asList(varNames), ssaTest, Collections.<String>emptyList());
+    List<String> varDefinition =
+        CartesianRequirementsTranslator.writeVarDefinition(
+            Arrays.asList(varNames), ssaTest, Collections.<String>emptyList());
     Truth.assertThat(varDefinition).isEmpty();
 
-    varDefinition = (List<String>) writeVarDefinition.invoke(iReqTransTest, Arrays.asList(varNames), ssaTest, null);
+    varDefinition =
+        CartesianRequirementsTranslator.writeVarDefinition(Arrays.asList(varNames), ssaTest, null);
     content = new ArrayList<>();
     content.add("(declare-fun var1@1 () Int)");
     content.add("(declare-fun var2 () Int)");
@@ -236,7 +237,9 @@ public class TranslatorTest {
     content.add("(declare-fun |fun::varC| () Int)");
     Truth.assertThat(varDefinition).containsExactlyElementsIn(content);
 
-    varDefinition = (List<String>) writeVarDefinition.invoke(iReqTransTest, Arrays.asList(varNames), ssaTest, requiredVars);
+    varDefinition =
+        CartesianRequirementsTranslator.writeVarDefinition(
+            Arrays.asList(varNames), ssaTest, requiredVars);
     List<String> content2 = new ArrayList<>();
     content2.add("(declare-fun var1@1 () Int)");
     content2.add("(declare-fun var3@1 () Int)");
@@ -283,25 +286,27 @@ public class TranslatorTest {
   public void testPredicateRequirementsTranslator() throws InvalidConfigurationException, CPAException,
       UnsupportedOperationException, IOException, ParserException, InterruptedException {
     Configuration config = TestDataTools.configurationForTest().build();
-    LogManager logger = new BasicLogManager(config);
+    LogManager logger = LogManager.createTestLogManager();
     PredicateCPA predicateCpa =
         (PredicateCPA)
             PredicateCPA.factory()
                 .setConfiguration(config)
                 .setLogger(logger)
+                .set(new AggregatedReachedSets(), AggregatedReachedSets.class)
                 .setShutdownNotifier(ShutdownNotifier.createDummy())
                 .set(TestDataTools.makeCFA("void main(){}"), CFA.class)
                 .set(new ReachedSetFactory(config), ReachedSetFactory.class)
+                .set(Specification.alwaysSatisfied(), Specification.class)
                 .createInstance();
     FormulaManagerView fmv = predicateCpa.getSolver().getFormulaManager();
 
     // Region used in abstractionFormula
-    RegionManager regionManager = new SymbolicRegionManager(fmv, null);
-    Region region = regionManager.createPredicate();
+    RegionManager regionManager = new SymbolicRegionManager(predicateCpa.getSolver());
+    Region region = regionManager.makeTrue();
 
     // Initialize formula manager
     BooleanFormulaManager bfmgr = fmv.getBooleanFormulaManager();
-    BooleanFormula bf = bfmgr.makeBoolean(true);
+    BooleanFormula bf = bfmgr.makeTrue();
 
     // create empty path formula
     PathFormula pathFormula = new PathFormula(bf, SSAMap.emptySSAMap(), PointerTargetSet.emptyPointerTargetSet(), 0);
@@ -317,14 +322,14 @@ public class TranslatorTest {
     BooleanFormula bf13 = ifmgr.lessThan(ifmgr.makeVariable("fun::var1"), ifmgr.makeNumber(0));
     BooleanFormula bf14 = bfmgr.or(bf11, bf12);
     BooleanFormula bf1 = bfmgr.and(bf14, bf13);
-    aFormula = new AbstractionFormula(fmv, region, bf1, bfmgr.makeBoolean(true), pathFormula, Collections.<Integer>emptySet());
+    aFormula = new AbstractionFormula(fmv, region, bf1, bfmgr.makeTrue(), pathFormula, Collections.<Integer>emptySet());
     PredicateAbstractState pf1State = PredicateAbstractState.mkAbstractionState(pathFormula, aFormula, PathCopyingPersistentTreeMap.<CFANode, Integer>of());
 
     // create PredicateAbstractState pf2State
     BooleanFormula bf21 = ifmgr.greaterThan(ifmgr.makeVariable("var2"), ifmgr.makeVariable("fun::varB"));
     BooleanFormula bf22 = ifmgr.lessThan(ifmgr.makeVariable("fun::varC"), ifmgr.makeNumber(0));
     BooleanFormula bf2 = bfmgr.and(bf21, bf22);
-    aFormula = new AbstractionFormula(fmv, region, bf2, bfmgr.makeBoolean(true), pathFormula, Collections.<Integer>emptySet());
+    aFormula = new AbstractionFormula(fmv, region, bf2, bfmgr.makeTrue(), pathFormula, Collections.<Integer>emptySet());
     PredicateAbstractState pf2State = PredicateAbstractState.mkAbstractionState(pathFormula, aFormula, PathCopyingPersistentTreeMap.<CFANode, Integer>of());
 
     PredicateRequirementsTranslator pReqTrans = new PredicateRequirementsTranslator(predicateCpa);
@@ -391,7 +396,7 @@ public class TranslatorTest {
   }
 
   @Test
-  public void testOctagonTranslator() throws InvalidConfigurationException {
+  public void testOctagonTranslator() {
 //    int numVars = 3;
 //    OctagonIntManager manager = new OctagonIntManager();
 //    Configuration config = TestDataTools.configurationForTest().build();
@@ -438,7 +443,7 @@ public class TranslatorTest {
 //
 //    map.put(memLocs.get(2), 2);
 //
-//    OctagonRequirementsTranslator octReqTranslator = new OctagonRequirementsTranslator(OctagonState.class, TestLogManager.getInstance());
+//    OctagonRequirementsTranslator octReqTranslator = new OctagonRequirementsTranslator(OctagonState.class, LogManager.createTestLogManager());
 //
 //    // Test getVarsInRequirements
 //    List<String> varsInRequirements = octReqTranslator.getVarsInRequirements(octState, null);
@@ -478,7 +483,7 @@ public class TranslatorTest {
   }
 
   @Test
-  public void testApronTranslator() throws InvalidConfigurationException {
+  public void testApronTranslator() {
 //    ApronManager apronManager = new ApronManager(TestDataTools.configurationForTest().build());
 //
 //    List<MemoryLocation> intMap = new ArrayList<>();
@@ -502,7 +507,7 @@ public class TranslatorTest {
 //    Map<MemoryLocation, ApronState.Type> typeMap = new HashMap<>(); // TODO
 //    // TODO
 //
-//    ApronRequirementsTranslator apronReqTranslator = new ApronRequirementsTranslator(ApronState.class, TestLogManager.getInstance());
+//    ApronRequirementsTranslator apronReqTranslator = new ApronRequirementsTranslator(ApronState.class, LogManager.createTestLogManager());
 //
 //    Abstract0 aprUni = new Abstract0(apronManager.getManager(), 6, 0);
 //    Tcons0[] constraints = new Tcons0[5];
@@ -518,7 +523,7 @@ public class TranslatorTest {
 //    constraints[4] = new Tcons0(Tcons0.EQMOD, node, new DoubleScalar(5));
 //    Abstract0 apr = aprUni.meetCopy(apronManager.getManager(), constraints);
 //
-//    ApronState aprState = new ApronState(apr, apronManager, intMap, realMap, typeMap, false, TestLogManager.getInstance());
+//    ApronState aprState = new ApronState(apr, apronManager, intMap, realMap, typeMap, false, LogManager.createTestLogManager());
 //
 //    List<String> varsInReq = apronReqTranslator.getVarsInRequirements(aprState, null);
 //    List<String>list = new ArrayList<>();

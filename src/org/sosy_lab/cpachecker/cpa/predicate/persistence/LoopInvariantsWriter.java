@@ -23,36 +23,34 @@
  */
 package org.sosy_lab.cpachecker.cpa.predicate.persistence;
 
-import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.collect.FluentIterable.from;
 import static org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState.getPredicateState;
 import static org.sosy_lab.cpachecker.util.AbstractStates.extractLocation;
 
+import com.google.common.collect.Maps;
 import java.io.IOException;
 import java.io.Writer;
+import java.nio.charset.Charset;
+import java.nio.file.Path;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
-
-import org.sosy_lab.cpachecker.util.Pair;
-import org.sosy_lab.common.io.Files;
-import org.sosy_lab.common.io.Path;
+import org.sosy_lab.common.io.MoreFiles;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
-import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
+import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
-import org.sosy_lab.cpachecker.util.CFAUtils;
+import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.predicates.AbstractionManager;
 import org.sosy_lab.cpachecker.util.predicates.regions.Region;
 import org.sosy_lab.cpachecker.util.predicates.regions.RegionManager;
-import org.sosy_lab.solver.api.BooleanFormula;
 import org.sosy_lab.cpachecker.util.predicates.smt.FormulaManagerView;
-
-import com.google.common.collect.Maps;
+import org.sosy_lab.java_smt.api.BooleanFormula;
 
 
 public class LoopInvariantsWriter {
@@ -72,7 +70,7 @@ public class LoopInvariantsWriter {
     this.rmgr = pRegMgr;
   }
 
-  private Map<CFANode, Region> getLoopHeadInvariants(ReachedSet reached) {
+  private Map<CFANode, Region> getLoopHeadInvariants(UnmodifiableReachedSet reached) {
     if (!cfa.getAllLoopHeads().isPresent()) {
       logger.log(Level.WARNING, "Cannot dump loop invariants because loop-structure information is not available.");
       return null;
@@ -89,7 +87,7 @@ public class LoopInvariantsWriter {
           return null;
         }
 
-        Region region = firstNonNull(regions.get(loc), rmgr.makeFalse());
+        Region region = regions.getOrDefault(loc, rmgr.makeFalse());
         region = rmgr.makeOr(region, predicateState.getAbstractionFormula().asRegion());
         regions.put(loc, region);
       }
@@ -98,18 +96,19 @@ public class LoopInvariantsWriter {
     return regions;
   }
 
-  public void exportLoopInvariants(Path invariantsFile, ReachedSet reached) {
+  public void exportLoopInvariants(Path invariantsFile, UnmodifiableReachedSet reached) {
     Map<CFANode, Region> regions = getLoopHeadInvariants(reached);
     if (regions == null) {
       return;
     }
 
-    try (Writer writer = Files.openOutputFile(invariantsFile)) {
-      for (CFANode loc : from(cfa.getAllLoopHeads().get())
-                           .toSortedSet(CFAUtils.NODE_NUMBER_COMPARATOR)) {
+    try (Writer writer = MoreFiles.openOutputFile(invariantsFile, Charset.defaultCharset())) {
+      for (CFANode loc :
+          from(cfa.getAllLoopHeads().get())
+              .toSortedSet(Comparator.comparingInt(CFANode::getNodeNumber))) {
 
-        Region region = firstNonNull(regions.get(loc), rmgr.makeFalse());
-        BooleanFormula formula = absmgr.toConcrete(region);
+        Region region = regions.getOrDefault(loc, rmgr.makeFalse());
+        BooleanFormula formula = absmgr.convertRegionToFormula(region);
 
         writer.append("loop__");
         writer.append(loc.getFunctionName());
@@ -124,7 +123,7 @@ public class LoopInvariantsWriter {
     }
   }
 
-  public void exportLoopInvariantsAsPrecision(Path invariantPrecisionsFile, ReachedSet reached) {
+  public void exportLoopInvariantsAsPrecision(Path invariantPrecisionsFile, UnmodifiableReachedSet reached) {
     Map<CFANode, Region> regions = getLoopHeadInvariants(reached);
     if (regions == null) {
       return;
@@ -133,11 +132,13 @@ public class LoopInvariantsWriter {
     Set<String> uniqueDefs = new HashSet<>();
     StringBuilder asserts = new StringBuilder();
 
-    try (Writer writer = Files.openOutputFile(invariantPrecisionsFile)) {
-      for (CFANode loc : from(cfa.getAllLoopHeads().get())
-                           .toSortedSet(CFAUtils.NODE_NUMBER_COMPARATOR)) {
-        Region region = firstNonNull(regions.get(loc), rmgr.makeFalse());
-        BooleanFormula formula = absmgr.toConcrete(region);
+    try (Writer writer =
+        MoreFiles.openOutputFile(invariantPrecisionsFile, Charset.defaultCharset())) {
+      for (CFANode loc :
+          from(cfa.getAllLoopHeads().get())
+              .toSortedSet(Comparator.comparingInt(CFANode::getNodeNumber))) {
+        Region region = regions.getOrDefault(loc, rmgr.makeFalse());
+        BooleanFormula formula = absmgr.convertRegionToFormula(region);
         Pair<String, List<String>> locInvariant = PredicatePersistenceUtils.splitFormula(fmgr, formula);
 
         for (String def : locInvariant.getSecond()) {

@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2014  Dirk Beyer
+ *  Copyright (C) 2007-2017  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,13 +23,12 @@
  */
 package org.sosy_lab.cpachecker.cpa.interval;
 
+import com.google.common.base.Splitter;
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-
 import org.sosy_lab.common.collect.PathCopyingPersistentTreeMap;
 import org.sosy_lab.common.collect.PersistentMap;
 import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
@@ -37,18 +36,21 @@ import org.sosy_lab.cpachecker.core.defaults.LatticeAbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractQueryableState;
 import org.sosy_lab.cpachecker.core.interfaces.FormulaReportingState;
 import org.sosy_lab.cpachecker.core.interfaces.Graphable;
+import org.sosy_lab.cpachecker.core.interfaces.PseudoPartitionable;
 import org.sosy_lab.cpachecker.exceptions.InvalidQueryException;
 import org.sosy_lab.cpachecker.util.CheckTypesOfStringsUtil;
-import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormulaManager;
 import org.sosy_lab.cpachecker.util.predicates.smt.FormulaManagerView;
-import org.sosy_lab.solver.api.BooleanFormula;
-import org.sosy_lab.solver.api.IntegerFormulaManager;
-import org.sosy_lab.solver.api.NumeralFormula;
+import org.sosy_lab.java_smt.api.BooleanFormula;
+import org.sosy_lab.java_smt.api.IntegerFormulaManager;
+import org.sosy_lab.java_smt.api.NumeralFormula;
 
-import com.google.common.base.Splitter;
-
-public class IntervalAnalysisState implements Serializable, LatticeAbstractState<IntervalAnalysisState>,
-    AbstractQueryableState, Graphable, FormulaReportingState {
+public class IntervalAnalysisState
+    implements Serializable,
+        LatticeAbstractState<IntervalAnalysisState>,
+        AbstractQueryableState,
+        Graphable,
+        FormulaReportingState,
+        PseudoPartitionable {
 
   private static final long serialVersionUID = -2030700797958100666L;
 
@@ -57,12 +59,12 @@ public class IntervalAnalysisState implements Serializable, LatticeAbstractState
   /**
    * the intervals of the element
    */
-  private PersistentMap<String, Interval> intervals;
+  private final PersistentMap<String, Interval> intervals;
 
   /**
    * the reference counts of the element
    */
-  private PersistentMap<String, Integer> referenceCounts;
+  private final PersistentMap<String, Integer> referenceCounts;
 
   /**
    *  This method acts as the default constructor, which initializes the intervals and reference counts to empty maps and the previous element to null.
@@ -80,7 +82,6 @@ public class IntervalAnalysisState implements Serializable, LatticeAbstractState
    */
   public IntervalAnalysisState(PersistentMap<String, Interval> intervals, PersistentMap<String, Integer> referencesMap) {
     this.intervals        = intervals;
-
     this.referenceCounts  = referencesMap;
   }
 
@@ -92,7 +93,7 @@ public class IntervalAnalysisState implements Serializable, LatticeAbstractState
    */
   // see ExplicitState::getValueFor
   public Interval getInterval(String variableName) {
-    return intervals.containsKey(variableName)?intervals.get(variableName):Interval.createUnboundInterval();
+    return intervals.getOrDefault(variableName, Interval.UNBOUND);
   }
 
   /**
@@ -102,21 +103,7 @@ public class IntervalAnalysisState implements Serializable, LatticeAbstractState
    * @return the reference count of the variable, or 0 if the the variable is not yet referenced
    */
   private Integer getReferenceCount(String variableName) {
-    return (referenceCounts.containsKey(variableName)) ? referenceCounts.get(variableName) : 0;
-  }
-
-  /**
-   * This method determines whether or not the reference count for a given variable exceeds a given threshold.
-   *
-   * @param variableName the name of the variable
-   * @param threshold the threshold
-   * @return true, if the reference count of the variable exceeds the given threshold, else false
-   */
-  @Deprecated
-  public boolean exceedsThreshold(String variableName, Integer threshold) {
-    Integer referenceCount = (referenceCounts.containsKey(variableName)) ? referenceCounts.get(variableName) : 0;
-
-    return referenceCount > threshold;
+    return referenceCounts.getOrDefault(variableName, 0);
   }
 
   /**
@@ -134,28 +121,26 @@ public class IntervalAnalysisState implements Serializable, LatticeAbstractState
    *
    * @param variableName name of the variable
    * @param interval the interval to be assigned
-   * @param pThreshold threshold from property explicitAnalysis.threshold
+   * @param pThreshold threshold from property valueAnalysis.threshold
    * @return this
    */
   // see ExplicitState::assignConstant
   public IntervalAnalysisState addInterval(String variableName, Interval interval, int pThreshold) {
     if (interval.isUnbound()) {
-      removeInterval(variableName);
-      return this;
+      return removeInterval(variableName);
     }
     // only add the interval if it is not already present
     if (!intervals.containsKey(variableName) || !intervals.get(variableName).equals(interval)) {
       int referenceCount = getReferenceCount(variableName);
 
       if (pThreshold == -1 || referenceCount < pThreshold) {
-        referenceCounts = referenceCounts.putAndCopy(variableName, referenceCount + 1);
-
-        intervals = intervals.putAndCopy(variableName, interval);
+        return new IntervalAnalysisState(
+            intervals.putAndCopy(variableName, interval),
+            referenceCounts.putAndCopy(variableName, referenceCount + 1));
       } else {
-        removeInterval(variableName);
+        return removeInterval(variableName);
       }
     }
-
     return this;
   }
 
@@ -168,18 +153,20 @@ public class IntervalAnalysisState implements Serializable, LatticeAbstractState
   // see ExplicitState::forget
   public IntervalAnalysisState removeInterval(String variableName) {
     if (intervals.containsKey(variableName)) {
-      intervals = intervals.removeAndCopy(variableName);
+      return new IntervalAnalysisState(intervals.removeAndCopy(variableName), referenceCounts);
     }
 
     return this;
   }
 
-  public void dropFrame(String pCalledFunctionName) {
+  public IntervalAnalysisState dropFrame(String pCalledFunctionName) {
+    IntervalAnalysisState tmp = this;
     for (String variableName : intervals.keySet()) {
       if (variableName.startsWith(pCalledFunctionName+"::")) {
-        removeInterval(variableName);
+        tmp = tmp.removeInterval(variableName);
       }
     }
+    return tmp;
   }
 
   /**
@@ -258,15 +245,11 @@ public class IntervalAnalysisState implements Serializable, LatticeAbstractState
     return true;
   }
 
-  public static IntervalAnalysisState copyOf(IntervalAnalysisState old) {
-    return new IntervalAnalysisState(old.intervals, old.referenceCounts);
-  }
-
   /**
    * @return the set of tracked variables by this state
    */
   public Map<String,Interval> getIntervalMap() {
-    return intervals; //  TODO make immutable?
+    return intervals;
   }
 
   /** If there was a recursive function, we have wrong intervals for scoped variables in the returnState.
@@ -280,12 +263,12 @@ public class IntervalAnalysisState implements Serializable, LatticeAbstractState
     // - the local return variable from THIS.
     // we copy callState and override all global values and the return variable.
 
-    final IntervalAnalysisState rebuildState = IntervalAnalysisState.copyOf(callState);
+    IntervalAnalysisState rebuildState = callState;
 
     // first forget all global information
     for (final String trackedVar : callState.intervals.keySet()) {
       if (!trackedVar.contains("::")) { // global -> delete
-        rebuildState.removeInterval(trackedVar);
+        rebuildState = rebuildState.removeInterval(trackedVar);
       }
     }
 
@@ -293,14 +276,14 @@ public class IntervalAnalysisState implements Serializable, LatticeAbstractState
     for (final String trackedVar : this.intervals.keySet()) {
 
       if (!trackedVar.contains("::")) { // global -> override deleted value
-        rebuildState.addInterval(trackedVar, this.getInterval(trackedVar), -1);
+        rebuildState = rebuildState.addInterval(trackedVar, this.getInterval(trackedVar), -1);
 
       } else if (functionExit.getEntryNode().getReturnVariable().isPresent() &&
           functionExit.getEntryNode().getReturnVariable().get().getQualifiedName().equals(trackedVar)) {
         assert (!rebuildState.contains(trackedVar)) :
                 "calling function should not contain return-variable of called function: " + trackedVar;
         if (this.contains(trackedVar)) {
-          rebuildState.addInterval(trackedVar, this.getInterval(trackedVar), -1);
+          rebuildState = rebuildState.addInterval(trackedVar, this.getInterval(trackedVar), -1);
         }
       }
     }
@@ -317,24 +300,11 @@ public class IntervalAnalysisState implements Serializable, LatticeAbstractState
       return true;
     }
 
-    if (other == null || !getClass().equals(other.getClass())) {
-      return false;
+    if (other instanceof IntervalAnalysisState) {
+      IntervalAnalysisState otherElement = (IntervalAnalysisState) other;
+      return intervals.equals(otherElement.intervals);
     }
-
-    IntervalAnalysisState otherElement = (IntervalAnalysisState)other;
-
-    if (intervals.size() != otherElement.intervals.size()) {
-      return false;
-    }
-
-    for (Entry<String, Interval> variableName : intervals.entrySet()) {
-      if (!otherElement.intervals.containsKey(variableName.getKey())
-          || !otherElement.intervals.get(variableName.getKey()).equals(variableName.getValue())) {
-        return false;
-      }
-    }
-
-    return true;
+    return false;
   }
 
   /* (non-Javadoc)
@@ -354,17 +324,11 @@ public class IntervalAnalysisState implements Serializable, LatticeAbstractState
     sb.append("[\n");
 
     for (Map.Entry<String, Interval> entry: intervals.entrySet()) {
-      String key = entry.getKey();
-      sb.append(" <");
-      sb.append(key);
-      sb.append(" = ");
-      sb.append(entry.getValue());
-      sb.append(" :: ");
-      sb.append(getReferenceCount(key));
-      sb.append(">\n");
+      sb.append(String.format("  < %s = %s :: %s >%n",
+          entry.getKey(), entry.getValue(), getReferenceCount(entry.getKey())));
     }
 
-    return sb.append("] size->  ").append(intervals.size()).toString();
+    return sb.append("] size -> ").append(intervals.size()).toString();
   }
 
   @Override
@@ -413,28 +377,14 @@ public class IntervalAnalysisState implements Serializable, LatticeAbstractState
   }
 
   @Override
-  public Object evaluateProperty(String pProperty) throws InvalidQueryException {
-    return Boolean.valueOf(checkProperty(pProperty));
-  }
-
-  @Override
-  public void modifyProperty(String pModification) throws InvalidQueryException {
-    throw new InvalidQueryException("The modifying query " + pModification + " is an unsupported operation in " + getCPAName() + "!");
-  }
-
-  @Override
   public String toDOTLabel() {
     StringBuilder sb = new StringBuilder();
 
     sb.append("{");
     // create a string like: x =  [low; high] (refCount)
     for (Entry<String, Interval> entry : intervals.entrySet()) {
-      sb.append(entry.getKey());
-      sb.append(" = ");
-      sb.append(entry.getValue());
-      sb.append(" (");
-      sb.append(referenceCounts.get(entry.getKey()));
-      sb.append("), ");
+      sb.append(String.format("%s = %s (%s), ",
+          entry.getKey(), entry.getValue(), getReferenceCount(entry.getKey())));
     }
     sb.append("}");
 
@@ -446,19 +396,15 @@ public class IntervalAnalysisState implements Serializable, LatticeAbstractState
     return false;
   }
 
-  public Map<String, Interval> getIntervalMapView() {
-    return Collections.unmodifiableMap(intervals);
-  }
-
   @Override
-  public BooleanFormula getFormulaApproximation(FormulaManagerView pMgr, PathFormulaManager pPfmgr) {
+  public BooleanFormula getFormulaApproximation(FormulaManagerView pMgr) {
     IntegerFormulaManager nfmgr = pMgr.getIntegerFormulaManager();
     List<BooleanFormula> result = new ArrayList<>();
     for (Entry<String, Interval> entry : intervals.entrySet()) {
       Interval interval = entry.getValue();
       if (interval.isEmpty()) {
         // one invalid interval disqualifies the whole state
-        return pMgr.getBooleanFormulaManager().makeBoolean(false);
+        return pMgr.getBooleanFormulaManager().makeFalse();
       }
 
       // we assume that everything is an SIGNED INTEGER
@@ -474,5 +420,15 @@ public class IntervalAnalysisState implements Serializable, LatticeAbstractState
       }
     }
     return pMgr.getBooleanFormulaManager().and(result);
+  }
+
+  @Override
+  public Comparable<?> getPseudoPartitionKey() {
+    return intervals.size();
+  }
+
+  @Override
+  public Object getPseudoHashCode() {
+    return this;
   }
 }

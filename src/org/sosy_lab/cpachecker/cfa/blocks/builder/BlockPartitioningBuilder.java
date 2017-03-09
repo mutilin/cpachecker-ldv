@@ -2,7 +2,7 @@
  *  CPAchecker is a tool for configurable software verification.
  *  This file is part of CPAchecker.
  *
- *  Copyright (C) 2007-2014  Dirk Beyer
+ *  Copyright (C) 2007-2016  Dirk Beyer
  *  All rights reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,40 +23,38 @@
  */
 package org.sosy_lab.cpachecker.cfa.blocks.builder;
 
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableSet.Builder;
+import com.google.common.collect.Iterables;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-
+import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.blocks.BlockPartitioning;
 import org.sosy_lab.cpachecker.cfa.blocks.ReferencedVariable;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdgeType;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.CFATerminationNode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
-import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsTransferRelation;
-
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Sets;
 import org.sosy_lab.cpachecker.util.CFATraversal;
 import org.sosy_lab.cpachecker.util.CFAUtils;
-
-import com.google.common.collect.Iterables;
-
 
 /**
  * Helper class can build a <code>BlockPartitioning</code> from a partition of a program's CFA into blocks.
  */
 public class BlockPartitioningBuilder {
+
+  private static final CFATraversal TRAVERSE_CFA_INSIDE_FUNCTION = CFATraversal.dfs().ignoreFunctionCalls();
 
   protected final Map<CFANode, Set<ReferencedVariable>> referencedVariablesMap = new HashMap<>();
   protected final Map<CFANode, Set<LockIdentifier>> capturedLocksMap = new HashMap<>();
@@ -65,172 +63,90 @@ public class BlockPartitioningBuilder {
   protected final Map<CFANode, Set<FunctionEntryNode>> innerFunctionCallsMap = new HashMap<>();
   protected final Map<CFANode, Set<CFANode>> blockNodesMap = new HashMap<>();
 
-  private final LockStatisticsTransferRelation ltransfer;
+  public BlockPartitioning build(CFA cfa) {
 
-  public BlockPartitioningBuilder(LockStatisticsTransferRelation t) {
-    ltransfer = t;
+    // using Multimaps causes an overhead here,
+    // because large sets could be copied once at 'putAll' and then they are thrown away
+
+    // first pre-compute the block-structure for functions. we use it for optimization
+    Map<FunctionEntryNode, Set<CFANode>> functions = new HashMap<>();
+    Map<FunctionEntryNode, Set<ReferencedVariable>> referencedVariables = new HashMap<>();
+    Map<FunctionEntryNode, Set<FunctionEntryNode>> innerFunctionCalls = new HashMap<>();
+    for (FunctionEntryNode head : cfa.getAllFunctionHeads()) {
+      final Set<CFANode> body = TRAVERSE_CFA_INSIDE_FUNCTION.collectNodesReachableFrom(head);
+      functions.put(head, body);
+      referencedVariables.put(head, collectReferencedVariables(body));
+      innerFunctionCalls.put(head, collectInnerFunctionCalls(body));
+    }
+
+    // then get directly called functions and sum up all indirectly called functions
+    Map<CFANode, Set<FunctionEntryNode>> blockFunctionCalls = new HashMap<>();
+    for (CFANode callNode : callNodesMap.keySet()) {
+      Set<FunctionEntryNode> calledFunctions = getAllCalledFunctions(innerFunctionCalls,
+          collectInnerFunctionCalls(blockNodesMap.get(callNode)));
+      blockFunctionCalls.put(callNode, calledFunctions);
+    }
+
+    //now we can create the Blocks   for the BlockPartitioning
+    Collection<Block> blocks = new ArrayList<>();
+    for (Entry<CFANode, Set<CFANode>> entry : callNodesMap.entrySet()) {
+      CFANode callNode = entry.getKey();
+
+      // we collect nodes and variables from all inner function calls
+      Collection<Iterable<ReferencedVariable>> variables = new ArrayList<>();
+      Collection<Iterable<CFANode>> blockNodes = new ArrayList<>();
+      Set<CFANode> directNodes = blockNodesMap.get(callNode);
+      blockNodes.add(directNodes);
+      variables.add(referencedVariablesMap.get(callNode));
+      for (FunctionEntryNode calledFunction : blockFunctionCalls.get(callNode)) {
+        blockNodes.add(functions.get(calledFunction));
+        variables.add(referencedVariables.get(calledFunction));
+      }
+
+      blocks.add(
+          new Block(
+              Iterables.concat(variables),
+              entry.getValue(),
+              returnNodesMap.get(callNode),
+              Iterables.concat(blockNodes)));
+    }
+
+    return new BlockPartitioning(blocks, cfa.getMainFunction());
   }
 
-  public BlockPartitioning build(CFANode mainFunction) {
-    Map<CFANode, Set<FunctionEntryNode>> workCopyOfInnerFunctionCalls = new HashMap<>();
-
-    /* We chose one representative from every loop.
-     * This map stores for the node its representative.
-     */
-    Map<CFANode, CFANode> loopMapping = new HashMap<>();
-
-    //Deep clone, because we will delete nodes
-    for (CFANode node : innerFunctionCallsMap.keySet()) {
-      Set<FunctionEntryNode> newSet = Sets.newHashSet(innerFunctionCallsMap.get(node));
-      workCopyOfInnerFunctionCalls.put(node, newSet);
-    }
-
-    //Set of not handled CFANodes
-    Set<CFANode> workCopyOfCFANodes = Sets.newHashSet(referencedVariablesMap.keySet());
-    do {
-      //loop for finding single nodes
-      Set<CFANode> SingleNodes = new HashSet<>();
-      do {
-        SingleNodes.clear();
-        for (CFANode node : workCopyOfCFANodes) {
-          Set<FunctionEntryNode> calls = workCopyOfInnerFunctionCalls.get(node);
-          //Remove single-node loop
-          calls.remove(node);
-          if (calls.isEmpty()) {
-            SingleNodes.add(node);
-          }
-        }
-        if (!SingleNodes.isEmpty()) {
-          workCopyOfCFANodes.removeAll(SingleNodes);
-
-          for (CFANode node : workCopyOfCFANodes) {
-            Iterator<FunctionEntryNode> iterator = workCopyOfInnerFunctionCalls.get(node).iterator();
-            while (iterator.hasNext()) {
-              FunctionEntryNode calledFun = iterator.next();
-              if (SingleNodes.contains(calledFun)) {
-                iterator.remove();
-                joinFunctionPartitioning(node, calledFun);
-              }
-            }
-          }
-        }
-      } while (!SingleNodes.isEmpty());
-
-      if (workCopyOfCFANodes.isEmpty()) {
-        break;
-      }
-      //Detect a recursion loop
-      LinkedList<CFANode> foundedRecursionLoop = new LinkedList<>();
-      /* Create a random path by getting the first function call from every node
-       * and find the first node which is repeated
-       */
-      CFANode representativeNode = workCopyOfCFANodes.iterator().next();
-      while (!foundedRecursionLoop.contains(representativeNode)) {
-        foundedRecursionLoop.add(representativeNode);
-        representativeNode = workCopyOfInnerFunctionCalls.get(representativeNode).iterator().next();
-        assert (representativeNode != null);
-      }
-
-      Set<FunctionEntryNode> functionsCalledFromTheLoop = new HashSet<>();
-      //Remove the first elements, which are not included in the loop
-      while (!foundedRecursionLoop.pollFirst().equals(representativeNode)) {}
-      //Join all partitions of functions from the loop
-      for (CFANode recursiveCaller : foundedRecursionLoop) {
-        loopMapping.put(recursiveCaller, representativeNode);
-        joinFunctionPartitioning(representativeNode, recursiveCaller);
-        workCopyOfCFANodes.remove(recursiveCaller);
-        functionsCalledFromTheLoop.addAll(workCopyOfInnerFunctionCalls.get(recursiveCaller));
-        //Remove the handled node from others
-        for (CFANode node : workCopyOfCFANodes) {
-          Set<FunctionEntryNode> callers = workCopyOfInnerFunctionCalls.get(node);
-          if (callers.remove(recursiveCaller)) {
-            //Do not add single node loops
-            if (!node.equals(representativeNode)) {
-              // We should add to callers one node from the loop instead of removed one.
-              callers.add((FunctionEntryNode) representativeNode);
-            }
-          }
-        }
-      }
-      foundedRecursionLoop.add(representativeNode);
-      functionsCalledFromTheLoop.removeAll(foundedRecursionLoop);
-      //Add to chosen node (representative) all function calls from removed functions
-      workCopyOfInnerFunctionCalls.get(representativeNode).addAll(functionsCalledFromTheLoop);
-
-    } while (!workCopyOfCFANodes.isEmpty()) ;
-
-    //Try to optimize the memory
-    Map<CFANode, ImmutableSet<ReferencedVariable>> immutableVariablesMap = new HashMap<>();
-    Map<CFANode, ImmutableSet<CFANode>> immutableNodesMap = new HashMap<>();
-    Map<CFANode, ImmutableSet<LockIdentifier>> immutableLocksMap = new HashMap<>();
-    //Resolve loop mapping
-    for (CFANode node : loopMapping.keySet()) {
-      CFANode mappedNode = loopMapping.get(node);
-      while (loopMapping.containsKey(mappedNode)) {
-        mappedNode = loopMapping.get(mappedNode);
-      }
-      /* We put the same object, because new Block() makes copy of these maps,
-       * so we do not care about this equality
-       */
-      ImmutableSet<ReferencedVariable> resultVars;
-      ImmutableSet<CFANode> resultNodes;
-      ImmutableSet<LockIdentifier> resultLocks;
-      if (!immutableVariablesMap.containsKey(mappedNode)) {
-        resultVars = ImmutableSet.copyOf(referencedVariablesMap.get(mappedNode));
-        immutableVariablesMap.put(mappedNode, resultVars);
-      } else {
-        resultVars = immutableVariablesMap.get(mappedNode);
-      }
-      immutableVariablesMap.put(node, resultVars);
-      if (!immutableNodesMap.containsKey(mappedNode)) {
-        resultNodes = ImmutableSet.copyOf(blockNodesMap.get(mappedNode));
-        immutableNodesMap.put(mappedNode, resultNodes);
-      } else {
-        resultNodes = immutableNodesMap.get(mappedNode);
-      }
-      immutableNodesMap.put(node, resultNodes);
-      if (!immutableLocksMap.containsKey(mappedNode)) {
-        resultLocks = ImmutableSet.copyOf(capturedLocksMap.get(mappedNode));
-        immutableLocksMap.put(mappedNode, resultLocks);
-      } else {
-        resultLocks = immutableLocksMap.get(mappedNode);
-      }
-      immutableLocksMap.put(node, resultLocks);
-    }
-
-    //now we can create the Blocks for the BlockPartitioning
-    Collection<Block> blocks = new ArrayList<>(returnNodesMap.keySet().size());
-    for (CFANode key : returnNodesMap.keySet()) {
-      if (immutableVariablesMap.containsKey(key)) {
-        assert immutableNodesMap.containsKey(key);
-        blocks.add(new Block(immutableVariablesMap.get(key), callNodesMap.get(key), returnNodesMap.get(key), immutableNodesMap.get(key), immutableLocksMap.get(key)));
-      } else {
-        blocks.add(new Block(ImmutableSet.copyOf(referencedVariablesMap.get(key)), callNodesMap.get(key),
-            returnNodesMap.get(key), ImmutableSet.copyOf(blockNodesMap.get(key)), ImmutableSet.copyOf(capturedLocksMap.get(key))));
+  private static Set<FunctionEntryNode> getAllCalledFunctions(
+      Map<FunctionEntryNode, Set<FunctionEntryNode>> innerFunctionCalls,
+      Set<FunctionEntryNode> directFunctions) {
+    Set<FunctionEntryNode> calledFunctions = new HashSet<>();
+    Deque<FunctionEntryNode> waitlist = new ArrayDeque<>();
+    waitlist.addAll(directFunctions);
+    while (!waitlist.isEmpty()) {
+      FunctionEntryNode entry  = waitlist.pop();
+      if (calledFunctions.add(entry)) {
+        waitlist.addAll(innerFunctionCalls.get(entry));
       }
     }
-    return new BlockPartitioning(blocks, mainFunction);
-  }
-
-  private void joinFunctionPartitioning(CFANode node, CFANode caller) {
-    Set<ReferencedVariable> functionVars = referencedVariablesMap.get(caller);
-    Set<CFANode> functionBody = blockNodesMap.get(caller);
-    Set<LockIdentifier> locks = capturedLocksMap.get(caller);
-    referencedVariablesMap.get(node).addAll(functionVars);
-    blockNodesMap.get(node).addAll(functionBody);
-    capturedLocksMap.get(node).addAll(locks);
+    return calledFunctions;
   }
 
   /**
-   * @param nodes Nodes from which Block should be created; if the set of nodes contains inner function calls, the called function body should NOT be included
+   * @param nodes Nodes from which Block should be created;
+   *              if the set of nodes contains inner function calls, the called
+   *              function body should NOT be included.
+   * @param blockHead Entry point for the block.
    */
-
-  public void addBlock(Set<CFANode> nodes, CFANode mainFunction) {
+  public void addBlock(Set<CFANode> nodes, CFANode blockHead) {
     Set<ReferencedVariable> referencedVariables = collectReferencedVariables(nodes);
-    Set<CFANode> callNodes = collectCallNodes(nodes, mainFunction);
-    Set<CFANode> returnNodes = collectReturnNodes(nodes, mainFunction);
+    Set<CFANode> callNodes = collectCallNodes(nodes);
+    Set<CFANode> returnNodes = collectReturnNodes(nodes);
     Set<FunctionEntryNode> innerFunctionCalls = collectInnerFunctionCalls(nodes);
-    Set<LockIdentifier> innerLocks = collectLocks(nodes);
+
+    if (callNodes.isEmpty()) {
+     /* What shall we do with function, which is not called from anywhere?
+      * There are problems with them at partitioning building stage
+      */
+      return;
+    }
 
     CFANode registerNode = null;
     for (CFANode node : callNodes) {
@@ -248,96 +164,91 @@ public class BlockPartitioningBuilder {
     returnNodesMap.put(registerNode, returnNodes);
     innerFunctionCallsMap.put(registerNode, innerFunctionCalls);
     blockNodesMap.put(registerNode, nodes);
-    capturedLocksMap.put(registerNode, innerLocks);
   }
 
-  private Set<LockIdentifier> collectLocks(Set<CFANode> pNodes) {
-    Set<LockIdentifier> result = new HashSet<>();
-    if (ltransfer == null) {
-      return Collections.emptySet();
-    }
-    for (CFANode node : pNodes) {
-      for (int i = 0; i < node.getNumLeavingEdges(); i++) {
-        CFAEdge e = node.getLeavingEdge(i);
-        result.addAll(ltransfer.getAffectedLocks(e));
-      }
-    }
-    return result;
-  }
-
-  private Set<FunctionEntryNode> collectInnerFunctionCalls(Set<CFANode> pNodes) {
-    Set<FunctionEntryNode> result = new HashSet<>();
+  /** get all inner function calls of the current block.
+   * Precondition: the block does not yet include function-calls
+   * (except we have a function-block of a recursive function)
+   *
+   *  @return all directly called functions (transitive function calls not included) */
+  protected Set<FunctionEntryNode> collectInnerFunctionCalls(Set<CFANode> pNodes) {
+    Builder<FunctionEntryNode> result = ImmutableSet.builder();
     for (CFANode node : pNodes) {
       for (CFAEdge e : CFAUtils.leavingEdges(node).filter(CFunctionCallEdge.class)) {
         result.add(((CFunctionCallEdge)e).getSuccessor());
       }
     }
-    return result;
+    return result.build();
   }
 
-  private Set<CFANode> collectCallNodes(Set<CFANode> pNodes, CFANode mainFunction) {
-    Set<CFANode> result = new HashSet<>();
+  /**
+   * get all call-nodes of the current block.
+   *
+   * <p>Precondition: the block does not yet include function-calls
+   */
+  protected Set<CFANode> collectCallNodes(Set<CFANode> pNodes) {
+    Builder<CFANode> result = ImmutableSet.builder();
     for (CFANode node : pNodes) {
-      if (node instanceof FunctionEntryNode &&
-         node.getFunctionName().equalsIgnoreCase(mainFunction.getFunctionName())) {
-        //main definition is always a call edge
-        result.add(node);
-        continue;
-      }
-      if (node.getEnteringSummaryEdge() != null) {
-        CFANode pred = node.getEnteringSummaryEdge().getPredecessor();
-        if (!pNodes.contains(pred)) {
-          result.add(node);
-        }
-        //ignore inner function calls
-        continue;
-      }
-      for (CFAEdge edge : CFAUtils.enteringEdges(node)) {
-        CFANode pred = edge.getPredecessor();
-        if (!pNodes.contains(pred)) {
-          //entering edge from "outside" of the given set of nodes
-          //-> this is a call-node
-          result.add(node);
-        }
-      }
-    }
-    return result;
-  }
 
-  private Set<CFANode> collectReturnNodes(Set<CFANode> pNodes, CFANode mainFunction) {
-    Set<CFANode> result = new HashSet<>();
-    for (CFANode node : pNodes) {
-      if (node instanceof FunctionExitNode &&
-         node.getFunctionName().equalsIgnoreCase(mainFunction.getFunctionName())) {
-        //main exit nodes are always return nodes
+      // handle a bug in CFA creation: there are ugly CFA-nodes ... and we ignore them.
+      if (node.getNumEnteringEdges() == 0 && node.getNumLeavingEdges() == 0) {
+        continue;
+      }
+
+      if (node.getNumEnteringEdges() == 0 && node.getEnteringSummaryEdge() == null) {
+        // entry of main function
         result.add(node);
         continue;
       }
 
-      for (CFAEdge leavingEdge : CFAUtils.leavingEdges(node)) {
-        CFANode succ = leavingEdge.getSuccessor();
-        if (!pNodes.contains(succ)) {
-          //leaving edge from inside of the given set of nodes to outside
-          //-> this is a either return-node or a function call
-          if (!(leavingEdge instanceof CFunctionCallEdge)) {
-            //-> only add if its not a function call
-            result.add(node);
-          } else {
-            //otherwise check if the summary edge is inside of the block
-            CFANode sumSucc = ((CFunctionCallEdge)leavingEdge).getSummaryEdge().getSuccessor();
-            if (!pNodes.contains(sumSucc)) {
-              //summary edge successor not in nodes set; this is a leaving edge
-              //add entering nodes
-              Iterables.addAll(result, CFAUtils.predecessorsOf(sumSucc));
-            }
-          }
+      for (CFAEdge edge : CFAUtils.allEnteringEdges(node)) {
+        if (edge.getEdgeType() != CFAEdgeType.FunctionReturnEdge
+            && !pNodes.contains(edge.getPredecessor())) {
+          // entering edge from "outside" of the given set of nodes.
+          // this case also handles blocks from recursive function-calls,
+          // because at least one callee should be outside of the block.
+          result.add(node);
         }
       }
     }
-    return result;
+    return result.build();
   }
 
-  private Set<ReferencedVariable> collectReferencedVariables(Set<CFANode> nodes) {
+  /**
+   * get all exit-nodes of the current block
+   *
+   * <p>Precondition: the block does not yet include function-calls
+   */
+  protected Set<CFANode> collectReturnNodes(Set<CFANode> pNodes) {
+    Builder<CFANode> result = ImmutableSet.builder();
+    for (CFANode node : pNodes) {
+
+      // handle a bug in CFA creation: there are ugly CFA-nodes ... and we ignore them.
+      if (node.getNumEnteringEdges() == 0 && node.getNumLeavingEdges() == 0) {
+        continue;
+      }
+
+      if (node.getNumLeavingEdges() == 0 && !(node instanceof CFATerminationNode)) {
+        // exit of main function
+        result.add(node);
+        continue;
+      }
+
+      for (CFAEdge edge : CFAUtils.allLeavingEdges(node)) {
+        if (edge.getEdgeType() != CFAEdgeType.FunctionCallEdge
+            && !pNodes.contains(edge.getSuccessor())) {
+          // leaving edge from inside of the given set of nodes to outside
+          // -> this is a either return-node or a function call
+          // this case also handles blocks from recursive function-calls,
+          // because at least one callee should be outside of the block.
+          result.add(node);
+        }
+      }
+    }
+    return result.build();
+  }
+
+  protected Set<ReferencedVariable> collectReferencedVariables(Set<CFANode> nodes) {
     return (new ReferencedVariablesCollector(nodes)).getVars();
   }
 }

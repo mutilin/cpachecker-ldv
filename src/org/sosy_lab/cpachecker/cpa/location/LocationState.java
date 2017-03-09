@@ -23,157 +23,61 @@
  */
 package org.sosy_lab.cpachecker.cpa.location;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-import static com.google.common.base.Predicates.*;
-import static com.google.common.collect.FluentIterable.from;
-import static org.sosy_lab.cpachecker.util.CFAUtils.*;
+import static com.google.common.base.Predicates.instanceOf;
+import static com.google.common.base.Predicates.not;
+import static com.google.common.base.Predicates.or;
+import static org.sosy_lab.cpachecker.util.CFAUtils.allEnteringEdges;
+import static org.sosy_lab.cpachecker.util.CFAUtils.allLeavingEdges;
+import static org.sosy_lab.cpachecker.util.CFAUtils.enteringEdges;
+import static org.sosy_lab.cpachecker.util.CFAUtils.leavingEdges;
 
+import com.google.common.base.Predicate;
 import java.io.Serializable;
 import java.util.Collections;
-import java.util.Set;
-import java.util.SortedSet;
-
-import org.sosy_lab.common.configuration.Configuration;
-import org.sosy_lab.common.configuration.InvalidConfigurationException;
-import org.sosy_lab.common.configuration.Option;
-import org.sosy_lab.common.configuration.Options;
-import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionCallEdge;
 import org.sosy_lab.cpachecker.cfa.model.FunctionReturnEdge;
-import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
-import org.sosy_lab.cpachecker.core.defaults.NamedProperty;
+import org.sosy_lab.cpachecker.cfa.model.c.CLabelNode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractQueryableState;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractStateWithLocation;
 import org.sosy_lab.cpachecker.core.interfaces.Partitionable;
-import org.sosy_lab.cpachecker.core.interfaces.Property;
-import org.sosy_lab.cpachecker.core.interfaces.Targetable;
 import org.sosy_lab.cpachecker.exceptions.InvalidQueryException;
 import org.sosy_lab.cpachecker.util.CFAUtils;
 import org.sosy_lab.cpachecker.util.globalinfo.CFAInfo;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 
-import com.google.common.base.Function;
-import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Ordering;
-
 public class LocationState implements AbstractStateWithLocation, AbstractQueryableState, Partitionable, Serializable {
 
   private static final long serialVersionUID = -801176497691618779L;
 
-  @Options(prefix="cpa.location")
-  public static class LocationStateFactory {
+  private final static Predicate<CFAEdge> NOT_FUNCTIONCALL =
+      not(or(instanceOf(FunctionReturnEdge.class), instanceOf(FunctionCallEdge.class)));
 
-    private final LocationState[] states;
-
-    enum LocationStateType {FORWARD, BACKWARD, BACKWARDNOTARGET}
-
-    @Option(secure=true, description="With this option enabled, unction calls that occur"
-        + " in the CFA are followed. By disabling this option one can traverse a function"
-        + " without following function calls (in this case FunctionSummaryEdges are used)")
-    private boolean followFunctionCalls = true;
-
-    public LocationStateFactory(CFA pCfa, LocationStateType locationType, Configuration config) throws InvalidConfigurationException {
-      config.inject(this);
-
-      SortedSet<CFANode> allNodes = from(pCfa.getAllNodes())
-          // First, we collect all CFANodes in between the inner edges of all MultiEdges.
-          // This is necessary for cpa.composite.splitMultiEdges
-          .transformAndConcat(new Function<CFANode, Iterable<CFAEdge>>() {
-                @Override
-                public Iterable<CFAEdge> apply(CFANode pInput) {
-                  return CFAUtils.leavingEdges(pInput);
-                }
-              })
-          .filter(MultiEdge.class)
-          .transformAndConcat(new Function<MultiEdge, Iterable<CFAEdge>>() {
-                @Override
-                public Iterable<CFAEdge> apply(MultiEdge pInput) {
-                  return pInput.getEdges();
-                }
-              })
-          .transform(CFAUtils.TO_SUCCESSOR)
-          // Second, we collect all normal CFANodes
-          .append(pCfa.getAllNodes())
-          // Third, sort and remove duplicates
-          .toSortedSet(Ordering.natural());
-
-      int maxNodeNumber = allNodes.last().getNodeNumber();
-      states = new LocationState[maxNodeNumber+1];
-      for (CFANode node : allNodes) {
-        LocationState state = locationType == LocationStateType.BACKWARD
-            ? new BackwardsLocationState(node, pCfa, followFunctionCalls)
-            : locationType == LocationStateType.BACKWARDNOTARGET
-                ? new BackwardsLocationStateNoTarget(node, pCfa, followFunctionCalls)
-                : new LocationState(node, followFunctionCalls);
-
-        states[node.getNodeNumber()] = state;
-      }
-    }
-
-    public LocationState getState(CFANode node) {
-      return Preconditions.checkNotNull(states[checkNotNull(node).getNodeNumber()],
-          "LocationState for CFANode %s in function %s requested,"
-          + " but this node is not part of the current CFA.",
-          node, node.getFunctionName());
-    }
-  }
-
-  private static class BackwardsLocationState extends LocationState implements Targetable {
+  static class BackwardsLocationState extends LocationState {
 
     private static final long serialVersionUID = 6825257572921009531L;
 
-    private final CFA cfa;
-    private boolean followFunctionCalls;
-
-    protected BackwardsLocationState(CFANode locationNode, CFA pCfa, boolean pFollowFunctionCalls) {
+    BackwardsLocationState(CFANode locationNode, boolean pFollowFunctionCalls) {
       super(locationNode, pFollowFunctionCalls);
-      cfa = pCfa;
-      followFunctionCalls = pFollowFunctionCalls;
     }
 
     @Override
     public Iterable<CFAEdge> getOutgoingEdges() {
-      if (followFunctionCalls) {
-        return enteringEdges(getLocationNode());
-
-      } else {
-        return allEnteringEdges(getLocationNode()).filter(not(or(instanceOf(FunctionReturnEdge.class), instanceOf(FunctionCallEdge.class))));
-      }
+      return super.getIngoingEdges();
     }
 
     @Override
-    public boolean isTarget() {
-      return cfa.getMainFunction() == getLocationNode();
+    public Iterable<CFAEdge> getIngoingEdges() {
+      return super.getOutgoingEdges();
     }
 
-    @Override
-    public Set<Property> getViolatedProperties() throws IllegalStateException {
-      return ImmutableSet.<Property>of(NamedProperty.create("Entry node reached backwards."));
-    }
-
-  }
-
-  private static class BackwardsLocationStateNoTarget extends BackwardsLocationState {
-
-    private static final long serialVersionUID = -2918748452708606128L;
-
-    protected BackwardsLocationStateNoTarget(CFANode pLocationNode, CFA pCfa, boolean pFollowFunctionCalls) {
-      super(pLocationNode, pCfa, pFollowFunctionCalls);
-    }
-
-    @Override
-    public boolean isTarget() {
-      return false;
-    }
   }
 
   private transient CFANode locationNode;
   private boolean followFunctionCalls;
 
-  private LocationState(CFANode pLocationNode, boolean pFollowFunctionCalls) {
+  LocationState(CFANode pLocationNode, boolean pFollowFunctionCalls) {
     locationNode = pLocationNode;
     followFunctionCalls = pFollowFunctionCalls;
   }
@@ -194,7 +98,17 @@ public class LocationState implements AbstractStateWithLocation, AbstractQueryab
       return leavingEdges(locationNode);
 
     } else {
-      return allLeavingEdges(locationNode).filter(not(or(instanceOf(FunctionReturnEdge.class), instanceOf(FunctionCallEdge.class))));
+      return allLeavingEdges(locationNode).filter(NOT_FUNCTIONCALL);
+    }
+  }
+
+  @Override
+  public Iterable<CFAEdge> getIngoingEdges() {
+    if (followFunctionCalls) {
+      return enteringEdges(locationNode);
+
+    } else {
+      return allEnteringEdges(locationNode).filter(NOT_FUNCTIONCALL);
     }
   }
 
@@ -227,17 +141,14 @@ public class LocationState implements AbstractStateWithLocation, AbstractQueryab
         }
       } else if (parts[0].toLowerCase().equals("functionname")) {
         return this.locationNode.getFunctionName().equals(parts[1]);
+      } else if (parts[0].toLowerCase().equals("label")) {
+        return this.locationNode instanceof CLabelNode ?
+            ((CLabelNode) this.locationNode).getLabel().equals(parts[1]) : false;
       } else {
         throw new InvalidQueryException("The Query \"" + pProperty
             + "\" is invalid. \"" + parts[0] + "\" is no valid keyword");
       }
     }
-  }
-
-  @Override
-  public void modifyProperty(String pModification)
-      throws InvalidQueryException {
-    throw new InvalidQueryException("The location CPA does not support modification.");
   }
 
   @Override
@@ -254,7 +165,7 @@ public class LocationState implements AbstractStateWithLocation, AbstractQueryab
       }
       return 0; // DUMMY
     } else {
-      return Boolean.valueOf(checkProperty(pProperty));
+      return checkProperty(pProperty);
     }
   }
 

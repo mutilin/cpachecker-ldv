@@ -23,46 +23,31 @@
  */
 package org.sosy_lab.cpachecker.cpa.bdd;
 
-import java.util.HashSet;
 import java.util.Set;
-
-import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
-import org.sosy_lab.cpachecker.cfa.blocks.ReferencedVariable;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
+import org.sosy_lab.cpachecker.core.defaults.GenericReducer;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
-import org.sosy_lab.cpachecker.core.interfaces.Reducer;
-import org.sosy_lab.cpachecker.util.predicates.regions.NamedRegionManager;
+import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.predicates.regions.Region;
 
-public class BDDReducer implements Reducer {
+class BDDReducer extends GenericReducer<BDDState, Precision> {
 
-  private final NamedRegionManager mgr;
   private final PredicateManager predmgr;
 
-  BDDReducer(NamedRegionManager pMgr, PredicateManager pPredmgr) {
-    mgr = pMgr;
+  BDDReducer(PredicateManager pPredmgr) {
     predmgr = pPredmgr;
   }
 
-  private Set<String> getVarsOfBlock(Block pBlock) {
-    Set<String> vars = new HashSet<>();
-    for (ReferencedVariable referencedVar : pBlock.getReferencedVariables()) {
-      vars.add(referencedVar.getName());
-    }
-    return vars;
-  }
-
   @Override
-  public AbstractState getVariableReducedState(AbstractState pExpandedState, Block pBlock, Block outerContext, CFANode pCallNode) {
-    BDDState state = (BDDState)pExpandedState;
+  protected BDDState getVariableReducedState0(
+      BDDState pExpandedState, Block pBlock, CFANode pCallNode) {
+    BDDState state = pExpandedState;
 
     final Set<String> trackedVars = predmgr.getTrackedVars().keySet();
-    final Set<String> blockVars = getVarsOfBlock(pBlock);
     for (final String var : trackedVars) {
-      if (!blockVars.contains(var)) {
+      if (!pBlock.getVariables().contains(var)) {
         int size = predmgr.getTrackedVars().get(var);
         Region[] toRemove = predmgr.createPredicateWithoutPrecisionCheck(var, size);
         state = state.forget(toRemove);
@@ -73,13 +58,25 @@ public class BDDReducer implements Reducer {
   }
 
   @Override
-  public AbstractState getVariableExpandedState(AbstractState pRootState, Block reducedContext, Block outerSubtree, AbstractState pReducedState) {
-    BDDState state = (BDDState)pRootState;
-    BDDState reducedState = (BDDState)pReducedState;
+  protected BDDState getVariableExpandedState0(
+      BDDState pRootState, Block reducedContext, BDDState pReducedState) {
+    BDDState state = pRootState;
+    BDDState reducedState = pReducedState;
 
     // remove all vars, that are used in the block
-    Set<Region> usedVars = mgr.extractPredicates(state.getRegion());
-    state = state.forget(usedVars.toArray(new Region[usedVars.size()]));
+    final Set<String> trackedVars = predmgr.getTrackedVars().keySet();
+    for (final String var : trackedVars) {
+      if (reducedContext.getVariables().contains(var)) {
+        int size = predmgr.getTrackedVars().get(var);
+        Region[] toRemove = predmgr.createPredicateWithoutPrecisionCheck(var, size);
+        state = state.forget(toRemove);
+      }
+    }
+
+    // TODO maybe we have to add some heuristics like in BAMPredicateReducer,
+    // because we existentially quantify "block-inner" variables from formulas like "outer==inner".
+    // This is sound, but leads to weaker formulas, maybe to weak for a useful analysis.
+    // Or simpler solution: We could replace this Reducer with a NoOpReducer.
 
     // add information from block to state
     state = state.addConstraint(reducedState.getRegion());
@@ -88,47 +85,29 @@ public class BDDReducer implements Reducer {
   }
 
   @Override
-  public Precision getVariableReducedPrecision(Precision precision, Block context) {
+  protected Precision getVariableReducedPrecision0(Precision precision, Block context) {
     // TODO what to do?
     return precision;
   }
 
   @Override
-  public Precision getVariableExpandedPrecision(Precision rootPrecision, Block rootContext, Precision reducedPrecision) {
+  protected Precision getVariableExpandedPrecision0(
+      Precision rootPrecision, Block rootContext, Precision reducedPrecision) {
     // TODO what to do?
     return reducedPrecision;
   }
 
   @Override
-  public Object getHashCodeForState(AbstractState stateKey, Precision precisionKey) {
-    return Pair.of(((BDDState)stateKey).getRegion(), precisionKey);
+  protected Object getHashCodeForState0(BDDState stateKey, Precision precisionKey) {
+    return Pair.of(stateKey.getRegion(), precisionKey);
   }
 
   @Override
-  public Object getHashCodeForState(AbstractState stateKey) {
-    return ((BDDState)stateKey).getRegion();
-  }
-
-  @Override
-  public int measurePrecisionDifference(Precision pPrecision, Precision pOtherPrecision) {
-    return 0;
-  }
-
-  @Override
-  public AbstractState getVariableReducedStateForProofChecking(AbstractState pExpandedState, Block pContext, CFANode pCallNode) {
-    // TODO what to do?
-    return getVariableReducedState(pExpandedState, pContext, null, pCallNode);
-  }
-
-  @Override
-  public AbstractState getVariableExpandedStateForProofChecking(AbstractState pRootState, Block pReducedContext, AbstractState pReducedState) {
-    // TODO what to do?
-    return getVariableExpandedState(pRootState, pReducedContext, null, pReducedState);
-  }
-
-  @Override
-  public AbstractState rebuildStateAfterFunctionCall(AbstractState rootState, AbstractState entryState,
-      AbstractState expandedState, FunctionExitNode exitLocation) {
+  protected BDDState rebuildStateAfterFunctionCall0(
+      BDDState rootState,
+      BDDState entryState,
+      BDDState expandedState,
+      FunctionExitNode exitLocation) {
     throw new UnsupportedOperationException("not implemented");
   }
 }

@@ -25,15 +25,17 @@ CPAchecker web page:
 # prepare for Python 3
 from __future__ import absolute_import, division, print_function, unicode_literals
 
+import collections
 import sys
 sys.dont_write_bytecode = True # prevent creation of .pyc files
 
+import json
 import logging
 import os
 import shutil
 import threading
 
-import urllib.request as urllib2
+from requests import HTTPError
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import as_completed
 
@@ -49,6 +51,9 @@ _print_lock = threading.Lock()
 
 def init(config, benchmark):
     global _webclient
+
+    if not config.debug:
+        logging.getLogger('requests').setLevel(logging.WARNING)
 
     if not benchmark.config.cpu_model:
         logging.warning("It is strongly recommended to set a CPU model('--cloudCPUModel'). "\
@@ -94,36 +99,45 @@ def execute_benchmark(benchmark, output_handler):
     STOPPED_BY_INTERRUPT = False
     try:
         for runSet in benchmark.run_sets:
+            if STOPPED_BY_INTERRUPT:
+                break
+
             if not runSet.should_be_executed():
                 output_handler.output_for_skipping_run_set(runSet)
                 continue
 
             output_handler.output_before_run_set(runSet)
-            result_futures = _submitRunsParallel(runSet, benchmark)
+            try:
+                result_futures = _submitRunsParallel(runSet, benchmark, output_handler)
 
-            _handle_results(result_futures, output_handler, benchmark)
+                _handle_results(result_futures, output_handler, benchmark, runSet)
+            except KeyboardInterrupt:
+                STOPPED_BY_INTERRUPT = True
+                output_handler.set_error('interrupted', runSet)
             output_handler.output_after_run_set(runSet)
 
-    except KeyboardInterrupt as e:
-        STOPPED_BY_INTERRUPT = True
-        raise e
-    except:
-        stop()
-        raise
     finally:
+        stop()
         output_handler.output_after_benchmark(STOPPED_BY_INTERRUPT)
-
-    stop()
 
 def stop():
     global _webclient
-    _webclient.shutdown()
-    _webclient = None
+    if _webclient:
+        _webclient.shutdown()
+        _webclient = None
 
-def _submitRunsParallel(runSet, benchmark):
+def _submitRunsParallel(runSet, benchmark, output_handler):
     global _webclient
 
     logging.info('Submitting runs...')
+
+    meta_information = json.dumps({"tool": {"name": _webclient.tool_name(), \
+                                            "revision": _webclient.tool_revision(), \
+                                            "benchexec-module" : benchmark.tool_module}, \
+                                       "benchmark" : benchmark.name,
+                                       "timestamp" : benchmark.instance,
+                                       "runSet" : runSet.real_name or "",
+                                       "generator": "benchmark.webcliebt_benchexec.py"})
 
     executor = ThreadPoolExecutor(max_workers=_webclient.thread_count)
     submission_futures = {}
@@ -133,15 +147,24 @@ def _submitRunsParallel(runSet, benchmark):
         logging.warning("CPU core requirement is not supported by the WebInterface.")
     if MEMLIMIT in limits and limits[MEMLIMIT] != benchmark.requirements.memory:
         logging.warning("Memory requirement is not supported by the WebInterface.")
-        
+
+    global_required_files = set(benchmark._required_files)
     cpu_model = benchmark.requirements.cpu_model
     priority = benchmark.config.cloudPriority
-    result_files_pattern = benchmark.result_files_pattern
-    if result_files_pattern is None:
+    result_files_patterns = benchmark.result_files_patterns
+    if not result_files_patterns:
         logging.warning("No result files pattern is given and the result will not contain any result files.")
 
     for run in runSet.runs:
-        submisson_future = executor.submit(_webclient.submit, run, limits, cpu_model, result_files_pattern, priority)
+        required_files = global_required_files.union(run.required_files)
+        submisson_future = executor.submit(_webclient.submit,
+                                           run=run,
+                                           limits=limits,
+                                           cpu_model=cpu_model,
+                                           required_files = required_files,
+                                           meta_information=meta_information,
+                                           priority=priority,
+                                           result_files_patterns=result_files_patterns)
         submission_futures[submisson_future] = run
 
     executor.shutdown(wait=False)
@@ -158,8 +181,11 @@ def _submitRunsParallel(runSet, benchmark):
                     logging.info('Submitted run %s/%s', submissonCounter, len(runSet.runs))
 
 
-            except (urllib2.URLError, WebClientError) as e:
+            except (HTTPError, WebClientError) as e:
+                output_handler.set_error("VerifierCloud problem", runSet)
                 logging.warning('Could not submit run %s: %s.', run.identifier, e)
+                return result_futures # stop submitting runs
+
             finally:
                 submissonCounter += 1
     finally:
@@ -175,7 +201,7 @@ def _log_future_exception(result):
     if result.exception() is not None:
         logging.warning('Error during result processing.', exc_info=True)
 
-def _handle_results(result_futures, output_handler, benchmark):
+def _handle_results(result_futures, output_handler, benchmark, run_set):
     executor = ThreadPoolExecutor(max_workers=_webclient.thread_count)
 
     for result_future in as_completed(result_futures.keys()):
@@ -184,16 +210,21 @@ def _handle_results(result_futures, output_handler, benchmark):
             result = result_future.result()
             f = executor.submit(_unzip_and_handle_result, result, run, output_handler, benchmark)
             f.add_done_callback(_log_future_exception)
-        
+
         except WebClientError as e:
+            output_handler.set_error("VerifierCloud problem", run_set)
             logging.warning("Execution of %s failed: %s", run.identifier, e)
-            
+
     executor.shutdown(wait=True)
+
+IGNORED_VALUES = set(['command', 'timeLimit', 'coreLimit', 'returnvalue', 'exitsignal'])
+"""result values that are ignored because they are redundant"""
 
 def _unzip_and_handle_result(zip_content, run, output_handler, benchmark):
     """
     Call handle_result with appropriate parameters to fit into the BenchExec expectations.
     """
+    result_values = collections.OrderedDict()
 
     def _open_output_log(output_path):
         log_file = open(run.log_file, 'wb')
@@ -202,41 +233,39 @@ def _unzip_and_handle_result(zip_content, run, output_handler, benchmark):
         return log_file
 
     def _handle_run_info(values):
-        if "memory" in values:
-            values["memUsage"] = int(values.pop("memory").strip('B'))
+        def parseTimeValue(s):
+            if s[-1] != 's':
+                raise ValueError('Cannot parse "{0}" as a time value.'.format(s))
+            return float(s[:-1])
 
-        run.walltime = float(values["walltime"].strip('s'))
-        run.cputime = float(values["cputime"].strip('s'))
-        return_value = int(values["exitcode"])
-        termination_reason = values.pop("terminationreason", None)
+        for key, value in values.items():
+            if key == "memory":
+                result_values["memory"] = int(value.strip('B'))
+            elif key in ["walltime", "cputime"]:
+                result_values[key] = parseTimeValue(value)
+            elif key == "exitcode":
+                result_values["exitcode"] = int(value)
+            elif (key == "terminationreason" or
+                  key.startswith("blkio-") or
+                  key.startswith("cpuenergy") or
+                  key.startswith("energy-") or key.startswith("cputime-cpu")):
+                result_values[key] = value
+            elif key not in IGNORED_VALUES:
+                result_values['vcloud-'+key] = value
 
-        # remove irrelevant columns
-        values.pop("command", None)
-        values.pop("timeLimit", None)
-        values.pop("coreLimit", None)
-
-        # prefix other values with @vcloud- to make them hidden by default
-        for key in list(values.keys()):
-            if not key in {'cputime', 'walltime', 'memUsage'} \
-                    and not key.startswith('energy'):
-                values['@vcloud-'+key] = values.pop(key)
-
-        run.values.update(values)
-        return return_value, termination_reason
+        return None
 
     def _handle_host_info(values):
         host = values.pop("name", "-")
         output_handler.store_system_info(
-            values.pop("os", "-"), values.pop("cpuModel", "-"), values.pop("cores", "-"),
-            values.pop("frequency", "-"), values.pop("memory", "-"),
+            values.get("os", "-"), values.get("cpuModel", "-"), values.get("cores", "-"),
+            values.get("frequency", "-"), values.get("memory", "-"),
             host, runSet=run.runSet)
 
-        # prefix other values with @vcloud- to make them hidden by default
-        for key in list(values.keys()):
-            values['@vcloud-'+key] = values.pop(key)
+        for key, value in values.items():
+            result_values['vcloud-'+key] = value
 
-        values["host"] = host
-        run.values.update(values)
+        result_values["host"] = host
 
     def _handle_stderr_file(result_zip_file, files, output_path):
         if RESULT_FILE_STDERR in files:
@@ -244,13 +273,16 @@ def _unzip_and_handle_result(zip_content, run, output_handler, benchmark):
             shutil.move(os.path.join(output_path, RESULT_FILE_STDERR), run.log_file + ".stdError")
             os.rmdir(output_path)
 
-    (return_value, termination_reason) = handle_result(
-        zip_content, run.log_file + ".output", run.identifier, benchmark.result_files_pattern,
-        _open_output_log, _handle_run_info, _handle_host_info, _handle_stderr_file)
+    handle_result(
+        zip_content, run.log_file + ".output", run.identifier,
+        result_files_patterns=benchmark.result_files_patterns,
+        open_output_log=_open_output_log,
+        handle_run_info=_handle_run_info,
+        handle_host_info=_handle_host_info,
+        handle_special_files=_handle_stderr_file)
 
-    if return_value is not None:
-        run.after_execution(return_value, termination_reason=termination_reason)
-
+    if result_values:
         with _print_lock:
             output_handler.output_before_run(run)
+            run.set_result(result_values, ["host"])
             output_handler.output_after_run(run)

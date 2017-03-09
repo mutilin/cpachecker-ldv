@@ -23,21 +23,21 @@
  */
 package org.sosy_lab.cpachecker.pcc.strategy;
 
+import com.google.common.collect.Maps;
+import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.Collection;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
-
-import org.sosy_lab.cpachecker.util.Pair;
+import javax.annotation.Nullable;
 import org.sosy_lab.common.ShutdownNotifier;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.log.LogManager;
-import org.sosy_lab.cpachecker.core.algorithm.Algorithm;
 import org.sosy_lab.cpachecker.core.algorithm.CPAAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.pcc.AlgorithmWithPropertyCheck;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
@@ -49,26 +49,31 @@ import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
 import org.sosy_lab.cpachecker.cpa.PropertyChecker.PropertyCheckerCPA;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
-
-import com.google.common.collect.Maps;
+import org.sosy_lab.cpachecker.util.Pair;
 
 @Options(prefix = "pcc.backwardtargets")
 public class BackwardTargetsReachedSetStrategy extends SequentialReadStrategy implements StatisticsProvider {
 
-  private final Algorithm algorithm;
+  private final @Nullable AlgorithmWithPropertyCheck algorithm;
   private AbstractState[] backwardTargets;
 
   @Option(secure = true, description = "Enable to store ARG states instead of abstract states wrapped by ARG state")
   private boolean certificateStatesAsARGStates = false;
 
-  public BackwardTargetsReachedSetStrategy(final Configuration pConfig, final LogManager pLogger,
-      final ShutdownNotifier pShutdownNotifier, final PropertyCheckerCPA pCpa)
+  public BackwardTargetsReachedSetStrategy(
+      final Configuration pConfig,
+      final LogManager pLogger,
+      final ShutdownNotifier pShutdownNotifier,
+      final Path pProofFile,
+      final @Nullable PropertyCheckerCPA pCpa)
       throws InvalidConfigurationException {
-    super(pConfig, pLogger);
+    super(pConfig, pLogger, pProofFile);
     pConfig.inject(this);
-    algorithm = new AlgorithmWithPropertyCheck(
-        CPAAlgorithm.create(pCpa, pLogger, pConfig, pShutdownNotifier),
-        pLogger, pCpa);
+    algorithm =
+        pCpa == null
+            ? null
+            : new AlgorithmWithPropertyCheck(
+                CPAAlgorithm.create(pCpa, pLogger, pConfig, pShutdownNotifier), pLogger, pCpa);
   }
 
   @Override
@@ -159,8 +164,8 @@ public class BackwardTargetsReachedSetStrategy extends SequentialReadStrategy im
   @Override
   public void collectStatistics(Collection<Statistics> statsCollection) {
     super.collectStatistics(statsCollection);
-    if (algorithm instanceof StatisticsProvider) {
-      ((StatisticsProvider) algorithm).collectStatistics(statsCollection);
+    if (algorithm != null) {
+      algorithm.collectStatistics(statsCollection);
     }
   }
 

@@ -23,13 +23,12 @@
  */
 package org.sosy_lab.cpachecker.cfa.blocks;
 
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableSet.Builder;
 import java.util.Collections;
 import java.util.Set;
-
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier;
-
-import com.google.common.collect.ImmutableSet;
 
 /**
  * Represents a block as described in the BAM paper.
@@ -37,13 +36,15 @@ import com.google.common.collect.ImmutableSet;
 public class Block {
 
   private final ImmutableSet<ReferencedVariable> referencedVariables;
+  private ImmutableSet<String> variables; // lazy initialization
   private final ImmutableSet<CFANode> callNodes;
   private final ImmutableSet<CFANode> returnNodes;
   private final ImmutableSet<CFANode> nodes;
   private final ImmutableSet<LockIdentifier> capturedLocks;
 
   public Block(ImmutableSet<ReferencedVariable> pReferencedVariables,
-      Set<CFANode> pCallNodes, Set<CFANode> pReturnNodes, ImmutableSet<CFANode> allNodes, ImmutableSet<LockIdentifier> locks) {
+      Set<CFANode> pCallNodes, Set<CFANode> pReturnNodes,
+      ImmutableSet<CFANode> allNodes, ImmutableSet<LockIdentifier> locks) {
 
     referencedVariables = pReferencedVariables;
     callNodes = ImmutableSet.copyOf(pCallNodes);
@@ -52,8 +53,20 @@ public class Block {
     capturedLocks = locks;
   }
 
+  public Block(ImmutableSet<ReferencedVariable> pReferencedVariables,
+      Set<CFANode> pCallNodes, Set<CFANode> pReturnNodes,
+      ImmutableSet<CFANode> allNodes) {
+    this(pReferencedVariables, pCallNodes, pReturnNodes, allNodes, ImmutableSet.of());
+  }
+
+  public Block(Iterable<ReferencedVariable> pReferencedVariables,
+      Set<CFANode> pCallNodes, Set<CFANode> pReturnNodes,
+      Iterable<CFANode> allNodes) {
+    this(ImmutableSet.copyOf(pReferencedVariables), pCallNodes, pReturnNodes, ImmutableSet.copyOf(allNodes));
+  }
+
   public Set<CFANode> getCallNodes() {
-    return Collections.unmodifiableSet(callNodes);
+    return callNodes;
   }
 
   public Set<LockIdentifier> getCapturedLocks() {
@@ -65,8 +78,21 @@ public class Block {
     return callNodes.iterator().next();
   }
 
+  /** returns a collection of variables used in the block */
   public Set<ReferencedVariable> getReferencedVariables() {
     return referencedVariables;
+  }
+
+  /** returns a collection of variables used in the block */
+  public Set<String> getVariables() {
+    if (variables == null) {
+      Builder<String> builder = ImmutableSet.builder();
+      for (ReferencedVariable referencedVar : getReferencedVariables()) {
+        builder.add(referencedVar.getName());
+      }
+      variables = builder.build();
+    }
+    return variables;
   }
 
   public Set<CFANode> getNodes() {

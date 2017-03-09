@@ -24,10 +24,9 @@
 package org.sosy_lab.cpachecker.cpa.automaton;
 
 import java.io.PrintStream;
-
 import org.sosy_lab.common.time.TimeSpan;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
-import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
+import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
 import org.sosy_lab.cpachecker.util.statistics.AbstractStatistics;
 
 class AutomatonStatistics extends AbstractStatistics {
@@ -44,28 +43,28 @@ class AutomatonStatistics extends AbstractStatistics {
   }
 
   @Override
-  public void printStatistics(PrintStream out, Result pResult, ReachedSet pReached) {
+  public void printStatistics(PrintStream out, Result pResult, UnmodifiableReachedSet pReached) {
     AutomatonTransferRelation trans = mCpa.getTransferRelation();
 
     put(out, 0, "Number of states", mCpa.getAutomaton().getNumberOfStates());
-    put(out, 0, "Total time for successor computation", trans.totalPostTime);
+    put(out, 0, trans.totalPostTime);
 
-    if (trans.totalPostTime.getSumTime().compareTo(TimeSpan.ofMillis(500)) >= 0) {
+    if (trans.totalPostTime.getConsumedTime().compareTo(TimeSpan.ofMillis(500)) >= 0) {
       // normally automaton is very fast, and time measurements are very imprecise
       // so don't care about very small times
-      put(out, 1, "Time for transition matches", trans.matchTime);
-      put(out, 1, "Time for transition assertions", trans.assertionsTime);
-      put(out, 1, "Time for transition actions", trans.actionTime);
+      put(out, 1, trans.matchTime);
+      put(out, 1, trans.assertionsTime);
+      put(out, 1, trans.actionTime);
     }
 
-    if (trans.totalStrengthenTime.getNumberOfIntervals() > 0) {
-      put(out, 0, "Total time for strengthen operator", trans.totalStrengthenTime);
+    if (trans.totalStrengthenTime.getUpdateCount() > 0) {
+      put(out, 0, trans.totalStrengthenTime);
     }
 
-    int stateBranchings = trans.automatonSuccessors.getValueCount()
+    long stateBranchings = trans.automatonSuccessors.getValueCount()
         - trans.automatonSuccessors.getTimesWithValue(0)
         - trans.automatonSuccessors.getTimesWithValue(1);
     put(out, 0, "Automaton transfers with branching", stateBranchings);
-    put(out, 0, "Automaton transfer successors", trans.automatonSuccessors);
+    put(out, 0, trans.automatonSuccessors);
   }
 }

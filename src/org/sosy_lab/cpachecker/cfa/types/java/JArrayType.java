@@ -24,13 +24,15 @@
 package org.sosy_lab.cpachecker.cfa.types.java;
 
 import java.util.Objects;
-
 import org.sosy_lab.cpachecker.cfa.types.AArrayType;
 
 /**
  * Description of a Java array through its element type and number of dimensions.
  */
 public class JArrayType extends AArrayType implements JReferenceType {
+
+  private static final long serialVersionUID = -120299232751433551L;
+
   private final int dimension;
 
   /**

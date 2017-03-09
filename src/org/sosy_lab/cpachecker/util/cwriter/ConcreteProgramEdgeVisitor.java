@@ -26,8 +26,6 @@ package org.sosy_lab.cpachecker.util.cwriter;
 import static com.google.common.base.Predicates.notNull;
 import static com.google.common.collect.FluentIterable.from;
 
-import java.util.Stack;
-
 import org.sosy_lab.cpachecker.cfa.ast.AExpressionStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpressionAssignmentStatement;
@@ -38,14 +36,15 @@ import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
 import org.sosy_lab.cpachecker.cfa.types.c.CPointerType;
 import org.sosy_lab.cpachecker.core.counterexample.CFAEdgeWithAssumptions;
-import org.sosy_lab.cpachecker.core.counterexample.CFAMultiEdgeWithAssumptions;
 import org.sosy_lab.cpachecker.core.counterexample.CFAPathWithAssumptions;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
+
+import java.util.Stack;
 
 
 public class ConcreteProgramEdgeVisitor extends DefaultEdgeVisitor {
 
-  private CFAPathWithAssumptions exactValuePath;
+  private final CFAPathWithAssumptions exactValuePath;
 
   public ConcreteProgramEdgeVisitor(PathTranslator t, CFAPathWithAssumptions exactValues) {
     super(t);
@@ -56,13 +55,13 @@ public class ConcreteProgramEdgeVisitor extends DefaultEdgeVisitor {
   public void visit(ARGState pChildElement, CFAEdge pEdge, Stack<FunctionBody> pFunctionStack) {
     translator.processEdge(pChildElement, pEdge, pFunctionStack);
 
-    createAssumedAssigmentString(pFunctionStack, exactValuePath, pEdge);
+    createAssumedAssigmentString(pFunctionStack, pEdge);
   }
 
 
-  private void createAssumedAssigmentString(Stack<FunctionBody> functionStack, CFAPathWithAssumptions exactValuePath,
+  private void createAssumedAssigmentString(Stack<FunctionBody> functionStack,
       CFAEdge currentCFAEdge) {
-    CFAEdgeWithAssumptions e = findMatchingEdge(exactValuePath, currentCFAEdge);
+    CFAEdgeWithAssumptions e = findMatchingEdge(currentCFAEdge);
     if (e != null &&
         e.getCFAEdge() instanceof CStatementEdge) {
 
@@ -100,15 +99,10 @@ public class ConcreteProgramEdgeVisitor extends DefaultEdgeVisitor {
     }
   }
 
-  private CFAEdgeWithAssumptions findMatchingEdge(CFAPathWithAssumptions exactValuePath, CFAEdge e) {
+  private CFAEdgeWithAssumptions findMatchingEdge(CFAEdge e) {
     for (CFAEdgeWithAssumptions edgeWithAssignments : from(exactValuePath).filter(notNull())) {
-
-      if (edgeWithAssignments instanceof CFAMultiEdgeWithAssumptions) {
-        for (CFAEdgeWithAssumptions singleEdge : (CFAMultiEdgeWithAssumptions) edgeWithAssignments) {
-          if (e.equals(singleEdge.getCFAEdge())) { return singleEdge; }
-        }
-      } else {
-        if (e.equals(edgeWithAssignments.getCFAEdge())) { return edgeWithAssignments; }
+      if (e.equals(edgeWithAssignments.getCFAEdge())) {
+        return edgeWithAssignments;
       }
     }
 

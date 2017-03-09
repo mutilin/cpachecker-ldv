@@ -26,6 +26,7 @@ package org.sosy_lab.cpachecker.cpa.interval;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Objects;
 
 public class Interval implements Serializable{
   private static final long serialVersionUID = 4223098080993616295L;
@@ -40,6 +41,9 @@ public class Interval implements Serializable{
    */
   private final Long high;
 
+  private static final Interval EMPTY = new Interval(null, null);
+  public static final Interval UNBOUND = new Interval(Long.MIN_VALUE, Long.MAX_VALUE);
+  public static final Interval BOOLEAN_INTERVAL = new Interval(0L, 1L);
   public static final Interval ZERO = new Interval(0L, 0L);
   public static final Interval ONE = new Interval(1L, 1L);
 
@@ -106,17 +110,9 @@ public class Interval implements Serializable{
   public boolean equals(Object other) {
     if (other != null && getClass().equals(other.getClass())) {
       Interval another = (Interval)other;
-
-      if (isEmpty() && another.isEmpty()) {
-        return true;
-      } else if (isEmpty() || another.isEmpty()) {
-        return false;
-      }
-
-      return low.equals(another.low) && high.equals(another.high);
-    } else {
-      return false;
+      return Objects.equals(low, another.low) && Objects.equals(high, another.high);
     }
+    return false;
   }
 
   /* (non-Javadoc)
@@ -124,16 +120,7 @@ public class Interval implements Serializable{
    */
   @Override
   public int hashCode() {
-    if (isEmpty()) {
-      return 0;
-    }
-
-    int result = 17;
-
-    result = 31 * result + low.hashCode();
-    result = 31 * result + high.hashCode();
-
-    return result;
+    return Objects.hash(low, high);
   }
 
   /**
@@ -146,7 +133,9 @@ public class Interval implements Serializable{
    */
   public Interval union(Interval other) {
     if (isEmpty() || other.isEmpty()) {
-      return createEmptyInterval();
+      return EMPTY;
+    } else if (low <= other.low && high >= other.high) {
+      return this;
     } else if (low >= other.low && high <= other.high) {
       return other;
     } else {
@@ -166,7 +155,7 @@ public class Interval implements Serializable{
     if (this.intersects(other)) {
       return new Interval(Math.max(low, other.low), Math.min(high, other.high));
     } else {
-      return createEmptyInterval();
+      return EMPTY;
     }
   }
 
@@ -219,7 +208,7 @@ public class Interval implements Serializable{
    */
   public Interval modulo(Interval other) {
     if (other.contains(ZERO)) {
-      return Interval.createUnboundInterval();
+      return Interval.UNBOUND;
     }
 
     // The interval doesn't contain zero, hence low and high has to be of the same sign.
@@ -237,7 +226,11 @@ public class Interval implements Serializable{
     if (low >= 0) {
       top = high;
     } else {
-      top = Math.max(Math.abs(low), high);
+      if (low == Long.MIN_VALUE) {
+        top = Long.MAX_VALUE;
+      } else {
+        top = Math.max(Math.abs(low), high);
+      }
     }
     newHigh = Math.min(top, other.high - 1);
 
@@ -273,7 +266,7 @@ public class Interval implements Serializable{
     Interval interval = null;
 
     if (isEmpty() || other.isEmpty() || high < other.low) {
-      interval = createEmptyInterval();
+      interval = EMPTY;
     } else {
       interval = new Interval(Math.max(low, other.low), high);
     }
@@ -291,7 +284,7 @@ public class Interval implements Serializable{
     Interval interval = null;
 
     if (isEmpty() || other.isEmpty() || low > other.high) {
-      interval = createEmptyInterval();
+      interval = EMPTY;
     } else {
       interval = new Interval(low, Math.min(high, other.high));
     }
@@ -336,7 +329,7 @@ public class Interval implements Serializable{
    */
   public Interval plus(Interval interval) {
     if (isEmpty() || interval.isEmpty()) {
-      return createEmptyInterval();
+      return EMPTY;
     }
 
     return new Interval(scalarPlus(low, interval.low), scalarPlus(high, interval.high));
@@ -398,7 +391,7 @@ public class Interval implements Serializable{
   public Interval divide(Interval other) {
     // other interval contains "0", return unbound interval
     if (other.contains(ZERO)) {
-      return createUnboundInterval();
+      return UNBOUND;
     } else {
       Long[] values = {
                         low / other.low,
@@ -421,7 +414,7 @@ public class Interval implements Serializable{
   public Interval shiftLeft(Interval offset) {
     // create an unbound interval upon trying to shift by a possibly negative offset
     if (ZERO.mayBeGreaterThan(offset)) {
-      return createUnboundInterval();
+      return UNBOUND;
     } else {
       // if lower bound is negative, shift it by upper bound of offset, else by lower bound of offset
       Long newLow   = low << ((low < 0L) ? offset.high : offset.low);
@@ -430,7 +423,7 @@ public class Interval implements Serializable{
       Long newHigh  = high << ((high < 0L) ? offset.low : offset.high);
 
       if ((low < 0 && newLow > low) || (high > 0 && newHigh < high)) {
-        return createUnboundInterval();
+        return UNBOUND;
       } else {
         return new Interval(newLow, newHigh);
       }
@@ -446,7 +439,7 @@ public class Interval implements Serializable{
   public Interval shiftRight(Interval offset) {
     // create an unbound interval upon trying to shift by a possibly negative offset
     if (ZERO.mayBeGreaterThan(offset)) {
-      return createUnboundInterval();
+      return UNBOUND;
     } else {
       // if lower bound is negative, shift it by lower bound of offset, else by upper bound of offset
       Long newLow   = low >> ((low < 0L) ? offset.low : offset.high);
@@ -489,33 +482,6 @@ public class Interval implements Serializable{
   }
 
   /**
-   * This method is a factory method for an empty interval
-   *
-   * @return an empty interval
-   */
-  private static Interval createEmptyInterval() {
-    return new Interval(null,null);
-  }
-
-  /**
-   * This method is a factory method for an interval for the values 0 and 1.
-   *
-   * @return an interval [0;1]
-   */
-  public static Interval createBooleanInterval() {
-    return new Interval(0L,1L);
-  }
-
-  /**
-   * This method is a factory method for an unbounded interval
-   *
-   * @return an unbounded interval, i.e. the lower and upper bound are set to Long.MIN_VALUE and Long.MAX_VALUE respectively
-   */
-  public static Interval createUnboundInterval() {
-    return new Interval(Long.MIN_VALUE, Long.MAX_VALUE);
-  }
-
-  /**
    * This method is a factory method for a lower bounded interval.
    *
    * @param lowerBound the lower bound to set
@@ -533,24 +499,6 @@ public class Interval implements Serializable{
    */
   public static Interval createUpperBoundedInterval(Long upperBound) {
     return new Interval(Long.MIN_VALUE, upperBound);
-  }
-
-  /**
-   * This method is a factory method for an interval representing the FALSE value.
-   *
-   * @return an interval representing the FALSE value, i.e. the lower and upper bound are set to 0
-   */
-  public static Interval createFalseInterval() {
-    return new Interval(0L);
-  }
-
-  /**
-   * This method is a factory method for an interval representing the TRUE value.
-   *
-   * @return an interval representing the TRUE value, i.e. the lower and upper bound are set to 1
-   */
-  public static Interval createTrueInterval() {
-    return new Interval(1L);
   }
 
   /**
@@ -584,7 +532,7 @@ public class Interval implements Serializable{
     Long bound = (Long.signum(x) == Long.signum(y)) ? Long.MAX_VALUE : Long.MIN_VALUE;
 
     // if overflow occurs, return the respective bound
-    if (x != 0 && (y > 0 && y > (bound / x) || y < 0 && y < (bound / x))) {
+    if (x != 0 && ((y > 0 && y > (bound / x)) || (y < 0 && y < (bound / x)))) {
       return bound;
     } else {
       return x * y;

@@ -23,29 +23,24 @@
  */
 package org.sosy_lab.cpachecker.cpa.invariants;
 
+import com.google.common.base.Preconditions;
+import com.google.common.collect.Lists;
+import com.google.common.math.IntMath;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-
 import javax.annotation.Nullable;
-
 import org.sosy_lab.cpachecker.cpa.invariants.operators.Operator;
 import org.sosy_lab.cpachecker.cpa.invariants.operators.mathematical.ICCOperator;
 import org.sosy_lab.cpachecker.cpa.invariants.operators.mathematical.IICOperator;
 import org.sosy_lab.cpachecker.cpa.invariants.operators.mathematical.ISCOperator;
 
-import com.google.common.base.Function;
-import com.google.common.base.Preconditions;
-import com.google.common.collect.Lists;
-import com.google.common.math.IntMath;
-
-/**
- * Instances of this class represent compound states of intervals.
- */
-public class CompoundMathematicalInterval implements CompoundInterval {
+/** Instances of this class represent compound states of intervals. */
+@SuppressWarnings("AmbiguousMethodReference")
+public class CompoundMathematicalInterval implements CompoundIntegralInterval {
 
   private static final CompoundMathematicalInterval ZERO = new CompoundMathematicalInterval(SimpleInterval.singleton(BigInteger.ZERO));
 
@@ -184,14 +179,7 @@ public class CompoundMathematicalInterval implements CompoundInterval {
 
   @Override
   public List<CompoundMathematicalInterval> splitIntoIntervals() {
-    return Lists.transform(Arrays.asList(this.intervals), new Function<SimpleInterval, CompoundMathematicalInterval>() {
-
-      @Override
-      public CompoundMathematicalInterval apply(SimpleInterval pInterval) {
-        return of(pInterval);
-      }
-
-    });
+    return Lists.transform(Arrays.asList(this.intervals), CompoundMathematicalInterval::of);
   }
 
   /**
@@ -409,8 +397,12 @@ public class CompoundMathematicalInterval implements CompoundInterval {
     while (leftInclusive < rightExclusive) {
       int index = IntMath.mean(leftInclusive, rightExclusive);
       SimpleInterval intervalAtIndex = this.intervals[index];
-      boolean lbIndexLeqLb = !intervalAtIndex.hasLowerBound() || hasLowerBound && intervalAtIndex.getLowerBound().compareTo(lb) <= 0;
-      boolean ubIndexGeqUb = !intervalAtIndex.hasUpperBound() || hasUpperBound && intervalAtIndex.getUpperBound().compareTo(ub) >= 0;
+      boolean lbIndexLeqLb =
+          !intervalAtIndex.hasLowerBound()
+              || (hasLowerBound && intervalAtIndex.getLowerBound().compareTo(lb) <= 0);
+      boolean ubIndexGeqUb =
+          !intervalAtIndex.hasUpperBound()
+              || (hasUpperBound && intervalAtIndex.getUpperBound().compareTo(ub) >= 0);
       if (lbIndexLeqLb) { // Interval at index starts before interval
         if (ubIndexGeqUb) { // Interval at index ends after interval
           return true;
@@ -1195,7 +1187,9 @@ public class CompoundMathematicalInterval implements CompoundInterval {
    */
   public CompoundMathematicalInterval logicalAnd(final CompoundMathematicalInterval pState) {
     if (isBottom() || pState.isBottom()) { return bottom(); }
-    if (isSingleton() && containsZero() || pState.isSingleton() && pState.containsZero()) { return logicalFalse(); }
+    if ((isSingleton() && containsZero()) || (pState.isSingleton() && pState.containsZero())) {
+      return logicalFalse();
+    }
     if (!containsZero() && !pState.containsZero()) { return logicalTrue(); }
     return top();
   }

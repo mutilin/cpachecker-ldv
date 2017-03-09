@@ -23,10 +23,13 @@
  */
 package org.sosy_lab.cpachecker.core.algorithm;
 
-import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.collect.FluentIterable.from;
 import static org.sosy_lab.cpachecker.util.AbstractStates.IS_TARGET_STATE;
 
+import com.google.common.base.Predicates;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
@@ -35,8 +38,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Level;
-
-import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.common.ShutdownNotifier;
 import org.sosy_lab.common.collect.PersistentMap;
 import org.sosy_lab.common.configuration.Configuration;
@@ -48,13 +49,12 @@ import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.ast.FileLocation;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CIntegerLiteralExpression;
-import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
 import org.sosy_lab.cpachecker.core.defaults.MergeSepOperator;
 import org.sosy_lab.cpachecker.core.defaults.SingletonPrecision;
-import org.sosy_lab.cpachecker.core.defaults.VariableTrackingPrecision;
+import org.sosy_lab.cpachecker.core.defaults.precision.VariableTrackingPrecision;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
@@ -92,23 +92,17 @@ import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.RefinementFailedException;
 import org.sosy_lab.cpachecker.exceptions.RefinementFailedException.Reason;
-import org.sosy_lab.solver.SolverException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.CPAs;
 import org.sosy_lab.cpachecker.util.Precisions;
 import org.sosy_lab.cpachecker.util.predicates.AbstractionFormula;
 import org.sosy_lab.cpachecker.util.predicates.AbstractionPredicate;
-import org.sosy_lab.solver.api.BooleanFormula;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormula;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormulaManager;
 import org.sosy_lab.cpachecker.util.predicates.smt.BooleanFormulaManagerView;
 import org.sosy_lab.cpachecker.util.predicates.smt.Solver;
-
-import com.google.common.base.Predicates;
-import com.google.common.collect.HashMultimap;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Multimap;
+import org.sosy_lab.java_smt.api.BooleanFormula;
+import org.sosy_lab.java_smt.api.SolverException;
 
 @Options(prefix="enabledanalysis")
 public class AnalysisWithRefinableEnablerCPAAlgorithm implements Algorithm, StatisticsProvider{
@@ -141,8 +135,8 @@ public class AnalysisWithRefinableEnablerCPAAlgorithm implements Algorithm, Stat
     PREDICATE(PredicateAbstractState.class, PredicateCPA.class),
     VALUE(ValueAnalysisState.class, ValueAnalysisCPA.class);
 
-    private Class<? extends AbstractState> stateClass;
-    private Class<? extends ConfigurableProgramAnalysis> cpaClass;
+    private final Class<? extends AbstractState> stateClass;
+    private final Class<? extends ConfigurableProgramAnalysis> cpaClass;
 
     private Enabler(Class<? extends AbstractState> pStateClassOfEnabler,
         Class<? extends ConfigurableProgramAnalysis> pCPAClassOfEnabler) {
@@ -279,8 +273,8 @@ public class AnalysisWithRefinableEnablerCPAAlgorithm implements Algorithm, Stat
       try {
         for (AutomatonState s : AbstractStates.asIterable(predecessor).filter(AutomatonState.class)) {
           if (s.isTarget()) {
-            for (AssumeEdge assume : s.getAsAssumeEdges(node.getFunctionName())) {
-              predNode = createFakeEdge(assume.getRawStatement(),  (CExpression) assume.getExpression(), predNode);
+            for (CExpression assume : from(s.getAssumptions()).filter(CExpression.class)) {
+              predNode = createFakeEdge(assume, predNode);
             }
           }
         }
@@ -290,7 +284,7 @@ public class AnalysisWithRefinableEnablerCPAAlgorithm implements Algorithm, Stat
 
       if(fakeEdgesFromLastRun.isEmpty()){
         // create fake edge with assumption true
-        predNode = createFakeEdge("1", CIntegerLiteralExpression.ONE, predNode);
+        predNode = createFakeEdge(CIntegerLiteralExpression.ONE, predNode);
       }
 
       // create fake states, one per fake edge, note that states are the same except for enabler state (may be different)
@@ -345,7 +339,7 @@ public class AnalysisWithRefinableEnablerCPAAlgorithm implements Algorithm, Stat
       if(enablerCPA != Enabler.PREDICATE) {
         // add another edge after fake edges with assumptions as required by ValueAnalysisPathInterpolator
         // currently it is used by Value, Apron, Octagon, Interval Refiner (all except predicate refiner)
-        createFakeEdge("1", CIntegerLiteralExpression.ONE, predNode);
+        createFakeEdge(CIntegerLiteralExpression.ONE, predNode);
       }
 
       assert (ARGUtils.checkARG(pReachedSet));
@@ -426,7 +420,8 @@ public class AnalysisWithRefinableEnablerCPAAlgorithm implements Algorithm, Stat
         pf = pfm.makeEmptyPathFormula(pf);
 
         PersistentMap<CFANode, Integer> abstractionLocations = predFakeState.getAbstractionLocationsOnPath();
-        Integer newLocInstance = firstNonNull(abstractionLocations.get(pAssumeEdge.getSuccessor()), 0) + 1;
+        Integer newLocInstance =
+            abstractionLocations.getOrDefault(pAssumeEdge.getSuccessor(), 0) + 1;
         abstractionLocations = abstractionLocations.putAndCopy(pAssumeEdge.getSuccessor(), newLocInstance);
 
         // create fake abstraction predicate state
@@ -456,10 +451,16 @@ public class AnalysisWithRefinableEnablerCPAAlgorithm implements Algorithm, Stat
     return pFakeEnablerState;
   }
 
-  private CFANode createFakeEdge(final String pRawAssumeExpr, final CExpression pAssumeExpr, final CFANode pPredecessor) {
+  private CFANode createFakeEdge(final CExpression pAssumeExpr, final CFANode pPredecessor) {
     CFANode successor = new CFANode(pPredecessor.getFunctionName());
     CAssumeEdge assumeEdge =
-        new CAssumeEdge(pRawAssumeExpr, FileLocation.DUMMY, pPredecessor, successor, pAssumeExpr, true);
+        new CAssumeEdge(
+            pAssumeExpr.toASTString(),
+            FileLocation.DUMMY,
+            pPredecessor,
+            successor,
+            pAssumeExpr,
+            true);
     pPredecessor.addLeavingEdge(assumeEdge);
     successor.addEnteringEdge(assumeEdge);
     fakeEdgesFromLastRun.add(assumeEdge);
@@ -495,7 +496,7 @@ public class AnalysisWithRefinableEnablerCPAAlgorithm implements Algorithm, Stat
     } else {
       newPrec = builtNewVariableTrackingPrecision(initialPrecision, precisions);
     }
-
+    shutdownNotifier.shutdownIfNecessary();
 
     try {
       // assure that refinement fails if same path is encountered twice and precision not refined on that path
@@ -513,41 +514,10 @@ public class AnalysisWithRefinableEnablerCPAAlgorithm implements Algorithm, Stat
     return replaceEnablerPrecision(initialPrecision, newPrec);
   }
 
-  private PredicatePrecision builtNewPredicatePrecision(final Precision initialPrecision,
-      final Collection<Precision> pReachedSetPrecisions) throws InterruptedException {
-    Multimap<Pair<CFANode, Integer>, AbstractionPredicate> locationInstancPreds = HashMultimap.create();
-    Multimap<CFANode, AbstractionPredicate> localPreds = HashMultimap.create();
-    Multimap<String, AbstractionPredicate> functionPreds = HashMultimap.create();
-    Collection<AbstractionPredicate> globalPreds = new HashSet<>();
-
-    Collection<PredicatePrecision> seenPrecisions = new HashSet<>();
-
-    // add initial precision
-    PredicatePrecision predPrec = Precisions.extractPrecisionByType(initialPrecision, PredicatePrecision.class);
-    locationInstancPreds.putAll(predPrec.getLocationInstancePredicates());
-    localPreds.putAll(predPrec.getLocalPredicates());
-    functionPreds.putAll(predPrec.getFunctionPredicates());
-    globalPreds.addAll(predPrec.getGlobalPredicates());
-
-    seenPrecisions.add(predPrec);
-
-    // add further precision information obtained during refinement
-    for (Precision nextPrec : pReachedSetPrecisions) {
-      predPrec = Precisions.extractPrecisionByType(nextPrec, PredicatePrecision.class);
-
-      shutdownNotifier.shutdownIfNecessary();
-
-      if (!seenPrecisions.contains(predPrec)) {
-        seenPrecisions.add(predPrec);
-        locationInstancPreds.putAll(predPrec.getLocationInstancePredicates());
-        localPreds.putAll(predPrec.getLocalPredicates());
-        functionPreds.putAll(predPrec.getFunctionPredicates());
-        globalPreds.addAll(predPrec.getGlobalPredicates());
-      }
-    }
-
-    // construct new predicate precision
-    return new PredicatePrecision(locationInstancPreds, localPreds, functionPreds, globalPreds);
+  private PredicatePrecision builtNewPredicatePrecision(
+      final Precision initialPrecision, final Collection<Precision> pReachedSetPrecisions) {
+    return PredicatePrecision.unionOf(
+        Iterables.concat(ImmutableList.of(initialPrecision), pReachedSetPrecisions));
   }
 
   private Precision builtNewVariableTrackingPrecision(Precision pInitialPrecision, Collection<Precision> pPrecisions) {

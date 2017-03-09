@@ -23,6 +23,19 @@
  */
 package org.sosy_lab.cpachecker.cpa.invariants;
 
+import static com.google.common.collect.FluentIterable.from;
+
+import com.google.common.base.Function;
+import com.google.common.base.Joiner;
+import com.google.common.base.Preconditions;
+import com.google.common.base.Predicate;
+import com.google.common.base.Predicates;
+import com.google.common.collect.FluentIterable;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Queues;
+import com.google.common.collect.Sets;
+import com.ibm.icu.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -35,20 +48,24 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.Queue;
 import java.util.Set;
-
 import javax.annotation.Nullable;
-
 import org.sosy_lab.common.collect.PathCopyingPersistentTreeMap;
 import org.sosy_lab.common.collect.PersistentSortedMap;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
 import org.sosy_lab.cpachecker.cfa.types.MachineModel;
 import org.sosy_lab.cpachecker.cfa.types.Type;
+import org.sosy_lab.cpachecker.cfa.types.c.CArrayType;
+import org.sosy_lab.cpachecker.cfa.types.c.CPointerType;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
 import org.sosy_lab.cpachecker.core.defaults.LatticeAbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractQueryableState;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
+import org.sosy_lab.cpachecker.core.interfaces.ExpressionTreeReportingState;
 import org.sosy_lab.cpachecker.core.interfaces.FormulaReportingState;
 import org.sosy_lab.cpachecker.cpa.invariants.formula.BooleanConstant;
 import org.sosy_lab.cpachecker.cpa.invariants.formula.BooleanFormula;
@@ -58,12 +75,16 @@ import org.sosy_lab.cpachecker.cpa.invariants.formula.CompoundIntervalFormulaMan
 import org.sosy_lab.cpachecker.cpa.invariants.formula.Constant;
 import org.sosy_lab.cpachecker.cpa.invariants.formula.ContainsVarVisitor;
 import org.sosy_lab.cpachecker.cpa.invariants.formula.ContainsVisitor;
+import org.sosy_lab.cpachecker.cpa.invariants.formula.Equal;
 import org.sosy_lab.cpachecker.cpa.invariants.formula.Exclusion;
 import org.sosy_lab.cpachecker.cpa.invariants.formula.FormulaAbstractionVisitor;
 import org.sosy_lab.cpachecker.cpa.invariants.formula.FormulaCompoundStateEvaluationVisitor;
 import org.sosy_lab.cpachecker.cpa.invariants.formula.FormulaDepthCountVisitor;
 import org.sosy_lab.cpachecker.cpa.invariants.formula.FormulaEvaluationVisitor;
 import org.sosy_lab.cpachecker.cpa.invariants.formula.InvariantsFormulaManager;
+import org.sosy_lab.cpachecker.cpa.invariants.formula.IsLinearVisitor;
+import org.sosy_lab.cpachecker.cpa.invariants.formula.LogicalAnd;
+import org.sosy_lab.cpachecker.cpa.invariants.formula.LogicalNot;
 import org.sosy_lab.cpachecker.cpa.invariants.formula.NumeralFormula;
 import org.sosy_lab.cpachecker.cpa.invariants.formula.PartialEvaluator;
 import org.sosy_lab.cpachecker.cpa.invariants.formula.PushAssumptionToEnvironmentVisitor;
@@ -71,27 +92,23 @@ import org.sosy_lab.cpachecker.cpa.invariants.formula.ReplaceVisitor;
 import org.sosy_lab.cpachecker.cpa.invariants.formula.SplitConjunctionsVisitor;
 import org.sosy_lab.cpachecker.cpa.invariants.formula.StateEqualsVisitor;
 import org.sosy_lab.cpachecker.cpa.invariants.formula.ToBitvectorFormulaVisitor;
+import org.sosy_lab.cpachecker.cpa.invariants.formula.ToCodeFormulaVisitor;
 import org.sosy_lab.cpachecker.cpa.invariants.formula.Union;
 import org.sosy_lab.cpachecker.cpa.invariants.formula.Variable;
 import org.sosy_lab.cpachecker.cpa.invariants.variableselection.VariableSelection;
 import org.sosy_lab.cpachecker.exceptions.InvalidQueryException;
-import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormulaManager;
+import org.sosy_lab.cpachecker.util.expressions.And;
+import org.sosy_lab.cpachecker.util.expressions.ExpressionTree;
+import org.sosy_lab.cpachecker.util.expressions.ExpressionTrees;
 import org.sosy_lab.cpachecker.util.predicates.smt.FormulaManagerView;
 import org.sosy_lab.cpachecker.util.states.MemoryLocation;
-import org.sosy_lab.solver.api.BooleanFormulaManager;
-
-import com.google.common.base.Function;
-import com.google.common.base.Joiner;
-import com.google.common.base.Preconditions;
-import com.google.common.base.Predicate;
-import com.google.common.collect.FluentIterable;
-import com.google.common.collect.Iterables;
-import com.google.common.collect.Sets;
+import org.sosy_lab.java_smt.api.BooleanFormulaManager;
 
 /**
  * Instances of this class represent states in the light-weight invariants analysis.
  */
-public class InvariantsState implements AbstractState, FormulaReportingState,
+public class InvariantsState implements AbstractState,
+    ExpressionTreeReportingState, FormulaReportingState,
     LatticeAbstractState<InvariantsState>, AbstractQueryableState {
 
   private static final String PROPERTY_OVERFLOW = "overflow";
@@ -106,31 +123,12 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
   private static final SplitConjunctionsVisitor<CompoundInterval> SPLIT_CONJUNCTIONS_VISITOR =
       new SplitConjunctionsVisitor<>();
 
-  private static final Predicate<? super MemoryLocation> IS_UNSUPPORTED_VARIABLE_NAME = new Predicate<MemoryLocation>() {
+  private static boolean isUnsupportedVariableName(MemoryLocation pMemoryLocation) {
+    return pMemoryLocation == null || pMemoryLocation.getIdentifier().contains("[");
+  }
 
-      @Override
-      public boolean apply(MemoryLocation pMemoryLocation) {
-        return pMemoryLocation == null || pMemoryLocation.getIdentifier().contains("[");
-      }};
-
-  private final Predicate<BooleanFormula<CompoundInterval>> implies = new Predicate<BooleanFormula<CompoundInterval>>() {
-
-    @Override
-    public boolean apply(BooleanFormula<CompoundInterval> pArg0) {
-      return definitelyImplies(pArg0);
-    }
-
-  };
-
-  /**
-   * A visitor used to evaluate formulas as exactly as possible.
-   */
-  private final FormulaEvaluationVisitor<CompoundInterval> evaluationVisitor;
-
-  /**
-   * A visitor that, like the formula evaluation visitor, is used to evaluate formulas, but far less exact to allow for convergence.
-   */
-  private final FormulaEvaluationVisitor<CompoundInterval> abstractionVisitor;
+  /** The tools used to manage states. */
+  private final Tools tools;
 
   /**
    * The environment currently known to the state.
@@ -148,36 +146,17 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
 
   private final MachineModel machineModel;
 
-  private final CompoundIntervalManagerFactory compoundIntervalManagerFactory;
-
-  private final CompoundIntervalFormulaManager compoundIntervalFormulaManager;
-
   private final AbstractionState abstractionState;
 
   private final boolean overflowDetected;
 
+  private final boolean includeTypeInformation;
+
+  private final boolean overapproximatesUnsupportedFeature;
+
   private Iterable<BooleanFormula<CompoundInterval>> environmentAsAssumptions;
 
   private volatile int hash = 0;
-
-  public InvariantsState(
-      VariableSelection<CompoundInterval> pVariableSelection,
-      CompoundIntervalManagerFactory pCompoundIntervalManagerFactory,
-      MachineModel pMachineModel,
-      InvariantsState pInvariant,
-      AbstractionState pAbstractionState) {
-    this.environment = pInvariant.environment;
-    this.partialEvaluator = pInvariant.partialEvaluator;
-    this.variableSelection = pVariableSelection;
-    this.variableTypes = pInvariant.variableTypes;
-    this.compoundIntervalManagerFactory = pCompoundIntervalManagerFactory;
-    this.machineModel = pMachineModel;
-    this.abstractionState = pAbstractionState;
-    this.compoundIntervalFormulaManager = new CompoundIntervalFormulaManager(compoundIntervalManagerFactory);
-    this.evaluationVisitor = new FormulaCompoundStateEvaluationVisitor(compoundIntervalManagerFactory);
-    this.abstractionVisitor = new FormulaAbstractionVisitor(compoundIntervalManagerFactory);
-    this.overflowDetected = false;
-  }
 
   /**
    * Creates a new invariants state with a selection of
@@ -185,81 +164,98 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
    *
    * @param pVariableSelection the selected variables.
    * @param pMachineModel the machine model used.
+   * @param pAbstractionState the abstraction information.
+   * @param pIncludeTypeInformation whether or not to include type information for exports.
    */
   public InvariantsState(VariableSelection<CompoundInterval> pVariableSelection,
       CompoundIntervalManagerFactory pCompoundIntervalManagerFactory,
       MachineModel pMachineModel,
       AbstractionState pAbstractionState,
-      boolean pOverflowDetected) {
+      boolean pIncludeTypeInformation) {
     this.environment = NonRecursiveEnvironment.of(pCompoundIntervalManagerFactory);
     this.partialEvaluator = new PartialEvaluator(pCompoundIntervalManagerFactory, this.environment);
     this.variableSelection = pVariableSelection;
     this.variableTypes = PathCopyingPersistentTreeMap.of();
-    this.compoundIntervalManagerFactory = pCompoundIntervalManagerFactory;
+    this.tools = new Tools(pCompoundIntervalManagerFactory);
     this.machineModel = pMachineModel;
     this.abstractionState = pAbstractionState;
-    this.compoundIntervalFormulaManager = new CompoundIntervalFormulaManager(compoundIntervalManagerFactory);
-    this.evaluationVisitor = new FormulaCompoundStateEvaluationVisitor(compoundIntervalManagerFactory);
-    this.abstractionVisitor = new FormulaAbstractionVisitor(compoundIntervalManagerFactory);
-    this.overflowDetected = pOverflowDetected;
+    this.overflowDetected = false;
+    this.includeTypeInformation = pIncludeTypeInformation;
+    this.overapproximatesUnsupportedFeature = false;
   }
 
   /**
-   * Creates a new invariants state with the given data, reusing the given
-   * instance of the environment without copying.
+   * Creates a new invariants state with the given data, reusing the given instance of the
+   * environment without copying.
    *
    * @param pVariableSelection the selected variables.
+   * @param pTools the tools used to manage the state.
    * @param pMachineModel the machine model used.
-   * @param pAbstractionState the abstraction state.
+   * @param pAbstractionState the abstraction information.
    * @param pEnvironment the environment. This instance is reused and not copied.
    * @param pVariableTypes the variable types.
+   * @param pOverflowDetected if an overflow has been detected.
+   * @param pIncludeTypeInformation whether or not to include type information for exports.
+   * @param pOverapproximatesUnsupportedFeature whether or not an unsupported feature is over-approximated by this state.
    */
-  private InvariantsState(VariableSelection<CompoundInterval> pVariableSelection,
-      CompoundIntervalManagerFactory pCompoundIntervalManagerFactory,
+  private InvariantsState(
+      VariableSelection<CompoundInterval> pVariableSelection,
+      Tools pTools,
       MachineModel pMachineModel,
       AbstractionState pAbstractionState,
       NonRecursiveEnvironment pEnvironment,
       PersistentSortedMap<MemoryLocation, CType> pVariableTypes,
-      boolean pOverflowDetected) {
+      boolean pOverflowDetected,
+      boolean pIncludeTypeInformation,
+      boolean pOverapproximatesUnsupportedFeature) {
     this.environment = pEnvironment;
-    this.partialEvaluator = new PartialEvaluator(pCompoundIntervalManagerFactory, this.environment);
+    this.tools = pTools;
+    this.partialEvaluator =
+        new PartialEvaluator(pTools.compoundIntervalManagerFactory, this.environment);
     this.variableSelection = pVariableSelection;
     this.variableTypes = pVariableTypes;
-    this.compoundIntervalManagerFactory = pCompoundIntervalManagerFactory;
     this.machineModel = pMachineModel;
     this.abstractionState = pAbstractionState;
-    this.compoundIntervalFormulaManager = new CompoundIntervalFormulaManager(compoundIntervalManagerFactory);
-    this.evaluationVisitor = new FormulaCompoundStateEvaluationVisitor(compoundIntervalManagerFactory);
-    this.abstractionVisitor = new FormulaAbstractionVisitor(compoundIntervalManagerFactory);
     this.overflowDetected = pOverflowDetected;
+    this.includeTypeInformation = pIncludeTypeInformation;
+    this.overapproximatesUnsupportedFeature = pOverapproximatesUnsupportedFeature;
   }
 
   /**
-   * Creates a new invariants state with a selection of variables, the machine
-   * model used, the given variable types and the given abstraction state.
+   * Creates a new invariants state with a selection of variables, the machine model used, the given
+   * variable types and the given abstraction state.
    *
    * @param pVariableSelection the selected variables.
+   * @param pTools the tools used to manage the state.
    * @param pMachineModel the machine model used.
    * @param pVariableTypes the variable types.
    * @param pAbstractionState the abstraction state.
+   * @param pOverflowDetected if an overflow has been detected.
+   * @param pIncludeTypeInformation whether or not to include type information for exports.
+   * @param pOverapproximatesUnsupportedFeature whether or not an unsupported feature is overapproximated by this state.
    */
-  private InvariantsState(Map<MemoryLocation, NumeralFormula<CompoundInterval>> pEnvironment,
+  private InvariantsState(
+      Map<MemoryLocation, NumeralFormula<CompoundInterval>> pEnvironment,
       VariableSelection<CompoundInterval> pVariableSelection,
-      CompoundIntervalManagerFactory pCompoundIntervalManagerFactory,
+      Tools pTools,
       MachineModel pMachineModel,
       PersistentSortedMap<MemoryLocation, CType> pVariableTypes,
-      AbstractionState pAbstractionState) {
-    this.environment = NonRecursiveEnvironment.copyOf(pCompoundIntervalManagerFactory, pEnvironment);
-    this.partialEvaluator = new PartialEvaluator(pCompoundIntervalManagerFactory, pEnvironment);
+      AbstractionState pAbstractionState,
+      boolean pOverflowDetected,
+      boolean pIncludeTypeInformation,
+      boolean pOverapproximatesUnsupportedFeature) {
+    this.environment =
+        NonRecursiveEnvironment.copyOf(pTools.compoundIntervalManagerFactory, pEnvironment);
+    this.partialEvaluator =
+        new PartialEvaluator(pTools.compoundIntervalManagerFactory, pEnvironment);
     this.variableSelection = pVariableSelection;
     this.variableTypes = pVariableTypes;
-    this.compoundIntervalManagerFactory = pCompoundIntervalManagerFactory;
+    this.tools = pTools;
     this.machineModel = pMachineModel;
     this.abstractionState = pAbstractionState;
-    this.compoundIntervalFormulaManager = new CompoundIntervalFormulaManager(compoundIntervalManagerFactory);
-    this.evaluationVisitor = new FormulaCompoundStateEvaluationVisitor(compoundIntervalManagerFactory);
-    this.abstractionVisitor = new FormulaAbstractionVisitor(compoundIntervalManagerFactory);
-    this.overflowDetected = false;
+    this.overflowDetected = pOverflowDetected;
+    this.includeTypeInformation = pIncludeTypeInformation;
+    this.overapproximatesUnsupportedFeature = pOverapproximatesUnsupportedFeature;
   }
 
   private AbstractionState determineAbstractionState(AbstractionState pMasterState) {
@@ -284,7 +280,16 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
     if (state.equals(abstractionState)) {
       return this;
     }
-    return new InvariantsState(environment, variableSelection, compoundIntervalManagerFactory, machineModel, variableTypes, state);
+    return new InvariantsState(
+        environment,
+        variableSelection,
+        tools,
+        machineModel,
+        variableTypes,
+        state,
+        overflowDetected,
+        includeTypeInformation,
+        overapproximatesUnsupportedFeature);
   }
 
   public Type getType(MemoryLocation pMemoryLocation) {
@@ -295,7 +300,16 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
     if (pType.equals(variableTypes.get(pMemoryLocation))) {
       return this;
     }
-    return new InvariantsState(variableSelection, compoundIntervalManagerFactory, machineModel, abstractionState, environment, variableTypes.putAndCopy(pMemoryLocation, pType), overflowDetected);
+    return new InvariantsState(
+        variableSelection,
+        tools,
+        machineModel,
+        abstractionState,
+        environment,
+        variableTypes.putAndCopy(pMemoryLocation, pType),
+        overflowDetected,
+        includeTypeInformation,
+        overapproximatesUnsupportedFeature);
   }
 
   public InvariantsState setTypes(Map<MemoryLocation, CType> pVarTypes) {
@@ -312,11 +326,20 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
     PersistentSortedMap<MemoryLocation, CType> variableTypes = this.variableTypes;
     for (Map.Entry<MemoryLocation, CType> entry : pVarTypes.entrySet()) {
       MemoryLocation memoryLocation = entry.getKey();
-      if (!variableTypes.containsKey(memoryLocation)) {
+      if (!entry.getValue().equals(variableTypes.get(memoryLocation))) {
         variableTypes = variableTypes.putAndCopy(memoryLocation, entry.getValue());
       }
     }
-    return new InvariantsState(variableSelection, compoundIntervalManagerFactory, machineModel, abstractionState, environment, variableTypes, overflowDetected);
+    return new InvariantsState(
+        variableSelection,
+        tools,
+        machineModel,
+        abstractionState,
+        environment,
+        variableTypes,
+        overflowDetected,
+        includeTypeInformation,
+        overapproximatesUnsupportedFeature);
   }
 
   public InvariantsState assignArray(MemoryLocation pArray, NumeralFormula<CompoundInterval> pSubscript, NumeralFormula<CompoundInterval> pValue) {
@@ -325,13 +348,15 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
     if (value.isSingleton()) { // Exact subscript value is known
       return assignInternal(MemoryLocation.valueOf(pArray.getAsSimpleString() + "[" + value.getValue() + "]"), pValue);
     } else { // Multiple subscript values are possible: All possible subscript targets are now unknown
-      InvariantsState result = this;
+      InvariantsState result = overapproximateUnsupportedFeature();
       for (MemoryLocation memoryLocation : this.environment.keySet()) {
         String prefix = pArray.getAsSimpleString() + "[";
         if (memoryLocation.getAsSimpleString().startsWith(prefix)) {
           String subscriptValueStr = memoryLocation.getAsSimpleString().replace(prefix, "").replaceAll("].*", "");
           if (subscriptValueStr.equals("*") || value.contains(new BigInteger(subscriptValueStr))) {
-            result = result.assignInternal(memoryLocation, allPossibleValuesFormula(pValue.getBitVectorInfo()));
+            result =
+                result.assignInternal(
+                    memoryLocation, allPossibleValuesFormula(pValue.getTypeInfo()));
           }
         }
       }
@@ -339,18 +364,16 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
     }
   }
 
-  private CompoundIntervalManager getCompoundIntervalManager(BitVectorInfo pBitVectorInfo) {
-    return compoundIntervalManagerFactory.createCompoundIntervalManager(pBitVectorInfo);
+  private CompoundIntervalManager getCompoundIntervalManager(TypeInfo pTypeInfo) {
+    return tools.compoundIntervalManagerFactory.createCompoundIntervalManager(pTypeInfo);
   }
 
-  private CompoundInterval allPossibleValues(BitVectorInfo pBitVectorInfo) {
-    return getCompoundIntervalManager(pBitVectorInfo).allPossibleValues();
+  private CompoundInterval allPossibleValues(TypeInfo pTypeInfo) {
+    return getCompoundIntervalManager(pTypeInfo).allPossibleValues();
   }
 
-  private NumeralFormula<CompoundInterval> allPossibleValuesFormula(BitVectorInfo pBitVectorInfo) {
-    return InvariantsFormulaManager.INSTANCE.asConstant(
-        pBitVectorInfo,
-        allPossibleValues(pBitVectorInfo));
+  private NumeralFormula<CompoundInterval> allPossibleValuesFormula(TypeInfo pInfo) {
+    return InvariantsFormulaManager.INSTANCE.asConstant(pInfo, allPossibleValues(pInfo));
   }
 
   public InvariantsState assign(MemoryLocation pMemoryLocation, NumeralFormula<CompoundInterval> pValue) {
@@ -359,21 +382,22 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
     if (variableType == null) {
       return this;
     }
-    BitVectorInfo bitVectorInfo = BitVectorInfo.from(machineModel, variableType);
-    NumeralFormula<CompoundInterval> value = compoundIntervalFormulaManager.cast(bitVectorInfo, pValue);
+    TypeInfo typeInfo = BitVectorInfo.from(machineModel, variableType);
+    NumeralFormula<CompoundInterval> value =
+        tools.compoundIntervalFormulaManager.cast(typeInfo, pValue);
     for (Map.Entry<MemoryLocation, NumeralFormula<CompoundInterval>> entry : this.environment.entrySet()) {
       MemoryLocation memoryLocation = entry.getKey();
-      BitVectorInfo varBitVectorInfo = BitVectorInfo.from(machineModel, getType(memoryLocation));
+      TypeInfo varTypeInfo = BitVectorInfo.from(machineModel, getType(memoryLocation));
       if (memoryLocation.getAsSimpleString().startsWith(pMemoryLocation.getAsSimpleString() + "->")
           || memoryLocation.getAsSimpleString().startsWith(pMemoryLocation.getAsSimpleString() + ".")) {
-        result = result.assign(memoryLocation, allPossibleValuesFormula(varBitVectorInfo));
+        result = result.assign(memoryLocation, allPossibleValuesFormula(varTypeInfo));
       }
     }
     if (value instanceof Variable<?>) {
       MemoryLocation valueMemoryLocation = ((Variable<?>) value).getMemoryLocation();
       if (valueMemoryLocation.getAsSimpleString().startsWith(pMemoryLocation.getAsSimpleString() + "->")
           || valueMemoryLocation.getAsSimpleString().startsWith(pMemoryLocation.getAsSimpleString() + ".")) {
-        return assign(pMemoryLocation, allPossibleValuesFormula(bitVectorInfo));
+        return assign(pMemoryLocation, allPossibleValuesFormula(typeInfo));
       }
       String pointerDerefPrefix = valueMemoryLocation.getAsSimpleString() + "->";
       String nonPointerDerefPrefix = valueMemoryLocation.getAsSimpleString() + ".";
@@ -390,11 +414,11 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
           MemoryLocation memoryLocation = MemoryLocation.valueOf(pMemoryLocation.getAsSimpleString() + "->" + suffix);
           NumeralFormula<CompoundInterval> previous = this.environment.get(memoryLocation);
           if (previous != null) {
-            result = result.assign(
-                memoryLocation,
-                InvariantsFormulaManager.INSTANCE.<CompoundInterval>asVariable(
-                    previous.getBitVectorInfo(),
-                    entry.getKey()));
+            result =
+                result.assign(
+                    memoryLocation,
+                    InvariantsFormulaManager.INSTANCE.<CompoundInterval>asVariable(
+                        previous.getTypeInfo(), entry.getKey()));
           }
         }
       }
@@ -413,11 +437,18 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
   private InvariantsState assignInternal(MemoryLocation pMemoryLocation, NumeralFormula<CompoundInterval> pValue) {
     Preconditions.checkNotNull(pValue);
     // Only use information from supported variables
-    if (IS_UNSUPPORTED_VARIABLE_NAME.apply(pMemoryLocation)) {
-      return this;
+    if (isUnsupportedVariableName(pMemoryLocation)) {
+      return overapproximateUnsupportedFeature();
     }
-    if (FluentIterable.from(pValue.accept(COLLECT_VARS_VISITOR)).anyMatch(IS_UNSUPPORTED_VARIABLE_NAME)) {
-      return assignInternal(pMemoryLocation, allPossibleValuesFormula(pValue.getBitVectorInfo()));
+    if (FluentIterable.from(pValue.accept(COLLECT_VARS_VISITOR)).anyMatch(InvariantsState::isUnsupportedVariableName)) {
+      NumeralFormula<CompoundInterval> newEnvValue = InvariantsFormulaManager.INSTANCE.asConstant(
+          pValue.getTypeInfo(),
+          pValue.accept(getFormulaResolver(), environment));
+      InvariantsState result = assignInternal(pMemoryLocation, newEnvValue);
+      if (result != null) {
+        return result.overapproximateUnsupportedFeature();
+      }
+      return result;
     }
 
     // Check if the assigned variable is selected (newVariableSelection != null)
@@ -431,60 +462,37 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
       if (this.environment == newEnvironment) {
         return this;
       }
-      return new InvariantsState(newEnvironment,
+      return new InvariantsState(
+          newEnvironment,
           variableSelection,
-          compoundIntervalManagerFactory,
+          tools,
           machineModel,
           variableTypes,
-          abstractionState);
+          abstractionState,
+          overflowDetected,
+          includeTypeInformation,
+          overapproximatesUnsupportedFeature);
     }
 
-    BitVectorInfo bitVectorInfo = pValue.getBitVectorInfo();
-    Variable<CompoundInterval> variable = InvariantsFormulaManager.INSTANCE.asVariable(
-        bitVectorInfo,
-        pMemoryLocation);
-    ContainsVarVisitor<CompoundInterval> containsVarVisitor = new ContainsVarVisitor<>();
+    TypeInfo typeInfo = pValue.getTypeInfo();
+    Variable<CompoundInterval> variable =
+        InvariantsFormulaManager.INSTANCE.asVariable(typeInfo, pMemoryLocation);
 
     // Optimization: If the value being assigned is equivalent to the value already stored, do nothing
-    if (getEnvironmentValue(bitVectorInfo, pMemoryLocation).equals(pValue)
-        && (pValue instanceof Variable<?> || pValue instanceof Constant<?> && ((Constant<CompoundInterval>) pValue).getValue().isSingleton())
-        || variable.accept(new StateEqualsVisitor(getFormulaResolver(), this.environment, compoundIntervalManagerFactory), pValue)) {
+    if ((getEnvironmentValue(typeInfo, pMemoryLocation).equals(pValue)
+            && (pValue instanceof Variable<?>
+                || (pValue instanceof Constant<?>
+                    && ((Constant<CompoundInterval>) pValue).getValue().isSingleton())))
+        || variable.accept(
+            new StateEqualsVisitor(
+                getFormulaResolver(), this.environment, tools.compoundIntervalManagerFactory),
+            pValue)) {
       return this;
     }
 
-    // Avoid self-assignments if an equivalent alternative is available
-    if (pValue.accept(containsVarVisitor, pMemoryLocation)) {
-      NumeralFormula<CompoundInterval> varValue = environment.get(pMemoryLocation);
-      boolean isVarValueConstant = varValue instanceof Constant && ((Constant<CompoundInterval>) varValue).getValue().isSingleton();
-      NumeralFormula<CompoundInterval> alternative = varValue;
-      if (!(alternative instanceof Variable)) {
-        alternative = null;
-        for (Map.Entry<MemoryLocation, NumeralFormula<CompoundInterval>> entry : environment.entrySet()) {
-          NumeralFormula<CompoundInterval> value = entry.getValue();
-          if (!entry.getKey().equals(pMemoryLocation)
-              && (value.equals(variable) || isVarValueConstant && value.equals(varValue))) {
-            alternative = InvariantsFormulaManager.INSTANCE.asVariable(bitVectorInfo, entry.getKey());
-            break;
-          }
-        }
-      }
-      if (alternative != null) {
-        pValue = pValue.accept(new ReplaceVisitor<>(variable, alternative));
-      }
-      CompoundInterval value = pValue.accept(evaluationVisitor, environment);
-      if (value.isSingleton()) {
-        for (Map.Entry<MemoryLocation, NumeralFormula<CompoundInterval>> entry : environment.entrySet()) {
-          NumeralFormula<CompoundInterval> v = entry.getValue();
-          if (v instanceof Constant && value.equals(((Constant<CompoundInterval>) v).getValue())) {
-            pValue = InvariantsFormulaManager.INSTANCE.asVariable(bitVectorInfo, entry.getKey());
-            break;
-          }
-        }
-      }
-    }
-
     // Compute the assignment
-    InvariantsState result = assignInternal(pMemoryLocation, pValue, newVariableSelection, evaluationVisitor);
+    InvariantsState result =
+        assignInternal(pMemoryLocation, pValue, newVariableSelection, tools.evaluationVisitor);
 
     if (equals(result)) {
       return this;
@@ -492,7 +500,23 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
     return result;
   }
 
-  private InvariantsState assignInternal(MemoryLocation pMemoryLocation, NumeralFormula<CompoundInterval> pValue,
+  private InvariantsState overapproximateUnsupportedFeature() {
+    if (overapproximatesUnsupportedFeature) {
+      return this;
+    }
+    return new InvariantsState(
+        environment,
+        variableSelection,
+        tools,
+        machineModel,
+        variableTypes,
+        abstractionState,
+        overflowDetected,
+        includeTypeInformation,
+        true);
+  }
+
+  private InvariantsState assignInternal(final MemoryLocation pMemoryLocation, NumeralFormula<CompoundInterval> pValue,
       VariableSelection<CompoundInterval> newVariableSelection,
       FormulaEvaluationVisitor<CompoundInterval> evaluationVisitor) {
     NonRecursiveEnvironment resultEnvironment = this.environment;
@@ -504,12 +528,22 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
      * in any previously collected assumptions (including its new value)
      * have to be resolved with the variable's previous value.
      */
-    BitVectorInfo bitVectorInfo = pValue.getBitVectorInfo();
-    Variable<CompoundInterval> variable = InvariantsFormulaManager.INSTANCE.asVariable(
-        bitVectorInfo,
-        pMemoryLocation);
-    NumeralFormula<CompoundInterval> previousValue = getEnvironmentValue(bitVectorInfo, pMemoryLocation);
+    TypeInfo typeInfo = pValue.getTypeInfo();
+    Variable<CompoundInterval> variable =
+        InvariantsFormulaManager.INSTANCE.asVariable(typeInfo, pMemoryLocation);
+    NumeralFormula<CompoundInterval> previousValue = getEnvironmentValue(typeInfo, pMemoryLocation);
     ReplaceVisitor<CompoundInterval> replaceVisitor = new ReplaceVisitor<>(variable, previousValue);
+    resultEnvironment = resultEnvironment.putAndCopy(pMemoryLocation, pValue.accept(replaceVisitor).accept(partialEvaluator, evaluationVisitor));
+    if (pValue.accept(new IsLinearVisitor<>(), variable) && pValue.accept(containsVarVisitor, pMemoryLocation)) {
+      CompoundInterval zero =
+          tools.compoundIntervalManagerFactory.createCompoundIntervalManager(typeInfo).singleton(0);
+      previousValue =
+          pValue.accept(
+              new ReplaceVisitor<>(
+                  variable, InvariantsFormulaManager.INSTANCE.asConstant(typeInfo, zero)));
+      previousValue = tools.compoundIntervalFormulaManager.subtract(variable, previousValue);
+    }
+    replaceVisitor = new ReplaceVisitor<>(variable, previousValue);
 
     for (Map.Entry<MemoryLocation, NumeralFormula<CompoundInterval>> environmentEntry : this.environment.entrySet()) {
       if (!environmentEntry.getKey().equals(pMemoryLocation)) {
@@ -521,8 +555,16 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
         }
       }
     }
-    resultEnvironment = resultEnvironment.putAndCopy(pMemoryLocation, pValue.accept(replaceVisitor).accept(partialEvaluator, evaluationVisitor));
-    return new InvariantsState(newVariableSelection, compoundIntervalManagerFactory, machineModel, abstractionState, resultEnvironment, variableTypes, overflowDetected);
+    return new InvariantsState(
+        newVariableSelection,
+        tools,
+        machineModel,
+        abstractionState,
+        resultEnvironment,
+        variableTypes,
+        overflowDetected,
+        includeTypeInformation,
+        overapproximatesUnsupportedFeature);
   }
 
   /**
@@ -536,7 +578,16 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
     if (environment.isEmpty()) {
       return this;
     }
-    return new InvariantsState(variableSelection, compoundIntervalManagerFactory, machineModel, abstractionState, overflowDetected);
+    return new InvariantsState(
+        variableSelection,
+        tools,
+        machineModel,
+        abstractionState,
+        NonRecursiveEnvironment.of(tools.compoundIntervalManagerFactory),
+        variableTypes,
+        overflowDetected,
+        includeTypeInformation,
+        overapproximatesUnsupportedFeature);
   }
 
   /**
@@ -548,29 +599,34 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
    */
   public InvariantsState clear(MemoryLocation pMemoryLocation) {
     NumeralFormula<CompoundInterval> previous = environment.get(pMemoryLocation);
-    final BitVectorInfo bitVectorInfo;
+    final TypeInfo typeInfo;
 
     if (previous == null) {
       Type type = variableTypes.get(pMemoryLocation);
       if (type == null) {
         return this;
       }
-      bitVectorInfo = BitVectorInfo.from(machineModel, type);
+      typeInfo = BitVectorInfo.from(machineModel, type);
     } else {
-      bitVectorInfo = previous.getBitVectorInfo();
+      typeInfo = previous.getTypeInfo();
     }
 
-    NumeralFormula<CompoundInterval> allPossibleValues = allPossibleValuesFormula(bitVectorInfo);
-    InvariantsState result = assignInternal(pMemoryLocation, allPossibleValues, variableSelection, evaluationVisitor);
+    NumeralFormula<CompoundInterval> allPossibleValues = allPossibleValuesFormula(typeInfo);
+    InvariantsState result =
+        assignInternal(
+            pMemoryLocation, allPossibleValues, variableSelection, tools.evaluationVisitor);
     NonRecursiveEnvironment resultEnvironment = result.environment.removeAndCopy(pMemoryLocation);
-    result = new InvariantsState(
-        result.variableSelection,
-        result.compoundIntervalManagerFactory,
-        result.machineModel,
-        result.abstractionState,
-        resultEnvironment,
-        result.variableTypes,
-        overflowDetected);
+    result =
+        new InvariantsState(
+            result.variableSelection,
+            result.tools,
+            result.machineModel,
+            result.abstractionState,
+            resultEnvironment,
+            result.variableTypes,
+            overflowDetected,
+            includeTypeInformation,
+            result.overapproximatesUnsupportedFeature);
     if (equals(result)) {
       return this;
     }
@@ -581,14 +637,7 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
     final Set<Variable<CompoundInterval>> toClear = getVariables(pMemoryLocationPredicate);
     ContainsVisitor<CompoundInterval> containsVisitor = new ContainsVisitor<>();
     ContainsVarVisitor<CompoundInterval> containsVarVisitor = new ContainsVarVisitor<>();
-    Predicate<NumeralFormula<CompoundInterval>> toClearPredicate = new Predicate<NumeralFormula<CompoundInterval>>() {
-
-      @Override
-      public boolean apply(NumeralFormula<CompoundInterval> pFormula) {
-        return toClear.contains(pFormula);
-      }
-
-    };
+    Predicate<NumeralFormula<CompoundInterval>> toClearPredicate = toClear::contains;
     Queue<MemoryLocation> potentialReferrers = new ArrayDeque<>();
     for (Map.Entry<MemoryLocation, NumeralFormula<CompoundInterval>> entry : environment.entrySet()) {
       if (entry.getValue().accept(containsVisitor, toClearPredicate)) {
@@ -603,19 +652,19 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
       Variable<CompoundInterval> variable = toClearIterator.next();
       MemoryLocation memoryLocation = variable.getMemoryLocation();
       NumeralFormula<CompoundInterval> previous = resultEnvironment.get(memoryLocation);
-      final BitVectorInfo bitVectorInfo;
+      final TypeInfo typeInfo;
 
       if (previous == null) {
         Type type = variableTypes.get(memoryLocation);
         if (type == null) {
           continue;
         }
-        bitVectorInfo = BitVectorInfo.from(machineModel, type);
+        typeInfo = BitVectorInfo.from(machineModel, type);
       } else {
-        bitVectorInfo = previous.getBitVectorInfo();
+        typeInfo = previous.getTypeInfo();
       }
 
-      NumeralFormula<CompoundInterval> allPossibleValues = allPossibleValuesFormula(bitVectorInfo);
+      NumeralFormula<CompoundInterval> allPossibleValues = allPossibleValuesFormula(typeInfo);
       ReplaceVisitor<CompoundInterval> replaceVisitor = new ReplaceVisitor<>(
           variable,
           previous == null ? allPossibleValues : previous);
@@ -629,7 +678,9 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
           NumeralFormula<CompoundInterval> previousValue = resultEnvironment.get(key);
           if (previousValue.accept(containsVarVisitor, memoryLocation)) {
             NumeralFormula<CompoundInterval> newEnvValue =
-                previousValue.accept(replaceVisitor).accept(partialEvaluator, evaluationVisitor);
+                previousValue
+                    .accept(replaceVisitor)
+                    .accept(partialEvaluator, tools.evaluationVisitor);
             resultEnvironment = resultEnvironment.putAndCopy(key, newEnvValue);
             if (!newEnvValue.accept(containsVisitor, toClearPredicate)) {
               potentialReferrerIterator.remove();
@@ -641,14 +692,17 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
       toClearIterator.remove();
     }
 
-    InvariantsState result = new InvariantsState(
-        variableSelection,
-        compoundIntervalManagerFactory,
-        machineModel,
-        abstractionState,
-        resultEnvironment,
-        variableTypes,
-        overflowDetected);
+    InvariantsState result =
+        new InvariantsState(
+            variableSelection,
+            tools,
+            machineModel,
+            abstractionState,
+            resultEnvironment,
+            variableTypes,
+            overflowDetected,
+            includeTypeInformation,
+            overapproximatesUnsupportedFeature);
     if (equals(result)) {
       return this;
     }
@@ -662,7 +716,8 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
    */
   public Iterable<BooleanFormula<CompoundInterval>> getEnvironmentAsAssumptions() {
     if (this.environmentAsAssumptions == null) {
-      environmentAsAssumptions = getEnvironmentAsAssumptions(compoundIntervalManagerFactory, environment);
+      environmentAsAssumptions =
+          getEnvironmentAsAssumptions(tools.compoundIntervalManagerFactory, environment);
     }
     return environmentAsAssumptions;
   }
@@ -672,22 +727,30 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
     for (Map.Entry<? extends MemoryLocation, ? extends Type> typeEntry : variableTypes.entrySet()) {
       MemoryLocation memoryLocation = typeEntry.getKey();
       Type type = typeEntry.getValue();
-      if (BitVectorInfo.isSupported(machineModel, type)) {
-        BitVectorInfo bitVectorInfo = BitVectorInfo.from(machineModel, typeEntry.getValue());
-        CompoundIntervalManager cim = compoundIntervalManagerFactory.createCompoundIntervalManager(bitVectorInfo);
+      if (BitVectorInfo.isSupported(type)) {
+        TypeInfo typeInfo = BitVectorInfo.from(machineModel, typeEntry.getValue());
+        CompoundIntervalManager cim =
+            tools.compoundIntervalManagerFactory.createCompoundIntervalManager(typeInfo);
         CompoundInterval range = cim.allPossibleValues();
-        Variable<CompoundInterval> variable = InvariantsFormulaManager.INSTANCE.asVariable(
-                bitVectorInfo,
-                memoryLocation);
-        if (range.hasLowerBound()) {
-          assumptions.add(compoundIntervalFormulaManager.greaterThanOrEqual(
-              variable,
-              InvariantsFormulaManager.INSTANCE.asConstant(bitVectorInfo, cim.singleton(range.getLowerBound()))));
-        }
-        if (range.hasUpperBound()) {
-          assumptions.add(compoundIntervalFormulaManager.lessThanOrEqual(
-              variable,
-              InvariantsFormulaManager.INSTANCE.asConstant(bitVectorInfo, cim.singleton(range.getUpperBound()))));
+        Variable<CompoundInterval> variable =
+            InvariantsFormulaManager.INSTANCE.asVariable(typeInfo, memoryLocation);
+        NumeralFormula<CompoundInterval> value = environment.get(memoryLocation);
+        if (value == null
+            || value.accept(tools.evaluationVisitor, environment).containsAllPossibleValues()) {
+          if (range.hasLowerBound()) {
+            assumptions.add(
+                tools.compoundIntervalFormulaManager.greaterThanOrEqual(
+                    variable,
+                    InvariantsFormulaManager.INSTANCE.asConstant(
+                        typeInfo, cim.singleton(range.getLowerBound()))));
+          }
+          if (range.hasUpperBound()) {
+            assumptions.add(
+                tools.compoundIntervalFormulaManager.lessThanOrEqual(
+                    variable,
+                    InvariantsFormulaManager.INSTANCE.asConstant(
+                        typeInfo, cim.singleton(range.getUpperBound()))));
+          }
         }
       }
     }
@@ -708,8 +771,7 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
     for (Entry<? extends MemoryLocation, ? extends NumeralFormula<CompoundInterval>> entry : pEnvironment.entrySet()) {
       NumeralFormula<CompoundInterval> variable =
           InvariantsFormulaManager.INSTANCE.asVariable(
-              entry.getValue().getBitVectorInfo(),
-              entry.getKey());
+              entry.getValue().getTypeInfo(), entry.getKey());
 
       NumeralFormula<CompoundInterval> value = entry.getValue();
 
@@ -756,14 +818,17 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
   /**
    * Gets the value of the variable with the given memory location from the environment.
    *
-   * @param pBitVectorInfo the bit vector information of the variable.
+   * @param pTypeInfo the type information of the variable.
    * @param pMemoryLocation the memory location of the variable.
    *
    * @return the value of the variable with the given memory location from the environment.
    */
-  private NumeralFormula<CompoundInterval> getEnvironmentValue(BitVectorInfo pBitVectorInfo, MemoryLocation pMemoryLocation) {
+  private NumeralFormula<CompoundInterval> getEnvironmentValue(
+      TypeInfo pTypeInfo, MemoryLocation pMemoryLocation) {
     NumeralFormula<CompoundInterval> environmentValue = this.environment.get(pMemoryLocation);
-    if (environmentValue == null) { return allPossibleValuesFormula(pBitVectorInfo); }
+    if (environmentValue == null) {
+      return allPossibleValuesFormula(pTypeInfo);
+    }
     return environmentValue;
   }
 
@@ -773,7 +838,7 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
    * @return an exact formula evaluation visitor.
    */
   public FormulaEvaluationVisitor<CompoundInterval> getFormulaResolver() {
-    return evaluationVisitor;
+    return tools.evaluationVisitor;
   }
 
   /**
@@ -815,20 +880,21 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
       return BooleanConstant.isTrue(assumption) ? this : null;
     }
 
-    // Only use information from supported variables
-    if (FluentIterable.from(assumption.accept(COLLECT_VARS_VISITOR)).anyMatch(IS_UNSUPPORTED_VARIABLE_NAME)) {
-      return this;
-    }
-
     BooleanConstant<CompoundInterval> assumptionEvaluation = assumption.accept(pEvaluationVisitor, getEnvironment());
     // If the invariant evaluates to false or is bottom, it represents an invalid state
     if (BooleanConstant.isFalse(assumptionEvaluation)) { return null; }
     // If the invariant evaluates to true, it adds no value for now
     if (BooleanConstant.isTrue(assumptionEvaluation)) { return this; }
 
+    // Only use information from supported variables
+    if (FluentIterable.from(assumption.accept(COLLECT_VARS_VISITOR)).anyMatch(InvariantsState::isUnsupportedVariableName)) {
+      return overapproximateUnsupportedFeature();
+    }
+
     NonRecursiveEnvironment.Builder environmentBuilder = new NonRecursiveEnvironment.Builder(this.environment);
     PushAssumptionToEnvironmentVisitor patev =
-        new PushAssumptionToEnvironmentVisitor(compoundIntervalManagerFactory, pEvaluationVisitor, environmentBuilder);
+        new PushAssumptionToEnvironmentVisitor(
+            tools.compoundIntervalManagerFactory, pEvaluationVisitor, environmentBuilder);
     if (!assumption.accept(patev, BooleanConstant.<CompoundInterval>getTrue())) {
       assert !BooleanConstant.isTrue(assumptionEvaluation);
       return null;
@@ -837,7 +903,16 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
     if (isDefinitelyFalse(assumption, pEvaluationVisitor)) {
       return null;
     }
-    return new InvariantsState(environmentBuilder.build(), pNewVariableSelection, compoundIntervalManagerFactory, machineModel, variableTypes, abstractionState);
+    return new InvariantsState(
+        environmentBuilder.build(),
+        pNewVariableSelection,
+        tools,
+        machineModel,
+        variableTypes,
+        abstractionState,
+        overflowDetected,
+        includeTypeInformation,
+        overapproximatesUnsupportedFeature);
   }
 
   /**
@@ -874,21 +949,315 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
   }
 
   @Override
-  public org.sosy_lab.solver.api.BooleanFormula getFormulaApproximation(FormulaManagerView pManager, PathFormulaManager pfmgr) {
-    FormulaEvaluationVisitor<CompoundInterval> evaluationVisitor = getFormulaResolver();
+  public org.sosy_lab.java_smt.api.BooleanFormula getFormulaApproximation(
+      FormulaManagerView pManager) {
+
     BooleanFormulaManager bfmgr = pManager.getBooleanFormulaManager();
-    org.sosy_lab.solver.api.BooleanFormula result = bfmgr.makeBoolean(true);
+    FormulaEvaluationVisitor<CompoundInterval> evaluationVisitor = getFormulaResolver();
     ToBitvectorFormulaVisitor toBooleanFormulaVisitor =
         new ToBitvectorFormulaVisitor(pManager, evaluationVisitor);
 
-    final Predicate<MemoryLocation> acceptVariable = new Predicate<MemoryLocation>() {
+    return bfmgr.and(
+        getApproximationFormulas()
+            .transform(assumption -> assumption.accept(toBooleanFormulaVisitor, getEnvironment()))
+            .filter(Predicates.notNull())
+            .toList());
+  }
+
+  @Override
+  public ExpressionTree<Object> getFormulaApproximation(
+      final FunctionEntryNode pFunctionEntryNode, final CFANode pReferenceNode) {
+    final Predicate<MemoryLocation> isExportable = new Predicate<MemoryLocation>() {
 
       @Override
-      public boolean apply(@Nullable MemoryLocation pInput) {
-        return pInput != null && !pInput.getIdentifier().contains("*");
+      public boolean apply(MemoryLocation pMemoryLocation) {
+        if (pMemoryLocation
+            .getIdentifier()
+            .startsWith("__CPAchecker_TMP_")) {
+          return false;
+        }
+        if (pFunctionEntryNode.getReturnVariable().isPresent()
+            && pMemoryLocation.isOnFunctionStack()
+            && pMemoryLocation
+                .getIdentifier()
+                .equals(
+                    pFunctionEntryNode
+                        .getReturnVariable()
+                        .get()
+                        .getName())) {
+          return false;
+        }
+        if (!isExportable(pMemoryLocation)) {
+          return false;
+        }
+        String functionName = pFunctionEntryNode.getFunctionName();
+        return !pMemoryLocation.isOnFunctionStack()
+            || pMemoryLocation.getFunctionName().equals(functionName);
       }
 
     };
+    final Predicate<MemoryLocation> isPointerOrArray = new Predicate<MemoryLocation>() {
+
+      @Override
+      public boolean apply(MemoryLocation pMemoryLocation) {
+        Type type = getType(pMemoryLocation);
+        if (type instanceof CPointerType) {
+          return true;
+        }
+        if (type instanceof CArrayType) {
+          return true;
+        }
+        return false;
+      }
+
+    };
+    final Predicate<MemoryLocation> isValidMemLoc = isExportable;
+    Predicate<NumeralFormula<CompoundInterval>> isInvalidVar = new Predicate<NumeralFormula<CompoundInterval>>() {
+
+      @Override
+      public boolean apply(NumeralFormula<CompoundInterval> pFormula) {
+        if (pFormula instanceof Variable) {
+          return !isValidMemLoc.apply(((Variable<?>) pFormula).getMemoryLocation());
+        }
+        return false;
+      }
+
+    };
+    Function<BooleanFormula<CompoundInterval>, BooleanFormula<CompoundInterval>> replaceInvalid = getInvalidReplacer(isInvalidVar, Variable.convert(isPointerOrArray));
+    Function<BooleanFormula<CompoundInterval>, ExpressionTree<Object>> toCode =
+        new Function<BooleanFormula<CompoundInterval>, ExpressionTree<Object>>() {
+
+          @Override
+          public ExpressionTree<Object> apply(BooleanFormula<CompoundInterval> pFormula) {
+            ExpressionTree<String> asCode =
+                pFormula.accept(
+                    new ToCodeFormulaVisitor(tools.evaluationVisitor, machineModel),
+                    getEnvironment());
+            return ExpressionTrees.cast(asCode);
+          }
+        };
+    ExpressionTree<Object> result = And.of(
+        getApproximationFormulas()
+            .transform(replaceInvalid)
+            .filter(
+                new Predicate<BooleanFormula<CompoundInterval>>() {
+
+                  @Override
+                  public boolean apply(BooleanFormula<CompoundInterval> pFormula) {
+                    if (pFormula.equals(BooleanConstant.getTrue())) {
+                      return false;
+                    }
+                    Set<MemoryLocation> memLocs = pFormula.accept(new CollectVarsVisitor<>());
+                    if (memLocs.isEmpty()) {
+                      return false;
+                    }
+                    return FluentIterable.from(memLocs).allMatch(isValidMemLoc);
+                  }
+                })
+            .transform(toCode)
+            .filter(Predicates.notNull()));
+
+    final Set<MemoryLocation> safePointers = Sets.newHashSet();
+    isInvalidVar = new Predicate<NumeralFormula<CompoundInterval>>() {
+
+      @Override
+      public boolean apply(NumeralFormula<CompoundInterval> pFormula) {
+        if (pFormula instanceof Variable) {
+          return !isExportable.apply(((Variable<?>) pFormula).getMemoryLocation());
+        }
+        return false;
+      }
+
+    };
+    isInvalidVar = Predicates.or(isInvalidVar, new Predicate<NumeralFormula<CompoundInterval>>() {
+
+      @Override
+      public boolean apply(NumeralFormula<CompoundInterval> pFormula) {
+        if (pFormula instanceof Variable) {
+          return !safePointers.contains(((Variable<?>) pFormula).getMemoryLocation());
+        }
+        return !FluentIterable.from(pFormula.accept(COLLECT_VARS_VISITOR)).anyMatch(isPointerOrArray);
+      }
+
+    });
+    replaceInvalid = getInvalidReplacer(isInvalidVar, Variable.convert(isPointerOrArray));
+
+    for (Map.Entry<MemoryLocation, NumeralFormula<CompoundInterval>> entry : environment.entrySet()) {
+      MemoryLocation memoryLocation = entry.getKey();
+      CType type = variableTypes.get(memoryLocation);
+      if (!(type instanceof CPointerType)) {
+        continue;
+      }
+      if (!isExportable.apply(memoryLocation)) {
+        continue;
+      }
+      NumeralFormula<CompoundInterval> value = entry.getValue();
+      Predicate<NumeralFormula<CompoundInterval>> isNonSingletonConstant = new Predicate<NumeralFormula<CompoundInterval>>() {
+
+        @Override
+        public boolean apply(NumeralFormula<CompoundInterval> pFormula) {
+          if (pFormula instanceof Constant) {
+            return !((Constant<CompoundInterval>) pFormula).getValue().isSingleton();
+          }
+          return false;
+        }
+
+      };
+      ContainsVisitor<CompoundInterval> containsVisitor = new ContainsVisitor<>();
+      if (value.accept(containsVisitor, isNonSingletonConstant)) {
+        continue;
+      }
+      NumeralFormula<CompoundInterval> var =
+          InvariantsFormulaManager.INSTANCE.asVariable(value.getTypeInfo(), memoryLocation);
+      safePointers.add(memoryLocation);
+      for (MemoryLocation otherSafePointer : safePointers) {
+        if (otherSafePointer == memoryLocation) {
+          continue;
+        }
+        CType otherType = variableTypes.get(otherSafePointer);
+        if (!type.equals(otherType)) {
+          continue;
+        }
+        NumeralFormula<CompoundInterval> otherValue = environment.get(otherSafePointer);
+        NumeralFormula<CompoundInterval> otherVar =
+            InvariantsFormulaManager.INSTANCE.asVariable(
+                otherValue.getTypeInfo(), otherSafePointer);
+        BooleanFormula<CompoundInterval> equality = InvariantsFormulaManager.INSTANCE.equal(otherVar, var);
+        if (definitelyImplies(equality)) {
+          ExpressionTree<Object> code = toCode.apply(replaceInvalid.apply(equality));
+          if (code != null) {
+            result = And.of(result, code);
+          }
+        }
+      }
+    }
+    return result;
+  }
+
+  private ReplaceVisitor<CompoundInterval> getInvalidReplacementVisitor(
+      final Predicate<NumeralFormula<CompoundInterval>> isInvalidVar) {
+    return new ReplaceVisitor<>(
+        isInvalidVar,
+        new Function<NumeralFormula<CompoundInterval>, NumeralFormula<CompoundInterval>>() {
+
+          @Override
+          public NumeralFormula<CompoundInterval> apply(NumeralFormula<CompoundInterval> pFormula) {
+            return replaceOrEvaluateInvalid(pFormula, isInvalidVar);
+          }
+
+        });
+  }
+
+  private Function<BooleanFormula<CompoundInterval>, BooleanFormula<CompoundInterval>> getInvalidReplacer(
+      final Predicate<NumeralFormula<CompoundInterval>> pIsAlwaysInvalid,
+      final Predicate<NumeralFormula<CompoundInterval>> pIsPointerOrArray) {
+    return new Function<BooleanFormula<CompoundInterval>, BooleanFormula<CompoundInterval>>() {
+
+      @Override
+      public BooleanFormula<CompoundInterval> apply(BooleanFormula<CompoundInterval> pFormula) {
+        if (pFormula instanceof Equal) {
+          Predicate<NumeralFormula<CompoundInterval>> isAlwaysInvalid = pIsAlwaysInvalid;
+
+          Equal<CompoundInterval> eq = (Equal<CompoundInterval>) pFormula;
+
+          if (eq.getOperand1() instanceof Variable
+              && eq.getOperand2() instanceof Variable
+              && !isAlwaysInvalid.apply(eq.getOperand1())
+              && !isAlwaysInvalid.apply(eq.getOperand2())) {
+            return pFormula;
+          }
+
+          isAlwaysInvalid = Predicates.or(isAlwaysInvalid, pIsPointerOrArray);
+
+          NumeralFormula<CompoundInterval> op1 = eq.getOperand1().accept(getInvalidReplacementVisitor(isAlwaysInvalid));
+          final Set<MemoryLocation> op1Vars = op1.accept(COLLECT_VARS_VISITOR);
+          isAlwaysInvalid = Predicates.or(isAlwaysInvalid, new Predicate<NumeralFormula<CompoundInterval>>() {
+
+            @Override
+            public boolean apply(NumeralFormula<CompoundInterval> pFormula) {
+              return !Sets.intersection(op1Vars, pFormula.accept(COLLECT_VARS_VISITOR)).isEmpty();
+            }
+
+          });
+          NumeralFormula<CompoundInterval> op2 = eq.getOperand2().accept(getInvalidReplacementVisitor(isAlwaysInvalid));
+          return InvariantsFormulaManager.INSTANCE.equal(op1, op2);
+        }
+        if (pFormula instanceof LogicalNot) {
+          return InvariantsFormulaManager.INSTANCE.logicalNot(apply(((LogicalNot<CompoundInterval>) pFormula).getNegated()));
+        }
+        if (pFormula instanceof LogicalAnd) {
+          LogicalAnd<CompoundInterval> and = (LogicalAnd<CompoundInterval>) pFormula;
+          return InvariantsFormulaManager.INSTANCE.logicalAnd(apply(and.getOperand1()), apply(and.getOperand2()));
+        }
+        return pFormula.accept(getInvalidReplacementVisitor(Predicates.or(pIsAlwaysInvalid, pIsPointerOrArray)));
+      }
+
+    };
+  }
+
+  private NumeralFormula<CompoundInterval> replaceOrEvaluateInvalid(
+      NumeralFormula<CompoundInterval> pFormula,
+      final Predicate<NumeralFormula<CompoundInterval>> pIsInvalid) {
+    if (!pIsInvalid.apply(pFormula)) {
+      return pFormula;
+    }
+    CompoundInterval evaluated = pFormula.accept(tools.evaluationVisitor, environment);
+    if (!evaluated.isSingleton() && pFormula instanceof Variable) {
+      // Try and replace the variable by a fitting value
+      ReplaceVisitor<CompoundInterval> evaluateInvalidVars = new ReplaceVisitor<>(
+          pIsInvalid,
+          new Function<NumeralFormula<CompoundInterval>, NumeralFormula<CompoundInterval>>() {
+
+            @Override
+            public NumeralFormula<CompoundInterval> apply(NumeralFormula<CompoundInterval> pFormula) {
+              return replaceOrEvaluateInvalid(pFormula, pIsInvalid);
+            }
+
+          });
+
+      MemoryLocation memoryLocation = ((Variable<?>) pFormula).getMemoryLocation();
+      NumeralFormula<CompoundInterval> value =
+          getEnvironmentValue(pFormula.getTypeInfo(), memoryLocation);
+      value = value.accept(evaluateInvalidVars);
+      if (value instanceof Variable) {
+        return value;
+      }
+      CompoundIntervalManager cim =
+          tools.compoundIntervalManagerFactory.createCompoundIntervalManager(
+              pFormula.getTypeInfo());
+      if (value instanceof Constant && cim.contains(evaluated, ((Constant<CompoundInterval>) value).getValue())) {
+        evaluated = ((Constant<CompoundInterval>) value).getValue();
+      }
+      if (!evaluated.isSingleton()) {
+        // Try and find a variable referring to this variable
+        Set<Variable<CompoundInterval>> visited = Sets.newHashSet();
+        Queue<Variable<CompoundInterval>> waitlist = Queues.newArrayDeque();
+        visited.add((Variable<CompoundInterval>) pFormula);
+        waitlist.addAll(visited);
+        while (!waitlist.isEmpty()) {
+          Variable<CompoundInterval> currentVar = waitlist.poll();
+          if (!pIsInvalid.apply(currentVar)) {
+            return currentVar;
+          }
+          for (Map.Entry<MemoryLocation, NumeralFormula<CompoundInterval>> entry : environment.entrySet()) {
+            if (entry.getValue().equals(currentVar)) {
+              Variable<CompoundInterval> entryVar =
+                  InvariantsFormulaManager.INSTANCE.asVariable(
+                      entry.getValue().getTypeInfo(), entry.getKey());
+              if (visited.add(entryVar)) {
+                waitlist.offer(entryVar);
+              }
+            }
+          }
+        }
+      }
+    }
+    return InvariantsFormulaManager.INSTANCE.asConstant(pFormula.getTypeInfo(), evaluated);
+  }
+
+  private FluentIterable<BooleanFormula<CompoundInterval>> getApproximationFormulas() {
+
+    final Predicate<MemoryLocation> acceptVariable = InvariantsState::isExportable;
 
     final Predicate<BooleanFormula<CompoundInterval>> acceptFormula = new Predicate<BooleanFormula<CompoundInterval>>() {
 
@@ -899,17 +1268,11 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
       }
 
     };
-
-    for (BooleanFormula<CompoundInterval> assumption : Iterables.concat(getEnvironmentAsAssumptions(), getTypeInformationAsAssumptions())) {
-      if (acceptFormula.apply(assumption)) {
-        org.sosy_lab.solver.api.BooleanFormula assumptionFormula =
-            assumption.accept(toBooleanFormulaVisitor, getEnvironment());
-        if (assumptionFormula != null) {
-          result = bfmgr.and(result, assumptionFormula);
-        }
-      }
+    Iterable<BooleanFormula<CompoundInterval>> formulas = getEnvironmentAsAssumptions();
+    if (includeTypeInformation) {
+      formulas = Iterables.concat(formulas, getTypeInformationAsAssumptions());
     }
-    return result;
+    return FluentIterable.from(formulas).filter(acceptFormula);
   }
 
   @Override
@@ -921,6 +1284,12 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
 
   private boolean equalsState(InvariantsState pOther) {
     return pOther != null
+        && overflowDetected == pOther.overflowDetected
+        && includeTypeInformation == pOther.includeTypeInformation
+        && machineModel.equals(pOther.machineModel)
+        && tools.equals(pOther.tools)
+        && variableTypes.equals(pOther.variableTypes)
+        && variableSelection.equals(pOther.variableSelection)
         && environment.equals(pOther.environment)
         && abstractionState.equals(pOther.abstractionState);
   }
@@ -929,9 +1298,16 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
   public int hashCode() {
     int result = hash;
     if (result == 0) {
-      result = 17;
-      result = 31 * result + environment.hashCode();
-      result = 31 * result + abstractionState.hashCode();
+      result =
+          Objects.hash(
+              overflowDetected,
+              includeTypeInformation,
+              machineModel,
+              tools,
+              variableTypes,
+              variableSelection,
+              environment,
+              abstractionState);
       hash = result;
     }
     return result;
@@ -990,7 +1366,7 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
   }
 
   public boolean definitelyImplies(BooleanFormula<CompoundInterval> pFormula) {
-    return compoundIntervalFormulaManager.definitelyImplies(this.environment, pFormula);
+    return tools.compoundIntervalFormulaManager.definitelyImplies(this.environment, pFormula);
   }
 
   public InvariantsState widen(InvariantsState pOlderState,
@@ -1017,27 +1393,33 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
         continue;
       }
       NumeralFormula<CompoundInterval> currentFormula = environment.get(memoryLocation);
-      BitVectorInfo bitVectorInfo = oldFormula.getBitVectorInfo();
-      CompoundIntervalManager compoundIntervalManager = compoundIntervalManagerFactory.createCompoundIntervalManager(bitVectorInfo);
-      currentFormula = currentFormula == null ? allPossibleValuesFormula(bitVectorInfo) : currentFormula;
-      assert currentFormula.getBitVectorInfo().equals(bitVectorInfo);
+      TypeInfo typeInfo = oldFormula.getTypeInfo();
+      CompoundIntervalManager compoundIntervalManager =
+          tools.compoundIntervalManagerFactory.createCompoundIntervalManager(typeInfo);
+      currentFormula = currentFormula == null ? allPossibleValuesFormula(typeInfo) : currentFormula;
+      assert currentFormula.getTypeInfo().equals(typeInfo);
       if (!currentFormula.equals(oldFormula)) {
         NumeralFormula<CompoundInterval> newValueFormula =
-          compoundIntervalFormulaManager.union(
-            currentFormula.accept(this.partialEvaluator, evaluationVisitor),
-            oldFormula.accept(pOlderState.partialEvaluator, evaluationVisitor)).accept(new PartialEvaluator(compoundIntervalManagerFactory), evaluationVisitor);
+            tools
+                .compoundIntervalFormulaManager
+                .union(
+                    currentFormula.accept(this.partialEvaluator, tools.evaluationVisitor),
+                    oldFormula.accept(pOlderState.partialEvaluator, tools.evaluationVisitor))
+                .accept(
+                    new PartialEvaluator(tools.compoundIntervalManagerFactory),
+                    tools.evaluationVisitor);
 
         // Trim formulas that exceed the maximum depth
         if (currentFormula.accept(FORMULA_DEPTH_COUNT_VISITOR) > pPrecision.getMaximumFormulaDepth()) {
-          CompoundInterval value = compoundIntervalManager.union(
-              currentFormula.accept(evaluationVisitor, environment),
-              oldFormula.accept(evaluationVisitor, pOlderState.getEnvironment()));
+          CompoundInterval value =
+              compoundIntervalManager.union(
+                  currentFormula.accept(tools.evaluationVisitor, environment),
+                  oldFormula.accept(tools.evaluationVisitor, pOlderState.getEnvironment()));
           if (!value.isSingleton()) {
             value = compoundIntervalManager.allPossibleValues();
           }
-          newValueFormula = InvariantsFormulaManager.INSTANCE.asConstant(
-              currentFormula.getBitVectorInfo(),
-              value);
+          newValueFormula =
+              InvariantsFormulaManager.INSTANCE.asConstant(currentFormula.getTypeInfo(), value);
         }
 
         resultEnvironment = resultEnvironment.putAndCopy(memoryLocation, newValueFormula);
@@ -1050,51 +1432,72 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
     for (Map.Entry<MemoryLocation, NumeralFormula<CompoundInterval>> entry : toDo.entrySet()) {
       MemoryLocation memoryLocation = entry.getKey();
       NumeralFormula<CompoundInterval> newValueFormula = entry.getValue();
-      BitVectorInfo bitVectorInfo = entry.getValue().getBitVectorInfo();
-      CompoundInterval simpleExactValue = newValueFormula.accept(evaluationVisitor, resultEnvironment);
+      TypeInfo typeInfo = entry.getValue().getTypeInfo();
+      CompoundInterval simpleExactValue =
+          newValueFormula.accept(tools.evaluationVisitor, resultEnvironment);
       if (simpleExactValue.isSingleton()) {
-        resultEnvironment = resultEnvironment.putAndCopy(memoryLocation, InvariantsFormulaManager.INSTANCE.asConstant(bitVectorInfo, simpleExactValue));
+        resultEnvironment =
+            resultEnvironment.putAndCopy(
+                memoryLocation,
+                InvariantsFormulaManager.INSTANCE.asConstant(typeInfo, simpleExactValue));
       } else {
-        CompoundIntervalManager compoundIntervalManager = getCompoundIntervalManager(bitVectorInfo);
-        NumeralFormula<CompoundInterval> oldFormula = pOlderState.getEnvironmentValue(bitVectorInfo, memoryLocation);
-        NumeralFormula<CompoundInterval> currentFormula = getEnvironmentValue(bitVectorInfo, memoryLocation);
-        CompoundInterval oldExactValue = oldFormula.accept(evaluationVisitor, pOlderState.environment);
-        CompoundInterval currentExactValue = currentFormula.accept(evaluationVisitor, environment);
+        CompoundIntervalManager compoundIntervalManager = getCompoundIntervalManager(typeInfo);
+        NumeralFormula<CompoundInterval> oldFormula =
+            pOlderState.getEnvironmentValue(typeInfo, memoryLocation);
+        NumeralFormula<CompoundInterval> currentFormula =
+            getEnvironmentValue(typeInfo, memoryLocation);
+        CompoundInterval oldExactValue =
+            oldFormula.accept(tools.evaluationVisitor, pOlderState.environment);
+        CompoundInterval currentExactValue =
+            currentFormula.accept(tools.evaluationVisitor, environment);
         final CompoundInterval newValue;
         if (compoundIntervalManager.contains(oldExactValue, currentExactValue)) {
           newValue = oldExactValue;
-        } else if (compoundIntervalManager.lessEqual(oldExactValue, currentExactValue).isDefinitelyTrue()
-            || oldExactValue.hasUpperBound() && (!currentExactValue.hasUpperBound() || oldExactValue.getUpperBound().compareTo(currentExactValue.getUpperBound()) < 0)) {
+        } else if (compoundIntervalManager
+                .lessEqual(oldExactValue, currentExactValue)
+                .isDefinitelyTrue()
+            || (oldExactValue.hasUpperBound()
+                && (!currentExactValue.hasUpperBound()
+                    || compare(oldExactValue.getUpperBound(), currentExactValue.getUpperBound())
+                        < 0))) {
           newValue = compoundIntervalManager.union(oldExactValue, currentExactValue).extendToMaxValue();
-        } else if (compoundIntervalManager.greaterEqual(oldExactValue, currentExactValue).isDefinitelyTrue()
-            || oldExactValue.hasLowerBound() && (!currentExactValue.hasLowerBound() || oldExactValue.getLowerBound().compareTo(currentExactValue.getLowerBound()) > 0)) {
+        } else if (compoundIntervalManager
+                .greaterEqual(oldExactValue, currentExactValue)
+                .isDefinitelyTrue()
+            || (oldExactValue.hasLowerBound()
+                && (!currentExactValue.hasLowerBound()
+                    || compare(oldExactValue.getLowerBound(), currentExactValue.getLowerBound())
+                        > 0))) {
           newValue = compoundIntervalManager.union(oldExactValue, currentExactValue).extendToMinValue();
         } else {
           NumeralFormula<CompoundInterval> newFormula = resultEnvironment.get(memoryLocation);
           if (newFormula == null) {
-            newFormula = allPossibleValuesFormula(bitVectorInfo);
+            newFormula = allPossibleValuesFormula(typeInfo);
           }
-          newValue = newFormula.accept(abstractionVisitor, resultEnvironment);
+          newValue = newFormula.accept(tools.abstractionVisitor, resultEnvironment);
         }
-        resultEnvironment = resultEnvironment.putAndCopy(
-            memoryLocation,
-            InvariantsFormulaManager.INSTANCE.asConstant(
-                bitVectorInfo,
-                newValue));
+        resultEnvironment =
+            resultEnvironment.putAndCopy(
+                memoryLocation, InvariantsFormulaManager.INSTANCE.asConstant(typeInfo, newValue));
       }
     }
     final NonRecursiveEnvironment resEnv = resultEnvironment;
-    InvariantsState result = new InvariantsState(resEnv, variableSelection, compoundIntervalManagerFactory, machineModel, variableTypes, abstractionState);
+    InvariantsState result =
+        new InvariantsState(
+            resEnv,
+            variableSelection,
+            tools,
+            machineModel,
+            variableTypes,
+            abstractionState,
+            overflowDetected,
+            includeTypeInformation,
+            overapproximatesUnsupportedFeature);
 
     for (BooleanFormula<CompoundInterval> hint : FluentIterable
         .from(pWideningHints)
-        .filter(new Predicate<BooleanFormula<CompoundInterval>>() {
-
-          @Override
-          public boolean apply(BooleanFormula<CompoundInterval> pHint) {
-            return wideningTargets.containsAll(pHint.accept(COLLECT_VARS_VISITOR));
-          }})
-        .filter(implies)) {
+        .filter(pHint -> wideningTargets.containsAll(pHint.accept(COLLECT_VARS_VISITOR)))
+        .filter(this::definitelyImplies)) {
       result = result.assume(hint);
     }
     if (equals(result)) {
@@ -1106,10 +1509,11 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
 
   @Override
   public InvariantsState join(InvariantsState state2) {
-    return join(state2, InvariantsPrecision.getEmptyPrecision(
-        AbstractionStrategyFactories.ALWAYS.createStrategy(
-            compoundIntervalManagerFactory,
-            machineModel)));
+    return join(
+        state2,
+        InvariantsPrecision.getEmptyPrecision(
+            AbstractionStrategyFactories.ALWAYS.createStrategy(
+                tools.compoundIntervalManagerFactory, machineModel)));
   }
 
   public InvariantsState join(InvariantsState pState2, InvariantsPrecision pPrecision) {
@@ -1124,7 +1528,8 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
     } else if (state2.isLessOrEqual(state1)) {
       result = state1;
     } else {
-      NonRecursiveEnvironment resultEnvironment = NonRecursiveEnvironment.of(compoundIntervalManagerFactory);
+      NonRecursiveEnvironment resultEnvironment =
+          NonRecursiveEnvironment.of(tools.compoundIntervalManagerFactory);
 
       // Get some basic information by joining the environments
       {
@@ -1135,7 +1540,8 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
           MemoryLocation memoryLocation = entry.getKey();
           NumeralFormula<CompoundInterval> rightFormula = state2.environment.get(memoryLocation);
           if (rightFormula != null) {
-            NumeralFormula<CompoundInterval> leftFormula = getEnvironmentValue(rightFormula.getBitVectorInfo(), memoryLocation);
+            NumeralFormula<CompoundInterval> leftFormula =
+                getEnvironmentValue(rightFormula.getTypeInfo(), memoryLocation);
             if (leftFormula.equals(rightFormula)) {
               resultEnvironment = resultEnvironment.putAndCopy(memoryLocation, leftFormula);
             } else {
@@ -1157,12 +1563,15 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
           NumeralFormula<CompoundInterval> leftFormula = environment.get(memoryLocation);
           NumeralFormula<CompoundInterval> rightFormula = state2.environment.get(memoryLocation);
           assert leftFormula != null && rightFormula != null;
-          CompoundIntervalManager cim = compoundIntervalManagerFactory.createCompoundIntervalManager(leftFormula.getBitVectorInfo());
+          CompoundIntervalManager cim =
+              tools.compoundIntervalManagerFactory.createCompoundIntervalManager(
+                  leftFormula.getTypeInfo());
           NumeralFormula<CompoundInterval> evaluated =
-              InvariantsFormulaManager.INSTANCE.asConstant(leftFormula.getBitVectorInfo(),
+              InvariantsFormulaManager.INSTANCE.asConstant(
+                  leftFormula.getTypeInfo(),
                   cim.union(
-                      leftFormula.accept(evaluationVisitor, environment),
-                      rightFormula.accept(state2.evaluationVisitor, state2.environment)));
+                      leftFormula.accept(tools.evaluationVisitor, environment),
+                      rightFormula.accept(state2.tools.evaluationVisitor, state2.environment)));
           resultEnvironment = resultEnvironment.putAndCopy(memoryLocation, evaluated);
         }
 
@@ -1174,7 +1583,17 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
       AbstractionState abstractionState2 = pState2.determineAbstractionState(pPrecision);
       AbstractionState abstractionState = abstractionState1.join(abstractionState2);
 
-      result = new InvariantsState(resultVariableSelection, compoundIntervalManagerFactory, machineModel, abstractionState, resultEnvironment, variableTypes, overflowDetected);
+      result =
+          new InvariantsState(
+              resultVariableSelection,
+              tools,
+              machineModel,
+              abstractionState,
+              resultEnvironment,
+              variableTypes,
+              overflowDetected,
+              includeTypeInformation,
+              overapproximatesUnsupportedFeature || pState2.overapproximatesUnsupportedFeature);
 
       if (result.equalsState(state1)) {
         result = state1;
@@ -1186,20 +1605,17 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
   public BooleanFormula<CompoundInterval> asFormula() {
     BooleanFormula<CompoundInterval> result = BooleanConstant.<CompoundInterval>getTrue();
     for (BooleanFormula<CompoundInterval> assumption : getEnvironmentAsAssumptions()) {
-      result = compoundIntervalFormulaManager.logicalAnd(result, assumption);
+      result = tools.compoundIntervalFormulaManager.logicalAnd(result, assumption);
     }
     return result;
   }
 
   public Set<MemoryLocation> getVariables() {
-    Set<MemoryLocation> result = environment.keySet();
-    for (NumeralFormula<CompoundInterval> value : environment.values()) {
-      Set<MemoryLocation> valueVars = value.accept(COLLECT_VARS_VISITOR);
-      if (!valueVars.isEmpty()) {
-        result = Sets.union(result, valueVars);
-      }
-    }
-    return result;
+    ImmutableSet.Builder<MemoryLocation> result = ImmutableSet.builder();
+    result.addAll(environment.keySet());
+    result.addAll(
+        from(environment.values()).transformAndConcat(value -> value.accept(COLLECT_VARS_VISITOR)));
+    return result.build();
   }
 
   private Set<Variable<CompoundInterval>> getVariables(final Predicate<MemoryLocation> pMemoryLocationPredicate) {
@@ -1222,7 +1638,9 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
     for (Map.Entry<MemoryLocation, NumeralFormula<CompoundInterval>> entry : environment.entrySet()) {
       MemoryLocation memoryLocation = entry.getKey();
       if (pMemoryLocationPredicate.apply(memoryLocation)) {
-        result.add(InvariantsFormulaManager.INSTANCE.<CompoundInterval>asVariable(entry.getValue().getBitVectorInfo(), memoryLocation));
+        result.add(
+            InvariantsFormulaManager.INSTANCE.<CompoundInterval>asVariable(
+                entry.getValue().getTypeInfo(), memoryLocation));
       }
       for (NumeralFormula<CompoundInterval> formula : entry.getValue().accept(collectVisitor)) {
         Variable<CompoundInterval> variable = (Variable<CompoundInterval>) formula;
@@ -1238,12 +1656,14 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
     }
     return new InvariantsState(
         variableSelection,
-        compoundIntervalManagerFactory,
+        tools,
         machineModel,
         abstractionState,
         environment,
         variableTypes,
-        true);
+        true,
+        includeTypeInformation,
+        overapproximatesUnsupportedFeature);
   }
 
   @Override
@@ -1259,14 +1679,89 @@ public class InvariantsState implements AbstractState, FormulaReportingState,
     throw new InvalidQueryException("Query '" + pProperty + "' is invalid.");
   }
 
-  @Override
-  public Object evaluateProperty(String pProperty) throws InvalidQueryException {
-    return checkProperty(pProperty);
+  public boolean overapproximatesUnsupportedFeature() {
+    return overapproximatesUnsupportedFeature;
   }
 
-  @Override
-  public void modifyProperty(String pModification) throws InvalidQueryException {
-    throw new InvalidQueryException("Cannot modify properties.");
+  private static boolean isExportable(@Nullable MemoryLocation pMemoryLocation) {
+    return pMemoryLocation != null
+        && !pMemoryLocation.getIdentifier().contains("*")
+        && !pMemoryLocation.getIdentifier().contains("->")
+        && !pMemoryLocation.getIdentifier().contains(".")
+        && !pMemoryLocation.getIdentifier().contains("[");
+  }
+
+  private static int compare(Number pOp1, Number pOp2) {
+    if (pOp1 instanceof BigInteger && pOp2 instanceof BigInteger) {
+      return ((BigInteger) pOp1).compareTo((BigInteger) pOp2);
+    }
+    if (pOp1 instanceof BigDecimal && pOp2 instanceof BigDecimal) {
+      return ((BigDecimal) pOp1).compareTo((BigDecimal) pOp2);
+    }
+    if (isAssignableToLong(pOp1) && isAssignableToLong(pOp2)) {
+      return Long.compare(pOp1.longValue(), pOp2.longValue());
+    }
+    if (isAssignableToDouble(pOp1) && isAssignableToDouble(pOp2)) {
+      return Double.compare(pOp1.doubleValue(), pOp2.doubleValue());
+    }
+    throw new IllegalArgumentException("Unsupported comparsion: " + pOp1 + " to " + pOp2);
+  }
+
+  private static boolean isAssignableToLong(Number pNumber) {
+    return pNumber instanceof Long
+        || pNumber instanceof Integer
+        || pNumber instanceof Short
+        || pNumber instanceof Byte;
+  }
+
+  private static boolean isAssignableToDouble(Number pNumber) {
+    return pNumber instanceof Double || pNumber instanceof Float;
+  }
+
+  private static class Tools {
+
+    /** A factory for compound-interval managers. */
+    private final CompoundIntervalManagerFactory compoundIntervalManagerFactory;
+
+    /** A compound-interval manager. */
+    private final CompoundIntervalFormulaManager compoundIntervalFormulaManager;
+
+    /** A visitor used to evaluate formulas as exactly as possible. */
+    private final FormulaEvaluationVisitor<CompoundInterval> evaluationVisitor;
+
+    /**
+     * A visitor that, like the formula evaluation visitor, is used to evaluate formulas, but far
+     * less exact to allow for convergence.
+     */
+    private final FormulaEvaluationVisitor<CompoundInterval> abstractionVisitor;
+
+    private Tools(CompoundIntervalManagerFactory pCompoundIntervalManagerFactory) {
+      this.compoundIntervalManagerFactory = pCompoundIntervalManagerFactory;
+      this.compoundIntervalFormulaManager =
+          new CompoundIntervalFormulaManager(compoundIntervalManagerFactory);
+      this.evaluationVisitor =
+          new FormulaCompoundStateEvaluationVisitor(compoundIntervalManagerFactory);
+      this.abstractionVisitor = new FormulaAbstractionVisitor(compoundIntervalManagerFactory);
+    }
+
+    @Override
+    public boolean equals(Object pObj) {
+      if (this == pObj) {
+        return true;
+      }
+      if (pObj instanceof Tools) {
+        // All tools are derived from the factory
+        return compoundIntervalManagerFactory.equals(((Tools) pObj).compoundIntervalManagerFactory);
+      }
+      return false;
+    }
+
+    @Override
+    public int hashCode() {
+      // All tools are derived from the factory
+      return compoundIntervalManagerFactory.hashCode();
+    }
+
   }
 
 }

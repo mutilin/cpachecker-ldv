@@ -23,26 +23,24 @@
  */
 package org.sosy_lab.cpachecker.cpa.thread;
 
+import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
-
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractStateWithLocations;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractStateWithLocation;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractWrapperState;
 import org.sosy_lab.cpachecker.core.interfaces.Partitionable;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.location.LocationState;
 import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 
-import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
 
-
-public class ThreadState implements AbstractState, AbstractStateWithLocations, Partitionable,
+public class ThreadState implements AbstractState, AbstractStateWithLocation, Partitionable,
     AbstractWrapperState, Comparable<ThreadState> {
 
   public class ThreadStateBuilder {
@@ -174,6 +172,11 @@ public class ThreadState implements AbstractState, AbstractStateWithLocations, P
   }
 
   @Override
+  public CFANode getLocationNode() {
+    return location.getLocationNode();
+  }
+
+  @Override
   public Iterable<CFANode> getLocationNodes() {
     return location.getLocationNodes();
   }
@@ -181,6 +184,11 @@ public class ThreadState implements AbstractState, AbstractStateWithLocations, P
   @Override
   public Iterable<CFAEdge> getOutgoingEdges() {
     return location.getOutgoingEdges();
+  }
+
+  @Override
+  public Iterable<CFAEdge> getIngoingEdges() {
+    return location.getIngoingEdges();
   }
 
   @Override

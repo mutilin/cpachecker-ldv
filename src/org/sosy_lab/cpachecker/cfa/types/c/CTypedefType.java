@@ -27,7 +27,6 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import java.io.Serializable;
 import java.util.Objects;
-
 import javax.annotation.Nullable;
 
 /**
@@ -38,8 +37,9 @@ public final class CTypedefType implements CType, Serializable {
   private static final long serialVersionUID = -3461236537115147688L;
   private final String name; // the typedef name
   private final CType realType; // the real type this typedef points to
-  private boolean   isConst;
-  private boolean   isVolatile;
+  private final boolean isConst;
+  private final boolean isVolatile;
+  private int hashCache = 0;
 
   public CTypedefType(final boolean pConst, final boolean pVolatile,
       final String pName, CType pRealType) {
@@ -81,6 +81,12 @@ public final class CTypedefType implements CType, Serializable {
   public boolean isVolatile() {
     return isVolatile;
   }
+
+  @Override
+  public boolean isIncomplete() {
+    return realType.isIncomplete();
+  }
+
   @Override
   public <R, X extends Exception> R accept(CTypeVisitor<R, X> pVisitor) throws X {
     return pVisitor.visit(this);
@@ -88,13 +94,16 @@ public final class CTypedefType implements CType, Serializable {
 
   @Override
   public int hashCode() {
-    final int prime = 31;
-    int result = 7;
-    result = prime * result + Objects.hashCode(name);
-    result = prime * result + Objects.hashCode(isConst);
-    result = prime * result + Objects.hashCode(isVolatile);
-    result = prime * result + Objects.hashCode(realType);
-    return result;
+    if (hashCache == 0) {
+      final int prime = 31;
+      int result = 7;
+      result = prime * result + Objects.hashCode(name);
+      result = prime * result + Objects.hashCode(isConst);
+      result = prime * result + Objects.hashCode(isVolatile);
+      result = prime * result + Objects.hashCode(realType);
+      hashCache = result;
+    }
+    return hashCache;
   }
 
   /**
@@ -115,16 +124,17 @@ public final class CTypedefType implements CType, Serializable {
     CTypedefType other = (CTypedefType) obj;
 
     return Objects.equals(name, other.name) && isConst == other.isConst
-           && isVolatile == other.isVolatile && Objects.equals(realType, other.realType);
+           && isVolatile == other.isVolatile
+           && Objects.equals(realType, other.realType);
   }
 
   @Override
   public CType getCanonicalType() {
-    return getCanonicalType(isConst, isVolatile);
+    return getCanonicalType(false, false);
   }
 
   @Override
   public CType getCanonicalType(boolean pForceConst, boolean pForceVolatile) {
-    return realType.getCanonicalType(pForceConst, pForceVolatile);
+    return realType.getCanonicalType(isConst || pForceConst, isVolatile || pForceVolatile);
   }
 }

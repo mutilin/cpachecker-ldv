@@ -23,7 +23,13 @@
  */
 package org.sosy_lab.cpachecker.cpa.arg.counterexamples;
 
-import org.sosy_lab.cpachecker.core.CounterexampleInfo;
+import java.util.ArrayList;
+import java.util.List;
+import org.sosy_lab.common.configuration.Configuration;
+import org.sosy_lab.common.configuration.InvalidConfigurationException;
+import org.sosy_lab.common.log.LogManager;
+import org.sosy_lab.cpachecker.core.counterexample.CounterexampleInfo;
+import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 
 /**
  * This interface defines an abstraction for counterexample filter.
@@ -51,13 +57,38 @@ import org.sosy_lab.cpachecker.core.CounterexampleInfo;
  *
  * Counterexample filters do not need to be thread-safe.
  *
- * Implementations should define a public constructor with exactly the following
- * three arguments (in this order):
- * - {@link org.sosy_lab.common.configuration.Configuration}
- * - {@link org.sosy_lab.common.log.LogManager}
- * - {@link org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis}
+ * Implementations need to have exactly one public constructor or a static method named "create"
+ * which may take a {@link Configuration}, a {@link LogManager}, and a
+ * {@link ConfigurableProgramAnalysis}, and throw at most an
+ * {@link InvalidConfigurationException}.
  */
 public interface CounterexampleFilter {
 
   boolean isRelevant(CounterexampleInfo counterexample) throws InterruptedException;
+
+  interface Factory {
+    CounterexampleFilter create(
+        Configuration config, LogManager logger, ConfigurableProgramAnalysis cpa)
+        throws InvalidConfigurationException;
+  }
+
+  static CounterexampleFilter createCounterexampleFilter(
+      Configuration config,
+      LogManager logger,
+      ConfigurableProgramAnalysis cpa,
+      List<CounterexampleFilter.Factory> cexFilterClasses)
+      throws InvalidConfigurationException {
+    switch (cexFilterClasses.size()) {
+      case 0:
+        return new NullCounterexampleFilter();
+      case 1:
+        return cexFilterClasses.get(0).create(config, logger, cpa);
+      default:
+        List<CounterexampleFilter> filters = new ArrayList<>(cexFilterClasses.size());
+        for (CounterexampleFilter.Factory factory : cexFilterClasses) {
+          filters.add(factory.create(config, logger, cpa));
+        }
+        return new ConjunctiveCounterexampleFilter(filters);
+    }
+  }
 }

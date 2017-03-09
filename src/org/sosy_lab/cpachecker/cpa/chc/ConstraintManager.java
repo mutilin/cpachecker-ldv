@@ -23,6 +23,7 @@
  */
 package org.sosy_lab.cpachecker.cpa.chc;
 
+import com.google.common.collect.Lists;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -32,7 +33,12 @@ import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
-
+import jpl.Compound;
+import jpl.JPL;
+import jpl.Query;
+import jpl.Term;
+import jpl.Util;
+import jpl.Variable;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.ast.AExpression;
 import org.sosy_lab.cpachecker.cfa.ast.AFunctionCall;
@@ -42,7 +48,6 @@ import org.sosy_lab.cpachecker.cfa.ast.AInitializer;
 import org.sosy_lab.cpachecker.cfa.ast.c.CArraySubscriptExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CAssignment;
 import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression.BinaryOperator;
 import org.sosy_lab.cpachecker.cfa.ast.c.CDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFieldReference;
@@ -59,13 +64,6 @@ import org.sosy_lab.cpachecker.cfa.model.FunctionReturnEdge;
 import org.sosy_lab.cpachecker.cfa.model.FunctionSummaryEdge;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCCodeException;
 import org.sosy_lab.cpachecker.util.Pair;
-
-import jpl.Compound;
-import jpl.JPL;
-import jpl.Query;
-import jpl.Term;
-import jpl.Util;
-import jpl.Variable;
 
 public class ConstraintManager {
 
@@ -231,7 +229,17 @@ public class ConstraintManager {
       }
     } else {
       // negated atomic constraint
-      CBinaryExpression negbe = getNegatedRelOperator(c);
+      CBinaryExpression negbe = null;
+      if (c.getOperator().isLogicalOperator()) {
+        negbe =
+            new CBinaryExpression(
+                c.getFileLocation(),
+                c.getExpressionType(),
+                c.getCalculationType(),
+                c.getOperand1(),
+                c.getOperand2(),
+                c.getOperator().getOppositLogicalOperator());
+      }
       acList = expressionToCLP(negbe);
       for (Pair<Term,ArrayList<Term>> p : acList) {
         cns.add(new Constraint(p.getFirst(), p.getSecond()));
@@ -354,8 +362,7 @@ public class ConstraintManager {
         String varName = "FRET_" + fretEdge.getPredecessor().getFunctionName();
         Term lhs = CVar2PrologPrimedVar(op1.toString());
         Term rhs = CVar2PrologVar(varName);
-        Constraint ac = new Constraint(new ArrayList<Term>(
-            Collections.singletonList(new Compound("=:=", new Term[] {lhs,rhs}))));
+        Constraint ac = new Constraint(Lists.newArrayList(new Compound("=:=", new Term[]{lhs, rhs})));
 
         ac.addVar(op1.toString(), lhs);
 
@@ -481,63 +488,6 @@ public class ConstraintManager {
           return null;
       }
   }
-
-  private static CBinaryExpression getNegatedRelOperator(CBinaryExpression be) {
-
-    switch (be.getOperator()) {
-      case EQUALS:
-        return new CBinaryExpression(
-            be.getFileLocation(),
-            be.getExpressionType(),
-            be.getCalculationType(),
-            be.getOperand1(),
-            be.getOperand2(),
-            BinaryOperator.NOT_EQUALS );
-      case NOT_EQUALS:
-        return new CBinaryExpression(
-            be.getFileLocation(),
-            be.getExpressionType(),
-            be.getCalculationType(),
-            be.getOperand1(),
-            be.getOperand2(),
-            BinaryOperator.EQUALS );
-      case LESS_THAN:
-        return new CBinaryExpression(
-            be.getFileLocation(),
-            be.getExpressionType(),
-            be.getCalculationType(),
-            be.getOperand1(),
-            be.getOperand2(),
-            BinaryOperator.GREATER_EQUAL );
-      case LESS_EQUAL:
-        return new CBinaryExpression(
-            be.getFileLocation(),
-            be.getExpressionType(),
-            be.getCalculationType(),
-            be.getOperand1(),
-            be.getOperand2(),
-            BinaryOperator.GREATER_THAN );
-      case GREATER_THAN:
-        return new CBinaryExpression(
-            be.getFileLocation(),
-            be.getExpressionType(),
-            be.getCalculationType(),
-            be.getOperand1(),
-            be.getOperand2(),
-            BinaryOperator.LESS_EQUAL );
-      case GREATER_EQUAL:
-        return new CBinaryExpression(
-            be.getFileLocation(),
-            be.getExpressionType(),
-            be.getCalculationType(),
-            be.getOperand1(),
-            be.getOperand2(),
-            BinaryOperator.LESS_THAN );
-      default: // not a relational operator
-        return null;
-    }
-  }
-
 
   private static Collection<Pair<Term,ArrayList<Term>>> expressionToCLP(AExpression ce) {
 
@@ -721,7 +671,12 @@ public class ConstraintManager {
     return q.hasSolution();
   }
 
-
+  /**
+   * Compute over-approximation of convex hull of two constraints.
+   * TODO: Currently the over-approximation is always very imprecise (it is just the top element)
+   * @param cn1 the first constraint
+   * @param cn2s the second constraint
+   */
   public static Constraint convexHull(Constraint cn1, Constraint cn2s) {
     return new Constraint();
   }

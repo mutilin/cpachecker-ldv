@@ -23,16 +23,15 @@
  */
 package org.sosy_lab.cpachecker.cfa.postprocessing.global;
 
+import com.google.common.base.Preconditions;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
-
+import java.util.Optional;
 import javax.annotation.Nonnull;
-
-import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.cfa.CFACreationUtils;
 import org.sosy_lab.cpachecker.cfa.ast.AAstNode;
 import org.sosy_lab.cpachecker.cfa.ast.FileLocation;
@@ -75,7 +74,6 @@ import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.CFATerminationNode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
-import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionEntryNode;
@@ -85,6 +83,7 @@ import org.sosy_lab.cpachecker.cfa.model.c.CReturnStatementEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
 import org.sosy_lab.cpachecker.cfa.types.Type;
 import org.sosy_lab.cpachecker.cfa.types.c.CArrayType;
+import org.sosy_lab.cpachecker.cfa.types.c.CBitFieldType;
 import org.sosy_lab.cpachecker.cfa.types.c.CCompositeType;
 import org.sosy_lab.cpachecker.cfa.types.c.CCompositeType.CCompositeTypeMemberDeclaration;
 import org.sosy_lab.cpachecker.cfa.types.c.CElaboratedType;
@@ -98,10 +97,7 @@ import org.sosy_lab.cpachecker.cfa.types.c.DefaultCTypeVisitor;
 import org.sosy_lab.cpachecker.util.CFATraversal;
 import org.sosy_lab.cpachecker.util.CFATraversal.CFAVisitor;
 import org.sosy_lab.cpachecker.util.CFATraversal.TraversalProcess;
-
-import com.google.common.base.Optional;
-import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
+import org.sosy_lab.cpachecker.util.Pair;
 
 /** This Class can be used to clone a function from the CFA.
  * You need to specify a new functionName.
@@ -233,28 +229,6 @@ class FunctionCloner implements CFAVisitor {
         break;
       }
 
-      case MultiEdge: {
-        final MultiEdge e = (MultiEdge) edge;
-        final List<CFAEdge> clonedEdges = new ArrayList<>(e.getEdges().size());
-        CFANode pred = start;
-        for (final CFAEdge child : e) {
-          // do not add inner nodes to nodeMapping, they are only accessible via the MultiEdge
-          final CFANode succ = cloneNode(child.getSuccessor(), false);
-          clonedEdges.add(cloneEdge(child, pred, succ));
-          pred = succ;
-        }
-
-        assert pred == end : "cloned end-node must be in nodeMapping";
-
-        // only nodes in the middle are double connected with their nodes
-        for (int i = 1; i < clonedEdges.size() - 1; i++) {
-          CFACreationUtils.addEdgeUnconditionallyToCFA(clonedEdges.get(i));
-        }
-
-        newEdge = new MultiEdge(start, end, clonedEdges);
-        break;
-      }
-
       case FunctionCallEdge: {
         throw new AssertionError(SUPERGRAPH_BUILD_TOO_EARLY);
 
@@ -331,8 +305,12 @@ class FunctionCloner implements CFAVisitor {
       if (returnVariable.isPresent()) {
         returnVariable = Optional.of(cloneAst(returnVariable.get()));
       }
-      final CFunctionEntryNode entryNode = new CFunctionEntryNode(n.getFileLocation(), cloneAst(n.getFunctionDefinition()),
-              newExitNode, n.getFunctionParameterNames(), returnVariable);
+      final CFunctionEntryNode entryNode =
+          new CFunctionEntryNode(
+              n.getFileLocation(),
+              cloneAst(n.getFunctionDefinition()),
+              newExitNode,
+              returnVariable);
       newExitNode.setEntryNode(entryNode); // this must not change hashvalue!
       newNode = entryNode;
 
@@ -603,8 +581,13 @@ class FunctionCloner implements CFAVisitor {
     public CType visit(CCompositeType type) {
       // possible problem: compositeType contains itself again -> recursion
       // solution: cache the empty compositeType and fill it later.
-      CCompositeType comp = new CCompositeType(type.isConst(), type.isVolatile(), type.getKind(),
-              ImmutableList.<CCompositeTypeMemberDeclaration>of(), type.getName(), type.getOrigName());
+      CCompositeType comp =
+          new CCompositeType(
+              type.isConst(),
+              type.isVolatile(),
+              type.getKind(),
+              type.getName(),
+              type.getOrigName());
       typeCache.put(type, comp);
 
       // convert members and set them
@@ -665,6 +648,12 @@ class FunctionCloner implements CFAVisitor {
     @Override
     public CType visit(CTypedefType type) {
       return new CTypedefType(type.isConst(), type.isVolatile(), type.getName(), type.getRealType().accept(this));
+    }
+
+    @Override
+    public CType visit(CBitFieldType pCBitFieldType) throws RuntimeException {
+      return new CBitFieldType(
+          pCBitFieldType.getType().accept(this), pCBitFieldType.getBitFieldSize());
     }
   }
 

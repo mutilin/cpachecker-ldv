@@ -23,19 +23,24 @@
  */
 package org.sosy_lab.cpachecker.cpa.assumptions.genericassumptions;
 
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
 
+import org.sosy_lab.common.configuration.Configuration;
+import org.sosy_lab.common.configuration.InvalidConfigurationException;
+import org.sosy_lab.common.log.LogManager;
+import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.core.defaults.SingleEdgeTransferRelation;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
+import org.sosy_lab.cpachecker.util.ArithmeticOverflowAssumptionBuilder;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Lists;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Transfer relation for the generic assumption generator.
@@ -49,9 +54,14 @@ public class GenericAssumptionsTransferRelation extends SingleEdgeTransferRelati
    *
    * Modify this to register new kind of assumptions.
    */
-  private final List<GenericAssumptionBuilder> assumptionBuilders =
-    ImmutableList.<GenericAssumptionBuilder>of(
-        new ArithmeticOverflowAssumptionBuilder());
+  private final List<GenericAssumptionBuilder> assumptionBuilders;
+
+  public GenericAssumptionsTransferRelation(
+      CFA pCFA, LogManager logger, Configuration pConfiguration)
+      throws InvalidConfigurationException {
+    assumptionBuilders = ImmutableList.of(
+            new ArithmeticOverflowAssumptionBuilder(pCFA, logger, pConfiguration));
+  }
 
   @Override
   public Collection<? extends AbstractState> getAbstractSuccessorsForEdge(
@@ -65,15 +75,4 @@ public class GenericAssumptionsTransferRelation extends SingleEdgeTransferRelati
 
     return Collections.singleton(new GenericAssumptionsState(allAssumptions));
   }
-
-  @Override
-  public Collection<? extends AbstractState> strengthen(
-      AbstractState el, List<AbstractState> otherElements,
-      CFAEdge edge, Precision p)
-      throws CPATransferException {
-    // TODO Improve strengthening for assumptions so that they
-    //      may be discharged online
-    return null;
-  }
-
 }

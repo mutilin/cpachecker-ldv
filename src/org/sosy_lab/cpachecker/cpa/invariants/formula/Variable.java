@@ -23,17 +23,19 @@
  */
 package org.sosy_lab.cpachecker.cpa.invariants.formula;
 
-import java.util.Objects;
+import com.google.common.base.Predicate;
 
-import org.sosy_lab.cpachecker.cpa.invariants.BitVectorInfo;
+import org.sosy_lab.cpachecker.cpa.invariants.TypeInfo;
 import org.sosy_lab.cpachecker.util.states.MemoryLocation;
+
+import java.util.Objects;
 
 
 public class Variable<ConstantType> extends AbstractFormula<ConstantType> implements NumeralFormula<ConstantType> {
 
   private final MemoryLocation memoryLocation;
 
-  private Variable(BitVectorInfo pInfo, MemoryLocation pMemoryLocation) {
+  private Variable(TypeInfo pInfo, MemoryLocation pMemoryLocation) {
     super(pInfo);
     this.memoryLocation = pMemoryLocation;
   }
@@ -54,7 +56,7 @@ public class Variable<ConstantType> extends AbstractFormula<ConstantType> implem
     }
     if (pOther instanceof Variable) {
       Variable<?> other = (Variable<?>) pOther;
-      return getBitVectorInfo().equals(other.getBitVectorInfo())
+      return getTypeInfo().equals(other.getTypeInfo())
           && getMemoryLocation().equals(other.getMemoryLocation());
     }
     return false;
@@ -62,7 +64,7 @@ public class Variable<ConstantType> extends AbstractFormula<ConstantType> implem
 
   @Override
   public int hashCode() {
-    return Objects.hash(getBitVectorInfo(), getMemoryLocation());
+    return Objects.hash(getTypeInfo(), getMemoryLocation());
   }
 
   @Override
@@ -79,12 +81,23 @@ public class Variable<ConstantType> extends AbstractFormula<ConstantType> implem
   /**
    * Gets an invariants formula representing the variable with the given memory location.
    *
-   * @param pInfo the bit vector information.
+   * @param pInfo the type information.
    * @param pMemoryLocation the memory location of the variable.
    *
    * @return an invariants formula representing the variable with the given memory location.
    */
-  static <ConstantType> Variable<ConstantType> of(BitVectorInfo pInfo, MemoryLocation pMemoryLocation) {
+  static <ConstantType> Variable<ConstantType> of(TypeInfo pInfo, MemoryLocation pMemoryLocation) {
     return new Variable<>(pInfo, pMemoryLocation);
+  }
+
+  public static <ConstantType> Predicate<NumeralFormula<ConstantType>> convert(Predicate<? super MemoryLocation> pPredicate) {
+    return new Predicate<NumeralFormula<ConstantType>>() {
+
+      @Override
+      public boolean apply(NumeralFormula<ConstantType> pFormula) {
+        return pFormula instanceof Variable && pPredicate.apply(((Variable<?>) pFormula).getMemoryLocation());
+      }
+
+    };
   }
 }

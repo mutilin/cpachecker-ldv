@@ -24,20 +24,32 @@
 package org.sosy_lab.cpachecker.util;
 
 import static com.google.common.base.Preconditions.checkNotNull;
-import static com.google.common.base.Predicates.*;
+import static com.google.common.base.Predicates.instanceOf;
+import static com.google.common.base.Predicates.not;
+import static com.google.common.base.Predicates.notNull;
+import static com.google.common.base.Predicates.or;
 import static com.google.common.collect.FluentIterable.from;
 
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.Set;
-import java.util.concurrent.TimeUnit;
-import java.util.logging.Level;
+import com.google.common.base.Equivalence;
+import com.google.common.base.Equivalence.Wrapper;
+import com.google.common.base.Function;
+import com.google.common.base.Functions;
+import com.google.common.collect.Collections2;
+import com.google.common.collect.FluentIterable;
+import com.google.common.collect.ImmutableCollection;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableSetMultimap;
+import com.google.common.collect.ImmutableSortedSet;
+import com.google.common.collect.Multimap;
+import com.google.common.collect.Multimaps;
+import com.google.common.collect.Ordering;
+import com.google.common.collect.SortedSetMultimap;
+import com.google.common.collect.TreeMultimap;
 
 import org.sosy_lab.common.ShutdownManager;
 import org.sosy_lab.common.ShutdownNotifier;
 import org.sosy_lab.common.configuration.Configuration;
-import org.sosy_lab.common.configuration.ConfigurationBuilder;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
@@ -58,11 +70,13 @@ import org.sosy_lab.cpachecker.cfa.model.FunctionCallEdge;
 import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
 import org.sosy_lab.cpachecker.core.CPABuilder;
+import org.sosy_lab.cpachecker.core.Specification;
 import org.sosy_lab.cpachecker.core.algorithm.Algorithm;
 import org.sosy_lab.cpachecker.core.algorithm.CPAAlgorithm;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.StateSpacePartition;
 import org.sosy_lab.cpachecker.core.interfaces.WrapperCPA;
+import org.sosy_lab.cpachecker.core.reachedset.AggregatedReachedSets;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSetFactory;
 import org.sosy_lab.cpachecker.cpa.livevar.LiveVariablesCPA;
@@ -72,22 +86,13 @@ import org.sosy_lab.cpachecker.util.resources.ResourceLimit;
 import org.sosy_lab.cpachecker.util.resources.ResourceLimitChecker;
 import org.sosy_lab.cpachecker.util.resources.WalltimeLimit;
 
-import com.google.common.base.Equivalence;
-import com.google.common.base.Equivalence.Wrapper;
-import com.google.common.base.Function;
-import com.google.common.base.Functions;
-import com.google.common.base.Optional;
-import com.google.common.collect.Collections2;
-import com.google.common.collect.FluentIterable;
-import com.google.common.collect.ImmutableCollection;
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.ImmutableSetMultimap;
-import com.google.common.collect.ImmutableSortedSet;
-import com.google.common.collect.Multimap;
-import com.google.common.collect.Multimaps;
-import com.google.common.collect.Ordering;
-import com.google.common.collect.SortedSetMultimap;
-import com.google.common.collect.TreeMultimap;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
 
 public class LiveVariables {
 
@@ -98,9 +103,10 @@ public class LiveVariables {
   /**
    * Equivalence implementation especially for the use with live variables. We
    * have to use this wrapper, because of the storageType in CVariableDeclarations
-   * which do not always have to be the same for exactly the same variable (e.g.
-   * one declaration is extern, and afterwards the real declaration is following which
-   * then has storageType auto, for live variables we need to consider them as one.
+   * which does not always have to be the same for exactly the same variable
+   * (e.g. one declaration is extern, and afterwards the real declaration is following which
+   * then has storageType auto: for live variables we need to consider them
+   * as one).
    */
   public static final Equivalence<ASimpleDeclaration> LIVE_DECL_EQUIVALENCE = new Equivalence<ASimpleDeclaration>() {
 
@@ -159,19 +165,23 @@ public class LiveVariables {
    */
   private static class AllVariablesAsLiveVariables extends LiveVariables {
 
-    private FluentIterable<String> allVariables;
-    private FluentIterable<ASimpleDeclaration> allVariableDecls;
+    private FluentIterable<ASimpleDeclaration> allVariables;
 
     private AllVariablesAsLiveVariables(CFA cfa, List<Pair<ADeclaration, String>> globalsList) {
       super();
       checkNotNull(cfa);
       checkNotNull(globalsList);
 
-      Set<ASimpleDeclaration> globalVars = FluentIterable.from(globalsList)
-                                                          .transform(DECLARATION_FILTER)
-                                                          .filter(notNull())
-                                                          .filter(not(or(instanceOf(CTypeDeclaration.class),
-                                                                         instanceOf(CFunctionDeclaration.class)))).toSet();
+      Set<ASimpleDeclaration> globalVars =
+          from(globalsList)
+              .<ASimpleDeclaration>transform(Pair::getFirst)
+              .filter(notNull())
+              .filter(
+                  not(
+                      or(
+                          instanceOf(CTypeDeclaration.class),
+                          instanceOf(CFunctionDeclaration.class))))
+              .toSet();
 
       final CFATraversal.EdgeCollectingCFAVisitor edgeCollectingVisitor = new CFATraversal.EdgeCollectingCFAVisitor();
       CFATraversal.dfs().traverseOnce(cfa.getMainFunction(), edgeCollectingVisitor);
@@ -180,15 +190,8 @@ public class LiveVariables {
       // we have no information which variable is live at a certain node, so
       // when asked about the variables for a certain node, we return the whole
       // set of all variables of the analysed program
-      allVariableDecls = edges.transform(new Function<ADeclarationEdge, ASimpleDeclaration>() {
-
-        @Override
-        public ASimpleDeclaration apply(ADeclarationEdge pInput) {
-          return pInput.getDeclaration();
-        }}).append(globalVars);
-
-
-      allVariables = allVariableDecls.transform(ASimpleDeclaration.GET_QUALIFIED_NAME);
+      allVariables =
+          edges.<ASimpleDeclaration>transform(ADeclarationEdge::getDeclaration).append(globalVars);
     }
 
     @Override
@@ -202,13 +205,13 @@ public class LiveVariables {
     }
 
     @Override
-    public FluentIterable<String> getLiveVariableNamesForNode(CFANode pNode) {
+    public FluentIterable<ASimpleDeclaration> getLiveVariablesForNode(CFANode pNode) {
       return allVariables;
     }
 
     @Override
-    public FluentIterable<ASimpleDeclaration> getLiveVariablesForNode(CFANode pNode) {
-      return allVariableDecls;
+    public FluentIterable<ASimpleDeclaration> getAllLiveVariables() {
+      return allVariables;
     }
   }
 
@@ -314,35 +317,33 @@ public class LiveVariables {
 
   }
 
-  /**
-   * Return an iterable of all names of live variables at a given CFANode
-   * without duplicates and with deterministic iteration order.
-   */
-  public FluentIterable<String> getLiveVariableNamesForNode(CFANode pNode) {
-    return from(liveVariablesStrings.get(pNode)).append(globalVariablesStrings);
+  public static Optional<LiveVariables> createWithAllVariablesAsLive(
+      final List<Pair<ADeclaration, String>> globalsList,
+      final MutableCFA pCFA) {
+    return Optional.of(new AllVariablesAsLiveVariables(pCFA, globalsList));
   }
 
-  public static Optional<LiveVariables> createWithAllVariablesAsLive(final List<Pair<ADeclaration, String>> globalsList,
-                                                           final MutableCFA pCFA) {
-    return Optional.of((LiveVariables)new AllVariablesAsLiveVariables(pCFA, globalsList));
-  }
-
-  public static Optional<LiveVariables> create(final Optional<VariableClassification> variableClassification,
-                                               final List<Pair<ADeclaration, String>> globalsList,
-                                               final MutableCFA pCFA,
-                                               final LogManager logger,
-                                               final ShutdownNotifier shutdownNotifier,
-                                               final Configuration config) throws InvalidConfigurationException {
+  public static LiveVariables create(
+      final Optional<VariableClassification> variableClassification,
+      final List<Pair<ADeclaration, String>> globalsList,
+      final MutableCFA pCFA,
+      final LogManager logger,
+      final ShutdownNotifier pShutdownNotifier,
+      final Configuration config)
+      throws InvalidConfigurationException,
+             IllegalArgumentException,
+             AssertionError,
+             InterruptedException {
     checkNotNull(variableClassification);
     checkNotNull(globalsList);
     checkNotNull(pCFA);
     checkNotNull(logger);
-    checkNotNull(shutdownNotifier);
+    checkNotNull(pShutdownNotifier);
 
     // we cannot make any assumptions about c programs where we do not know
     // about the addressed variables
     if (pCFA.getLanguage() == Language.C && !variableClassification.isPresent()) {
-      return Optional.of((LiveVariables)new AllVariablesAsLiveVariables(pCFA, globalsList));
+      return new AllVariablesAsLiveVariables(pCFA, globalsList);
     }
 
     // we need a cfa with variableClassification, thus we create one now
@@ -352,64 +353,90 @@ public class LiveVariables {
     // be chosen later on
     LiveVariablesConfiguration liveVarConfig = new LiveVariablesConfiguration(config);
 
-    ShutdownManager liveVarsShutdown = ShutdownManager.createWithParent(shutdownNotifier);
-    List<ResourceLimit> limits;
-    if (liveVarConfig.overallLivenessCheckTime.isEmpty()) {
-      limits = Collections.emptyList();
+    final ResourceLimitChecker limitChecker;
+    final ShutdownNotifier shutdownNotifier;
+    if (!liveVarConfig.overallLivenessCheckTime.isEmpty()) {
+      ShutdownManager liveVarsShutdown = ShutdownManager.createWithParent(pShutdownNotifier);
+      shutdownNotifier = liveVarsShutdown.getNotifier();
+      ResourceLimit limit = WalltimeLimit.fromNowOn(liveVarConfig.overallLivenessCheckTime);
+      limitChecker = new ResourceLimitChecker(liveVarsShutdown, ImmutableList.of(limit));
+      limitChecker.start();
     } else {
-      limits = Collections.singletonList((ResourceLimit)WalltimeLimit.fromNowOn(liveVarConfig.overallLivenessCheckTime));
+      shutdownNotifier = pShutdownNotifier;
+      limitChecker = null;
     }
-    ResourceLimitChecker limitChecker = new ResourceLimitChecker(liveVarsShutdown, limits);
 
-    limitChecker.start();
-    LiveVariables liveVarObject = create0(variableClassification.orNull(), globalsList, logger, shutdownNotifier, cfa, liveVarConfig);
-    limitChecker.cancel();
+    LiveVariables liveVarObject = create0(
+        variableClassification.orElse(null),
+        globalsList,
+        logger,
+        shutdownNotifier,
+        cfa,
+        liveVarConfig
+    );
 
-    return Optional.of(liveVarObject);
+    if (limitChecker != null) {
+      limitChecker.cancel();
+    }
+
+    return liveVarObject;
   }
 
-  private static LiveVariables create0(final VariableClassification variableClassification,
-                                                 final List<Pair<ADeclaration, String>> globalsList,
-                                                 final LogManager logger,
-                                                 final ShutdownNotifier shutdownNotifier,
-                                                 final CFA cfa,
-                                                 final LiveVariablesConfiguration config) throws AssertionError {
+  private static LiveVariables create0(
+      final VariableClassification variableClassification,
+      final List<Pair<ADeclaration, String>> globalsList,
+      final LogManager logger,
+      final ShutdownNotifier pShutdownNotifier,
+      final CFA cfa,
+      final LiveVariablesConfiguration config)
+      throws AssertionError, IllegalArgumentException, InterruptedException {
+
     // prerequisites for creating the live variables
     Set<Wrapper<ASimpleDeclaration>> globalVariables;
     switch (config.evaluationStrategy) {
-    case FUNCTION_WISE: globalVariables = FluentIterable.from(globalsList)
-                                                        .transform(DECLARATION_FILTER)
-                                                        .filter(notNull())
-                                                        .filter(not(or(instanceOf(CTypeDeclaration.class),
-                                                                       instanceOf(CFunctionDeclaration.class))))
-                                                        .transform(TO_EQUIV_WRAPPER)
-                                                        .toSet();
-      break;
+      case FUNCTION_WISE:
+        globalVariables =
+            from(globalsList)
+                .transform(Pair::getFirst)
+                .filter(notNull())
+                .filter(
+                    not(
+                        or(
+                            instanceOf(CTypeDeclaration.class),
+                            instanceOf(CFunctionDeclaration.class))))
+                .transform(TO_EQUIV_WRAPPER)
+                .toSet();
+        break;
     case GLOBAL: globalVariables = Collections.emptySet(); break;
     default:
       throw new AssertionError("Unhandled case statement: " + config.evaluationStrategy);
     }
 
-    ShutdownManager liveVarsShutdown = ShutdownManager.createWithParent(shutdownNotifier);
-    List<ResourceLimit> limits;
-    if (config.partwiseLivenessCheckTime.isEmpty()) {
-      limits = Collections.emptyList();
+    final ResourceLimitChecker limitChecker;
+    final ShutdownNotifier shutdownNotifier;
+    if (!config.partwiseLivenessCheckTime.isEmpty()) {
+      ShutdownManager liveVarsShutdown = ShutdownManager.createWithParent(pShutdownNotifier);
+      shutdownNotifier = liveVarsShutdown.getNotifier();
+      ResourceLimit limit = WalltimeLimit.fromNowOn(config.partwiseLivenessCheckTime);
+      limitChecker = new ResourceLimitChecker(liveVarsShutdown, ImmutableList.of(limit));
+      limitChecker.start();
     } else {
-      limits = Collections.singletonList((ResourceLimit)WalltimeLimit.fromNowOn(config.partwiseLivenessCheckTime));
+      shutdownNotifier = pShutdownNotifier;
+      limitChecker = null;
     }
-    ResourceLimitChecker limitChecker = new ResourceLimitChecker(liveVarsShutdown, limits);
 
-    Optional<AnalysisParts> parts = getNecessaryAnalysisComponents(cfa, logger, liveVarsShutdown.getNotifier(), config.evaluationStrategy);
+    Optional<AnalysisParts> parts =
+        getNecessaryAnalysisComponents(cfa, logger, shutdownNotifier, config.evaluationStrategy);
     Multimap<CFANode, Wrapper<ASimpleDeclaration>> liveVariables = null;
-
-    limitChecker.start();
 
     // create live variables
     if (parts.isPresent()) {
       liveVariables = addLiveVariablesFromCFA(cfa, logger, parts.get(), config.evaluationStrategy);
     }
 
-    limitChecker.cancel();
+    if (limitChecker != null) {
+      limitChecker.cancel();
+    }
 
     // when the analysis did not finish or could even not be created we return
     // an absent optional, but before we try the function-wise analysis if we
@@ -417,60 +444,66 @@ public class LiveVariables {
     if (liveVariables == null && config.evaluationStrategy != EvaluationStrategy.FUNCTION_WISE) {
       logger.log(Level.INFO, "Global live variables collection failed, fallback to function-wise analysis.");
       config.evaluationStrategy = EvaluationStrategy.FUNCTION_WISE;
-      return create0(variableClassification, globalsList, logger, shutdownNotifier, cfa, config);
+      return create0(
+          variableClassification,
+          globalsList,
+          logger,
+          pShutdownNotifier,
+          cfa,
+          config);
     } else if (liveVariables == null) {
       return new AllVariablesAsLiveVariables(cfa, globalsList);
     }
 
-    return new LiveVariables(liveVariables,
-                             variableClassification,
-                             globalVariables,
-                             config.evaluationStrategy,
-                             cfa.getLanguage());
+    return new LiveVariables(
+        liveVariables,
+        variableClassification,
+        globalVariables,
+        config.evaluationStrategy,
+        cfa.getLanguage());
   }
 
-  private final static Function<Pair<ADeclaration, String>, ASimpleDeclaration> DECLARATION_FILTER =
-      new Function<Pair<ADeclaration, String>, ASimpleDeclaration>() {
-        @Override
-        public ASimpleDeclaration apply(Pair<ADeclaration, String> pInput) {
-          return pInput.getFirst();
-      }};
+  public final static Function<ASimpleDeclaration, Equivalence.Wrapper<ASimpleDeclaration>>
+      TO_EQUIV_WRAPPER = LIVE_DECL_EQUIVALENCE::wrap;
 
-  public final static Function<ASimpleDeclaration, Equivalence.Wrapper<ASimpleDeclaration>> TO_EQUIV_WRAPPER =
-      new Function<ASimpleDeclaration, Equivalence.Wrapper<ASimpleDeclaration>>() {
-    @Override
-    public Equivalence.Wrapper<ASimpleDeclaration> apply(ASimpleDeclaration pInput) {
-      return LIVE_DECL_EQUIVALENCE.wrap(pInput);
-  }};
+  private final static Function<Equivalence.Wrapper<ASimpleDeclaration>, ASimpleDeclaration>
+      FROM_EQUIV_WRAPPER = Equivalence.Wrapper::get;
 
-  private final static Function<Equivalence.Wrapper<ASimpleDeclaration>, ASimpleDeclaration> FROM_EQUIV_WRAPPER =
-      new Function<Equivalence.Wrapper<ASimpleDeclaration>, ASimpleDeclaration>() {
-    @Override
-    public ASimpleDeclaration apply(Equivalence.Wrapper<ASimpleDeclaration> pInput) {
-      return pInput.get();
-    }};
+  public final static Function<Equivalence.Wrapper<ASimpleDeclaration>, String>
+      FROM_EQUIV_WRAPPER_TO_STRING =
+          Functions.compose(ASimpleDeclaration::getQualifiedName, FROM_EQUIV_WRAPPER);
 
-  public final static Function<Equivalence.Wrapper<ASimpleDeclaration>, String> FROM_EQUIV_WRAPPER_TO_STRING =
-      Functions.compose(ASimpleDeclaration.GET_QUALIFIED_NAME, FROM_EQUIV_WRAPPER);
-
-  private static Multimap<CFANode, Wrapper<ASimpleDeclaration>> addLiveVariablesFromCFA(final CFA pCfa, final LogManager logger,
-                                              AnalysisParts analysisParts, EvaluationStrategy evaluationStrategy) {
+  private static Multimap<CFANode, Wrapper<ASimpleDeclaration>> addLiveVariablesFromCFA(
+      final CFA pCfa,
+      final LogManager logger,
+      AnalysisParts analysisParts,
+      EvaluationStrategy evaluationStrategy
+  ) throws IllegalArgumentException, InterruptedException {
 
     Optional<LoopStructure> loopStructure = pCfa.getLoopStructure();
 
     // put all FunctionExitNodes into the waitlist
     final Collection<FunctionEntryNode> functionHeads;
     switch (evaluationStrategy) {
-    case FUNCTION_WISE: functionHeads = pCfa.getAllFunctionHeads(); break;
-    case GLOBAL: functionHeads = Collections.singleton(pCfa.getMainFunction()); break;
-    default: throw new AssertionError("Unhandeld case statement: " + evaluationStrategy);
+      case FUNCTION_WISE:
+        functionHeads = pCfa.getAllFunctionHeads(); break;
+      case GLOBAL:
+        functionHeads = Collections.singleton(pCfa.getMainFunction()); break;
+      default:
+        throw new AssertionError("Unhandled case statement: " +
+            evaluationStrategy);
     }
 
     for (FunctionEntryNode node : functionHeads) {
       FunctionExitNode exitNode = node.getExitNode();
       if (pCfa.getAllNodes().contains(exitNode)) {
-        analysisParts.reachedSet.add(analysisParts.cpa.getInitialState(exitNode, StateSpacePartition.getDefaultPartition()),
-                                     analysisParts.cpa.getInitialPrecision(exitNode, StateSpacePartition.getDefaultPartition()));
+        analysisParts.reachedSet.add(
+            analysisParts.cpa.getInitialState(
+                exitNode,
+                StateSpacePartition.getDefaultPartition()),
+            analysisParts.cpa.getInitialPrecision(
+                exitNode,
+                StateSpacePartition.getDefaultPartition()));
       }
     }
 
@@ -488,8 +521,11 @@ public class LiveVariables {
         // function calls inside have no outgoing edges
         if (from(l.getOutgoingEdges()).filter(not(instanceOf(FunctionCallEdge.class))).isEmpty()) {
           CFANode functionHead = l.getLoopHeads().iterator().next();
-          analysisParts.reachedSet.add(analysisParts.cpa.getInitialState(functionHead, StateSpacePartition.getDefaultPartition()),
-                                       analysisParts.cpa.getInitialPrecision(functionHead, StateSpacePartition.getDefaultPartition()));
+          analysisParts.reachedSet.add(
+              analysisParts.cpa.getInitialState(
+                  functionHead, StateSpacePartition.getDefaultPartition()),
+              analysisParts.cpa.getInitialPrecision(
+                  functionHead, StateSpacePartition.getDefaultPartition()));
         }
       }
     }
@@ -518,18 +554,23 @@ public class LiveVariables {
       final EvaluationStrategy evaluationStrategy) {
 
     try {
-      Configuration config;
+      String configFile;
       switch (evaluationStrategy) {
-        case FUNCTION_WISE: config = getLocalConfiguration(); break;
-        case GLOBAL: config = getGlobalConfiguration(); break;
+        case FUNCTION_WISE:
+          configFile = "liveVariables-intraprocedural.properties";
+          break;
+        case GLOBAL:
+          configFile = "liveVariables-interprocedural.properties";
+          break;
         default: throw new AssertionError("Unhandled case statement: " + evaluationStrategy);
       }
 
+      Configuration config =
+          Configuration.builder().loadFromResource(LiveVariables.class, configFile).build();
       ReachedSetFactory reachedFactory = new ReachedSetFactory(config);
-      ConfigurableProgramAnalysis cpa = new CPABuilder(config,
-                                                       logger,
-                                                       shutdownNotifier,
-                                                       reachedFactory).buildCPAWithSpecAutomatas(cfa);
+      ConfigurableProgramAnalysis cpa =
+          new CPABuilder(config, logger, shutdownNotifier, reachedFactory)
+              .buildCPAs(cfa, Specification.alwaysSatisfied(), new AggregatedReachedSets());
       Algorithm algorithm = CPAAlgorithm.create(cpa,
                                                 logger,
                                                 config,
@@ -540,40 +581,13 @@ public class LiveVariables {
     } catch (InvalidConfigurationException | CPAException e) {
       // this should never happen, but if it does we continue the
       // analysis without having the live variable analysis
-      logger.logUserException(Level.WARNING, e, "An error occured during the creation"
+      logger.logUserException(Level.WARNING, e, "An error occurred during the"
+          + " creation"
           + " of the necessary CPA parts for the live variables analysis.");
-      return Optional.absent();
+      return Optional.empty();
     }
   }
 
-
-  private static Configuration getGlobalConfiguration() throws InvalidConfigurationException {
-    ConfigurationBuilder configBuilder = Configuration.builder();
-    configBuilder.setOption("analysis.traversal.order", "BFS");
-    configBuilder.setOption("analysis.traversal.usePostorder", "true");
-    configBuilder.setOption("analysis.traversal.useCallstack", "true");
-    configBuilder.setOption("cpa", "cpa.composite.CompositeCPA");
-    configBuilder.setOption("CompositeCPA.cpas", "cpa.location.LocationCPABackwardsNoTargets,"
-                                               + "cpa.callstack.CallstackCPABackwards,"
-                                               + "cpa.livevar.LiveVariablesCPA");
-    configBuilder.setOption("cpa.location.followFunctionCalls", "true");
-    configBuilder.setOption("cpa.liveVar.assumeGlobalVariablesAreAlwaysLive", "false");
-
-    return configBuilder.build();
-  }
-
-  private static Configuration getLocalConfiguration() throws InvalidConfigurationException {
-    ConfigurationBuilder configBuilder = Configuration.builder();
-    configBuilder.setOption("analysis.traversal.order", "BFS");
-    configBuilder.setOption("analysis.traversal.usePostorder", "true");
-    configBuilder.setOption("cpa", "cpa.composite.CompositeCPA");
-    configBuilder.setOption("CompositeCPA.cpas", "cpa.location.LocationCPABackwardsNoTargets,"
-                                               + "cpa.livevar.LiveVariablesCPA");
-    configBuilder.setOption("cpa.location.followFunctionCalls", "false");
-    configBuilder.setOption("cpa.liveVar.assumeGlobalVariablesAreAlwaysLive", "true");
-
-    return configBuilder.build();
-  }
 
   private static class AnalysisParts {
 

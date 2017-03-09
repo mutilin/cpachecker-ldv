@@ -23,11 +23,7 @@
  */
 package org.sosy_lab.cpachecker.util.predicates.ufCheckingProver;
 
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Deque;
-import java.util.List;
-import java.util.logging.Level;
+import com.google.common.collect.ImmutableList;
 
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
@@ -35,16 +31,24 @@ import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.util.predicates.smt.FormulaManagerView;
-import org.sosy_lab.solver.AssignableTerm.Function;
-import org.sosy_lab.solver.Model;
-import org.sosy_lab.solver.SolverException;
-import org.sosy_lab.solver.api.BasicProverEnvironment;
-import org.sosy_lab.solver.api.BooleanFormula;
-import org.sosy_lab.solver.api.BooleanFormulaManager;
-import org.sosy_lab.solver.api.Formula;
+import org.sosy_lab.java_smt.api.SolverException;
+import org.sosy_lab.java_smt.api.BasicProverEnvironment;
+import org.sosy_lab.java_smt.api.BooleanFormula;
+import org.sosy_lab.java_smt.api.BooleanFormulaManager;
+import org.sosy_lab.java_smt.api.Model;
+import org.sosy_lab.java_smt.api.Model.ValueAssignment;
 
-import com.google.common.collect.Iterables;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
+import java.util.List;
+import java.util.logging.Level;
 
+/**
+ * Get the model, substitute implementation for UFs which were used to replace
+ * non-linear numerical operations (overflow/etc), and if the model does not
+ * hold anymore, generate a new one.
+ */
 public class UFCheckingBasicProverEnvironment<T> implements BasicProverEnvironment<T> {
 
   private final BasicProverEnvironment<T> delegate;
@@ -137,20 +141,28 @@ public class UFCheckingBasicProverEnvironment<T> implements BasicProverEnvironme
     int additionalConstraints = 0;
     while (!unsat) {
 
+      final List<BooleanFormula> constraints = new ArrayList<>();
+
       // next line only succeeds if the solver supports the generation of a model.
       // TODO enable by default for MathSat?
 
-      final Model model = getModel();
-      final List<BooleanFormula> constraints = new ArrayList<>();
-      for (Function uf : Iterables.filter(model.keySet(), Function.class)) {
-        final Object value = model.get(uf);
-        final BooleanFormula newAssignment = faMgr.evaluate(uf, value);
+      try (final Model model = getModel()) {
+        for (ValueAssignment entry : model) {
 
-        if (!bfmgr.isTrue(newAssignment)) {
-          constraints.add(newAssignment);
+          if (!entry.isFunction()) {
+
+            // We are only interested in UFs.
+            continue;
+          }
+
+          final Object value = entry.getValue();
+          final BooleanFormula newAssignment = faMgr.evaluate(entry, value);
+
+          if (!bfmgr.isTrue(newAssignment)) {
+            constraints.add(newAssignment);
+          }
         }
       }
-
       if (constraints.isEmpty()) {
         logger.log(Level.FINE, "no UFs to improve");
         break;
@@ -180,12 +192,12 @@ public class UFCheckingBasicProverEnvironment<T> implements BasicProverEnvironme
   }
 
   @Override
-  public void close() {
-    delegate.close();
+  public ImmutableList<ValueAssignment> getModelAssignments() throws SolverException {
+    return delegate.getModelAssignments();
   }
 
   @Override
-  public <E extends Formula> E evaluate(E f) {
-    return delegate.evaluate(f);
+  public void close() {
+    delegate.close();
   }
 }

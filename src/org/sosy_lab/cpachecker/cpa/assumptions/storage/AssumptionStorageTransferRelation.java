@@ -23,12 +23,12 @@
  */
 package org.sosy_lab.cpachecker.cpa.assumptions.storage;
 
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
+import com.google.common.base.Preconditions;
+import com.google.common.collect.Iterables;
 
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.defaults.SingleEdgeTransferRelation;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
@@ -36,13 +36,15 @@ import org.sosy_lab.cpachecker.core.interfaces.conditions.AssumptionReportingSta
 import org.sosy_lab.cpachecker.core.interfaces.conditions.AvoidanceReportingState;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
-import org.sosy_lab.solver.api.BooleanFormula;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.SSAMap;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.ctoformula.CtoFormulaConverter;
 import org.sosy_lab.cpachecker.util.predicates.smt.BooleanFormulaManagerView;
 import org.sosy_lab.cpachecker.util.predicates.smt.FormulaManagerView;
+import org.sosy_lab.java_smt.api.BooleanFormula;
 
-import com.google.common.base.Preconditions;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Transfer relation and strengthening for the DumpInvariant CPA
@@ -80,10 +82,13 @@ public class AssumptionStorageTransferRelation extends SingleEdgeTransferRelatio
     BooleanFormulaManagerView bfmgr = formulaManager.getBooleanFormulaManager();
     assert bfmgr.isTrue(asmptStorageElem.getAssumption());
     assert bfmgr.isTrue(asmptStorageElem.getStopFormula());
-    String function = (edge.getSuccessor() != null) ? edge.getSuccessor().getFunctionName() : null;
+    final CFANode currentLocation =
+        Iterables.getOnlyElement(AbstractStates.extractLocations(others));
+    String function = currentLocation.getFunctionName();
 
-    BooleanFormula assumption =  bfmgr.makeBoolean(true);
-    BooleanFormula stopFormula = bfmgr.makeBoolean(false); // initialize with false because we create a disjunction
+    BooleanFormula assumption =  bfmgr.makeTrue();
+    BooleanFormula stopFormula = bfmgr.makeFalse(); // initialize with false because we create a
+    // disjunction
 
     // process stop flag
     boolean stop = false;
@@ -109,11 +114,11 @@ public class AssumptionStorageTransferRelation extends SingleEdgeTransferRelatio
     Preconditions.checkState(!bfmgr.isTrue(stopFormula));
 
     if (!stop) {
-      stopFormula = bfmgr.makeBoolean(true);
+      stopFormula = bfmgr.makeTrue();
     }
 
     if (bfmgr.isTrue(assumption) && bfmgr.isTrue(stopFormula)) {
-      return null; // nothing has changed
+      return Collections.singleton(el); // nothing has changed
 
     } else {
       return Collections.singleton(new AssumptionStorageState(formulaManager, assumption, stopFormula));

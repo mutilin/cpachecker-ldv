@@ -25,33 +25,46 @@ package org.sosy_lab.cpachecker.cpa.composite;
 
 import java.util.ArrayList;
 import java.util.List;
-
-import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
+import org.sosy_lab.cpachecker.core.defaults.GenericReducer;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
+import org.sosy_lab.cpachecker.util.Pair;
 
-
-public class CompositeReducer implements Reducer {
+class CompositeReducer extends GenericReducer<CompositeState, CompositePrecision> {
 
   private final List<Reducer> wrappedReducers;
 
-  public CompositeReducer(List<Reducer> pWrappedReducers) {
+  CompositeReducer(List<Reducer> pWrappedReducers) {
     wrappedReducers = pWrappedReducers;
   }
 
   @Override
   public AbstractState getVariableReducedState(
       AbstractState pExpandedState, Block pContext, Block outerContext,
-      CFANode pLocation) {
+      CFANode pLocation) throws InterruptedException {
 
     List<AbstractState> result = new ArrayList<>();
     int i = 0;
     for (AbstractState expandedState : ((CompositeState)pExpandedState).getWrappedStates()) {
       result.add(wrappedReducers.get(i++).getVariableReducedState(expandedState, pContext, outerContext, pLocation));
+
+    }
+    return new CompositeState(result);
+  }
+
+  @Override
+  protected CompositeState getVariableReducedState0(
+      CompositeState pExpandedState, Block pContext, CFANode pLocation)
+      throws InterruptedException {
+
+    List<AbstractState> result = new ArrayList<>();
+    int i = 0;
+    for (AbstractState expandedState : pExpandedState.getWrappedStates()) {
+      result.add(wrappedReducers.get(i++).getVariableReducedState(expandedState, pContext, pLocation));
     }
     return new CompositeState(result);
   }
@@ -59,10 +72,13 @@ public class CompositeReducer implements Reducer {
   @Override
   public AbstractState getVariableExpandedState(
       AbstractState pRootState, Block pReducedContext, Block outerSubtree,
-      AbstractState pReducedState) {
+      AbstractState pReducedState) throws InterruptedException {
 
-    List<AbstractState> rootStates = ((CompositeState)pRootState).getWrappedStates();
-    List<AbstractState> reducedStates = ((CompositeState)pReducedState).getWrappedStates();
+    CompositeState rootState = (CompositeState) pRootState;
+    CompositeState reducedState = (CompositeState) pReducedState;
+
+    List<AbstractState> rootStates = rootState.getWrappedStates();
+    List<AbstractState> reducedStates = reducedState.getWrappedStates();
 
     List<AbstractState> result = new ArrayList<>();
     int i = 0;
@@ -73,10 +89,27 @@ public class CompositeReducer implements Reducer {
   }
 
   @Override
-  public Object getHashCodeForState(AbstractState pElementKey, Precision pPrecisionKey) {
+  protected CompositeState getVariableExpandedState0(
+      CompositeState pRootState, Block pReducedContext, CompositeState pReducedState)
+      throws InterruptedException {
 
-    List<AbstractState> elements = ((CompositeState)pElementKey).getWrappedStates();
-    List<Precision> precisions = ((CompositePrecision)pPrecisionKey).getPrecisions();
+    List<AbstractState> rootStates = pRootState.getWrappedStates();
+    List<AbstractState> reducedStates = pReducedState.getWrappedStates();
+
+    List<AbstractState> result = new ArrayList<>();
+    int i = 0;
+    for (Pair<AbstractState, AbstractState> p : Pair.zipList(rootStates, reducedStates)) {
+      result.add(wrappedReducers.get(i++).getVariableExpandedState(p.getFirst(), pReducedContext, p.getSecond()));
+    }
+    return new CompositeState(result);
+  }
+
+  @Override
+  protected Object getHashCodeForState0(
+      CompositeState pElementKey, CompositePrecision pPrecisionKey) {
+
+    List<AbstractState> elements = pElementKey.getWrappedStates();
+    List<Precision> precisions = pPrecisionKey.getWrappedPrecisions();
 
     List<Object> result = new ArrayList<>(elements.size());
     int i = 0;
@@ -87,22 +120,8 @@ public class CompositeReducer implements Reducer {
   }
 
   @Override
-  public Object getHashCodeForState(AbstractState pElementKey) {
-
-    List<AbstractState> elements = ((CompositeState)pElementKey).getWrappedStates();
-
-    List<Object> result = new ArrayList<>(elements.size());
-    int i = 0;
-    for (AbstractState e : elements) {
-      result.add(wrappedReducers.get(i++).getHashCodeForState(e));
-    }
-    return result;
-  }
-
-  @Override
-  public Precision getVariableReducedPrecision(Precision pPrecision,
-      Block pContext) {
-    List<Precision> precisions = ((CompositePrecision)pPrecision).getPrecisions();
+  protected Precision getVariableReducedPrecision0(CompositePrecision pPrecision, Block pContext) {
+    List<Precision> precisions = pPrecision.getWrappedPrecisions();
     List<Precision> result = new ArrayList<>(precisions.size());
 
     int i = 0;
@@ -114,9 +133,10 @@ public class CompositeReducer implements Reducer {
   }
 
   @Override
-  public Precision getVariableExpandedPrecision(Precision pRootPrecision, Block pRootContext, Precision pReducedPrecision) {
-    List<Precision> rootPrecisions = ((CompositePrecision)pRootPrecision).getPrecisions();
-    List<Precision> reducedPrecisions = ((CompositePrecision)pReducedPrecision).getPrecisions();
+  protected CompositePrecision getVariableExpandedPrecision0(
+      CompositePrecision pRootPrecision, Block pRootContext, CompositePrecision pReducedPrecision) {
+    List<Precision> rootPrecisions = pRootPrecision.getWrappedPrecisions();
+    List<Precision> reducedPrecisions = pReducedPrecision.getWrappedPrecisions();
     List<Precision> result = new ArrayList<>(rootPrecisions.size());
 
     int i = 0;
@@ -129,9 +149,10 @@ public class CompositeReducer implements Reducer {
   }
 
   @Override
-  public int measurePrecisionDifference(Precision pPrecision, Precision pOtherPrecision) {
-    List<Precision> precisions = ((CompositePrecision)pPrecision).getPrecisions();
-    List<Precision> otherPrecisions = ((CompositePrecision)pOtherPrecision).getPrecisions();
+  protected int measurePrecisionDifference0(
+      CompositePrecision pPrecision, CompositePrecision pOtherPrecision) {
+    List<Precision> precisions = pPrecision.getWrappedPrecisions();
+    List<Precision> otherPrecisions = pOtherPrecision.getWrappedPrecisions();
 
     int i = 0;
     int sum = 0;
@@ -144,21 +165,23 @@ public class CompositeReducer implements Reducer {
   }
 
   @Override
-  public AbstractState getVariableReducedStateForProofChecking(AbstractState pExpandedState, Block pContext,
-      CFANode pCallNode) {
+  protected CompositeState getVariableReducedStateForProofChecking0(
+      CompositeState pExpandedState, Block pContext, CFANode pCallNode)
+      throws InterruptedException {
     List<AbstractState> result = new ArrayList<>();
     int i = 0;
-    for (AbstractState expandedState : ((CompositeState)pExpandedState).getWrappedStates()) {
+    for (AbstractState expandedState : pExpandedState.getWrappedStates()) {
       result.add(wrappedReducers.get(i++).getVariableReducedStateForProofChecking(expandedState, pContext, pCallNode));
     }
     return new CompositeState(result);
   }
 
   @Override
-  public AbstractState getVariableExpandedStateForProofChecking(AbstractState pRootState, Block pReducedContext,
-      AbstractState pReducedState) {
-    List<AbstractState> rootStates = ((CompositeState)pRootState).getWrappedStates();
-    List<AbstractState> reducedStates = ((CompositeState)pReducedState).getWrappedStates();
+  protected CompositeState getVariableExpandedStateForProofChecking0(
+      CompositeState pRootState, Block pReducedContext, CompositeState pReducedState)
+      throws InterruptedException {
+    List<AbstractState> rootStates = pRootState.getWrappedStates();
+    List<AbstractState> reducedStates = pReducedState.getWrappedStates();
 
     List<AbstractState> result = new ArrayList<>();
     int i = 0;
@@ -169,11 +192,14 @@ public class CompositeReducer implements Reducer {
   }
 
   @Override
-  public AbstractState rebuildStateAfterFunctionCall(AbstractState pRootState, AbstractState pEntryState,
-      AbstractState pExpandedState, FunctionExitNode exitLocation) {
-    List<AbstractState> rootStates = ((CompositeState)pRootState).getWrappedStates();
-    List<AbstractState> entryStates = ((CompositeState)pEntryState).getWrappedStates();
-    List<AbstractState> expandedStates = ((CompositeState)pExpandedState).getWrappedStates();
+  protected CompositeState rebuildStateAfterFunctionCall0(
+      CompositeState pRootState,
+      CompositeState pEntryState,
+      CompositeState pExpandedState,
+      FunctionExitNode exitLocation) {
+    List<AbstractState> rootStates = pRootState.getWrappedStates();
+    List<AbstractState> entryStates = pEntryState.getWrappedStates();
+    List<AbstractState> expandedStates = pExpandedState.getWrappedStates();
 
     List<AbstractState> results = new ArrayList<>();
     for (int i = 0; i < rootStates.size(); i++) {

@@ -23,10 +23,11 @@
  */
 package org.sosy_lab.cpachecker.core.algorithm.invariants;
 
-import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.core.reachedset.AggregatedReachedSets;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
-import org.sosy_lab.cpachecker.exceptions.UnrecognizedCodeException;
+import org.sosy_lab.cpachecker.util.predicates.invariants.ExpressionTreeInvariantSupplier;
+import org.sosy_lab.cpachecker.util.predicates.invariants.FormulaInvariantsSupplier;
 
 
 /**
@@ -46,6 +47,14 @@ import org.sosy_lab.cpachecker.exceptions.UnrecognizedCodeException;
 public interface InvariantGenerator {
 
   /**
+   * Checks if the invariant generator has already been started.
+   *
+   * @return {@code true} if the invariant generator has already been started,
+   * {@code false} otherwise.
+   */
+  boolean isStarted();
+
+  /**
    * Prepare invariant generation, and optionally start the algorithm.
    * May be called only once.
    */
@@ -58,7 +67,9 @@ public interface InvariantGenerator {
   void cancel();
 
   /**
-   * Retrieve the generated invariant.
+   * Retrieve the generated {@link AggregatedReachedSets} object. It can be used to extract invariants
+   * by e.g. using {@link FormulaInvariantsSupplier} or {@link ExpressionTreeInvariantSupplier}.
+   *
    * Can be called only after {@link #start(CFANode)} was called.
    *
    * Depending on the invariant generator, this method may either block
@@ -68,7 +79,7 @@ public interface InvariantGenerator {
    * @throws CPAException If the invariant generation failed.
    * @throws InterruptedException If the invariant generation was interrupted.
    */
-  InvariantSupplier get() throws CPAException, InterruptedException;
+  AggregatedReachedSets get() throws CPAException, InterruptedException;
 
   /**
    * Return whether the invariant generation has already proved
@@ -77,14 +88,4 @@ public interface InvariantGenerator {
    */
   boolean isProgramSafe();
 
-  /**
-   * Add a specific invariant that is guaranteed to hold to the set of facts
-   * this invariant generator may return.
-   * Note that it is not guaranteed that the invariant returned
-   * by a call to {@link #get()} includes or implies the injected invariant.
-   * @param pLocation The location where the invariant holds.
-   * @param pAssumption A guard that is guaranteed to hold at the given location.
-   * @throws UnrecognizedCodeException if a problem occurred during the injection.
-   */
-  void injectInvariant(CFANode pLocation, AssumeEdge pAssumption) throws UnrecognizedCodeException;
 }

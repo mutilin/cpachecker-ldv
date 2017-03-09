@@ -23,14 +23,16 @@
  */
 package org.sosy_lab.cpachecker.cfa;
 
+import com.google.common.collect.Lists;
 import java.io.IOException;
 import java.io.Writer;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
-
 import org.eclipse.cdt.core.parser.OffsetLimitReachedException;
 import org.eclipse.cdt.internal.core.parser.scanner.ILexerLog;
 import org.eclipse.cdt.internal.core.parser.scanner.Lexer;
@@ -41,17 +43,13 @@ import org.sosy_lab.common.configuration.FileOption;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
-import org.sosy_lab.common.io.Files;
-import org.sosy_lab.common.io.Path;
-import org.sosy_lab.common.io.Paths;
+import org.sosy_lab.common.io.MoreFiles;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.cfa.ast.c.CAstNode;
 import org.sosy_lab.cpachecker.cfa.parser.Scope;
 import org.sosy_lab.cpachecker.exceptions.CParserException;
 import org.sosy_lab.cpachecker.exceptions.ParserException;
-
-import com.google.common.collect.Lists;
 
 /**
  * Encapsulates a {@link CParser} instance and tokenizes all files first.
@@ -89,22 +87,18 @@ public class CParserWithLocationMapper implements CParser {
     readLineDirectives = pReadLineDirectives;
   }
 
-//  public static void main(String[] args) throws CParserException {
-//    String sourceFileName = args[0];
-//    CParserWithLocationExtractor t = new CParserWithLocationExtractor(null);
-//    StringBuilder tokenized = t.tokenizeSourcefile(sourceFileName);
-//    System.out.append(tokenized.toString());
-//  }
-
   @Override
-  public ParseResult parseFile(String pFilename, CSourceOriginMapping sourceOriginMapping) throws ParserException, IOException, InvalidConfigurationException, InterruptedException {
+  public ParseResult parseFile(String pFilename)
+      throws ParserException, IOException, InterruptedException {
+    CSourceOriginMapping sourceOriginMapping = new CSourceOriginMapping();
     String tokenizedCode = tokenizeSourcefile(pFilename, sourceOriginMapping);
-    return realParser.parseString(pFilename, tokenizedCode, sourceOriginMapping);
+    return realParser.parseString(
+        pFilename, tokenizedCode, sourceOriginMapping, CProgramScope.empty());
   }
 
   private String tokenizeSourcefile(String pFilename,
       CSourceOriginMapping sourceOriginMapping) throws CParserException, IOException {
-    String code = Paths.get(pFilename).asCharSource(Charset.defaultCharset()).read();
+    String code = MoreFiles.toString(Paths.get(pFilename), Charset.defaultCharset());
     return processCode(pFilename, code, sourceOriginMapping);
   }
 
@@ -122,7 +116,7 @@ public class CParserWithLocationMapper implements CParser {
       int relativeLineNumber = absoluteLineNumber;
 
       String rangeLinesOriginFilename = fileName;
-      int includeStartedWithAbsoluteLine = 0;
+      int includeStartedWithAbsoluteLine = 1;
 
       Token token;
       while ((token = lx.nextToken()).getType() != Token.tEND_OF_INPUT) {
@@ -182,7 +176,12 @@ public class CParserWithLocationMapper implements CParser {
       }
 
       if (readLineDirectives) {
-        sourceOriginMapping.mapInputLineRangeToDelta(fileName, rangeLinesOriginFilename, includeStartedWithAbsoluteLine + 1, absoluteLineNumber, relativeLineNumber - absoluteLineNumber);
+        sourceOriginMapping.mapInputLineRangeToDelta(
+            fileName,
+            rangeLinesOriginFilename,
+            includeStartedWithAbsoluteLine,
+            absoluteLineNumber + 1,
+            relativeLineNumber - absoluteLineNumber);
       }
     } catch (OffsetLimitReachedException e) {
       throw new CParserException("Tokenizing failed", e);
@@ -190,7 +189,8 @@ public class CParserWithLocationMapper implements CParser {
 
     String code = tokenizeCode ? tokenizedCode.toString() : pCode;
     if (tokenizeCode && dumpTokenizedProgramToFile != null) {
-      try (Writer out = Files.openOutputFile(dumpTokenizedProgramToFile, StandardCharsets.US_ASCII)) {
+      try (Writer out =
+          MoreFiles.openOutputFile(dumpTokenizedProgramToFile, StandardCharsets.US_ASCII)) {
         out.append(code);
       } catch (IOException e) {
         logger.logUserException(Level.WARNING, e, "Could not write tokenized program to file");
@@ -200,10 +200,12 @@ public class CParserWithLocationMapper implements CParser {
   }
 
   @Override
-  public ParseResult parseString(String pFilename, String pCode, CSourceOriginMapping sourceOriginMapping) throws ParserException, InvalidConfigurationException {
-    String tokenizedCode = processCode(pFilename, pCode, sourceOriginMapping);
+  public ParseResult parseString(
+      String pFilename, String pCode, CSourceOriginMapping pSourceOriginMapping, Scope pScope)
+      throws CParserException {
+    String tokenizedCode = processCode(pFilename, pCode, pSourceOriginMapping);
 
-    return realParser.parseString(pFilename, tokenizedCode, sourceOriginMapping);
+    return realParser.parseString(pFilename, tokenizedCode, pSourceOriginMapping, pScope);
   }
 
   @Override
@@ -217,23 +219,25 @@ public class CParserWithLocationMapper implements CParser {
   }
 
   @Override
-  public ParseResult parseFile(List<FileToParse> pFilenames, CSourceOriginMapping sourceOriginMapping) throws CParserException, IOException,
-      InvalidConfigurationException, InterruptedException {
+  public ParseResult parseFile(List<String> pFilenames)
+      throws CParserException, IOException, InterruptedException {
+    CSourceOriginMapping sourceOriginMapping = new CSourceOriginMapping();
 
     List<FileContentToParse> programFragments = new ArrayList<>(pFilenames.size());
-    for (FileToParse f : pFilenames) {
-      String programCode = tokenizeSourcefile(f.getFileName(), sourceOriginMapping);
+    for (String f : pFilenames) {
+      String programCode = tokenizeSourcefile(f, sourceOriginMapping);
       if (programCode.isEmpty()) {
         throw new CParserException("Tokenizer returned empty program");
       }
-      programFragments.add(new FileContentToParse(f.getFileName(), programCode));
+      programFragments.add(new FileContentToParse(f, programCode));
     }
     return realParser.parseString(programFragments, sourceOriginMapping);
   }
 
   @Override
-  public ParseResult parseString(List<FileContentToParse> pCode, CSourceOriginMapping sourceOriginMapping) throws CParserException,
-      InvalidConfigurationException {
+  public ParseResult parseString(
+      List<FileContentToParse> pCode, CSourceOriginMapping sourceOriginMapping)
+      throws CParserException {
 
     List<FileContentToParse> tokenizedFragments = new ArrayList<>(pCode.size());
     for (FileContentToParse f : pCode) {
@@ -248,12 +252,12 @@ public class CParserWithLocationMapper implements CParser {
   }
 
   @Override
-  public CAstNode parseSingleStatement(String pCode, Scope pScope) throws CParserException, InvalidConfigurationException {
+  public CAstNode parseSingleStatement(String pCode, Scope pScope) throws CParserException {
     return realParser.parseSingleStatement(pCode, pScope);
   }
 
   @Override
-  public List<CAstNode> parseStatements(String pCode, Scope pScope) throws CParserException, InvalidConfigurationException {
+  public List<CAstNode> parseStatements(String pCode, Scope pScope) throws CParserException {
     return realParser.parseStatements(pCode, pScope);
   }
 }

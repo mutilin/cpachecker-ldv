@@ -23,9 +23,7 @@
  */
 package org.sosy_lab.cpachecker.cpa.functionpointer;
 
-import java.util.Collection;
-import java.util.List;
-import java.util.logging.Level;
+import com.google.common.collect.ImmutableSet;
 
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
@@ -66,7 +64,6 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CVariableDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.DefaultCExpressionVisitor;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdgeType;
-import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
@@ -88,8 +85,10 @@ import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCCodeException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCFAEdgeException;
 
-import com.google.common.base.Optional;
-import com.google.common.collect.ImmutableSet;
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
+import java.util.logging.Level;
 
 @Options(prefix="cpa.functionpointer")
 class FunctionPointerTransferRelation extends SingleEdgeTransferRelation {
@@ -185,10 +184,12 @@ class FunctionPointerTransferRelation extends SingleEdgeTransferRelation {
             }
           }
           if (a.getTruthAssumption()
-              && (cfaEdge.getSuccessor().getNumLeavingEdges() > 0
-                  && cfaEdge.getSuccessor().getLeavingEdge(0).getEdgeType() == CFAEdgeType.FunctionCallEdge
-                  || cfaEdge.getSuccessor().getNumLeavingEdges() > 1
-                  && cfaEdge.getSuccessor().getLeavingEdge(1).getEdgeType() == CFAEdgeType.FunctionCallEdge)) {
+              && ((cfaEdge.getSuccessor().getNumLeavingEdges() > 0
+                      && cfaEdge.getSuccessor().getLeavingEdge(0).getEdgeType()
+                          == CFAEdgeType.FunctionCallEdge)
+                  || (cfaEdge.getSuccessor().getNumLeavingEdges() > 1
+                      && cfaEdge.getSuccessor().getLeavingEdge(1).getEdgeType()
+                          == CFAEdgeType.FunctionCallEdge))) {
 
             // This AssumedEdge has probably been created by converting a
             // function pointer call into a series of if-else-if-else edges,
@@ -323,13 +324,6 @@ class FunctionPointerTransferRelation extends SingleEdgeTransferRelation {
       // nothing to do.
       case BlankEdge:
       case CallToReturnEdge: {
-        break;
-      }
-
-      case MultiEdge: {
-        for (CFAEdge currentEdge : ((MultiEdge)pCfaEdge).getEdges()) {
-          handleEdge(newState, currentEdge);
-        }
         break;
       }
 
@@ -609,14 +603,5 @@ class FunctionPointerTransferRelation extends SingleEdgeTransferRelation {
     String name = ((CIdExpression)exp.getArrayExpression()).getDeclaration().getQualifiedName();
     name += "[" + exp.getSubscriptExpression().toASTString() + "]";
     return name;
-  }
-
-  @Override
-  public Collection<? extends AbstractState> strengthen(
-      AbstractState pElement, List<AbstractState> pOtherElements,
-      CFAEdge pCfaEdge, Precision pPrecision) {
-    // in this method we could access the abstract domains of other CPAs
-    // if required.
-    return null;
   }
 }

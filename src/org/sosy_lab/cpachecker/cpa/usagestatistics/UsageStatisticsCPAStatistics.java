@@ -25,31 +25,31 @@ package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
 import static com.google.common.collect.FluentIterable.from;
 
+import com.google.common.collect.Sets;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.Writer;
+import java.nio.charset.Charset;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.logging.Level;
-
 import javax.xml.parsers.ParserConfigurationException;
-
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.FileOption;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
-import org.sosy_lab.common.io.Files;
-import org.sosy_lab.common.io.Path;
-import org.sosy_lab.common.io.Paths;
+import org.sosy_lab.common.io.MoreFiles;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.cfa.Language;
@@ -65,12 +65,13 @@ import org.sosy_lab.cpachecker.cfa.model.c.CReturnStatementEdge;
 import org.sosy_lab.cpachecker.cfa.types.MachineModel;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
-import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
+import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.arg.ARGUtils;
-import org.sosy_lab.cpachecker.cpa.bam.BAMCEXSubgraphComputer.BackwardARGState;
 import org.sosy_lab.cpachecker.cpa.bam.BAMMultipleCEXSubgraphComputer;
+import org.sosy_lab.cpachecker.cpa.bam.BAMSubgraphComputer.BackwardARGState;
+import org.sosy_lab.cpachecker.cpa.bam.BAMSubgraphComputer.MissingBlockException;
 import org.sosy_lab.cpachecker.cpa.bam.BAMTransferRelation;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsState;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsTransferRelation;
@@ -84,22 +85,19 @@ import org.sosy_lab.cpachecker.cpa.usagestatistics.storage.UsagePoint;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Pair;
-import org.sosy_lab.cpachecker.util.SourceLocationMapper;
-import org.sosy_lab.cpachecker.util.automaton.AutomatonGraphmlCommon;
 import org.sosy_lab.cpachecker.util.automaton.AutomatonGraphmlCommon.AssumeCase;
 import org.sosy_lab.cpachecker.util.automaton.AutomatonGraphmlCommon.GraphMlBuilder;
-import org.sosy_lab.cpachecker.util.automaton.AutomatonGraphmlCommon.GraphType;
 import org.sosy_lab.cpachecker.util.automaton.AutomatonGraphmlCommon.KeyDef;
 import org.sosy_lab.cpachecker.util.automaton.AutomatonGraphmlCommon.NodeFlag;
 import org.sosy_lab.cpachecker.util.automaton.AutomatonGraphmlCommon.NodeType;
+import org.sosy_lab.cpachecker.util.automaton.AutomatonGraphmlCommon.WitnessType;
+import org.sosy_lab.cpachecker.util.automaton.VerificationTaskMetaData;
 import org.sosy_lab.cpachecker.util.identifiers.GlobalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.LocalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.StructureFieldIdentifier;
+import org.w3c.dom.DOMException;
 import org.w3c.dom.Element;
-
-import com.google.common.base.Predicate;
-import com.google.common.collect.Sets;
 
 @Options(prefix="cpa.usagestatistics")
 public class UsageStatisticsCPAStatistics implements Statistics {
@@ -153,6 +151,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   private BAMTransferRelation transfer;
   private UnsafeDetector detector;
   private final LockStatisticsTransferRelation lockTransfer;
+  private final Configuration config;
 
   public final Timer transferRelationTimer = new Timer();
   public final Timer printStatisticsTimer = new Timer();
@@ -164,8 +163,8 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     pConfig.inject(this);
     logger = pLogger;
     lockTransfer = lTransfer;
-    //I don't know any normal way to know the output directory
-    outputSuffix = outputStatFileName.getAbsolutePath().replace(outputStatFileName.getName(), "");
+    config = pConfig;
+    outputSuffix = outputStatFileName.toAbsolutePath().getParent().toString();
   }
 
   private void resetAllCounters() {
@@ -322,7 +321,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       assert outputFileType == OutputFileType.MULTIPLE_FILES;
       //Special format for Multi error traces in LDV
       Path currentPath = Paths.get(outputSuffix + "ErrorPath." + createUniqueName(id) + ".txt");
-      writer = Files.openOutputFile(currentPath);
+      writer = Files.newBufferedWriter(currentPath, StandardOpenOption.WRITE);
     }
     if (isTrueUnsafe) {
     	trueUnsafes++;
@@ -360,16 +359,18 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     assert usage.getKeyState() != null;
 
     Set<List<Integer>> emptySet = Collections.emptySet();
-    Map<ARGState, ARGState> pathToARG = new HashMap<>();
-    BAMMultipleCEXSubgraphComputer subgraphComputer = transfer.createBAMMultipleSubgraphComputer(pathToARG);
+    BAMMultipleCEXSubgraphComputer subgraphComputer = transfer.createBAMMultipleSubgraphComputer();
     ARGState target = (ARGState)usage.getKeyState();
     BackwardARGState newTreeTarget = new BackwardARGState(target);
-    pathToARG.put(newTreeTarget, target);
     ARGState root;
-    root = subgraphComputer.findPath(newTreeTarget, emptySet);
-    ARGPath path = ARGUtils.getRandomPath(root);
-    //path is transformed internally
-    usage.resetKeyState(path.getInnerEdges());
+    try {
+      root = subgraphComputer.findPath(newTreeTarget, emptySet);
+      ARGPath path = ARGUtils.getRandomPath(root);
+      //path is transformed internally
+      usage.resetKeyState(path.getInnerEdges());
+    } catch (MissingBlockException | InterruptedException e) {
+      e.printStackTrace();
+    }
   }
 
   int globalCounter = 0;
@@ -388,46 +389,24 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
     secondPath = secondUsage.getPath();
 
+    if (firstPath == null || secondPath == null) {
+      return;
+    }
     Writer w;
+    String nextId, currentId = getId();
     try {
       File name = new File("output/witness." + createUniqueName(pId) + ".graphml");
-      w = Files.openOutputFile(Paths.get(name.getAbsolutePath()));
-      GraphMlBuilder builder = new GraphMlBuilder(w);
+      w = Files.newBufferedWriter(Paths.get(name.getAbsolutePath()), StandardOpenOption.WRITE);
+      String defaultSourcefileName = firstPath.get(0).getFileLocation().getFileName();
 
-
-      builder.appendDocHeader();
-      builder.appendNewKeyDef(KeyDef.ASSUMPTION, null);
-      builder.appendNewKeyDef(KeyDef.SOURCECODE, null);
-      builder.appendNewKeyDef(KeyDef.SOURCECODELANGUAGE, null);
-      builder.appendNewKeyDef(KeyDef.CONTROLCASE, null);
-      builder.appendNewKeyDef(KeyDef.ORIGINLINE, null);
-      String defaultSourcefileName = SourceLocationMapper.getFileLocationsFromCfaEdge(firstPath.get(0)).iterator().next().getFileName();
-      assert defaultSourcefileName != null;
-      builder.appendNewKeyDef(KeyDef.ORIGINFILE, defaultSourcefileName);
-      builder.appendNewKeyDef(KeyDef.NODETYPE, AutomatonGraphmlCommon.defaultNodeType.text);
-      for (NodeFlag f : NodeFlag.values()) {
-        builder.appendNewKeyDef(f.key, "false");
-      }
-
-      builder.appendNewKeyDef(KeyDef.FUNCTIONENTRY, null);
-      builder.appendNewKeyDef(KeyDef.FUNCTIONEXIT, null);
-      builder.appendGraphHeader(GraphType.ERROR_WITNESS, Language.C, new HashSet<String>(), "", "", MachineModel.LINUX64);
-      String currentId, nextId;
-      currentId = getId();
-      Element start = builder.createNodeElement(currentId, NodeType.ONPATH);
-      builder.addDataElementChild(start, NodeFlag.ISENTRY.key, "true");
-      builder.appendToAppendable(start);
+      GraphMlBuilder builder = new GraphMlBuilder(WitnessType.VIOLATION_WITNESS, defaultSourcefileName, Language.C,
+          MachineModel.LINUX64, new VerificationTaskMetaData(config, Optional.empty()));
 
       nextId = currentId;
 
       Iterator<CFAEdge> iterator;// = firstPath.iterator();
       iterator = from(firstPath)
-                 .filter(new Predicate<CFAEdge>() {
-                   @Override
-                    public boolean apply(CFAEdge pArg0) {
-                      return !SourceLocationMapper.getFileLocationsFromCfaEdge(pArg0).isEmpty();
-                    }
-                  })
+                 .filter(e -> e.getFileLocation()!= null)
                  .iterator();
       Element result = null;
 
@@ -444,17 +423,10 @@ public class UsageStatisticsCPAStatistics implements Statistics {
           }
           result = prepareElement(builder, currentId, nextId, pEdge, defaultSourcefileName, "0", warningMessage);
         } while (result == null && iterator.hasNext());
-
-        builder.appendToAppendable(result);
       }
 
       iterator = from(secondPath)
-          .filter(new Predicate<CFAEdge>() {
-            @Override
-             public boolean apply(CFAEdge pArg0) {
-               return !SourceLocationMapper.getFileLocationsFromCfaEdge(pArg0).isEmpty();
-             }
-           })
+          .filter(e -> e.getFileLocation()!= null)
           .iterator();
       while (iterator.hasNext()) {
         currentId = nextId;
@@ -473,16 +445,18 @@ public class UsageStatisticsCPAStatistics implements Statistics {
         if (!iterator.hasNext()) {
           builder.addDataElementChild(result, NodeFlag.ISVIOLATION.key, "true");
         }
-
-        builder.appendToAppendable(result);
       }
 
-      builder.appendFooter();
+      MoreFiles.writeFile(name.toPath(), Charset.defaultCharset(), builder);
       w.close();
     } catch (IOException e) {
       e.printStackTrace();
     } catch (ParserConfigurationException e) {
       e.printStackTrace();
+    } catch (DOMException e1) {
+      e1.printStackTrace();
+    } catch (InvalidConfigurationException e1) {
+      e1.printStackTrace();
     }
 
   }
@@ -512,16 +486,15 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       builder.addDataElementChild(result, KeyDef.CONTROLCASE, assumeCase.toString());
     }
 
-    Set<FileLocation> locations = SourceLocationMapper.getFileLocationsFromCfaEdge(pEdge);
-    if (locations.size() > 0) {
-      FileLocation l = locations.iterator().next();
-      if (!l.getFileName().equals(defaultSourcefileName)) {
-        builder.addDataElementChild(result, KeyDef.ORIGINFILE, l.getFileName());
+    FileLocation location = pEdge.getFileLocation();
+    if (location != null) {
+      if (!location.getFileName().equals(defaultSourcefileName)) {
+        builder.addDataElementChild(result, KeyDef.ORIGINFILE, location.getFileName());
       } else {
         builder.addDataElementChild(result, KeyDef.ORIGINFILE, defaultSourcefileName);
       }
-      builder.addDataElementChild(result, KeyDef.ORIGINLINE, Integer.toString(l.getStartingLineInOrigin()));
-      builder.addDataElementChild(result, KeyDef.OFFSET, Integer.toString(l.getNodeOffset()));
+      builder.addDataElementChild(result, KeyDef.STARTLINE, Integer.toString(location.getStartingLineInOrigin()));
+      builder.addDataElementChild(result, KeyDef.OFFSET, Integer.toString(location.getNodeOffset()));
     } else {
       return null;
     }
@@ -530,18 +503,16 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       builder.addDataElementChild(result, KeyDef.SOURCECODE, pEdge.getRawStatement());
     }
 
-    builder.addDataElementChild(result, KeyDef.THREADIDENTIFIER, ThreadNum);
+    builder.addDataElementChild(result, KeyDef.THREADID, ThreadNum);
 
     if (!warningMessage.isEmpty()) {
       builder.addDataElementChild(result, KeyDef.WARNING, warningMessage);
     }
 
-    builder.appendToAppendable(result);
-
     return builder.createNodeElement(nextId, NodeType.ONPATH);
   }
 
-  public void printUnsafeRawdata(final ReachedSet reached) {
+  public void printUnsafeRawdata(final UnmodifiableReachedSet reached) {
     try {
       printStatisticsTimer.start();
       ARGState firstState = AbstractStates.extractStateByType(reached.getFirstState(), ARGState.class);
@@ -560,7 +531,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       Writer writer = null;
       try {
         if (outputFileType == OutputFileType.SINGLE_FILE) {
-          writer = Files.openOutputFile(outputStatFileName);
+          writer = Files.newBufferedWriter(outputStatFileName, StandardOpenOption.WRITE);
           logger.log(Level.FINE, "Print statistics about unsafe cases");
           printCountStatistics(writer, container.getUnsafeIterator());
         }
@@ -595,7 +566,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
         if (falseUnsafes.size() > 0) {
           try {
-            writer = Files.openOutputFile(outputFalseUnsafes);
+            writer = Files.newBufferedWriter(outputFalseUnsafes, StandardOpenOption.WRITE);
             logger.log(Level.FINE, "Print statistics about false unsafes");
             for (SingleIdentifier id : falseUnsafes) {
               writer.append(createUniqueName(id) + "\n");
@@ -612,7 +583,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   }
 
   @Override
-  public void printStatistics(final PrintStream out, final Result result, final ReachedSet reached) {
+  public void printStatistics(final PrintStream out, final Result result, final UnmodifiableReachedSet reached) {
     resetAllCounters();
     //should be the first, as it set the container
     printUnsafeRawdata(reached);

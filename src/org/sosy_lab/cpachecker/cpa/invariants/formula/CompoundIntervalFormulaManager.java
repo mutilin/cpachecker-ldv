@@ -23,6 +23,7 @@
  */
 package org.sosy_lab.cpachecker.cpa.invariants.formula;
 
+import com.google.common.collect.FluentIterable;
 import java.math.BigInteger;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -32,19 +33,18 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Queue;
 import java.util.Set;
-
 import org.sosy_lab.cpachecker.cpa.invariants.BitVectorInfo;
-import org.sosy_lab.cpachecker.cpa.invariants.BitVectorType;
 import org.sosy_lab.cpachecker.cpa.invariants.CompoundInterval;
 import org.sosy_lab.cpachecker.cpa.invariants.CompoundIntervalManager;
 import org.sosy_lab.cpachecker.cpa.invariants.CompoundIntervalManagerFactory;
 import org.sosy_lab.cpachecker.cpa.invariants.NonRecursiveEnvironment;
 import org.sosy_lab.cpachecker.cpa.invariants.NonRecursiveEnvironment.Builder;
+import org.sosy_lab.cpachecker.cpa.invariants.TypeInfo;
+import org.sosy_lab.cpachecker.cpa.invariants.Typed;
 import org.sosy_lab.cpachecker.util.states.MemoryLocation;
-
-import com.google.common.collect.FluentIterable;
 
 
 public class CompoundIntervalFormulaManager {
@@ -71,6 +71,29 @@ public class CompoundIntervalFormulaManager {
     this.partialEvaluator = new PartialEvaluator(compoundIntervalManagerFactory, this);
   }
 
+  CompoundIntervalManagerFactory getCompoundIntervalManagerFactory() {
+    return compoundIntervalManagerFactory;
+  }
+
+  @Override
+  public boolean equals(Object pObj) {
+    if (this == pObj) {
+      return true;
+    }
+    if (pObj instanceof CompoundIntervalFormulaManager) {
+      CompoundIntervalFormulaManager other = (CompoundIntervalFormulaManager) pObj;
+      return compoundIntervalManagerFactory.equals(other.compoundIntervalManagerFactory)
+          && evaluationVisitor.equals(other.evaluationVisitor)
+          && partialEvaluator.equals(other.partialEvaluator);
+    }
+    return false;
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(compoundIntervalManagerFactory, evaluationVisitor, partialEvaluator);
+  }
+
   public static Set<MemoryLocation> collectVariableNames(NumeralFormula<CompoundInterval> pFormula) {
     return pFormula.accept(COLLECT_VARS_VISITOR);
   }
@@ -79,12 +102,23 @@ public class CompoundIntervalFormulaManager {
     return pFormula.accept(COLLECT_VARS_VISITOR);
   }
 
-  public CompoundInterval evaluate(NumeralFormula<CompoundInterval> pFormula) {
-    return pFormula.accept(evaluationVisitor, EMPTY_ENVIRONMENT);
+  private CompoundInterval evaluate(NumeralFormula<CompoundInterval> pFormula) {
+    return evaluate(pFormula, false);
   }
 
-  public boolean isDefinitelyTrue(NumeralFormula<CompoundInterval> pFormula) {
-    if (evaluate(pFormula).isDefinitelyTrue()) {
+  private CompoundInterval evaluate(NumeralFormula<CompoundInterval> pFormula, boolean pDisableOverflowCheck) {
+    return pFormula.accept(getEvaluationVisitor(pDisableOverflowCheck), EMPTY_ENVIRONMENT);
+  }
+
+  private FormulaEvaluationVisitor<CompoundInterval> getEvaluationVisitor(boolean pDisableOverflowCheck) {
+    if (pDisableOverflowCheck) {
+      return new FormulaCompoundStateEvaluationVisitor(compoundIntervalManagerFactory, false);
+    }
+    return evaluationVisitor;
+  }
+
+  private boolean isDefinitelyTrue(NumeralFormula<CompoundInterval> pFormula) {
+    if (evaluate(pFormula, true).isDefinitelyTrue()) {
       return true;
     }
     return isDefinitelyTrue(fromNumeral(pFormula));
@@ -92,11 +126,11 @@ public class CompoundIntervalFormulaManager {
 
   private boolean isDefinitelyTrue(BooleanFormula<CompoundInterval> pFormula) {
     return BooleanConstant.isTrue(pFormula)
-        || definitelyImplies(Collections.<BooleanFormula<CompoundInterval>>singleton(BooleanConstant.<CompoundInterval>getTrue()), pFormula);
+        || definitelyImplies(Collections.<BooleanFormula<CompoundInterval>>singleton(BooleanConstant.<CompoundInterval>getTrue()), pFormula, true);
   }
 
-  public boolean isDefinitelyFalse(NumeralFormula<CompoundInterval> pFormula) {
-    return evaluate(pFormula).isDefinitelyFalse();
+  private boolean isDefinitelyFalse(NumeralFormula<CompoundInterval> pFormula) {
+    return evaluate(pFormula, true).isDefinitelyFalse();
   }
 
   private boolean isDefinitelyFalse(BooleanFormula<CompoundInterval> pFormula) {
@@ -105,7 +139,7 @@ public class CompoundIntervalFormulaManager {
   }
 
   public boolean isDefinitelyBottom(NumeralFormula<CompoundInterval> pFormula) {
-    return evaluate(pFormula).isBottom();
+    return evaluate(pFormula, true).isBottom();
   }
 
   public boolean containsAllPossibleValues(NumeralFormula<CompoundInterval> pFormula) {
@@ -114,15 +148,19 @@ public class CompoundIntervalFormulaManager {
   }
 
   public boolean definitelyImplies(Iterable<BooleanFormula<CompoundInterval>> pFormulas, BooleanFormula<CompoundInterval> pFormula) {
-    return definitelyImplies(pFormulas, pFormula, new HashMap<MemoryLocation, NumeralFormula<CompoundInterval>>());
+    return definitelyImplies(pFormulas, pFormula, new HashMap<>(), false);
   }
 
-  public boolean definitelyImplies(Iterable<BooleanFormula<CompoundInterval>> pFormulas, BooleanFormula<CompoundInterval> pFormula, Map<MemoryLocation, NumeralFormula<CompoundInterval>> pBaseEnvironment) {
+  private boolean definitelyImplies(Iterable<BooleanFormula<CompoundInterval>> pFormulas, BooleanFormula<CompoundInterval> pFormula, boolean pOverflowCheck) {
+    return definitelyImplies(pFormulas, pFormula, new HashMap<>(), pOverflowCheck);
+  }
+
+  private boolean definitelyImplies(Iterable<BooleanFormula<CompoundInterval>> pFormulas, BooleanFormula<CompoundInterval> pFormula, Map<MemoryLocation, NumeralFormula<CompoundInterval>> pBaseEnvironment, boolean pDisableOverflowCheck) {
     Map<MemoryLocation, NumeralFormula<CompoundInterval>> newMap = new HashMap<>(pBaseEnvironment);
     if (pFormula instanceof Collection<?>) {
-      return definitelyImplies((Collection<BooleanFormula<CompoundInterval>>) pFormulas, pFormula, true, newMap, false);
+      return definitelyImplies((Collection<BooleanFormula<CompoundInterval>>) pFormulas, pFormula, true, newMap, false, pDisableOverflowCheck);
     }
-    return definitelyImplies(FluentIterable.from(pFormulas).toSet(), pFormula, true, newMap, false);
+    return definitelyImplies(FluentIterable.from(pFormulas).toSet(), pFormula, true, newMap, false, pDisableOverflowCheck);
   }
 
   /**
@@ -143,13 +181,13 @@ public class CompoundIntervalFormulaManager {
    * @return {@code true} if the information base definitely implies the given
    * formula.
    */
-  private boolean definitelyImplies(Collection<BooleanFormula<CompoundInterval>> pInformationBaseFormulas, BooleanFormula<CompoundInterval> pFormula, boolean pExtend, Map<MemoryLocation, NumeralFormula<CompoundInterval>> pInformationBaseEnvironment, boolean pEnvironmentComplete) {
+  private boolean definitelyImplies(Collection<BooleanFormula<CompoundInterval>> pInformationBaseFormulas, BooleanFormula<CompoundInterval> pFormula, boolean pExtend, Map<MemoryLocation, NumeralFormula<CompoundInterval>> pInformationBaseEnvironment, boolean pEnvironmentComplete, boolean pDisableOverflowCheck) {
     final Collection<BooleanFormula<CompoundInterval>> formulas;
     if (pExtend) {
       formulas = new HashSet<>();
       for (BooleanFormula<CompoundInterval> formula : pInformationBaseFormulas) {
         for (BooleanFormula<CompoundInterval> f : formula.accept(SPLIT_CONJUNCTIONS_VISITOR)) {
-          formulas.add(f.accept(partialEvaluator, evaluationVisitor));
+          formulas.add(f.accept(partialEvaluator, getEvaluationVisitor(pDisableOverflowCheck)));
         }
       }
     } else {
@@ -166,7 +204,7 @@ public class CompoundIntervalFormulaManager {
         for (BooleanFormula<CompoundInterval> disjunctivePart : disjunctions) {
           Collection<BooleanFormula<CompoundInterval>> conjunctivePartsOfDisjunctivePart = disjunctivePart.accept(SPLIT_CONJUNCTIONS_VISITOR);
           newFormulas.addAll(conjunctivePartsOfDisjunctivePart);
-          if (!definitelyImplies(newFormulas, pFormula, false, newBaseEnvironment, false)) {
+          if (!definitelyImplies(newFormulas, pFormula, false, newBaseEnvironment, false, pDisableOverflowCheck)) {
             return false;
           }
           newFormulas.removeAll(conjunctivePartsOfDisjunctivePart);
@@ -186,17 +224,18 @@ public class CompoundIntervalFormulaManager {
       }
     }
 
-    return definitelyImplies(formulas, tmpEnvironment, pFormula);
+    return definitelyImplies(formulas, tmpEnvironment, pFormula, pDisableOverflowCheck);
   }
 
   public boolean definitelyImplies(final Map<MemoryLocation, NumeralFormula<CompoundInterval>> pCompleteEnvironment,
       final BooleanFormula<CompoundInterval> pFormula) {
-    return definitelyImplies(Collections.<BooleanFormula<CompoundInterval>>emptyList(), pCompleteEnvironment, pFormula);
+    return definitelyImplies(Collections.<BooleanFormula<CompoundInterval>>emptyList(), pCompleteEnvironment, pFormula, false);
   }
 
   private boolean definitelyImplies(final Collection<BooleanFormula<CompoundInterval>> pExtendedFormulas,
       final Map<MemoryLocation, NumeralFormula<CompoundInterval>> pCompleteEnvironment,
-      final BooleanFormula<CompoundInterval> pFormula) {
+      final BooleanFormula<CompoundInterval> pFormula,
+      final boolean pDisableOverflowCheck) {
 
     /*
      * Imagine this function is sound, which it should be.
@@ -220,6 +259,7 @@ public class CompoundIntervalFormulaManager {
      * so we can only decide the truth if we know that the sets do not overlap or are both singletons.
      */
 
+    FormulaEvaluationVisitor<CompoundInterval> evaluationVisitor = getEvaluationVisitor(pDisableOverflowCheck);
     PartialEvaluator variableResolver = new PartialEvaluator(compoundIntervalManagerFactory, pCompleteEnvironment);
     Builder impliedEnvironment = NonRecursiveEnvironment.Builder.of(compoundIntervalManagerFactory, EMPTY_ENVIRONMENT);
 
@@ -230,7 +270,7 @@ public class CompoundIntervalFormulaManager {
         Collection<BooleanFormula<CompoundInterval>> disjunctions = formulaAtom.accept(SPLIT_DISJUNCTIONS_VISITOR);
         if (disjunctions.size() > 1) {
           for (BooleanFormula<CompoundInterval> disjunctionPart : disjunctions) {
-            if (definitelyImplies(pExtendedFormulas, disjunctionPart, false, pCompleteEnvironment, true)) {
+            if (definitelyImplies(pExtendedFormulas, disjunctionPart, false, pCompleteEnvironment, true, pDisableOverflowCheck)) {
               continue outer;
             }
           }
@@ -255,7 +295,8 @@ public class CompoundIntervalFormulaManager {
           if (op1.accept(stateEqualsVisitor, op2)) {
             continue;
           }
-          CompoundIntervalManager cim = compoundIntervalManagerFactory.createCompoundIntervalManager(op1.getBitVectorInfo());
+          CompoundIntervalManager cim =
+              compoundIntervalManagerFactory.createCompoundIntervalManager(op1.getTypeInfo());
           CompoundInterval leftEval = op1.accept(evaluationVisitor, pCompleteEnvironment);
           CompoundInterval rightEval = op2.accept(evaluationVisitor, pCompleteEnvironment);
           if (!cim.doIntersect(leftEval, rightEval)) {
@@ -271,7 +312,8 @@ public class CompoundIntervalFormulaManager {
             if (op1.accept(stateEqualsVisitor, op2)) {
               return false;
             }
-            CompoundIntervalManager cim = compoundIntervalManagerFactory.createCompoundIntervalManager(op1.getBitVectorInfo());
+            CompoundIntervalManager cim =
+                compoundIntervalManagerFactory.createCompoundIntervalManager(op1.getTypeInfo());
             CompoundInterval leftEval = op1.accept(evaluationVisitor, pCompleteEnvironment);
             CompoundInterval rightEval = op2.accept(evaluationVisitor, pCompleteEnvironment);
             if (!cim.doIntersect(leftEval, rightEval)) {
@@ -307,8 +349,9 @@ public class CompoundIntervalFormulaManager {
               continue;
             }
             if (rightFormula instanceof Constant) {
-              BitVectorInfo bitVectorInfo = rightFormula.getBitVectorInfo();
-              CompoundIntervalManager cim = compoundIntervalManagerFactory.createCompoundIntervalManager(bitVectorInfo);
+              TypeInfo typeInfo = rightFormula.getTypeInfo();
+              CompoundIntervalManager cim =
+                  compoundIntervalManagerFactory.createCompoundIntervalManager(typeInfo);
               CompoundInterval leftValue = leftFormula == null ? cim.allPossibleValues() : leftFormula.accept(evaluationVisitor, pCompleteEnvironment);
               CompoundInterval rightValue = rightFormula.accept(evaluationVisitor, impliedEnvironment);
               if (cim.contains(rightValue, leftValue)) {
@@ -325,8 +368,13 @@ public class CompoundIntervalFormulaManager {
     return true;
   }
 
-  public boolean definitelyImplies(BooleanFormula<CompoundInterval> pFormula1, BooleanFormula<CompoundInterval> pFormula2) {
-    if (BooleanConstant.isFalse(pFormula1) || pFormula1.equals(pFormula2)) {
+  public boolean definitelyImplies(
+      BooleanFormula<CompoundInterval> pFormula1,
+      BooleanFormula<CompoundInterval> pFormula2,
+      boolean pDisableOverflowCheck) {
+    if (BooleanConstant.isFalse(pFormula1)
+        || pFormula1.equals(pFormula2)
+        || BooleanConstant.isTrue(pFormula2)) {
       return true;
     }
     if (pFormula1 instanceof Equal<?> && pFormula2 instanceof Equal<?>) {
@@ -349,8 +397,9 @@ public class CompoundIntervalFormulaManager {
           newValue = (((Constant<CompoundInterval>) p2.getOperand1()).getValue());
         }
         if (newValue != null) {
-          BitVectorInfo bitVectorInfo = p2.getOperand1().getBitVectorInfo();
-          CompoundIntervalManager cim = compoundIntervalManagerFactory.createCompoundIntervalManager(bitVectorInfo);
+          TypeInfo typeInfo = p2.getOperand1().getTypeInfo();
+          CompoundIntervalManager cim =
+              compoundIntervalManagerFactory.createCompoundIntervalManager(typeInfo);
           return cim.contains(newValue, value);
         }
       }
@@ -358,7 +407,7 @@ public class CompoundIntervalFormulaManager {
 
     Collection<BooleanFormula<CompoundInterval>> leftFormulas = pFormula1.accept(SPLIT_CONJUNCTIONS_VISITOR);
 
-    return definitelyImplies(leftFormulas, pFormula2, false, new HashMap<MemoryLocation, NumeralFormula<CompoundInterval>>(), false);
+    return definitelyImplies(leftFormulas, pFormula2, false, new HashMap<>(), false, pDisableOverflowCheck);
   }
 
   /**
@@ -591,7 +640,15 @@ public class CompoundIntervalFormulaManager {
       Union<CompoundInterval> union = (Union<CompoundInterval>) pOperand2;
       return logicalOr(lessThan(pOperand1, union.getOperand1()), lessThan(pOperand1, union.getOperand2()));
     }
-    return InvariantsFormulaManager.INSTANCE.lessThan(pOperand1, pOperand2);
+    BooleanFormula<CompoundInterval> result =
+        InvariantsFormulaManager.INSTANCE.lessThan(pOperand1, pOperand2);
+    if (isDefinitelyTrue(result)) {
+      return BooleanConstant.getTrue();
+    }
+    if (isDefinitelyFalse(result)) {
+      return BooleanConstant.getFalse();
+    }
+    return result;
   }
 
   /**
@@ -613,7 +670,15 @@ public class CompoundIntervalFormulaManager {
       Union<CompoundInterval> union = (Union<CompoundInterval>) pOperand2;
       return logicalOr(lessThanOrEqual(pOperand1, union.getOperand1()), lessThanOrEqual(pOperand1, union.getOperand2()));
     }
-    return InvariantsFormulaManager.INSTANCE.lessThanOrEqual(pOperand1, pOperand2);
+    BooleanFormula<CompoundInterval> result =
+        InvariantsFormulaManager.INSTANCE.lessThanOrEqual(pOperand1, pOperand2);
+    if (isDefinitelyTrue(result)) {
+      return BooleanConstant.getTrue();
+    }
+    if (isDefinitelyFalse(result)) {
+      return BooleanConstant.getFalse();
+    }
+    return result;
   }
 
   /**
@@ -644,10 +709,10 @@ public class CompoundIntervalFormulaManager {
     if (!pOperand2.accept(patev, BooleanConstant.<CompoundInterval>getTrue())) {
       return BooleanConstant.getFalse();
     }
-    if (definitelyImplies(pOperand1, pOperand2)) {
+    if (definitelyImplies(pOperand1, pOperand2, true)) {
       return pOperand1;
     }
-    if (definitelyImplies(pOperand2, pOperand1)) {
+    if (definitelyImplies(pOperand2, pOperand1, true)) {
       return pOperand2;
     }
     if (pOperand1 instanceof Equal<?> && pOperand2 instanceof Equal<?>) {
@@ -664,8 +729,8 @@ public class CompoundIntervalFormulaManager {
       }
       if (var != null && value != null) {
         CompoundInterval newValue = null;
-        BitVectorInfo bitVectorInfo = p2.getOperand1().getBitVectorInfo();
-        CompoundIntervalManager cim = getCompoundIntervalManager(bitVectorInfo);
+        TypeInfo typeInfo = p2.getOperand1().getTypeInfo();
+        CompoundIntervalManager cim = getCompoundIntervalManager(typeInfo);
         if (var.equals(p2.getOperand1()) && p2.getOperand2() instanceof Constant<?>) {
           newValue = cim.intersect(value, ((Constant<CompoundInterval>) p2.getOperand2()).getValue());
         } else if (var.equals(p2.getOperand2()) && p2.getOperand1() instanceof Constant<?>) {
@@ -678,7 +743,7 @@ public class CompoundIntervalFormulaManager {
           if (newValue.isBottom()) {
             return BooleanConstant.getFalse();
           }
-          return equal(var, asConstant(bitVectorInfo, newValue));
+          return equal(var, asConstant(typeInfo, newValue));
         }
       }
     }
@@ -730,10 +795,10 @@ public class CompoundIntervalFormulaManager {
     if (BooleanConstant.isFalse(pOperand2)) {
       return pOperand1;
     }
-    if (definitelyImplies(pOperand1, pOperand2)) {
+    if (definitelyImplies(pOperand1, pOperand2, true)) {
       return pOperand2;
     }
-    if (definitelyImplies(pOperand2, pOperand1)) {
+    if (definitelyImplies(pOperand2, pOperand1, true)) {
       return pOperand1;
     }
     if (pOperand1 instanceof Equal && pOperand2 instanceof Equal) {
@@ -759,7 +824,7 @@ public class CompoundIntervalFormulaManager {
         if (otherValue != null) {
           newValue = union(value, p2.getOperand2());
           newValue = newValue.accept(new PartialEvaluator(compoundIntervalManagerFactory), evaluationVisitor);
-          CompoundInterval val = evaluate(newValue);
+          CompoundInterval val = evaluate(newValue, true);
           if (val.containsAllPossibleValues() && newValue instanceof Constant<?>) {
             return BooleanConstant.getTrue();
           }
@@ -771,7 +836,9 @@ public class CompoundIntervalFormulaManager {
             Union<CompoundInterval> union = (Union<CompoundInterval>) newValue;
             NumeralFormula<CompoundInterval> op1 = union.getOperand1();
             NumeralFormula<CompoundInterval> op2 = union.getOperand2();
-            useNewValue = !(op1.equals(value) && op2.equals(otherValue) || op1.equals(otherValue) && op2.equals(value));
+            useNewValue =
+                !((op1.equals(value) && op2.equals(otherValue))
+                    || (op1.equals(otherValue) && op2.equals(value)));
           }
           if (useNewValue) {
             return equal(var, newValue);
@@ -793,7 +860,7 @@ public class CompoundIntervalFormulaManager {
    * given operands, meaning that the first operand implies the second operand.
    */
   public BooleanFormula<CompoundInterval> logicalImplies(BooleanFormula<CompoundInterval> pOperand1, BooleanFormula<CompoundInterval> pOperand2) {
-    if (definitelyImplies(pOperand1, pOperand2)) {
+    if (definitelyImplies(pOperand1, pOperand2, true)) {
       return BooleanConstant.getTrue();
     }
     return logicalNot(logicalAnd(pOperand1, logicalNot(pOperand2)));
@@ -866,21 +933,22 @@ public class CompoundIntervalFormulaManager {
         return factor1;
       }
     }
-    BitVectorInfo bitVectorInfo = pToNegate.getBitVectorInfo();
-    CompoundIntervalManager cim = getCompoundIntervalManager(bitVectorInfo);
+    TypeInfo typeInfo = pToNegate.getTypeInfo();
+    CompoundIntervalManager cim = getCompoundIntervalManager(typeInfo);
     if (pToNegate instanceof Constant) {
-      return asConstant(bitVectorInfo, cim.negate(((Constant<CompoundInterval>) pToNegate).getValue()));
+      return asConstant(typeInfo, cim.negate(((Constant<CompoundInterval>) pToNegate).getValue()));
     }
     if (cim.allPossibleValues().contains(BigInteger.valueOf(-1))) {
-      NumeralFormula<CompoundInterval> minusOne = asConstant(bitVectorInfo, cim.singleton(-1));
+      NumeralFormula<CompoundInterval> minusOne = asConstant(typeInfo, cim.singleton(-1));
       return InvariantsFormulaManager.INSTANCE.multiply(pToNegate, minusOne);
     }
     // TODO more precise implementation; maybe reintroduce "Negation" as a formula
-    return allPossibleValues(bitVectorInfo);
+    CompoundInterval value = evaluate(pToNegate);
+    return asConstant(typeInfo, cim.negate(value));
   }
 
   private boolean isMinusOne(NumeralFormula<CompoundInterval> pFormula) {
-    CompoundInterval value = evaluate(pFormula);
+    CompoundInterval value = evaluate(pFormula, true);
     return value.isSingleton() && value.contains(BigInteger.valueOf(-1));
   }
 
@@ -987,8 +1055,8 @@ public class CompoundIntervalFormulaManager {
     // Try reducing nested unions by temporarily representing them as a set
     Set<NumeralFormula<CompoundInterval>> atomicUnionParts = new HashSet<>();
     Queue<NumeralFormula<CompoundInterval>> unionParts = new ArrayDeque<>();
-    BitVectorInfo bitVectorInfo = pOperand1.getBitVectorInfo();
-    CompoundIntervalManager cim = getCompoundIntervalManager(bitVectorInfo);
+    TypeInfo typeInfo = pOperand1.getTypeInfo();
+    CompoundIntervalManager cim = getCompoundIntervalManager(typeInfo);
     CompoundInterval constantPart = cim.bottom();
     unionParts.offer(pOperand1);
     unionParts.offer(pOperand2);
@@ -1004,12 +1072,15 @@ public class CompoundIntervalFormulaManager {
         atomicUnionParts.add(currentPart);
       }
     }
-    return unionAll(bitVectorInfo, constantPart, atomicUnionParts);
+    return unionAll(typeInfo, constantPart, atomicUnionParts);
   }
 
-  private NumeralFormula<CompoundInterval> unionAll(BitVectorInfo pBitVectorInfo, CompoundInterval pConstantPart, Collection<NumeralFormula<CompoundInterval>> pFormulas) {
+  private NumeralFormula<CompoundInterval> unionAll(
+      TypeInfo pInfo,
+      CompoundInterval pConstantPart,
+      Collection<NumeralFormula<CompoundInterval>> pFormulas) {
     if (pFormulas.isEmpty() || pConstantPart.containsAllPossibleValues()) {
-      return asConstant(pBitVectorInfo, pConstantPart);
+      return asConstant(pInfo, pConstantPart);
     }
     NumeralFormula<CompoundInterval> result = null;
     Iterator<NumeralFormula<CompoundInterval>> atomicUnionPartsIterator = pFormulas.iterator();
@@ -1018,7 +1089,7 @@ public class CompoundIntervalFormulaManager {
       result = InvariantsFormulaManager.INSTANCE.union(result, atomicUnionPartsIterator.next());
     }
     if (!pConstantPart.isBottom()) {
-      NumeralFormula<CompoundInterval> constantPartFormula = asConstant(pBitVectorInfo, pConstantPart);
+      NumeralFormula<CompoundInterval> constantPartFormula = asConstant(pInfo, pConstantPart);
       result = InvariantsFormulaManager.INSTANCE.union(result, constantPartFormula);
     }
     return result;
@@ -1027,7 +1098,7 @@ public class CompoundIntervalFormulaManager {
   public NumeralFormula<CompoundInterval> exclude(NumeralFormula<CompoundInterval> pToExclude) {
     if (pToExclude instanceof Constant) {
       Constant<CompoundInterval> c = (Constant<CompoundInterval>) pToExclude;
-      BitVectorInfo bitVectorInfo = pToExclude.getBitVectorInfo();
+      TypeInfo bitVectorInfo = pToExclude.getTypeInfo();
       if (c.getValue().isSingleton()) {
         return asConstant(bitVectorInfo, c.getValue().invert());
       }
@@ -1059,11 +1130,12 @@ public class CompoundIntervalFormulaManager {
   }
 
   public NumeralFormula<CompoundInterval> fromBoolean(
-      BitVectorInfo pBitVectorInfo,
-      BooleanFormula<CompoundInterval> pFormula) {
-    CompoundIntervalManager cim = getCompoundIntervalManager(pBitVectorInfo);
-    NumeralFormula<CompoundInterval> trueNumeralFormula = asConstant(pBitVectorInfo, cim.singleton(BigInteger.ONE));
-    NumeralFormula<CompoundInterval> falseNumeralFormula = asConstant(pBitVectorInfo, cim.logicalFalse());
+      TypeInfo pTypeInfo, BooleanFormula<CompoundInterval> pFormula) {
+    CompoundIntervalManager cim = getCompoundIntervalManager(pTypeInfo);
+    NumeralFormula<CompoundInterval> trueNumeralFormula =
+        asConstant(pTypeInfo, cim.singleton(BigInteger.ONE));
+    NumeralFormula<CompoundInterval> falseNumeralFormula =
+        asConstant(pTypeInfo, cim.logicalFalse());
     return ifThenElse(
         pFormula,
         trueNumeralFormula,
@@ -1071,8 +1143,8 @@ public class CompoundIntervalFormulaManager {
   }
 
   public BooleanFormula<CompoundInterval> fromNumeral(NumeralFormula<CompoundInterval> pFormula) {
-    BitVectorInfo bitVectorInfo = pFormula.getBitVectorInfo();
-    CompoundIntervalManager cim = getCompoundIntervalManager(bitVectorInfo);
+    TypeInfo typeInfo = pFormula.getTypeInfo();
+    CompoundIntervalManager cim = getCompoundIntervalManager(typeInfo);
     if (pFormula instanceof IfThenElse) {
       IfThenElse<CompoundInterval> ifThenElse = (IfThenElse<CompoundInterval>) pFormula;
       if (isDefinitelyTrue(ifThenElse.getPositiveCase()) && isDefinitelyFalse(ifThenElse.getNegativeCase())) {
@@ -1082,42 +1154,44 @@ public class CompoundIntervalFormulaManager {
         return logicalNot(ifThenElse.getCondition());
       }
     }
-    return logicalNot(equal(pFormula, asConstant(bitVectorInfo, cim.singleton(BigInteger.ZERO))));
+    return logicalNot(equal(pFormula, asConstant(typeInfo, cim.singleton(BigInteger.ZERO))));
   }
 
-  public NumeralFormula<CompoundInterval> cast(BitVectorInfo pBitVectorInfo, NumeralFormula<CompoundInterval> pToCast) {
-    if (pToCast.getBitVectorInfo().equals(pBitVectorInfo)) {
+  public NumeralFormula<CompoundInterval> cast(
+      TypeInfo pTypeInfo, NumeralFormula<CompoundInterval> pToCast) {
+    if (pToCast.getTypeInfo().equals(pTypeInfo)) {
       return pToCast;
     }
-    NumeralFormula<CompoundInterval> casted = InvariantsFormulaManager.INSTANCE.cast(pBitVectorInfo, pToCast);
+    NumeralFormula<CompoundInterval> casted =
+        InvariantsFormulaManager.INSTANCE.cast(pTypeInfo, pToCast);
     if (pToCast instanceof Constant) {
-      casted = asConstant(pBitVectorInfo, casted.accept(evaluationVisitor, EMPTY_ENVIRONMENT));
+      casted = asConstant(pTypeInfo, casted.accept(evaluationVisitor, EMPTY_ENVIRONMENT));
     }
     return casted;
   }
 
-  private NumeralFormula<CompoundInterval> bottom(BitVectorInfo pBitVectorInfo) {
-    return asConstant(pBitVectorInfo, getCompoundIntervalManager(pBitVectorInfo).bottom());
+  private NumeralFormula<CompoundInterval> bottom(TypeInfo pInfo) {
+    return asConstant(pInfo, getCompoundIntervalManager(pInfo).bottom());
   }
 
-  private NumeralFormula<CompoundInterval> bottom(BitVectorType pBitVectorType) {
-    return bottom(pBitVectorType.getBitVectorInfo());
+  private NumeralFormula<CompoundInterval> bottom(Typed pTyped) {
+    return bottom(pTyped.getTypeInfo());
   }
 
-  private NumeralFormula<CompoundInterval> allPossibleValues(BitVectorInfo pBitVectorInfo) {
-    return asConstant(pBitVectorInfo, getCompoundIntervalManager(pBitVectorInfo).allPossibleValues());
+  private NumeralFormula<CompoundInterval> allPossibleValues(TypeInfo pInfo) {
+    return asConstant(pInfo, getCompoundIntervalManager(pInfo).allPossibleValues());
   }
 
-  private NumeralFormula<CompoundInterval> allPossibleValues(BitVectorType pBitVectorType) {
-    return allPossibleValues(pBitVectorType.getBitVectorInfo());
+  private NumeralFormula<CompoundInterval> allPossibleValues(Typed pBitVectorType) {
+    return allPossibleValues(pBitVectorType.getTypeInfo());
   }
 
-  private NumeralFormula<CompoundInterval> asConstant(BitVectorInfo pBitVectorInfo, CompoundInterval pValue) {
-    return InvariantsFormulaManager.INSTANCE.asConstant(pBitVectorInfo, pValue);
+  private NumeralFormula<CompoundInterval> asConstant(TypeInfo pInfo, CompoundInterval pValue) {
+    return InvariantsFormulaManager.INSTANCE.asConstant(pInfo, pValue);
   }
 
-  private CompoundIntervalManager getCompoundIntervalManager(BitVectorInfo pBitVectorInfo) {
-    return compoundIntervalManagerFactory.createCompoundIntervalManager(pBitVectorInfo);
+  private CompoundIntervalManager getCompoundIntervalManager(TypeInfo pInfo) {
+    return compoundIntervalManagerFactory.createCompoundIntervalManager(pInfo);
   }
 
 }

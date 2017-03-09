@@ -23,12 +23,17 @@
  */
 package org.sosy_lab.cpachecker.cpa.smg.join;
 
-import java.util.Collection;
+import com.google.common.collect.Iterables;
 
 import org.sosy_lab.cpachecker.cpa.smg.SMGEdgePointsTo;
+import org.sosy_lab.cpachecker.cpa.smg.SMGEdgePointsToFilter;
+import org.sosy_lab.cpachecker.cpa.smg.SMGTargetSpecifier;
 import org.sosy_lab.cpachecker.cpa.smg.SMGValueFactory;
 import org.sosy_lab.cpachecker.cpa.smg.graphs.SMG;
 import org.sosy_lab.cpachecker.cpa.smg.objects.SMGObject;
+import org.sosy_lab.cpachecker.cpa.smg.objects.SMGObjectKind;
+
+import java.util.Set;
 
 final class SMGJoinMapTargetAddress {
   private SMG smg;
@@ -36,7 +41,7 @@ final class SMGJoinMapTargetAddress {
   private SMGNodeMapping mapping2;
   private Integer value;
 
-  public SMGJoinMapTargetAddress(SMG pSMG1, SMG destSMG, SMGNodeMapping pMapping1,
+  public SMGJoinMapTargetAddress(SMG pSMG1, SMG pSMG2, SMG destSMG, SMGNodeMapping pMapping1,
                              SMGNodeMapping pMapping2, Integer pAddress1,
                              Integer pAddress2) {
     smg = destSMG;
@@ -46,23 +51,40 @@ final class SMGJoinMapTargetAddress {
 
     // TODO: Ugly, refactor
     SMGEdgePointsTo pt = pSMG1.getPointer(pAddress1);
+    SMGEdgePointsTo pt2 = pSMG2.getPointer(pAddress2);
     if (pt.getObject().notNull()) {
       target = pMapping1.get(pt.getObject());
     }
 
-    // TODO: Ugly, refactor
-    Collection<SMGEdgePointsTo> edges = smg.getPTEdges().values();
-    for (SMGEdgePointsTo edge : edges) {
-      if ((edge.getObject() == target) &&
-          (edge.getOffset() == pt.getOffset())) {
-        value = edge.getValue();
-        return;
-      }
+    SMGTargetSpecifier tg;
+
+    /*When mapping optional object to other abstract object, use tg of other object.*/
+    if ((pt.getObject().isAbstract() && pt.getObject().getKind() != SMGObjectKind.OPTIONAL)
+        || pt2 == null
+        || pt2.getObject().getKind() == SMGObjectKind.OPTIONAL) {
+      tg = pt.getTargetSpecifier();
+    } else {
+      tg = pt2.getTargetSpecifier();
     }
 
-    value = SMGValueFactory.getNewValue();
+    Set<SMGEdgePointsTo> edges = smg.getPtEdges(SMGEdgePointsToFilter.targetObjectFilter(target).filterAtTargetOffset(pt.getOffset()).filterByTargetSpecifier(tg));
+
+    if (!edges.isEmpty()) {
+      value = Iterables.getOnlyElement(edges).getValue();
+      return;
+    }
+
+    if(pAddress1.equals(pAddress2)) {
+      value = pAddress1;
+    } else {
+      value = SMGValueFactory.getNewValue();
+    }
+
     smg.addValue(value);
-    smg.addPointsToEdge(new SMGEdgePointsTo(value, target, pt.getOffset()));
+
+    SMGEdgePointsTo nPtEdge = new SMGEdgePointsTo(value, target, pt.getOffset(), tg);
+
+    smg.addPointsToEdge(nPtEdge);
     mapping1.map(pAddress1, value);
     mapping2.map(pAddress2, value);
   }

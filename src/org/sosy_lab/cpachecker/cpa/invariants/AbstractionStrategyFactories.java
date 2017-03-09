@@ -23,6 +23,9 @@
  */
 package org.sosy_lab.cpachecker.cpa.invariants;
 
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Sets;
 import java.math.BigInteger;
 import java.util.ArrayDeque;
 import java.util.Collections;
@@ -30,7 +33,6 @@ import java.util.HashSet;
 import java.util.Objects;
 import java.util.Queue;
 import java.util.Set;
-
 import org.sosy_lab.cpachecker.cfa.ast.ADeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.AExpression;
 import org.sosy_lab.cpachecker.cfa.ast.AExpressionAssignmentStatement;
@@ -52,8 +54,8 @@ import org.sosy_lab.cpachecker.cfa.model.CFAEdgeType;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionReturnEdge;
 import org.sosy_lab.cpachecker.cfa.model.FunctionSummaryEdge;
-import org.sosy_lab.cpachecker.cfa.model.MultiEdge;
 import org.sosy_lab.cpachecker.cfa.types.MachineModel;
+import org.sosy_lab.cpachecker.cpa.invariants.formula.BooleanConstant;
 import org.sosy_lab.cpachecker.cpa.invariants.formula.BooleanFormula;
 import org.sosy_lab.cpachecker.cpa.invariants.formula.CompoundIntervalFormulaManager;
 import org.sosy_lab.cpachecker.cpa.invariants.formula.Constant;
@@ -67,10 +69,6 @@ import org.sosy_lab.cpachecker.cpa.invariants.formula.NumeralFormula;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCodeException;
 import org.sosy_lab.cpachecker.util.CFAUtils;
 import org.sosy_lab.cpachecker.util.states.MemoryLocation;
-
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Iterables;
-import com.google.common.collect.Sets;
 
 enum AbstractionStrategyFactories implements AbstractionStrategyFactory {
 
@@ -130,7 +128,8 @@ enum AbstractionStrategyFactories implements AbstractionStrategyFactory {
           return from(pOther, false);
         }
 
-        private AbstractionState from(final AbstractionState pPrevious, final boolean pWithEnteringEdges) {
+        private AbstractionState from(
+            final AbstractionState pPrevious, final boolean pWithEnteringEdges) {
           class EnteringEdgesBasedAbstractionState implements AbstractionState {
 
             private final Set<CFAEdge> visitedEdges;
@@ -142,7 +141,10 @@ enum AbstractionStrategyFactories implements AbstractionStrategyFactory {
             private EnteringEdgesBasedAbstractionState(
                 Set<MemoryLocation> pPreviousWideningTargets,
                 Set<BooleanFormula<CompoundInterval>> pPreviousWideningHints) {
-              this(Collections.<CFAEdge>emptySet(), pPreviousWideningTargets, pPreviousWideningHints);
+              this(
+                  Collections.<CFAEdge>emptySet(),
+                  pPreviousWideningTargets,
+                  pPreviousWideningHints);
             }
 
             private EnteringEdgesBasedAbstractionState(
@@ -158,7 +160,8 @@ enum AbstractionStrategyFactories implements AbstractionStrategyFactory {
               return determineWideningTargets(Collections.singleton(pEdge));
             }
 
-            private ImmutableSet<MemoryLocation> determineWideningTargets(Iterable<CFAEdge> pEdges) {
+            private ImmutableSet<MemoryLocation> determineWideningTargets(
+                Iterable<CFAEdge> pEdges) {
               ImmutableSet.Builder<MemoryLocation> wideningTargets = ImmutableSet.builder();
               Set<CFAEdge> checkedEdges = new HashSet<>();
               Queue<CFAEdge> waitlist = new ArrayDeque<>();
@@ -167,10 +170,6 @@ enum AbstractionStrategyFactories implements AbstractionStrategyFactory {
               while (!waitlist.isEmpty()) {
                 CFAEdge lastEdge = waitlist.poll();
                 checkedEdges.add(lastEdge);
-                if (lastEdge.getEdgeType() == CFAEdgeType.MultiEdge) {
-                  Iterables.addAll(waitlist, (MultiEdge) lastEdge);
-                  continue;
-                }
                 if (lastEdge.getEdgeType() == CFAEdgeType.FunctionReturnEdge) {
                   FunctionReturnEdge functionReturnEdge = (FunctionReturnEdge) lastEdge;
 
@@ -185,7 +184,10 @@ enum AbstractionStrategyFactories implements AbstractionStrategyFactory {
                         CFANode newSucc = enteringEdge.getPredecessor();
                         if (visited.add(newSucc)) {
                           if (enteringEdge.getEdgeType() == CFAEdgeType.FunctionReturnEdge) {
-                            successors.add(((FunctionReturnEdge) enteringEdge).getSummaryEdge().getPredecessor());
+                            successors.add(
+                                ((FunctionReturnEdge) enteringEdge)
+                                    .getSummaryEdge()
+                                    .getPredecessor());
                           } else {
                             successors.offer(newSucc);
                           }
@@ -201,8 +203,13 @@ enum AbstractionStrategyFactories implements AbstractionStrategyFactory {
                   if (summaryEdge != null) {
                     AFunctionCall functionCall = summaryEdge.getExpression();
                     if (functionCall instanceof AFunctionCallAssignmentStatement) {
-                      AFunctionCallAssignmentStatement assignmentStatement = (AFunctionCallAssignmentStatement) functionCall;
-                      wideningTargets.addAll(edgeAnalyzer.getInvolvedVariableTypes(assignmentStatement.getLeftHandSide(), summaryEdge).keySet());
+                      AFunctionCallAssignmentStatement assignmentStatement =
+                          (AFunctionCallAssignmentStatement) functionCall;
+                      wideningTargets.addAll(
+                          edgeAnalyzer
+                              .getInvolvedVariableTypes(
+                                  assignmentStatement.getLeftHandSide(), summaryEdge)
+                              .keySet());
                       continue;
                     }
                   }
@@ -210,7 +217,8 @@ enum AbstractionStrategyFactories implements AbstractionStrategyFactory {
                 if (lastEdge.getEdgeType() == CFAEdgeType.StatementEdge) {
                   AStatementEdge edge = (AStatementEdge) lastEdge;
                   if (edge.getStatement() instanceof AExpressionStatement) {
-                    AExpressionStatement expressionStatement = (AExpressionStatement) edge.getStatement();
+                    AExpressionStatement expressionStatement =
+                        (AExpressionStatement) edge.getStatement();
                     AExpression expression = expressionStatement.getExpression();
                     if (expression instanceof ALiteralExpression) {
                       continue;
@@ -219,7 +227,8 @@ enum AbstractionStrategyFactories implements AbstractionStrategyFactory {
                       continue;
                     }
                   } else if (edge.getStatement() instanceof AExpressionAssignmentStatement) {
-                    AExpressionAssignmentStatement expressionAssignmentStatement = (AExpressionAssignmentStatement) edge.getStatement();
+                    AExpressionAssignmentStatement expressionAssignmentStatement =
+                        (AExpressionAssignmentStatement) edge.getStatement();
                     AExpression expression = expressionAssignmentStatement.getRightHandSide();
                     if (expression instanceof ALiteralExpression) {
                       continue;
@@ -242,7 +251,8 @@ enum AbstractionStrategyFactories implements AbstractionStrategyFactory {
                       continue;
                     }
                     if (initializer instanceof AInitializerExpression) {
-                      AExpression expression = ((AInitializerExpression) initializer).getExpression();
+                      AExpression expression =
+                          ((AInitializerExpression) initializer).getExpression();
                       if (expression instanceof ALiteralExpression) {
                         continue;
                       }
@@ -260,7 +270,8 @@ enum AbstractionStrategyFactories implements AbstractionStrategyFactory {
             @Override
             public Set<MemoryLocation> determineWideningTargets(AbstractionState pOther) {
               if (pOther instanceof EnteringEdgesBasedAbstractionState) {
-                EnteringEdgesBasedAbstractionState other = (EnteringEdgesBasedAbstractionState) pOther;
+                EnteringEdgesBasedAbstractionState other =
+                    (EnteringEdgesBasedAbstractionState) pOther;
                 if (!visitedEdges.containsAll(other.visitedEdges)) {
                   return Sets.intersection(wideningTargets, other.wideningTargets);
                 }
@@ -272,7 +283,8 @@ enum AbstractionStrategyFactories implements AbstractionStrategyFactory {
             @Override
             public AbstractionState addEnteringEdge(CFAEdge pEdge) {
               Set<MemoryLocation> newWideningTargets = determineWideningTargets(pEdge);
-              Set<BooleanFormula<CompoundInterval>> newWideningHints = determineWideningHints(pEdge);
+              Set<BooleanFormula<CompoundInterval>> newWideningHints =
+                  determineWideningHints(pEdge);
               if (visitedEdges.contains(pEdge)
                   && wideningTargets.containsAll(newWideningTargets)
                   && wideningHints.containsAll(newWideningHints)) {
@@ -281,8 +293,7 @@ enum AbstractionStrategyFactories implements AbstractionStrategyFactory {
               newWideningHints = union(wideningHints, newWideningHints);
               newWideningTargets = union(wideningTargets, newWideningTargets);
               return new EnteringEdgesBasedAbstractionState(
-                  add(visitedEdges, pEdge),
-                  newWideningTargets, newWideningHints);
+                  add(visitedEdges, pEdge), newWideningTargets, newWideningHints);
             }
 
             private Set<BooleanFormula<CompoundInterval>> determineWideningHints(CFAEdge pEdge) {
@@ -300,7 +311,8 @@ enum AbstractionStrategyFactories implements AbstractionStrategyFactory {
                               pMachineModel,
                               pEdge,
                               pWithEnteringEdges,
-                              Collections.<MemoryLocation, NumeralFormula<CompoundInterval>>emptyMap()));
+                              Collections
+                                  .<MemoryLocation, NumeralFormula<CompoundInterval>>emptyMap()));
                   if (expression instanceof CExpression) {
                     wideningHint = ((CExpression) expression).accept(expressionToFormulaVisitor);
                   } else if (expression instanceof JExpression) {
@@ -312,15 +324,15 @@ enum AbstractionStrategyFactories implements AbstractionStrategyFactory {
                   // Does not really matter, just no hint
                   return Collections.emptySet();
                 }
-                return normalize(
-                    Collections.singleton(cifm.fromNumeral(wideningHint)));
+                return normalize(Collections.singleton(cifm.fromNumeral(wideningHint)));
               }
               return Collections.emptySet();
             }
 
             private ImmutableSet<BooleanFormula<CompoundInterval>> normalize(
                 Set<BooleanFormula<CompoundInterval>> pToNormalize) {
-              ImmutableSet.Builder<BooleanFormula<CompoundInterval>> builder = ImmutableSet.builder();
+              ImmutableSet.Builder<BooleanFormula<CompoundInterval>> builder =
+                  ImmutableSet.builder();
               Queue<BooleanFormula<CompoundInterval>> toNormalize = new ArrayDeque<>(pToNormalize);
               while (!toNormalize.isEmpty()) {
                 BooleanFormula<CompoundInterval> hint = toNormalize.poll();
@@ -341,20 +353,31 @@ enum AbstractionStrategyFactories implements AbstractionStrategyFactory {
                       LessThan<CompoundInterval> lt = (LessThan<CompoundInterval>) hint;
                       NumeralFormula<CompoundInterval> op1 = lt.getOperand1();
                       NumeralFormula<CompoundInterval> op2 = lt.getOperand2();
-                      BitVectorInfo bitVectorInfo = op1.getBitVectorInfo();
-                      CompoundIntervalManager cim = pCompoundIntervalManagerFactory.createCompoundIntervalManager(bitVectorInfo);
+                      TypeInfo typeInfo = op1.getTypeInfo();
+                      CompoundIntervalManager cim =
+                          pCompoundIntervalManagerFactory.createCompoundIntervalManager(typeInfo);
                       if (op1 instanceof Constant) {
-                        NumeralFormula<CompoundInterval> newOp1 = InvariantsFormulaManager.INSTANCE.asConstant(bitVectorInfo,
-                            cim.add(
-                                ((Constant<CompoundInterval>) op1).getValue(),
-                                cim.negate(cim.singleton(BigInteger.ONE))));
-                        builder.add(cifm.lessThan(newOp1, op2));
+                        NumeralFormula<CompoundInterval> newOp1 =
+                            InvariantsFormulaManager.INSTANCE.asConstant(
+                                typeInfo,
+                                cim.add(
+                                    ((Constant<CompoundInterval>) op1).getValue(),
+                                    cim.negate(cim.singleton(BigInteger.ONE))));
+                        BooleanFormula<CompoundInterval> newLT = cifm.lessThan(newOp1, op2);
+                        if (!(newLT instanceof BooleanConstant)) {
+                          builder.add(newLT);
+                        }
                       } else if (op2 instanceof Constant) {
-                        NumeralFormula<CompoundInterval> newOp2 = InvariantsFormulaManager.INSTANCE.asConstant(bitVectorInfo,
-                            cim.add(
-                                ((Constant<CompoundInterval>) op2).getValue(),
-                                cim.singleton(BigInteger.ONE)));
-                        builder.add(cifm.lessThan(op1, newOp2));
+                        NumeralFormula<CompoundInterval> newOp2 =
+                            InvariantsFormulaManager.INSTANCE.asConstant(
+                                typeInfo,
+                                cim.add(
+                                    ((Constant<CompoundInterval>) op2).getValue(),
+                                    cim.singleton(BigInteger.ONE)));
+                        BooleanFormula<CompoundInterval> newLT = cifm.lessThan(op1, newOp2);
+                        if (!(newLT instanceof BooleanConstant)) {
+                          builder.add(newLT);
+                        }
                       }
                     }
                   }
@@ -369,20 +392,22 @@ enum AbstractionStrategyFactories implements AbstractionStrategyFactory {
                 return this;
               }
               if (pOther instanceof EnteringEdgesBasedAbstractionState) {
-                EnteringEdgesBasedAbstractionState other = (EnteringEdgesBasedAbstractionState) pOther;
-                if ((this.visitedEdges == other.visitedEdges || other.visitedEdges.containsAll(this.visitedEdges))
-                    && (this.wideningTargets == other.wideningTargets || other.wideningTargets.containsAll(this.wideningTargets))
-                    && (this.wideningHints == other.wideningHints || other.wideningHints.containsAll(this.wideningHints))) {
+                EnteringEdgesBasedAbstractionState other =
+                    (EnteringEdgesBasedAbstractionState) pOther;
+                if ((this.visitedEdges == other.visitedEdges
+                        || other.visitedEdges.containsAll(this.visitedEdges))
+                    && (this.wideningTargets == other.wideningTargets
+                        || other.wideningTargets.containsAll(this.wideningTargets))
+                    && (this.wideningHints == other.wideningHints
+                        || other.wideningHints.containsAll(this.wideningHints))) {
                   return other;
                 }
                 if ((this.visitedEdges.containsAll(other.visitedEdges))
                     && this.wideningTargets.containsAll(other.wideningTargets)) {
                   return this;
                 }
-                final Set<CFAEdge> edges =
-                    union(visitedEdges, other.visitedEdges);
-                final Set<MemoryLocation> lastEdges =
-                    union(wideningTargets, other.wideningTargets);
+                final Set<CFAEdge> edges = union(visitedEdges, other.visitedEdges);
+                final Set<MemoryLocation> lastEdges = union(wideningTargets, other.wideningTargets);
                 final Set<BooleanFormula<CompoundInterval>> hints =
                     union(wideningHints, other.wideningHints);
                 return new EnteringEdgesBasedAbstractionState(edges, lastEdges, hints);
@@ -411,13 +436,16 @@ enum AbstractionStrategyFactories implements AbstractionStrategyFactory {
 
             @Override
             public String toString() {
-              return String.format("Widening targets: %s; Visited edges: %s", wideningTargets, visitedEdges.toString());
+              return String.format(
+                  "Widening targets: %s; Visited edges: %s",
+                  wideningTargets, visitedEdges.toString());
             }
 
             @Override
             public boolean isLessThanOrEqualTo(AbstractionState pOther) {
               if (pOther instanceof EnteringEdgesBasedAbstractionState) {
-                EnteringEdgesBasedAbstractionState other = (EnteringEdgesBasedAbstractionState) pOther;
+                EnteringEdgesBasedAbstractionState other =
+                    (EnteringEdgesBasedAbstractionState) pOther;
                 return other.visitedEdges.containsAll(this.visitedEdges);
               }
               return !pOther.isLessThanOrEqualTo(this);
@@ -427,7 +455,6 @@ enum AbstractionStrategyFactories implements AbstractionStrategyFactory {
             public Set<BooleanFormula<CompoundInterval>> getWideningHints() {
               return this.wideningHints;
             }
-
           }
           if (pWithEnteringEdges && pPrevious instanceof EnteringEdgesBasedAbstractionState) {
             return pPrevious;
@@ -435,15 +462,16 @@ enum AbstractionStrategyFactories implements AbstractionStrategyFactory {
           final Set<MemoryLocation> previousWideningTargets;
           final Set<BooleanFormula<CompoundInterval>> previousWideningHints;
           if (pPrevious instanceof EnteringEdgesBasedAbstractionState) {
-            previousWideningTargets = ((EnteringEdgesBasedAbstractionState) pPrevious).wideningTargets;
+            previousWideningTargets =
+                ((EnteringEdgesBasedAbstractionState) pPrevious).wideningTargets;
             previousWideningHints = ((EnteringEdgesBasedAbstractionState) pPrevious).wideningHints;
           } else {
             previousWideningTargets = Collections.emptySet();
             previousWideningHints = Collections.emptySet();
           }
-          return new EnteringEdgesBasedAbstractionState(previousWideningTargets, previousWideningHints);
+          return new EnteringEdgesBasedAbstractionState(
+              previousWideningTargets, previousWideningHints);
         }
-
       };
     }
 

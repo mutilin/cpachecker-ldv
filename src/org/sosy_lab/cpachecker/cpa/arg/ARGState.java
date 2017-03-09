@@ -23,10 +23,13 @@
  */
 package org.sosy_lab.cpachecker.cpa.arg;
 
-import static com.google.common.base.Preconditions.*;
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.FluentIterable.from;
-import static org.sosy_lab.cpachecker.util.AbstractStates.extractLocations;
+import static org.sosy_lab.cpachecker.util.AbstractStates.extractStateByType;
 
+import com.google.common.collect.Sets;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -34,20 +37,21 @@ import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Optional;
 import java.util.Set;
-
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-
 import org.sosy_lab.common.UniqueIdGenerator;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.core.counterexample.CounterexampleInfo;
 import org.sosy_lab.cpachecker.core.defaults.AbstractSingleWrapperState;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractStateWithDummyLocation;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractStateWithLocations;
 import org.sosy_lab.cpachecker.core.interfaces.Graphable;
-
-import com.google.common.base.Function;
-import com.google.common.collect.Sets;
+import org.sosy_lab.cpachecker.util.AbstractStates;
 
 public class ARGState extends AbstractSingleWrapperState implements Comparable<ARGState>, Graphable {
 
@@ -74,6 +78,9 @@ public class ARGState extends AbstractSingleWrapperState implements Comparable<A
   private final int stateId;
 
   private static UniqueIdGenerator idGenerator = new UniqueIdGenerator();
+
+  // If this is a target state, we may store additional information here.
+  private transient CounterexampleInfo counterexample;
 
   public ARGState(@Nullable AbstractState pWrappedState, @Nullable ARGState pParentElement) {
     super(pWrappedState);
@@ -131,38 +138,77 @@ public class ARGState extends AbstractSingleWrapperState implements Comparable<A
     // by an analysis. Possible traces might be 'interrupted' by covered states.
     // Covered states do not have children, so we expect the return value null in this case.
 
-    final Iterable<CFANode> currentLocs = extractLocations(this);
-    final Iterable<CFANode> childLocs = extractLocations(pChild);
+    final AbstractStateWithLocations currentLocs =
+        extractStateByType(this, AbstractStateWithLocations.class);
+    final AbstractStateWithLocations childLocs =
+        extractStateByType(pChild, AbstractStateWithLocations.class);
 
     // first try to get a normal edge
-    for (CFANode currentLoc : currentLocs) {
-      for (CFANode childLoc : childLocs) {
-        if (currentLoc.hasEdgeTo(childLoc)) { // Forwards
-          return currentLoc.getEdgeTo(childLoc);
-
-        } else if (childLoc.hasEdgeTo(currentLoc)) { // Backwards
-          return childLoc.getEdgeTo(currentLoc);
-        }
+    // consider only the actual analysis direction
+    Collection<CFAEdge> ingoingEdgesOfChild = Sets.newHashSet(childLocs.getIngoingEdges());
+    for (CFAEdge edge : currentLocs.getOutgoingEdges()) {
+      if (ingoingEdgesOfChild.contains(edge)) {
+        return edge;
       }
     }
 
     // then try to get a special edge, just to have some edge.
-    for (CFANode currentLoc : currentLocs) {
-      for (CFANode childLoc : childLocs) {
+    for (CFANode currentLoc : currentLocs.getLocationNodes()) {
+      for (CFANode childLoc : childLocs.getLocationNodes()) {
         if (currentLoc.getLeavingSummaryEdge() != null
             && currentLoc.getLeavingSummaryEdge().getSuccessor().equals(childLoc)) { // Forwards
           return currentLoc.getLeavingSummaryEdge();
+        }
+      }
+    }
 
-        } else if (currentLoc.getEnteringSummaryEdge() != null
-            && currentLoc.getEnteringSummaryEdge().getSuccessor().equals(childLoc)) { // Backwards
-          return currentLoc.getEnteringSummaryEdge();
+    // check for dummy location
+    AbstractStateWithDummyLocation stateWithDummyLocation =
+        AbstractStates.extractStateByType(pChild, AbstractStateWithDummyLocation.class);
+    if (stateWithDummyLocation != null && stateWithDummyLocation.isDummyLocation()) {
 
+      for (CFAEdge enteringEdge : stateWithDummyLocation.getEnteringEdges()) {
+        for (CFANode currentLocation : currentLocs.getLocationNodes()) {
+          if (enteringEdge.getPredecessor().equals(currentLocation)) {
+            return enteringEdge;
+          }
         }
       }
     }
 
     // there is no edge
     return null;
+  }
+
+  /**
+   * Returns the edges from the current state to the child state, or an empty list
+   * if there is no path between both states.
+   */
+  public List<CFAEdge> getEdgesToChild(ARGState pChild) {
+    CFAEdge singleEdge = getEdgeToChild(pChild);
+
+    // no direct connection, this is only possible for ARG holes during dynamic
+    // multiedges, it is guaranteed that there is exactly one path and no other
+    // leaving edges from the parent to the child
+    if (singleEdge == null) {
+      List<CFAEdge> allEdges = new ArrayList<>();
+      CFANode currentLoc = AbstractStates.extractLocation(this);
+      CFANode childLoc = AbstractStates.extractLocation(pChild);
+
+      while (!currentLoc.equals(childLoc)) {
+        // we didn't find a proper connection to the child so we return an empty list
+        if (currentLoc.getNumLeavingEdges() != 1) {
+          return Collections.emptyList();
+        }
+
+        final CFAEdge leavingEdge = currentLoc.getLeavingEdge(0);
+        allEdges.add(leavingEdge);
+        currentLoc = leavingEdge.getSuccessor();
+      }
+      return allEdges;
+    } else {
+      return Collections.singletonList(singleEdge);
+    }
   }
 
   public Set<ARGState> getSubgraph() {
@@ -267,6 +313,30 @@ public class ARGState extends AbstractSingleWrapperState implements Comparable<A
     child.parents.remove(this);
   }
 
+  // counterexample
+
+  /**
+   * Store additional information about the counterexample that leads to this target state.
+   */
+  public void addCounterexampleInformation(CounterexampleInfo pCounterexample) {
+    checkState(counterexample == null);
+    checkArgument(isTarget());
+    checkArgument(!pCounterexample.isSpurious());
+    // With BAM, the targetState and the last state of the path
+    // may actually be not identical.
+    checkArgument(pCounterexample.getTargetState().isTarget());
+    counterexample = pCounterexample;
+  }
+
+  /**
+   * Get additional information about the counterexample that is associated with this target state,
+   * if present.
+   */
+  public Optional<CounterexampleInfo> getCounterexampleInformation() {
+    checkState(isTarget());
+    return Optional.ofNullable(counterexample);
+  }
+
   // small and less important stuff
 
   public int getStateId() {
@@ -355,15 +425,8 @@ public class ARGState extends AbstractSingleWrapperState implements Comparable<A
   }
 
   private Iterable<Integer> stateIdsOf(Iterable<ARGState> elements) {
-    return from(elements).transform(TO_STATE_ID);
+    return from(elements).transform(ARGState::getStateId);
   }
-
-  private static final Function<ARGState, Integer> TO_STATE_ID = new Function<ARGState, Integer>() {
-    @Override
-    public Integer apply(ARGState pInput) {
-      return pInput.stateId;
-    }
-  };
 
   // removal from ARG
 

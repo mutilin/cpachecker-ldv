@@ -25,6 +25,8 @@ package org.sosy_lab.cpachecker.cpa.bam;
 
 import static org.sosy_lab.cpachecker.util.AbstractStates.extractLocation;
 
+import com.google.common.base.Predicate;
+import com.google.common.collect.Multimap;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -35,8 +37,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
@@ -46,9 +46,7 @@ import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.util.AbstractStates;
-
-import com.google.common.base.Predicate;
-import com.google.common.collect.Multimap;
+import org.sosy_lab.cpachecker.util.statistics.StatTimer;
 
 
 public class MultipleARGSubtreeRemover extends ARGSubtreeRemover {
@@ -68,7 +66,7 @@ public class MultipleARGSubtreeRemover extends ARGSubtreeRemover {
   private BAMTransferRelation transfer;
 
   public MultipleARGSubtreeRemover(BAMCPA bamcpa,
-      Timer removeCachedSubtreeTimer, Multimap<String, ReachedSet> map,
+      StatTimer removeCachedSubtreeTimer, Multimap<String, ReachedSet> map,
       Multimap<AbstractState, AbstractState> map2,
       BAMTransferRelation pTransfer) {
     super(bamcpa, removeCachedSubtreeTimer);
@@ -187,7 +185,7 @@ public class MultipleARGSubtreeRemover extends ARGSubtreeRemover {
     removeCachedSubtreeTimer.start();
 
     for (ARGState rootState : setsTotallyIntegratedInCache) {
-      cleanReachedSet(data.initialStateToReachedSet.get(rootState));
+      cleanReachedSet(data.getReachedSetForInitialState(rootState));
     }
     for (ReachedSet reachedSet : setsOnlyLocatedInCache) {
       cleanReachedSet(reachedSet);
@@ -202,6 +200,6 @@ public class MultipleARGSubtreeRemover extends ARGSubtreeRemover {
     CFANode rootNode = extractLocation(reducedRootState);
     Block rootSubtree = partitioning.getBlockForCallNode(rootNode);
     Precision reducedRootPrecision = reachedSet.getPrecision(reducedRootState);
-    bamCache.removeFromAllCaches(reducedRootState, reducedRootPrecision, rootSubtree);
+    bamCache.remove(reducedRootState, reducedRootPrecision, rootSubtree);
   }
 }

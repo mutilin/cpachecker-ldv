@@ -25,7 +25,6 @@ package org.sosy_lab.cpachecker.cpa.thread;
 
 import java.util.ArrayList;
 import java.util.List;
-
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
@@ -49,20 +48,20 @@ public class ThreadReducer implements Reducer {
 
   @Override
   public AbstractState getVariableReducedState(AbstractState pExpandedState, Block pContext,
-      Block pOuterContext, CFANode pCallNode) {
+      CFANode pCallNode) throws InterruptedException {
     ThreadState expState = (ThreadState)pExpandedState;
     LocationState expLocation = expState.getLocationState();
     CallstackState expCallstackState = expState.getCallstackState();
     ThreadStateBuilder builder = expState.getBuilder();
-    LocationState redLocation = (LocationState)lReducer.getVariableReducedState(expLocation, pContext, pOuterContext, pCallNode);
-    CallstackState redCallstack = (CallstackState)cReducer.getVariableReducedState(expCallstackState, pContext, pOuterContext, pCallNode);
+    LocationState redLocation = (LocationState)lReducer.getVariableReducedState(expLocation, pContext, pCallNode);
+    CallstackState redCallstack = (CallstackState)cReducer.getVariableReducedState(expCallstackState, pContext, pCallNode);
     builder.setWrappedStates(redLocation, redCallstack);
     return builder.build();
   }
 
   @Override
   public AbstractState getVariableExpandedState(AbstractState pRootState, Block pReducedContext,
-      Block pOuterContext, AbstractState pReducedState) {
+      AbstractState pReducedState) throws InterruptedException {
     ThreadState rootState = (ThreadState)pRootState;
     LocationState rootLocation = rootState.getLocationState();
     CallstackState rootCallstack = rootState.getCallstackState();
@@ -70,8 +69,8 @@ public class ThreadReducer implements Reducer {
     LocationState redLocation = redState.getLocationState();
     CallstackState redCallstack = redState.getCallstackState();
     ThreadStateBuilder builder = redState.getBuilder();
-    LocationState expLocation = (LocationState)lReducer.getVariableExpandedState(rootLocation, pReducedContext, pOuterContext, redLocation);
-    CallstackState expCallstack = (CallstackState)cReducer.getVariableExpandedState(rootCallstack, pReducedContext, pOuterContext, redCallstack);
+    LocationState expLocation = (LocationState)lReducer.getVariableExpandedState(rootLocation, pReducedContext, redLocation);
+    CallstackState expCallstack = (CallstackState)cReducer.getVariableExpandedState(rootCallstack, pReducedContext, redCallstack);
     builder.setWrappedStates(expLocation, expCallstack);
     return builder.build();
   }
@@ -106,26 +105,8 @@ public class ThreadReducer implements Reducer {
   }
 
   @Override
-  public AbstractState getVariableReducedStateForProofChecking(AbstractState pExpandedState,
-      Block pContext, CFANode pCallNode) {
-    return getVariableReducedState(pExpandedState, pContext, null, pCallNode);
-  }
-
-  @Override
-  public AbstractState getVariableExpandedStateForProofChecking(AbstractState pRootState,
-      Block pReducedContext, AbstractState pReducedState) {
-    return getVariableExpandedState(pRootState, pReducedContext, null, pReducedState);
-  }
-
-  @Override
   public AbstractState rebuildStateAfterFunctionCall(AbstractState pRootState,
       AbstractState pEntryState, AbstractState pExpandedState, FunctionExitNode pExitLocation) {
     return pExpandedState;
   }
-
-  @Override
-  public Object getHashCodeForState(AbstractState pStateKey) {
-    return getHashCodeForState(pStateKey, null);
-  }
-
 }

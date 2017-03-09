@@ -25,7 +25,6 @@ package org.sosy_lab.cpachecker.cfa.types.java;
 
 import java.util.ArrayList;
 import java.util.List;
-
 import org.sosy_lab.cpachecker.cfa.types.AFunctionType;
 
 /**
@@ -35,8 +34,8 @@ public class JMethodType extends AFunctionType implements JType {
 
   private static final long serialVersionUID = 1324108617808888102L;
 
-  private static final JMethodType UNRESOLVABLE_TYPE = new JMethodType(
-      JSimpleType.getUnspecified(), new ArrayList<JType>(), false);
+  private static final JMethodType UNRESOLVABLE_TYPE =
+      new JMethodType(JSimpleType.getUnspecified(), new ArrayList<>(), false);
 
   /**
    * Creates a new <code>JMethodType</code> object that stores the given information.
@@ -54,6 +53,11 @@ public class JMethodType extends AFunctionType implements JType {
   @Override
   public List<JType> getParameters() {
     return (List<JType>) super.getParameters();
+  }
+
+  @Override
+  public JType getReturnType() {
+    return (JType) super.getReturnType();
   }
 
   /**

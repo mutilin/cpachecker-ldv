@@ -23,10 +23,13 @@
  */
 package org.sosy_lab.cpachecker.pcc.strategy;
 
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.Multimap;
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.logging.Level;
-
+import javax.annotation.Nullable;
 import org.sosy_lab.common.ShutdownNotifier;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
@@ -44,9 +47,6 @@ import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 
-import com.google.common.collect.HashMultimap;
-import com.google.common.collect.Multimap;
-
 @Options
 public class ReachedSetStrategy extends SequentialReadStrategy {
 
@@ -55,9 +55,14 @@ public class ReachedSetStrategy extends SequentialReadStrategy {
   protected PropertyCheckerCPA cpa;
   protected final ShutdownNotifier shutdownNotifier;
 
-  public ReachedSetStrategy(Configuration pConfig, LogManager pLogger,
-      ShutdownNotifier pShutdownNotifier, PropertyCheckerCPA pCpa) throws InvalidConfigurationException {
-    super(pConfig, pLogger);
+  public ReachedSetStrategy(
+      Configuration pConfig,
+      LogManager pLogger,
+      ShutdownNotifier pShutdownNotifier,
+      Path pProofFile,
+      @Nullable PropertyCheckerCPA pCpa)
+      throws InvalidConfigurationException {
+    super(pConfig, pLogger, pProofFile);
     cpa= pCpa;
     shutdownNotifier = pShutdownNotifier;
   }
@@ -72,6 +77,7 @@ public class ReachedSetStrategy extends SequentialReadStrategy {
         reachedSet[i] = ((ARGState) reachedSet[i]).getWrappedState();
       }
     }
+    proofInfo.addInfoForStates(reachedSet);
     orderReachedSetByLocation(reachedSet);
   }
 

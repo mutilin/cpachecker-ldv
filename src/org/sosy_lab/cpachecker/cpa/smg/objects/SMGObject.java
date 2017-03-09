@@ -24,31 +24,76 @@
 package org.sosy_lab.cpachecker.cpa.smg.objects;
 
 
+import java.io.Serializable;
+import java.util.Comparator;
 
 public abstract class SMGObject {
-  final private int size;
-  final private String label;
+  private final int size;
+  private final String label;
+  private final int level;
+  private final SMGObjectKind kind;
+  private static int count;
+  private final int id;
 
-  static private final SMGObject nullObject = new SMGObject(0, "NULL") {
+
+
+  private static final SMGObject NULL_OBJECT = new SMGObject(0, "NULL", SMGObjectKind.NULL) {
+
     @Override
     public String toString() {
       return "NULL";
     }
+
+    @Override
+    public SMGObject copy() {
+      // fancy way of referencing itself
+      return SMGObject.getNullObject();
+    }
+
+    @Override
+    public SMGObject copy(int level) {
+      // fancy way of referencing itself
+      return SMGObject.getNullObject();
+    }
+
+    @Override
+    public boolean isMoreGeneral(SMGObject pOther) {
+      /*There is no object that can replace the null object in an smg.*/
+      return false;
+    }
   };
 
   static public SMGObject getNullObject() {
-    return nullObject;
+    return NULL_OBJECT;
   }
 
-  protected SMGObject(int pSize, String pLabel) {
-    size = pSize;
-    label = pLabel;
+  public SMGObjectKind getKind() {
+    return kind;
+  }
+
+  protected SMGObject(int pSize, String pLabel, SMGObjectKind pKind) {
+    this(pSize, pLabel, 0, pKind);
+  }
+
+  protected SMGObject(int pSize, String pLabel, int pLevel, SMGObjectKind pKind) {
+    this(pSize, pLabel, pLevel, pKind, getNewId());
   }
 
   protected SMGObject(SMGObject pOther) {
-    size = pOther.size;
-    label = pOther.label;
+    this(pOther.size, pOther.label, pOther.level, pOther.kind, pOther.id);
   }
+
+  private SMGObject(int pSize, String pLabel, int pLevel, SMGObjectKind pKind, int pId) {
+    size = pSize;
+    label = pLabel;
+    level = pLevel;
+    kind = pKind;
+    id = pId;
+  }
+
+  public abstract SMGObject copy();
+
+  public abstract SMGObject copy(int pNewLevel);
 
   public String getLabel() {
     return label;
@@ -59,11 +104,11 @@ public abstract class SMGObject {
   }
 
   public boolean notNull() {
-    return (! equals(nullObject));
+    return (! equals(NULL_OBJECT));
   }
 
   public boolean isAbstract() {
-    if (equals(nullObject)) {
+    if (equals(NULL_OBJECT)) {
       return false;
     }
 
@@ -77,17 +122,45 @@ public abstract class SMGObject {
     throw new UnsupportedOperationException("accept() called on SMGObject instance not on a subclass");
   }
 
-  public boolean isMoreGeneral(SMGObject pOther) {
-    if (size != pOther.size) {
-      throw new IllegalArgumentException("isMoreGeneral called on incompatible pair of objects");
-    }
-    return false;
-  }
+  /**
+   * Compares objects and determines, if this object is more general than given object.
+   * If this object is more general than the given object, then a smg resulting in replacing
+   * the given object with this object would cover strictly more states.
+   *
+   * @param pOther other object to be compared with this object.
+   * @return Returns true iff this object is more general than given object.
+   *  False otherwise.
+   */
+  public abstract boolean isMoreGeneral(SMGObject pOther);
 
   /**
    * @param pOther object to join with
+   * @param pDestLevel increase Nesting level.
    */
-  public SMGObject join(SMGObject pOther) {
+  public SMGObject join(SMGObject pOther, int pDestLevel) {
     throw new UnsupportedOperationException("join() called on SMGObject instance, not on a subclass");
+  }
+
+  public int getLevel() {
+    return level;
+  }
+
+  private static int getNewId() {
+    count++;
+    return count;
+  }
+
+  public int getId() {
+    return id;
+  }
+
+  public static class SMGObjectComparator implements Serializable, Comparator<SMGObject> {
+
+    private static final long serialVersionUID = 1L;
+
+    @Override
+    public int compare(SMGObject o1, SMGObject o2) {
+      return Integer.compare(o1.getId(), o2.getId());
+    }
   }
 }

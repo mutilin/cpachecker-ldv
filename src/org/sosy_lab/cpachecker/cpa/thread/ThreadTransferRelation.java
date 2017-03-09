@@ -28,9 +28,6 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-
-import javax.annotation.Nullable;
-
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCall;
@@ -157,14 +154,6 @@ public class ThreadTransferRelation extends SingleEdgeTransferRelation {
   private boolean isThreadCreateFunction(CFunctionCall statement) {
     return (statement instanceof CThreadCreateStatement);
     //return functionName.equals(CREATE) || functionName.equals(CREATE_SELF_PARALLEL);
-  }
-
-  @Override
-  public Collection<? extends AbstractState> strengthen(AbstractState pState,
-      List<AbstractState> pOtherStates, @Nullable CFAEdge pCfaEdge, Precision pPrecision)
-      throws CPATransferException, InterruptedException {
-    // TODO Auto-generated method stub
-    return null;
   }
 
   public Statistics getStatistics() {

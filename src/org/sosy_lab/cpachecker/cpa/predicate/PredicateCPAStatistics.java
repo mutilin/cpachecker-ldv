@@ -24,50 +24,51 @@
 package org.sosy_lab.cpachecker.cpa.predicate;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
-import static org.sosy_lab.cpachecker.util.statistics.StatisticsUtils.*;
+import static org.sosy_lab.cpachecker.util.statistics.StatisticsUtils.div;
+import static org.sosy_lab.cpachecker.util.statistics.StatisticsUtils.toPercent;
+import static org.sosy_lab.cpachecker.util.statistics.StatisticsUtils.valueWithPercentage;
 
+import com.google.common.base.Preconditions;
+import com.google.common.collect.MultimapBuilder;
+import com.google.common.collect.SetMultimap;
+import com.google.common.collect.Sets;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.Writer;
+import java.nio.charset.Charset;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.Set;
 import java.util.logging.Level;
-
-import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.FileOption;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
-import org.sosy_lab.common.io.Files;
-import org.sosy_lab.common.io.Path;
-import org.sosy_lab.common.io.Paths;
+import org.sosy_lab.common.io.MoreFiles;
+import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.TimeSpan;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.interfaces.MergeOperator;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
-import org.sosy_lab.cpachecker.core.interfaces.WrapperPrecision;
-import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
+import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
 import org.sosy_lab.cpachecker.cpa.predicate.persistence.LoopInvariantsWriter;
 import org.sosy_lab.cpachecker.cpa.predicate.persistence.PredicateAbstractionsWriter;
 import org.sosy_lab.cpachecker.cpa.predicate.persistence.PredicateMapWriter;
+import org.sosy_lab.cpachecker.util.Precisions;
 import org.sosy_lab.cpachecker.util.predicates.AbstractionManager;
 import org.sosy_lab.cpachecker.util.predicates.AbstractionPredicate;
 import org.sosy_lab.cpachecker.util.predicates.BlockOperator;
-import org.sosy_lab.cpachecker.util.predicates.pathformula.CachingPathFormulaManager;
+import org.sosy_lab.cpachecker.util.predicates.pathformula.PathFormulaManager;
 import org.sosy_lab.cpachecker.util.predicates.regions.RegionManager;
 import org.sosy_lab.cpachecker.util.predicates.smt.FormulaManagerView;
 import org.sosy_lab.cpachecker.util.predicates.smt.Solver;
 import org.sosy_lab.cpachecker.util.statistics.AbstractStatistics;
-
-import com.google.common.base.Preconditions;
-import com.google.common.collect.MultimapBuilder;
-import com.google.common.collect.SetMultimap;
-import com.google.common.collect.Sets;
 
 @Options(prefix="cpa.predicate")
 class PredicateCPAStatistics extends AbstractStatistics {
@@ -124,32 +125,59 @@ class PredicateCPAStatistics extends AbstractStatistics {
   @FileOption(FileOption.Type.OUTPUT_FILE)
   private Path relationsFile = Paths.get("relations.txt");
 
-  private final PredicateCPA cpa;
+  private final LogManager logger;
+
+  private final Solver solver;
+  private final PathFormulaManager pfmgr;
   private final BlockOperator blk;
   private final RegionManager rmgr;
   private final AbstractionManager absmgr;
+  private final PredicateAbstractionManager amgr;
+
+  private final PredicateAbstractDomain domain;
+  private final MergeOperator merge;
+  private final PredicateTransferRelation trans;
+  private final PredicatePrecisionAdjustment prec;
+
   private final PredicateMapWriter precisionWriter;
   private final LoopInvariantsWriter loopInvariantsWriter;
   private final PredicateAbstractionsWriter abstractionsWriter;
 
-  public PredicateCPAStatistics(PredicateCPA pCpa, BlockOperator pBlk,
-      RegionManager pRmgr, AbstractionManager pAbsmgr, CFA pCfa,
-      Configuration pConfig)
-          throws InvalidConfigurationException {
+  public PredicateCPAStatistics(
+      Configuration pConfig,
+      LogManager pLogger,
+      CFA pCfa,
+      Solver pSolver,
+      PathFormulaManager pPfmgr,
+      BlockOperator pBlk,
+      RegionManager pRmgr,
+      AbstractionManager pAbsmgr,
+      PredicateAbstractionManager pPredAbsMgr,
+      PredicateAbstractDomain pDomain,
+      MergeOperator pMerge,
+      PredicateTransferRelation pTransfer,
+      PredicatePrecisionAdjustment pPrec)
+      throws InvalidConfigurationException {
+    pConfig.inject(this, PredicateCPAStatistics.class);
 
-    cpa = pCpa;
+    logger = pLogger;
+    solver = pSolver;
+    pfmgr = pPfmgr;
     blk = pBlk;
     rmgr = pRmgr;
     absmgr = pAbsmgr;
+    amgr = pPredAbsMgr;
+    domain = pDomain;
+    merge = pMerge;
+    trans = pTransfer;
+    prec = pPrec;
 
-    pConfig.inject(this, PredicateCPAStatistics.class);
-
-    final FormulaManagerView fmgr = cpa.getSolver().getFormulaManager();
-    loopInvariantsWriter = new LoopInvariantsWriter(pCfa, cpa.getLogger(), pAbsmgr, fmgr, pRmgr);
-    abstractionsWriter = new PredicateAbstractionsWriter(cpa.getLogger(), fmgr);
+    FormulaManagerView fmgr = pSolver.getFormulaManager();
+    loopInvariantsWriter = new LoopInvariantsWriter(pCfa, pLogger, pAbsmgr, fmgr, pRmgr);
+    abstractionsWriter = new PredicateAbstractionsWriter(pLogger, fmgr);
 
     if (exportPredmap && predmapFile != null) {
-      precisionWriter = new PredicateMapWriter(cpa.getConfiguration(), fmgr);
+      precisionWriter = new PredicateMapWriter(pConfig, fmgr);
     } else {
       precisionWriter = null;
     }
@@ -165,17 +193,15 @@ class PredicateCPAStatistics extends AbstractStatistics {
    */
   private static class MutablePredicateSets {
 
-    private final SetMultimap<Pair<CFANode, Integer>, AbstractionPredicate> locationInstance;
+    private final SetMultimap<PredicatePrecision.LocationInstance, AbstractionPredicate>
+        locationInstance;
     private final SetMultimap<CFANode, AbstractionPredicate> location;
     private final SetMultimap<String, AbstractionPredicate> function;
     private final Set<AbstractionPredicate> global;
 
     private MutablePredicateSets() {
       // Use special multimaps with set-semantics and an ordering only on keys (not on values)
-      this.locationInstance = MultimapBuilder
-          .treeKeys(Pair.<CFANode, Integer>lexicographicalNaturalComparator())
-          .linkedHashSetValues()
-          .build();
+      this.locationInstance = MultimapBuilder.treeKeys().linkedHashSetValues().build();
 
       this.location = MultimapBuilder.treeKeys().linkedHashSetValues().build();
       this.function = MultimapBuilder.treeKeys().linkedHashSetValues().build();
@@ -193,31 +219,30 @@ class PredicateCPAStatistics extends AbstractStatistics {
     allPredicates.addAll(predicates.location.values());
     allPredicates.addAll(predicates.locationInstance.values());
 
-    try (Writer w = Files.openOutputFile(targetFile)) {
+    try (Writer w = MoreFiles.openOutputFile(targetFile, Charset.defaultCharset())) {
       precisionWriter.writePredicateMap(predicates.locationInstance,
           predicates.location, predicates.function, predicates.global,
           allPredicates, w);
     } catch (IOException e) {
-      cpa.getLogger().logUserException(Level.WARNING, e, "Could not write predicate map to file");
+      logger.logUserException(Level.WARNING, e, "Could not write predicate map to file");
     }
   }
 
 
   @Override
-  public void printStatistics(PrintStream out, Result result, ReachedSet reached) {
-    PredicateAbstractionManager amgr = cpa.getPredicateManager();
-
+  public void printStatistics(PrintStream out, Result result, UnmodifiableReachedSet reached) {
     int maxPredsPerLocation = -1;
     int allLocs = -1;
     int avgPredsPerLocation = -1;
     if (precisionStatistics) {
       MutablePredicateSets predicates = new MutablePredicateSets();
       {
-        Set<Precision> seenPrecisions = Collections.newSetFromMap(new IdentityHashMap<Precision, Boolean>());
+        Set<Precision> seenPrecisions = Collections.newSetFromMap(new IdentityHashMap<>());
 
         for (Precision precision : reached.getPrecisions()) {
-          if (seenPrecisions.add(precision) && precision instanceof WrapperPrecision) {
-            PredicatePrecision preds = ((WrapperPrecision)precision).retrieveWrappedPrecision(PredicatePrecision.class);
+          PredicatePrecision preds =
+              Precisions.extractPrecisionByType(precision, PredicatePrecision.class);
+          if (preds != null && seenPrecisions.add(preds)) {
             predicates.locationInstance.putAll(preds.getLocationInstancePredicates());
             predicates.location.putAll(preds.getLocalPredicates());
             predicates.function.putAll(preds.getFunctionPredicates());
@@ -256,15 +281,6 @@ class PredicateCPAStatistics extends AbstractStatistics {
     }
 
     PredicateAbstractionManager.Stats as = amgr.stats;
-    PredicateAbstractDomain domain = cpa.getAbstractDomain();
-    PredicateTransferRelation trans = cpa.getTransferRelation();
-    PredicatePrecisionAdjustment prec = cpa.getPrecisionAdjustment();
-    Solver solver = cpa.getSolver();
-
-    CachingPathFormulaManager pfMgr = null;
-    if (cpa.getPathFormulaManager() instanceof CachingPathFormulaManager) {
-      pfMgr = (CachingPathFormulaManager)cpa.getPathFormulaManager();
-    }
 
     out.println("Number of abstractions:            " + prec.numAbstractions + " (" + toPercent(prec.numAbstractions, trans.postTimer.getNumberOfIntervals()) + " of all post computations)");
     if (prec.numAbstractions > 0) {
@@ -273,12 +289,18 @@ class PredicateCPAStatistics extends AbstractStatistics {
       out.println("  Because of loop head:            " + valueWithPercentage(blk.numBlkLoops, prec.numAbstractions));
       out.println("  Because of join nodes:           " + valueWithPercentage(blk.numBlkJoins, prec.numAbstractions));
       out.println("  Because of threshold:            " + valueWithPercentage(blk.numBlkThreshold, prec.numAbstractions));
+      out.println("  Because of target state:         " + valueWithPercentage(prec.numTargetAbstractions, prec.numAbstractions));
       out.println("  Times precision was empty:       " + valueWithPercentage(as.numSymbolicAbstractions, as.numCallsAbstraction));
       out.println("  Times precision was {false}:     " + valueWithPercentage(as.numSatCheckAbstractions, as.numCallsAbstraction));
       out.println("  Times result was cached:         " + valueWithPercentage(as.numCallsAbstractionCached, as.numCallsAbstraction));
       out.println("  Times cartesian abs was used:    " + valueWithPercentage(as.cartesianAbstractionTime.getNumberOfIntervals(), as.numCallsAbstraction));
       out.println("  Times boolean abs was used:      " + valueWithPercentage(as.booleanAbstractionTime.getNumberOfIntervals(), as.numCallsAbstraction));
       out.println("  Times result was 'false':        " + valueWithPercentage(prec.numAbstractionsFalse, prec.numAbstractions));
+      if (as.inductivePredicatesTime.getNumberOfIntervals() > 0) {
+        out.println(
+            "  Times inductive cache was used:  "
+                + valueWithPercentage(as.numInductivePathFormulaCacheUsed, as.numCallsAbstraction));
+      }
     }
 
     if (trans.satCheckTimer.getNumberOfIntervals() > 0) {
@@ -288,11 +310,6 @@ class PredicateCPAStatistics extends AbstractStatistics {
     out.println("Number of strengthen sat checks:   " + trans.strengthenCheckTimer.getNumberOfIntervals());
     if (trans.strengthenCheckTimer.getNumberOfIntervals() > 0) {
       out.println("  Times result was 'false':        " + trans.numStrengthenChecksFalse + " (" + toPercent(trans.numStrengthenChecksFalse, trans.strengthenCheckTimer.getNumberOfIntervals()) + ")");
-    }
-    out.println("Number of strengthening with abstraction reuse:   " + trans.strengthenReuseCheckTimer.getNumberOfIntervals());
-    if (trans.strengthenReuseCheckTimer.getNumberOfIntervals() > 0) {
-      out.println("  Times abstraction was valid:     " + valueWithPercentage(trans.numStrengthenReusedValidAbstractions, trans.strengthenReuseCheckTimer.getNumberOfIntervals()));
-      out.println("  Times abstraction was invalid:   " + valueWithPercentage(trans.numStrengthenReusedInvalidAbstractions, trans.strengthenReuseCheckTimer.getNumberOfIntervals()));
     }
     out.println("Number of coverage checks:         " + domain.coverageCheckTimer.getNumberOfIntervals());
     out.println("  BDD entailment checks:           " + domain.bddCoverageCheckTimer.getNumberOfIntervals());
@@ -320,6 +337,11 @@ class PredicateCPAStatistics extends AbstractStatistics {
       if (as.trivialPredicatesTime.getNumberOfIntervals() > 0) {
         out.println("Number of trivially used predicates:      " + valueWithPercentage(as.numTrivialPredicates, as.numTotalPredicates));
       }
+      if (as.inductivePredicatesTime.getNumberOfIntervals() > 0) {
+        out.println(
+            "Number of inductive predicates:           "
+                + valueWithPercentage(as.numInductivePredicates, as.numTotalPredicates));
+      }
       if (as.cartesianAbstractionTime.getNumberOfIntervals() > 0) {
         out.println("Number of preds cached for cartesian abs: " + valueWithPercentage(as.numCartesianAbsPredicatesCached, as.numTotalPredicates));
         out.println("Number of preds solved by cartesian abs:  " + valueWithPercentage(as.numCartesianAbsPredicates, as.numTotalPredicates));
@@ -332,19 +354,9 @@ class PredicateCPAStatistics extends AbstractStatistics {
       }
     }
     out.println();
-    if (pfMgr != null) {
-      int pathFormulaCacheHits = pfMgr.pathFormulaCacheHits;
-      int totalPathFormulaComputations = pfMgr.pathFormulaComputationTimer.getNumberOfIntervals() + pathFormulaCacheHits;
-      out.println("Number of path formula cache hits:   " + pathFormulaCacheHits + " (" + toPercent(pathFormulaCacheHits, totalPathFormulaComputations) + ")");
-    }
-
-    out.println();
 
     out.println("Time for post operator:              " + trans.postTimer);
     out.println("  Time for path formula creation:    " + trans.pathFormulaTimer);
-    if (pfMgr != null) {
-      out.println("    Actual computation:              " + pfMgr.pathFormulaComputationTimer);
-    }
     if (trans.satCheckTimer.getNumberOfIntervals() > 0) {
       out.println("  Time for satisfiability checks:    " + trans.satCheckTimer);
     }
@@ -352,16 +364,14 @@ class PredicateCPAStatistics extends AbstractStatistics {
     if (trans.strengthenCheckTimer.getNumberOfIntervals() > 0) {
       out.println("  Time for satisfiability checks:    " + trans.strengthenCheckTimer);
     }
-    if (trans.strengthenReuseCheckTimer.getNumberOfIntervals() > 0) {
-      out.println("  Time for abstraction reuse check:  " + trans.strengthenReuseCheckTimer);
-      out.println("  Time for abstraction converter:    " + trans.strengthenReuseConvertTimer);
-      out.println("  Time for abstraction reading:      " + trans.strengthenReuseReadTimer);
-    }
     out.println("Time for prec operator:              " + prec.totalPrecTime);
     if (prec.numAbstractions > 0) {
       out.println("  Time for abstraction:              " + prec.computingAbstractionTime + " (Max: " + prec.computingAbstractionTime.getMaxTime().formatAs(SECONDS) + ", Count: " + prec.computingAbstractionTime.getNumberOfIntervals() + ")");
       if (as.trivialPredicatesTime.getNumberOfIntervals() > 0) {
         out.println("    Relevant predicate analysis:     " + as.trivialPredicatesTime);
+      }
+      if (as.inductivePredicatesTime.getNumberOfIntervals() > 0) {
+        out.println("    Inductive predicate analysis:    " + as.inductivePredicatesTime);
       }
       if (as.cartesianAbstractionTime.getNumberOfIntervals() > 0) {
         out.println("    Cartesian abstraction:           " + as.cartesianAbstractionTime);
@@ -378,7 +388,6 @@ class PredicateCPAStatistics extends AbstractStatistics {
       out.println("    Time for BDD construction:       " + as.abstractionEnumTime.getInnerSumTime().formatAs(SECONDS)   + " (Max: " + as.abstractionEnumTime.getInnerMaxTime().formatAs(SECONDS) + ")");
     }
 
-    MergeOperator merge = cpa.getMergeOperator();
     if (merge instanceof PredicateMergeOperator) {
       out.println("Time for merge operator:             " + ((PredicateMergeOperator)merge).totalMergeTime);
     }
@@ -396,6 +405,8 @@ class PredicateCPAStatistics extends AbstractStatistics {
       out.println("Time for abstraction checks:       " + trans.abstractionCheckTimer);
       out.println("Time for unsat checks:             " + trans.satCheckTimer + " (Calls: " + trans.satCheckTimer.getNumberOfIntervals() + ")");
     }
+    out.println();
+    pfmgr.printStatistics(out);
     out.println();
     rmgr.printStatistics(out);
   }

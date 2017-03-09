@@ -27,7 +27,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
 import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.core.defaults.AbstractSingleWrapperState;
@@ -220,7 +219,7 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
   public static Timer tmpTimer3 = new Timer();
 
   public UsageStatisticsState expand(final UsageStatisticsState root, final AbstractState wrappedState,
-      Block pReducedContext, Block outerSubtree, LockStatisticsReducer reducer) {
+      Block pReducedContext, LockStatisticsReducer reducer) {
     tmpTimer1.start();
     UsageStatisticsState result = root.clone(wrappedState);
     if (this instanceof Exitable) {
@@ -228,7 +227,7 @@ public class UsageStatisticsState extends AbstractSingleWrapperState implements 
     }
     //Now it is only join
     LockStatisticsState rootLockState = AbstractStates.extractStateByType(root, LockStatisticsState.class);
-    LockStatisticsState reducedLockState = (LockStatisticsState) reducer.getVariableReducedState(rootLockState, pReducedContext, outerSubtree, AbstractStates.extractLocation(root));
+    LockStatisticsState reducedLockState = (LockStatisticsState) reducer.getVariableReducedState(rootLockState, pReducedContext, AbstractStates.extractLocation(root));
     List<LockEffect> difference = reducedLockState.getDifference(rootLockState);
 
     tmpTimer1.stop();

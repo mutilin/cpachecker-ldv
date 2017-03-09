@@ -23,10 +23,10 @@
  */
 package org.sosy_lab.cpachecker.util.predicates.smt;
 
-import java.util.List;
+import org.sosy_lab.java_smt.api.Formula;
+import org.sosy_lab.java_smt.api.FormulaType;
 
-import org.sosy_lab.solver.api.Formula;
-import org.sosy_lab.solver.api.FormulaType;
+import java.util.List;
 
 /**
  * Abstract helper class that does nothing more than providing access

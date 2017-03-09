@@ -24,6 +24,7 @@
 package org.sosy_lab.cpachecker.util.predicates;
 
 import static org.junit.Assert.assertEquals;
+import static org.mockito.Mockito.mock;
 
 import java.util.List;
 
@@ -32,16 +33,16 @@ import org.junit.Test;
 import org.sosy_lab.common.ShutdownNotifier;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
-import org.sosy_lab.common.log.TestLogManager;
+import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.types.MachineModel;
 import org.sosy_lab.cpachecker.cfa.types.c.CNumericTypes;
-import org.sosy_lab.solver.AssignableTerm.Variable;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.SSAMap;
 import org.sosy_lab.cpachecker.util.predicates.pathformula.SSAMap.SSAMapBuilder;
-import org.sosy_lab.solver.TermType;
+import org.sosy_lab.java_smt.api.Formula;
+import org.sosy_lab.java_smt.api.Model.ValueAssignment;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
-
 
 public class AssignmentToPathAllocatorTest {
 
@@ -53,15 +54,15 @@ public class AssignmentToPathAllocatorTest {
         new AssignmentToPathAllocator(
             Configuration.defaultConfiguration(),
             ShutdownNotifier.createDummy(),
-            TestLogManager.getInstance(),
+            LogManager.createTestLogManager(),
             MachineModel.LINUX32);
   }
 
   @Test
   public void testFindFirstOccurrenceOfVariable() {
-    Variable varX = new Variable("x@4", TermType.Integer);
-    Variable varY = new Variable("y@5", TermType.Integer);
-    Variable varZ = new Variable("z@6", TermType.Integer);
+    ValueAssignment varX = new ValueAssignment(mock(Formula.class), "x@4", 1, ImmutableList.of());
+    ValueAssignment varY = new ValueAssignment(mock(Formula.class), "y@5", 1, ImmutableList.of());
+    ValueAssignment varZ = new ValueAssignment(mock(Formula.class), "z@6", 1, ImmutableList.of());
 
     SSAMapBuilder ssaMapBuilder = SSAMap.emptySSAMap().builder();
     List<SSAMap> ssaMaps = Lists.newArrayList();

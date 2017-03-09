@@ -23,16 +23,16 @@
  */
 package org.sosy_lab.cpachecker.cpa.smg.graphs;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.logging.Level;
-
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cpa.smg.SMGEdge;
 import org.sosy_lab.cpachecker.cpa.smg.SMGEdgeHasValue;
 import org.sosy_lab.cpachecker.cpa.smg.SMGEdgeHasValueFilter;
 import org.sosy_lab.cpachecker.cpa.smg.objects.SMGObject;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.logging.Level;
 
 final class SMGConsistencyVerifier {
   private SMGConsistencyVerifier() {} /* utility class */
@@ -119,7 +119,7 @@ final class SMGConsistencyVerifier {
    */
   static private boolean verifyInvalidRegionsHaveNoHVEdges(LogManager pLogger, SMG pSmg) {
     for (SMGObject obj : pSmg.getObjects()) {
-      if (pSmg.isObjectValid(obj)) {
+      if (pSmg.isObjectValid(obj) || pSmg.isObjectExternallyAllocated(obj)) {
         continue;
       }
       // Verify that the HasValue edge set for this invalid object is empty
@@ -149,7 +149,7 @@ final class SMGConsistencyVerifier {
     SMGEdgeHasValueFilter filter = SMGEdgeHasValueFilter.objectFilter(pObject);
 
     for (SMGEdgeHasValue hvEdge : pSmg.getHVEdges(filter)) {
-      if ((hvEdge.getOffset() + hvEdge.getSizeInBytes(pSmg.getMachineModel())) > pObject.getSize()) {
+      if ((hvEdge.getOffset() + hvEdge.getSizeInBits(pSmg.getMachineModel())) > pObject.getSize()) {
         pLogger.log(Level.SEVERE, "SMG inconistent: field exceedes boundary of the object");
         pLogger.log(Level.SEVERE, "Object: ", pObject);
         pLogger.log(Level.SEVERE, "Field: ", hvEdge);
@@ -273,7 +273,7 @@ final class SMGConsistencyVerifier {
         pLogger,
         "Has Value edge consistency");
     toReturn = toReturn && verifySMGProperty(
-        verifyEdgeConsistency(pLogger, pSmg, pSmg.getPTEdges().values()),
+        verifyEdgeConsistency(pLogger, pSmg, pSmg.getPTEdges().asSet()),
         pLogger,
         "Points To edge consistency");
     toReturn = toReturn && verifySMGProperty(

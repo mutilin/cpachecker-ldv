@@ -25,6 +25,8 @@ package org.sosy_lab.cpachecker.pcc.strategy.parallel;
 
 import static org.sosy_lab.cpachecker.util.AbstractStates.extractLocation;
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Collection;
@@ -34,9 +36,9 @@ import java.util.List;
 import java.util.Stack;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ThreadFactory;
 import java.util.logging.Level;
-
-import org.sosy_lab.common.concurrency.Threads;
+import javax.annotation.Nullable;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Options;
@@ -71,10 +73,10 @@ public class ARGProofCheckerParallelStrategy extends SequentialReadStrategy {
   private ProofChecker checker;
   private PropertyChecker propChecker;
 
-  public ARGProofCheckerParallelStrategy(Configuration pConfig, LogManager pLogger,
-      ProofChecker pChecker)
+  public ARGProofCheckerParallelStrategy(
+      Configuration pConfig, LogManager pLogger, Path pProofFile, @Nullable ProofChecker pChecker)
       throws InvalidConfigurationException {
-    super(pConfig, pLogger);
+    super(pConfig, pLogger, pProofFile);
     checker = pChecker;
     propChecker = new NoTargetStateChecker();
     if (pChecker instanceof PropertyCheckerCPA) {
@@ -103,9 +105,13 @@ public class ARGProofCheckerParallelStrategy extends SequentialReadStrategy {
       CyclicBarrier barrier = new CyclicBarrier(numThreads);
       CommonResult result = new CommonResult(numThreads);
 
+      ThreadFactory threadFactory =
+          new ThreadFactoryBuilder()
+              .setNameFormat("ARGProofCheckerParallelStrategy-checkCertificate-%d")
+              .build();
       for (int i = 0; i < helper.length; i++) {
         helper[i] = new StateCheckingHelper(barrier, result, propChecker, checker);
-        helperThreads[i] = Threads.newThread(helper[i]);
+        helperThreads[i] = threadFactory.newThread(helper[i]);
         helperThreads[i].start();
       }
 
@@ -119,7 +125,8 @@ public class ARGProofCheckerParallelStrategy extends SequentialReadStrategy {
       for (int i = 0; i < args.length - 2; i++) {
         bamState = (BAMARGBlockStartState) args[i];
         block =
-            ((BAMCPA) checker).getTransferRelation().getBlockPartitioning()
+            ((BAMCPA) checker)
+                .getBlockPartitioning()
                 .getBlockForCallNode(AbstractStates.extractLocation(bamState));
 
         // traverse
@@ -148,7 +155,8 @@ public class ARGProofCheckerParallelStrategy extends SequentialReadStrategy {
         }
 
         // add ARG as checked
-        ((BAMCPA) checker).getTransferRelation().setCorrectARG(Pair.of(args[i], block), returnNodes);
+        ((BAMCPA) checker).getBamPccManager().setCorrectARG(Pair.of(args[i], block),
+            returnNodes);
       }
 
       // check main block
@@ -521,7 +529,7 @@ public class ARGProofCheckerParallelStrategy extends SequentialReadStrategy {
 
     public synchronized Collection<ARGState> getResult() throws InterruptedException {
       try {
-        if (numSetResults != max) {
+        while (numSetResults != max) {
           wait();
         }
         if (!success) {
@@ -535,7 +543,7 @@ public class ARGProofCheckerParallelStrategy extends SequentialReadStrategy {
       }
     }
 
-    public void increaseSetResults() {
+    private void increaseSetResults() {
       numSetResults++;
       if (numSetResults == max) {
         notify();

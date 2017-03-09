@@ -32,16 +32,14 @@ import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
-import org.sosy_lab.cpachecker.core.defaults.StaticPrecisionAdjustment;
 import org.sosy_lab.cpachecker.core.defaults.StopSepOperator;
-import org.sosy_lab.cpachecker.core.defaults.VariableTrackingPrecision;
+import org.sosy_lab.cpachecker.core.defaults.precision.VariableTrackingPrecision;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractDomain;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.CPAFactory;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.MergeOperator;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
-import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustment;
 import org.sosy_lab.cpachecker.core.interfaces.StateSpacePartition;
 import org.sosy_lab.cpachecker.core.interfaces.StopOperator;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
@@ -70,7 +68,6 @@ public final class OctagonCPA implements ConfigurableProgramAnalysis {
   private final TransferRelation transferRelation;
   private final MergeOperator mergeOperator;
   private final StopOperator stopOperator;
-  private final PrecisionAdjustment precisionAdjustment;
   private final LogManager logger;
   private final Precision precision;
   private final Configuration config;
@@ -95,15 +92,9 @@ public final class OctagonCPA implements ConfigurableProgramAnalysis {
     }
 
     this.transferRelation = new OctagonTransferRelation(logger, cfa.getLoopStructure().get());
-
-    MergeOperator octagonMergeOp = OctagonMergeOperator.getInstance(octagonDomain, config);
-
-    StopOperator octagonStopOp = new StopSepOperator(octagonDomain);
-
     this.abstractDomain = octagonDomain;
-    this.mergeOperator = octagonMergeOp;
-    this.stopOperator = octagonStopOp;
-    this.precisionAdjustment = StaticPrecisionAdjustment.getInstance();
+    this.mergeOperator = OctagonMergeOperator.getInstance(octagonDomain, config);
+    this.stopOperator = new StopSepOperator(octagonDomain);
     this.config = config;
     this.shutdownNotifier = shutdownNotifier;
     this.cfa = cfa;
@@ -141,11 +132,6 @@ public final class OctagonCPA implements ConfigurableProgramAnalysis {
   @Override
   public StopOperator getStopOperator() {
     return stopOperator;
-  }
-
-  @Override
-  public PrecisionAdjustment getPrecisionAdjustment() {
-    return precisionAdjustment;
   }
 
   @Override

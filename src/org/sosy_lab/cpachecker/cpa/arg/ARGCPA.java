@@ -23,29 +23,24 @@
  */
 package org.sosy_lab.cpachecker.cpa.arg;
 
-import static com.google.common.base.Preconditions.checkArgument;
+import static org.sosy_lab.cpachecker.util.AbstractStates.getOutgoingEdges;
 
-import java.util.ArrayList;
+import com.google.common.base.Preconditions;
+import com.google.common.base.Predicates;
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Multimap;
 import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.WeakHashMap;
-import java.util.logging.Level;
-
-import org.sosy_lab.common.Classes;
-import org.sosy_lab.common.configuration.ClassOption;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
+import org.sosy_lab.cpachecker.cfa.blocks.BlockPartitioning;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
-import org.sosy_lab.cpachecker.cfa.types.MachineModel;
-import org.sosy_lab.cpachecker.core.CounterexampleInfo;
+import org.sosy_lab.cpachecker.core.Specification;
 import org.sosy_lab.cpachecker.core.defaults.AbstractSingleWrapperCPA;
 import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
 import org.sosy_lab.cpachecker.core.defaults.FlatLatticeDomain;
@@ -64,18 +59,10 @@ import org.sosy_lab.cpachecker.core.interfaces.StateSpacePartition;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.core.interfaces.pcc.ProofChecker;
-import org.sosy_lab.cpachecker.cpa.arg.counterexamples.CEXExporter;
-import org.sosy_lab.cpachecker.cpa.arg.counterexamples.ConjunctiveCounterexampleFilter;
-import org.sosy_lab.cpachecker.cpa.arg.counterexamples.CounterexampleFilter;
-import org.sosy_lab.cpachecker.cpa.arg.counterexamples.NullCounterexampleFilter;
-import org.sosy_lab.cpachecker.cpa.arg.counterexamples.PathEqualityCounterexampleFilter;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 
-import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
-
-@Options(prefix="cpa.arg")
+@Options
 public class ARGCPA extends AbstractSingleWrapperCPA implements
     ConfigurableProgramAnalysisWithBAM, ProofChecker {
 
@@ -83,151 +70,94 @@ public class ARGCPA extends AbstractSingleWrapperCPA implements
     return AutomaticCPAFactory.forType(ARGCPA.class);
   }
 
-  @Option(secure=true,
+  @Option(secure=true, name="cpa.arg.inCPAEnabledAnalysis",
   description="inform ARG CPA if it is run in an analysis with enabler CPA because then it must "
-    + "behave differntly during merge.")
+    + "behave differently during merge.")
   private boolean inCPAEnabledAnalysis = false;
 
-  @Option(secure=true,
+  @Option(secure=true, name="cpa.arg.deleteInCPAEnabledAnalysis",
       description="inform merge operator in CPA enabled analysis that it should delete the subgraph of the merged node "
         + "which is required to get at most one successor per CFA edge.")
       private boolean deleteInCPAEnabledAnalysis = false;
 
-  @Option(secure=true, name="errorPath.filters",
-      description="Filter for irrelevant counterexamples to reduce the number of similar counterexamples reported."
-      + " Only relevant with analysis.stopAfterError=false and cpa.arg.errorPath.exportImmediately=true."
-      + " Put the weakest and cheapest filter first, e.g., PathEqualityCounterexampleFilter.")
-  @ClassOption(packagePrefix="org.sosy_lab.cpachecker.cpa.arg.counterexamples")
-  private List<Class<? extends CounterexampleFilter>> cexFilterClasses
-      = ImmutableList.<Class<? extends CounterexampleFilter>>of(
-          PathEqualityCounterexampleFilter.class);
-  private final CounterexampleFilter cexFilter;
-
-  @Option(secure=true, name="errorPath.exportImmediately",
-          description="export error paths to files immediately after they were found")
-  private boolean dumpErrorPathImmediately = false;
+  @Option(
+    secure = true,
+    name = "cpa.arg.keepCoveredStatesInReached",
+    description =
+        "whether to keep covered states in the reached set as addition to keeping them in the ARG"
+  )
+  private boolean keepCoveredStatesInReached = false;
 
   private final LogManager logger;
 
-  private final AbstractDomain abstractDomain;
-  private final ARGTransferRelation transferRelation;
-  private final MergeOperator mergeOperator;
-  private final ARGStopSep stopOperator;
-  private final PrecisionAdjustment precisionAdjustment;
-  private final Reducer reducer;
   private final ARGStatistics stats;
-  private final ProofChecker wrappedProofChecker;
 
-  private final CEXExporter cexExporter;
-  private final Map<ARGState, CounterexampleInfo> counterexamples = new WeakHashMap<>();
-  private final MachineModel machineModel;
-
-  private ARGCPA(ConfigurableProgramAnalysis cpa, Configuration config, LogManager logger, CFA cfa) throws InvalidConfigurationException {
+  private ARGCPA(
+      ConfigurableProgramAnalysis cpa,
+      Configuration config,
+      LogManager logger,
+      Specification pSpecification,
+      CFA cfa)
+      throws InvalidConfigurationException {
     super(cpa);
     config.inject(this);
     this.logger = logger;
-    abstractDomain = new FlatLatticeDomain();
-    transferRelation = new ARGTransferRelation(cpa.getTransferRelation());
 
-    PrecisionAdjustment wrappedPrec = cpa.getPrecisionAdjustment();
-    if (wrappedPrec instanceof SimplePrecisionAdjustment) {
-      precisionAdjustment = new ARGSimplePrecisionAdjustment((SimplePrecisionAdjustment) wrappedPrec);
-    } else {
-      precisionAdjustment = new ARGPrecisionAdjustment(cpa.getPrecisionAdjustment(), inCPAEnabledAnalysis);
-    }
-
-    if (cpa instanceof ConfigurableProgramAnalysisWithBAM) {
-      Reducer wrappedReducer = ((ConfigurableProgramAnalysisWithBAM)cpa).getReducer();
-      if (wrappedReducer != null) {
-        reducer = new ARGReducer(wrappedReducer);
-      } else {
-        reducer = null;
-      }
-    } else {
-      reducer = null;
-    }
-
-    if (cpa instanceof ProofChecker) {
-      this.wrappedProofChecker = (ProofChecker)cpa;
-    } else {
-      this.wrappedProofChecker = null;
-    }
-
-    MergeOperator wrappedMerge = getWrappedCpa().getMergeOperator();
-    if (wrappedMerge == MergeSepOperator.getInstance()) {
-      mergeOperator = MergeSepOperator.getInstance();
-    } else {
-      if (inCPAEnabledAnalysis) {
-        mergeOperator = new ARGMergeJoinCPAEnabledAnalysis(wrappedMerge, deleteInCPAEnabledAnalysis);
-      } else {
-        mergeOperator = new ARGMergeJoin(wrappedMerge);
-      }
-    }
-    stopOperator = new ARGStopSep(getWrappedCpa().getStopOperator(), logger, config);
-    cexFilter = createCounterexampleFilter(config, logger, cpa);
-    ARGPathExporter argPathExporter = new ARGPathExporter(config, logger, cfa.getMachineModel(), cfa.getLanguage());
-    cexExporter = new CEXExporter(config, logger, argPathExporter);
-    stats = new ARGStatistics(config, logger, this, cfa.getMachineModel(),
-        dumpErrorPathImmediately ? null : cexExporter, argPathExporter);
-    machineModel = cfa.getMachineModel();
-  }
-
-  private CounterexampleFilter createCounterexampleFilter(Configuration config,
-      LogManager logger, ConfigurableProgramAnalysis cpa) throws InvalidConfigurationException {
-    final Object[] argumentValues = new Object[]{config, logger, cpa};
-    final Class<?>[] argumentTypes = new Class<?>[]{Configuration.class, LogManager.class, ConfigurableProgramAnalysis.class};
-
-    switch (cexFilterClasses.size()) {
-    case 0:
-      return new NullCounterexampleFilter();
-    case 1:
-      return Classes.createInstance(CounterexampleFilter.class, cexFilterClasses.get(0),
-          argumentTypes,
-          argumentValues,
-          InvalidConfigurationException.class);
-    default:
-      List<CounterexampleFilter> filters = new ArrayList<>(cexFilterClasses.size());
-      for (Class<? extends CounterexampleFilter> cls : cexFilterClasses) {
-        filters.add(Classes.createInstance(CounterexampleFilter.class, cls,
-          argumentTypes, argumentValues,
-          InvalidConfigurationException.class));
-      }
-      return new ConjunctiveCounterexampleFilter(filters);
-    }
+    stats = new ARGStatistics(config, logger, this, pSpecification, cfa);
   }
 
   @Override
   public AbstractDomain getAbstractDomain() {
-    return abstractDomain;
+    return new FlatLatticeDomain();
   }
 
   @Override
   public TransferRelation getTransferRelation() {
-    return transferRelation;
+    return new ARGTransferRelation(getWrappedCpa().getTransferRelation());
   }
 
   @Override
   public MergeOperator getMergeOperator() {
-    return mergeOperator;
+    MergeOperator wrappedMergeOperator = getWrappedCpa().getMergeOperator();
+    if (wrappedMergeOperator == MergeSepOperator.getInstance()) {
+      return MergeSepOperator.getInstance();
+    } else if (inCPAEnabledAnalysis) {
+      return new ARGMergeJoinCPAEnabledAnalysis(wrappedMergeOperator, deleteInCPAEnabledAnalysis);
+    } else {
+      return new ARGMergeJoin(wrappedMergeOperator);
+    }
   }
 
   @Override
   public ForcedCoveringStopOperator getStopOperator() {
-    return stopOperator;
+    return new ARGStopSep(
+        getWrappedCpa().getStopOperator(),
+        logger,
+        inCPAEnabledAnalysis,
+        keepCoveredStatesInReached);
   }
 
   @Override
   public PrecisionAdjustment getPrecisionAdjustment() {
-    return precisionAdjustment;
+    PrecisionAdjustment wrappedPrec = getWrappedCpa().getPrecisionAdjustment();
+    if (wrappedPrec instanceof SimplePrecisionAdjustment) {
+      return new ARGSimplePrecisionAdjustment((SimplePrecisionAdjustment) wrappedPrec);
+    } else {
+      return new ARGPrecisionAdjustment(wrappedPrec, inCPAEnabledAnalysis, stats);
+    }
   }
 
   @Override
-  public Reducer getReducer() {
-    return reducer;
+  public Reducer getReducer() throws InvalidConfigurationException {
+    ConfigurableProgramAnalysis cpa = getWrappedCpa();
+    Preconditions.checkState(
+        cpa instanceof ConfigurableProgramAnalysisWithBAM,
+        "wrapped CPA does not support BAM: " + cpa.getClass().getCanonicalName());
+    return new ARGReducer(((ConfigurableProgramAnalysisWithBAM) cpa).getReducer());
   }
 
   @Override
-  public AbstractState getInitialState(CFANode pNode, StateSpacePartition pPartition) {
+  public AbstractState getInitialState(CFANode pNode, StateSpacePartition pPartition) throws InterruptedException {
     // TODO some code relies on the fact that this method is called only one and the result is the root of the ARG
     return new ARGState(getWrappedCpa().getInitialState(pNode, pPartition), null);
   }
@@ -238,66 +168,75 @@ public class ARGCPA extends AbstractSingleWrapperCPA implements
 
   @Override
   public void collectStatistics(Collection<Statistics> pStatsCollection) {
-    pStatsCollection.add(stats);
+    if (!Iterables.any(pStatsCollection, Predicates.instanceOf(ARGStatistics.class))) {
+      // we do not want to add ARGStatistics twice, if a wrapping CPA also uses it.
+      // This would result in overriding the output-files due to equal file names.
+      // Info: this case is one of the reasons to first collect our own statistics
+      // and afterwards call super.collectStatistics().
+      pStatsCollection.add(stats);
+    }
     super.collectStatistics(pStatsCollection);
   }
 
-  public Map<ARGState, CounterexampleInfo> getCounterexamples() {
-    return Collections.unmodifiableMap(counterexamples);
-  }
-
-  public void addCounterexample(ARGState targetState, CounterexampleInfo pCounterexample) {
-    checkArgument(targetState.isTarget());
-    checkArgument(!pCounterexample.isSpurious());
-    // With BAM, the targetState and the last state of the path
-    // may actually be not identical.
-    checkArgument(pCounterexample.getTargetPath().getLastState().isTarget());
-    counterexamples.put(targetState, pCounterexample);
-  }
-
-  public void clearCounterexamples(Set<ARGState> toRemove) {
-    // Actually the goal would be that this method is not necessary
-    // because the GC automatically removes counterexamples when the ARGState
-    // is removed from the ReachedSet.
-    // However, counterexamples may reference their target state through
-    // the target path attribute, so the GC may not remove the counterexample.
-    // While this is not a problem for correctness
-    // (we check in the end which counterexamples are still valid),
-    // it may be a memory leak.
-    // Thus this method.
-
-    counterexamples.keySet().removeAll(toRemove);
-  }
-
-  ARGToDotWriter getRefinementGraphWriter() {
-    return stats.getRefinementGraphWriter();
+  ARGStatistics getARGExporter() {
+    return stats;
   }
 
   @Override
   public boolean areAbstractSuccessors(AbstractState pElement, CFAEdge pCfaEdge,
       Collection<? extends AbstractState> pSuccessors) throws CPATransferException, InterruptedException {
-    Preconditions.checkNotNull(wrappedProofChecker, "Wrapped CPA has to implement ProofChecker interface");
-    return transferRelation.areAbstractSuccessors(pElement, pCfaEdge, pSuccessors, wrappedProofChecker);
+    Preconditions.checkState(
+        getWrappedCpa() instanceof ProofChecker,
+        "Wrapped CPA has to implement ProofChecker interface");
+    ProofChecker wrappedProofChecker = (ProofChecker)getWrappedCpa();
+    ARGState element = (ARGState) pElement;
+
+    assert Iterables.elementsEqual(element.getChildren(), pSuccessors);
+
+    AbstractState wrappedState = element.getWrappedState();
+    Multimap<CFAEdge, AbstractState> wrappedSuccessors = HashMultimap.create();
+    for (AbstractState absElement : pSuccessors) {
+      ARGState successorElem = (ARGState) absElement;
+      wrappedSuccessors.put(element.getEdgeToChild(successorElem), successorElem.getWrappedState());
+    }
+
+    if (pCfaEdge != null) {
+      return wrappedProofChecker.areAbstractSuccessors(
+          wrappedState, pCfaEdge, wrappedSuccessors.get(pCfaEdge));
+    }
+
+    for (CFAEdge edge : getOutgoingEdges(element)) {
+      if (!wrappedProofChecker.areAbstractSuccessors(
+          wrappedState, edge, wrappedSuccessors.get(edge))) {
+        return false;
+      }
+    }
+    return true;
   }
 
   @Override
   public boolean isCoveredBy(AbstractState pElement, AbstractState pOtherElement) throws CPAException, InterruptedException {
-    Preconditions.checkNotNull(wrappedProofChecker, "Wrapped CPA has to implement ProofChecker interface");
-    return stopOperator.isCoveredBy(pElement, pOtherElement, wrappedProofChecker);
+    Preconditions.checkState(
+        getWrappedCpa() instanceof ProofChecker,
+        "Wrapped CPA has to implement ProofChecker interface");
+    ProofChecker wrappedProofChecker = (ProofChecker)getWrappedCpa();
+    AbstractState wrappedState = ((ARGState) pElement).getWrappedState();
+    AbstractState wrappedOtherElement = ((ARGState) pOtherElement).getWrappedState();
+    return wrappedProofChecker.isCoveredBy(wrappedState, wrappedOtherElement);
   }
 
-  void exportCounterexampleOnTheFly(ARGState pTargetState,
-    CounterexampleInfo pCounterexampleInfo, int cexIndex) throws InterruptedException {
-    if (dumpErrorPathImmediately) {
-      if (cexFilter.isRelevant(pCounterexampleInfo)) {
-        cexExporter.exportCounterexample(pTargetState, pCounterexampleInfo, cexIndex);
-      } else {
-        logger.log(Level.FINEST, "Skipping counterexample printing because it is similar to one of already printed.");
-      }
-    }
+  @Override
+  public void setPartitioning(BlockPartitioning partitioning) {
+    ConfigurableProgramAnalysis cpa = getWrappedCpa();
+    assert cpa instanceof ConfigurableProgramAnalysisWithBAM;
+    ((ConfigurableProgramAnalysisWithBAM) cpa).setPartitioning(partitioning);
   }
 
-  public MachineModel getMachineModel() {
-    return machineModel;
+  @Override
+  public boolean isCoveredByRecursiveState(AbstractState state1, AbstractState state2)
+      throws CPAException, InterruptedException {
+    return ((ConfigurableProgramAnalysisWithBAM) getWrappedCpa())
+        .isCoveredByRecursiveState(
+            ((ARGState) state1).getWrappedState(), ((ARGState) state2).getWrappedState());
   }
 }

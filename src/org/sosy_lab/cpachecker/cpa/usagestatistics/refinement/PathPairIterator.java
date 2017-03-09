@@ -25,6 +25,10 @@ package org.sosy_lab.cpachecker.cpa.usagestatistics.refinement;
 
 import static com.google.common.collect.FluentIterable.from;
 
+import com.google.common.base.Function;
+import com.google.common.base.Preconditions;
+import com.google.common.collect.Multimap;
+import com.google.common.collect.Sets;
 import java.io.PrintStream;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -35,31 +39,23 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
-
-import javax.annotation.Nullable;
-
 import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.arg.ARGPath;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.arg.ARGUtils;
-import org.sosy_lab.cpachecker.cpa.bam.BAMCEXSubgraphComputer.BackwardARGState;
 import org.sosy_lab.cpachecker.cpa.bam.BAMMultipleCEXSubgraphComputer;
+import org.sosy_lab.cpachecker.cpa.bam.BAMSubgraphComputer.BackwardARGState;
+import org.sosy_lab.cpachecker.cpa.bam.BAMSubgraphComputer.MissingBlockException;
 import org.sosy_lab.cpachecker.cpa.bam.BAMTransferRelation;
 import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageInfo;
 import org.sosy_lab.cpachecker.util.Pair;
-
-import com.google.common.base.Function;
-import com.google.common.base.Preconditions;
-import com.google.common.collect.Multimap;
-import com.google.common.collect.Sets;
 
 
 public class PathPairIterator extends
     GenericIterator<Pair<UsageInfo, UsageInfo>, Pair<ExtendedARGPath, ExtendedARGPath>> {
 
   private final Set<List<Integer>> refinedStates = new HashSet<>();
-  private final Map<ARGState, ARGState> subgraphStatesToReachedState;
   private final BAMTransferRelation transfer;
   private final Multimap<AbstractState, AbstractState> fromReducedToExpand;
   private BAMMultipleCEXSubgraphComputer subgraphComputer;
@@ -72,29 +68,21 @@ public class PathPairIterator extends
   //private int numberOfrepeatedPaths = 0;
 
   private Map<AbstractState, Iterator<ARGState>> toCallerStatesIterator = new HashMap<>();
-  private Map<UsageInfo, ARGState> previousForkForUsage = new IdentityHashMap<>();
+  private Map<UsageInfo, BackwardARGState> previousForkForUsage = new IdentityHashMap<>();
 
   private Map<UsageInfo, List<ExtendedARGPath>> computedPathsForUsage = new IdentityHashMap<>();
   private Map<UsageInfo, Iterator<ExtendedARGPath>> currentIterators = new IdentityHashMap<>();
 
-  private final Function<ARGState, Integer> GET_ORIGIN_STATE_NUMBERS = new Function<ARGState, Integer>() {
-    @Override
-    @Nullable
-    public Integer apply(@Nullable ARGState pInput) {
-      assert subgraphStatesToReachedState.containsKey(pInput);
-      return subgraphStatesToReachedState.get(pInput).getStateId();
-    }
-  };
+  private final Function<ARGState, Integer> GET_ORIGIN_STATE_NUMBERS = s -> ((BackwardARGState)s).getARGState().getStateId();
 
   private final static Iterator<ExtendedARGPath> DUMMY_INTERATOR = new HashSet<ExtendedARGPath>().iterator();
 
   //internal state
   private ExtendedARGPath firstPath = null;
 
-  public PathPairIterator(ConfigurableRefinementBlock<Pair<ExtendedARGPath, ExtendedARGPath>> pWrapper
-      ,Map<ARGState, ARGState> pSubgraphStatesToReachedState, BAMTransferRelation bamTransfer) {
+  public PathPairIterator(ConfigurableRefinementBlock<Pair<ExtendedARGPath, ExtendedARGPath>> pWrapper,
+      BAMTransferRelation bamTransfer) {
     super(pWrapper);
-    subgraphStatesToReachedState = pSubgraphStatesToReachedState;
     transfer = bamTransfer;
     fromReducedToExpand = transfer.getMapFromReducedToExpand();
 
@@ -105,7 +93,7 @@ public class PathPairIterator extends
     firstPath = null;
     //subgraph computer need partitioning, which is not built at creation.
     //Thus, we move the creation of subgraphcomputer here
-    subgraphComputer = transfer.createBAMMultipleSubgraphComputer(subgraphStatesToReachedState);
+    subgraphComputer = transfer.createBAMMultipleSubgraphComputer();
   }
 
   @Override
@@ -205,7 +193,6 @@ public class PathPairIterator extends
   public Object handleFinishSignal(Class<? extends RefinementInterface> callerClass) {
     if (callerClass.equals(IdentifierIterator.class)) {
       //Refinement iteration finishes
-      subgraphStatesToReachedState.clear();
       refinedStates.clear();
     } else if (callerClass.equals(PointIterator.class)) {
       toCallerStatesIterator.clear();
@@ -262,7 +249,6 @@ public class PathPairIterator extends
     if (!previousForkForUsage.containsKey(info)) {
       //The first time, we have no path to iterate
       BackwardARGState newTarget = new BackwardARGState((ARGState)info.getKeyState());
-      subgraphStatesToReachedState.put(newTarget, (ARGState)info.getKeyState());
       currentPath = computePath(newTarget);
       //currentPath may become null if it goes through repeated (refined) states
     } else {
@@ -288,14 +274,15 @@ public class PathPairIterator extends
     } else {
       nextStart = path.getFirstState().getChildren().iterator().next();
     }
-    previousForkForUsage.put(path.getUsageInfo(), nextStart);
+    previousForkForUsage.put(path.getUsageInfo(), (BackwardARGState)nextStart);
   }
 
   //lastAffectedState is Backward!
-  private ARGPath computeNextPath(ARGState lastAffectedState) {
+  private ARGPath computeNextPath(BackwardARGState lastAffectedState) {
     assert lastAffectedState != null;
 
-    ARGState nextParent = null, previousCaller, childOfForkState = lastAffectedState;
+    ARGState nextParent = null;
+    BackwardARGState previousCaller, childOfForkState = lastAffectedState;
     do {
       //This is a backward state, which displays the following state after real reduced state, which we want to found
       childOfForkState = findPreviousFork(childOfForkState);
@@ -306,7 +293,7 @@ public class PathPairIterator extends
 
       //parent = forkState.getParents().iterator().next();
      // assert parent != null;
-      ARGState realChildOfForkState = subgraphStatesToReachedState.get(childOfForkState);
+      ARGState realChildOfForkState = childOfForkState.getARGState();
       assert realChildOfForkState.getParents().size() == 1;
       ARGState forkState = realChildOfForkState.getParents().iterator().next();
       //Clone is necessary, make tree set for determinism
@@ -314,7 +301,7 @@ public class PathPairIterator extends
       for (AbstractState state : fromReducedToExpand.get(forkState)) {
         callerStates.add((ARGState)state);
       }
-      previousCaller = childOfForkState.getParents().iterator().next();
+      previousCaller = (BackwardARGState) childOfForkState.getParents().iterator().next();
 
       assert callerStates != null;
 
@@ -328,7 +315,7 @@ public class PathPairIterator extends
       } else {
         //We get this fork the second time (the first one was from path computer)
         //Found the caller, we have explored the first time
-        ARGState realPreviousCaller = subgraphStatesToReachedState.get(previousCaller);
+        ARGState realPreviousCaller = previousCaller.getARGState();
         assert callerStates.remove(realPreviousCaller);
         iterator = callerStates.iterator();
         toCallerStatesIterator.put(realChildOfForkState, iterator);
@@ -343,26 +330,23 @@ public class PathPairIterator extends
     } while (nextParent == null);
 
     BackwardARGState newNextParent = new BackwardARGState(nextParent);
-    subgraphStatesToReachedState.put(newNextParent, nextParent);
     //Because of cached paths, we cannot change the part of it
     ARGState clonedChildOfForkState = cloneTheRestOfPath(childOfForkState);
     clonedChildOfForkState.addParent(newNextParent);
     return computePath(newNextParent);
   }
 
-  private ARGState cloneTheRestOfPath(ARGState pChildOfForkState) {
-    ARGState currentState = pChildOfForkState;
-    ARGState originState = subgraphStatesToReachedState.get(currentState);
-    BackwardARGState previousState = new BackwardARGState(currentState), clonedState;
-    subgraphStatesToReachedState.put(previousState, originState);
+  private ARGState cloneTheRestOfPath(BackwardARGState pChildOfForkState) {
+    BackwardARGState currentState = pChildOfForkState;
+    ARGState originState = currentState.getARGState();
+    BackwardARGState previousState = new BackwardARGState(originState), clonedState;
     ARGState result = previousState;
 
     while (!currentState.getChildren().isEmpty()) {
       assert currentState.getChildren().size() == 1;
-      currentState = currentState.getChildren().iterator().next();
-      originState = subgraphStatesToReachedState.get(currentState);
-      clonedState = new BackwardARGState(currentState);
-      subgraphStatesToReachedState.put(clonedState, originState);
+      currentState = (BackwardARGState) currentState.getChildren().iterator().next();
+      originState = currentState.getARGState();
+      clonedState = new BackwardARGState(originState);
       clonedState.addParent(previousState);
       previousState = clonedState;
     }
@@ -377,19 +361,19 @@ public class PathPairIterator extends
    * @param parent
    * @return
    */
-  private ARGState findPreviousFork(ARGState parent) {
-    List<ARGState> potentialForkStates = new LinkedList<>();
+  private BackwardARGState findPreviousFork(BackwardARGState parent) {
+    List<BackwardARGState> potentialForkStates = new LinkedList<>();
     Map<ARGState, ARGState> exitStateToEntryState = new TreeMap<>();
-    ARGState currentState = parent;
-    ARGState realState = subgraphStatesToReachedState.get(currentState);
+    BackwardARGState currentState = parent;
+    ARGState realState = currentState.getARGState();
     assert parent.getParents().size() == 1;
-    ARGState currentParent = parent.getParents().iterator().next();
-    ARGState realParent = subgraphStatesToReachedState.get(currentParent);
+    BackwardARGState currentParent = (BackwardARGState)parent.getParents().iterator().next();
+    ARGState realParent = currentParent.getARGState();
     while (currentState.getChildren().size() > 0) {
 
       assert currentState.getChildren().size() == 1;
-      currentState = currentState.getChildren().iterator().next();
-      realState = subgraphStatesToReachedState.get(currentState);
+      currentState = (BackwardARGState) currentState.getChildren().iterator().next();
+      realState = currentState.getARGState();
 
       //No matter which parent to take - interesting one is single anyway
       realParent = realState.getParents().iterator().next();
@@ -414,8 +398,8 @@ public class PathPairIterator extends
         assert fromReducedToExpand.get(realParent).size() > 1;
 
         //Now we should check, that there is no corresponding exit state in the path only in this case this is a real fork
-        parent = currentState.getParents().iterator().next();
-        ARGState displayedParent = subgraphStatesToReachedState.get(parent);
+        parent = (BackwardARGState) currentState.getParents().iterator().next();
+        ARGState displayedParent = parent.getARGState();
         //We may have several children, so add all of them
         for (ARGState displayedChild : displayedParent.getChildren()) {
           exitStateToEntryState.put(displayedChild, currentState);
@@ -437,21 +421,28 @@ public class PathPairIterator extends
     assert (pLastElement != null && !pLastElement.isDestroyed());
       //we delete this state from other unsafe
 
-    ARGState rootOfSubgraph = subgraphComputer.findPath(pLastElement, refinedStates);
-    assert (rootOfSubgraph != null);
-    if (rootOfSubgraph == BAMMultipleCEXSubgraphComputer.DUMMY_STATE_FOR_REPEATED_STATE) {
+    try {
+      ARGState rootOfSubgraph = subgraphComputer.findPath(pLastElement, refinedStates);
+      assert (rootOfSubgraph != null);
+      if (rootOfSubgraph == BAMMultipleCEXSubgraphComputer.DUMMY_STATE_FOR_REPEATED_STATE) {
+        return null;
+      }
+      ARGPath result = ARGUtils.getRandomPath(rootOfSubgraph);
+      additionTimer.start();
+      List<Integer> stateNumbers = from(result.asStatesList()).transform(GET_ORIGIN_STATE_NUMBERS).toList();
+      for (List<Integer> previousStates : refinedStates) {
+        if (stateNumbers.containsAll(previousStates)) {
+          successfulAdditionChecks++;
+        }
+      }
+      additionTimer.stop();
+      numberOfPathCalculated++;
+      return result;
+    } catch (MissingBlockException e) {
+      return null;
+    } catch (InterruptedException e) {
       return null;
     }
-    ARGPath result = ARGUtils.getRandomPath(rootOfSubgraph);
-    additionTimer.start();
-    List<Integer> stateNumbers = from(result.asStatesList()).transform(GET_ORIGIN_STATE_NUMBERS).toList();
-    for (List<Integer> previousStates : refinedStates) {
-      if (stateNumbers.containsAll(previousStates)) {
-        successfulAdditionChecks++;
-      }
-    }
-    additionTimer.stop();
-    numberOfPathCalculated++;
-    return result;
+
   }
 }

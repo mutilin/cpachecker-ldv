@@ -25,9 +25,8 @@ package org.sosy_lab.cpachecker.cpa.invariants;
 
 import java.util.Collections;
 import java.util.Map;
-
+import java.util.OptionalLong;
 import javax.annotation.Nullable;
-
 import org.sosy_lab.cpachecker.cfa.ast.AExpression;
 import org.sosy_lab.cpachecker.cfa.ast.AIdExpression;
 import org.sosy_lab.cpachecker.cfa.ast.AParameterDeclaration;
@@ -117,7 +116,8 @@ public class MemoryLocationExtractor {
     if (pParameterDeclaration instanceof CSimpleDeclaration) {
       CSimpleDeclaration decl = (CSimpleDeclaration) pParameterDeclaration;
 
-      if (!(decl instanceof CDeclaration && ((CDeclaration) decl).isGlobal() || decl instanceof CEnumerator)) {
+      if (!((decl instanceof CDeclaration && ((CDeclaration) decl).isGlobal())
+          || decl instanceof CEnumerator)) {
         return scope(varName);
       }
     }
@@ -176,7 +176,8 @@ public class MemoryLocationExtractor {
     if (var.getDeclaration() != null) {
       CSimpleDeclaration decl = var.getDeclaration();
 
-      if (!(decl instanceof CDeclaration && ((CDeclaration) decl).isGlobal() || decl instanceof CEnumerator)) {
+      if (!((decl instanceof CDeclaration && ((CDeclaration) decl).isGlobal())
+          || decl instanceof CEnumerator)) {
         return scope(varName);
       }
     }
@@ -189,7 +190,7 @@ public class MemoryLocationExtractor {
     if (pOwner != null) {
       varName = getMemoryLocation(pOwner) + (pIsPointerDereference ? "->" : ".") + varName;
     }
-    return MemoryLocation.valueOf(varName);
+    return MemoryLocation.valueOf(varName, OptionalLong.empty());
   }
 
   private MemoryLocation getArraySubscriptMemoryLocation(AExpression pOwner, AExpression pSubscript) throws UnrecognizedCodeException {
@@ -211,13 +212,14 @@ public class MemoryLocationExtractor {
       subscriptValue = compoundIntervalManagerFactory.createCompoundIntervalManager(machineModel, pOwner.getExpressionType()).allPossibleValues();
     }
     if (subscriptValue.isSingleton()) {
-      return MemoryLocation.valueOf(String.format("%s[%d]", getMemoryLocation(pOwner), subscriptValue.getValue()).toString());
+      return MemoryLocation.valueOf(
+          String.format("%s[%s]", getMemoryLocation(pOwner), subscriptValue.getValue()).toString());
     }
     return MemoryLocation.valueOf(String.format("%s[*]", getMemoryLocation(pOwner)));
   }
 
   private CompoundInterval evaluate(NumeralFormula<CompoundInterval> pFormula) {
-    return pFormula.accept(new FormulaCompoundStateEvaluationVisitor(compoundIntervalManagerFactory), environment);
+    return pFormula.accept(new FormulaCompoundStateEvaluationVisitor(compoundIntervalManagerFactory, false), environment);
   }
 
   private MemoryLocation scope(String pVar) {
@@ -225,7 +227,7 @@ public class MemoryLocationExtractor {
   }
 
   public static MemoryLocation scope(String pVar, String pFunction) {
-    return MemoryLocation.valueOf(pFunction, pVar, 0);
+    return MemoryLocation.valueOf(pFunction, pVar);
   }
 
   public boolean isFunctionScoped(String pScopedVariableName) {
