@@ -55,6 +55,7 @@ public class BAMMultipleCEXSubgraphComputer extends BAMSubgraphComputer{
     Map<ARGState, BackwardARGState> elementsMap = new HashMap<>();
     final NavigableSet<ARGState> openElements = new TreeSet<>(); // for sorted IDs in ARGstates
     ARGState root = null;
+    boolean inCallstackFunction = false;
 
     //Deep clone to be patient about modification
     remainingStates.clear();
@@ -87,26 +88,26 @@ public class BAMMultipleCEXSubgraphComputer extends BAMSubgraphComputer{
         }
       }
 
+      inCallstackFunction = false;
       if (currentState.getParents().isEmpty()) {
         //Find correct expanded state
         ARGState expandedState = (ARGState) reducedToExpanded.get(currentState);
 
-        if (expandedState == null) {
-          //The first state
-          root = newCurrentElement;
-          break;
-        }
+        assert expandedState != null;
+
+
         //Try to find path.
         //Exchange the reduced state by the expanded one
         currentState = expandedState;
         newCurrentElement = new BackwardARGState(currentState);
         elementsMap.put(currentState, newCurrentElement);
+        inCallstackFunction = true;
       }
 
       // add parent for further processing
       openElements.addAll(currentState.getParents());
 
-      if (data.hasInitialState(currentState)) {
+      if (data.hasInitialState(currentState) && !inCallstackFunction) {
 
         // If child-state is an expanded state, the child is at the exit-location of a block.
         // In this case, we enter the block (backwards).
@@ -133,6 +134,12 @@ public class BAMMultipleCEXSubgraphComputer extends BAMSubgraphComputer{
           if (checkRepeatitionOfState(newChild)) {
             return DUMMY_STATE_FOR_REPEATED_STATE;
           }
+        }
+
+        if (currentState.getParents().isEmpty()) {
+          //The first state
+          root = newCurrentElement;
+          break;
         }
       }
       if (currentState.isDestroyed()) {

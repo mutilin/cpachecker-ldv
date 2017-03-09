@@ -44,6 +44,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.logging.Level;
 import javax.xml.parsers.ParserConfigurationException;
+import org.sosy_lab.common.Appender;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.FileOption;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
@@ -393,62 +394,22 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       return;
     }
     Writer w;
-    String nextId, currentId = getId();
     try {
       File name = new File("output/witness." + createUniqueName(pId) + ".graphml");
-      w = Files.newBufferedWriter(Paths.get(name.getAbsolutePath()), StandardOpenOption.WRITE);
+      //w = Files.newBufferedWriter(Paths.get(name.getAbsolutePath()), StandardOpenOption.WRITE);
       String defaultSourcefileName = firstPath.get(0).getFileLocation().getFileName();
 
       GraphMlBuilder builder = new GraphMlBuilder(WitnessType.VIOLATION_WITNESS, defaultSourcefileName, Language.C,
           MachineModel.LINUX64, new VerificationTaskMetaData(config, Optional.empty()));
 
-      nextId = currentId;
+      printPath(firstUsage, 0, builder);
+      Element result = printPath(secondUsage, 1, builder);
 
-      Iterator<CFAEdge> iterator;// = firstPath.iterator();
-      iterator = from(firstPath)
-                 .filter(e -> e.getFileLocation()!= null)
-                 .iterator();
-      Element result = null;
+      builder.addDataElementChild(result, NodeFlag.ISVIOLATION.key, "true");
 
-      while (iterator.hasNext()) {
-        currentId = nextId;
-        nextId = getId();
-
-        do {
-          CFAEdge pEdge = iterator.next();
-          boolean isWarning = (pEdge.getLineNumber() == firstUsage.getLine().getLine() && pEdge.toString().contains(pId.getName()));
-          String warningMessage = "";
-          if (isWarning) {
-            warningMessage = firstUsage.getWarningMessage();
-          }
-          result = prepareElement(builder, currentId, nextId, pEdge, defaultSourcefileName, "0", warningMessage);
-        } while (result == null && iterator.hasNext());
-      }
-
-      iterator = from(secondPath)
-          .filter(e -> e.getFileLocation()!= null)
-          .iterator();
-      while (iterator.hasNext()) {
-        currentId = nextId;
-        nextId = getId();
-
-        do {
-          CFAEdge pEdge = iterator.next();
-          boolean isWarning = (pEdge.getLineNumber() == secondUsage.getLine().getLine() && pEdge.toString().contains(pId.getName()));
-          String warningMessage = "";
-          if (isWarning) {
-            warningMessage = secondUsage.getWarningMessage();
-          }
-          result = prepareElement(builder, currentId, nextId, pEdge, defaultSourcefileName, "1", warningMessage);
-        } while (result == null && iterator.hasNext());
-
-        if (!iterator.hasNext()) {
-          builder.addDataElementChild(result, NodeFlag.ISVIOLATION.key, "true");
-        }
-      }
-
-      MoreFiles.writeFile(name.toPath(), Charset.defaultCharset(), builder);
-      w.close();
+      //builder.appendTo(w);
+      MoreFiles.writeFile(Paths.get(name.getAbsolutePath()), Charset.defaultCharset(), (Appender) a -> builder.appendTo(a));
+      //w.close();
     } catch (IOException e) {
       e.printStackTrace();
     } catch (ParserConfigurationException e) {
@@ -461,14 +422,44 @@ public class UsageStatisticsCPAStatistics implements Statistics {
 
   }
 
+
+  private Element printPath(UsageInfo usage, int threadId, GraphMlBuilder builder) {
+    String currentId = getId(), nextId = currentId;
+    SingleIdentifier pId = usage.getId();
+    List<CFAEdge> path = usage.getPath();
+
+    Iterator<CFAEdge> iterator = from(path)
+               .filter(e -> (e.getFileLocation()!= null && !(e.getFileLocation().getFileName().contains("none"))))
+               .iterator();
+    Element result = null;
+
+    while (iterator.hasNext()) {
+      currentId = nextId;
+      nextId = getId();
+      CFAEdge pEdge = iterator.next();
+
+      result = builder.createEdgeElement(currentId, nextId);
+      dumpCommonInfoFrEdge(builder, result, pEdge);
+      builder.addDataElementChild(result, KeyDef.THREADID, Integer.toString(threadId));
+
+      boolean isWarning = (pEdge.getLineNumber() == usage.getLine().getLine() && pEdge.toString().contains(pId.getName()));
+      if (isWarning) {
+        builder.addDataElementChild(result, KeyDef.WARNING, usage.getWarningMessage());
+      }
+      result = builder.createNodeElement(nextId, NodeType.ONPATH);
+    }
+
+    //Special hack to connect two traces
+    idCounter--;
+    return result;
+  }
+
   int idCounter = 0;
   private String getId() {
     return "A" + idCounter++;
   }
 
-  private Element prepareElement(GraphMlBuilder builder, String currentId, String nextId, CFAEdge pEdge,
-      String defaultSourcefileName, String ThreadNum, String warningMessage) {
-    Element result = builder.createEdgeElement(currentId, nextId);
+  private void dumpCommonInfoFrEdge(GraphMlBuilder builder, Element result, CFAEdge pEdge) {
 
     if (pEdge.getSuccessor() instanceof FunctionEntryNode) {
       FunctionEntryNode in = (FunctionEntryNode) pEdge.getSuccessor();
@@ -487,29 +478,14 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     }
 
     FileLocation location = pEdge.getFileLocation();
-    if (location != null) {
-      if (!location.getFileName().equals(defaultSourcefileName)) {
-        builder.addDataElementChild(result, KeyDef.ORIGINFILE, location.getFileName());
-      } else {
-        builder.addDataElementChild(result, KeyDef.ORIGINFILE, defaultSourcefileName);
-      }
-      builder.addDataElementChild(result, KeyDef.STARTLINE, Integer.toString(location.getStartingLineInOrigin()));
-      builder.addDataElementChild(result, KeyDef.OFFSET, Integer.toString(location.getNodeOffset()));
-    } else {
-      return null;
-    }
+    assert (location != null) : "should be filtered";
+    builder.addDataElementChild(result, KeyDef.ORIGINFILE, location.getFileName());
+    builder.addDataElementChild(result, KeyDef.STARTLINE, Integer.toString(location.getStartingLineInOrigin()));
+    builder.addDataElementChild(result, KeyDef.OFFSET, Integer.toString(location.getNodeOffset()));
 
     if (!pEdge.getRawStatement().trim().isEmpty()) {
       builder.addDataElementChild(result, KeyDef.SOURCECODE, pEdge.getRawStatement());
     }
-
-    builder.addDataElementChild(result, KeyDef.THREADID, ThreadNum);
-
-    if (!warningMessage.isEmpty()) {
-      builder.addDataElementChild(result, KeyDef.WARNING, warningMessage);
-    }
-
-    return builder.createNodeElement(nextId, NodeType.ONPATH);
   }
 
   public void printUnsafeRawdata(final UnmodifiableReachedSet reached) {
