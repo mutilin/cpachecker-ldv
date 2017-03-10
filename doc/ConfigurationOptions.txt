@@ -223,21 +223,17 @@ analysis.programNames = no default value
 # states' lattice (maybe faster for some special analyses which use merge_sep
 # and stop_sep
 analysis.reachedSet = PARTITIONED
-<<<<<<< HEAD
-  enum:     [NORMAL, LOCATIONMAPPED, PARTITIONED, USAGESTATISTICS]
-=======
-  enum:     [NORMAL, LOCATIONMAPPED, PARTITIONED, PSEUDOPARTITIONED]
->>>>>>> master
+  enum:     [NORMAL, LOCATIONMAPPED, PARTITIONED, PSEUDOPARTITIONED, USAGESTATISTICS]
 
 # restart the analysis using a different configuration after unknown result
 analysis.restartAfterUnknown = false
 
-# Save results of local analysis
-analysis.saveLocalResults = false
-
 # run a sequence of analysis, where the previous ARG is inserted into the
 # current ARGReplayCPA.
 analysis.restartAlgorithmWithARGReplay = false
+
+# Save results of local analysis
+analysis.saveLocalResults = false
 
 # stop after the first error has been found
 analysis.stopAfterError = true
@@ -441,6 +437,9 @@ cegar.refinementLoops = -1
 # the package name starts with 'org.sosy_lab.cpachecker.', this prefix can be
 # omitted.
 cegar.refiner = no default value
+
+# Limitation of time in millis for the refinement
+cegar.timeLimit = Long.MAX_VALUE
 
 # whether or not to use refinement selection to decide which domain to refine
 cegar.useRefinementSelection = false
@@ -875,9 +874,6 @@ cpa.bam.argFile = "BlockedARG.dot"
 # Type of partitioning (FunctionAndLoopPartitioning or
 # DelayedFunctionAndLoopPartitioning)
 # or any class that implements a PartitioningHeuristic
-<<<<<<< HEAD
-cpa.bam.blockHeuristic = FunctionPartitioning.class
-=======
 cpa.bam.blockHeuristic = no default value
 
 # only consider functions with a matching name, i.e., select only some
@@ -892,12 +888,17 @@ cpa.bam.blockHeuristic.functionPartitioning.minFunctionCalls = 0
 # only consider function with a minimum number of CFA nodes. This approach is
 # similar to 'inlining' small functions, when using BAM.
 cpa.bam.blockHeuristic.functionPartitioning.minFunctionSize = 0
->>>>>>> master
+
+# allow to clean caches and ARG after all refinements
+cpa.bam.cleanARGAfterAllRefinements = false
 
 # This flag determines which precisions should be updated during refinement.
 # We can choose between the minimum number of states and all states that are
 # necessary to re-explore the program along the error-path.
 cpa.bam.doPrecisionRefinementForAllStates = false
+
+# export blocked ARG as .dot file
+cpa.bam.exportARGs = true
 
 # export blocks
 cpa.bam.exportBlocksPath = "block_cfa.dot"
@@ -909,6 +910,7 @@ cpa.bam.gatherCacheMissStatistics = false
 # BAM allows to analyse recursive procedures. This strongly depends on the
 # underlying CPA. The current support includes only ValueAnalysis and
 # PredicateAnalysis (with tree interpolation enabled).
+# BAM allows to analyse recursive procedures depending on the underlying CPA.
 cpa.bam.handleRecursiveProcedures = false
 
 # export single blocked ARG as .dot files, should contain '%d'
@@ -1003,9 +1005,6 @@ cpa.callstack.skipVoidRecursion = false
 
 # analyse the CFA backwards
 cpa.callstack.traverseBackwards = false
-
-# unsupported functions cause an exception
-cpa.callstack.unsupportedFunctions = {"pthread_create"}
 
 # firing relation to be used in the precision adjustment operator
 cpa.chc.firingRelation = "Always"
@@ -1238,22 +1237,15 @@ cpa.invariants.merge = "PRECISIONDEPENDENT"
 cpa.liveVar.assumeGlobalVariablesAreAlwaysLive = true
 
 # functions, which allocate new free memory
+cpa.local.allocateFunctionPattern = Sets.newHashSet("alloc")
 cpa.local.allocatefunctions = no default value
-
-# which merge operator to use for LocalCPA
-cpa.local.merge = "JOIN"
-  allowed values: [SEP, JOIN]
-
-# which stop operator to use for LocalCPA
-cpa.local.stop = "SEP"
-  allowed values: [SEP, JOIN, NEVER]
+cpa.local.conservativefunctions = no default value
 
 # With this option enabled, unction calls that occur in the CFA are followed.
 # By disabling this option one can traverse a function without following
 # function calls (in this case FunctionSummaryEdges are used)
 cpa.location.followFunctionCalls = true
 
-<<<<<<< HEAD
 #  annotated functions, which are known to works right
 cpa.lockStatistics.annotate = no default value
 
@@ -1265,11 +1257,13 @@ cpa.lockStatistics.lockreset = no default value
 
 # reduce recursive locks to a single access
 cpa.lockstatistics.aggressiveReduction = false
-=======
+
+# reduce unused locks
+cpa.lockstatistics.reduceUselessLocks = false
+
 # this option determines which merge operator to use
 cpa.loopinvariants.mergeType = "SEP"
   allowed values: [SEP, MERGE]
->>>>>>> master
 
 # Number of loop iterations before the loop counter is abstracted. Zero is
 # equivalent to no limit.
@@ -1468,6 +1462,9 @@ cpa.predicate.abstractions.file = "abstractions.txt"
 # 'MIN<=X<=MAX', where MIN and MAX are computed from the type of the method
 # (signature, not name!).
 cpa.predicate.addRangeConstraintsForNondet = false
+
+# whether to reduce predicates, related to a function, when we leave it
+cpa.predicate.bam.aggressiveReduce = false
 
 # which strategy/heuristic should be used to compute relevant predicates for
 # a block-reduction?
@@ -2248,12 +2245,18 @@ cpa.usagestatistics.abortfunctions = no default value
 # to list variable)
 cpa.usagestatistics.binderFunctions = no default value
 
-# which merge operator to use for LockStatisticsCPA
-cpa.usagestatistics.merge = "SEP"
-  allowed values: [SEP, JOIN]
+# path to write results
+cpa.usagestatistics.falseUnsafesOutput = "FalseUnsafes"
+
+# The functions, which cannot be executed in parallel with themselves
+cpa.usagestatistics.notSelfParallelFunctions = new HashSet<>()
 
 # path to write results
 cpa.usagestatistics.output = "unsafe_rawdata"
+
+# all variables should be printed to the one file or to the different
+cpa.usagestatistics.outputType = SINGLE_FILE
+  enum:     [SINGLE_FILE, MULTIPLE_FILES]
 
 # The value of marked unsafes, after which the precision should be cleaned
 cpa.usagestatistics.precisionReset = Integer.MAX_VALUE
@@ -2261,15 +2264,44 @@ cpa.usagestatistics.precisionReset = Integer.MAX_VALUE
 # print all unsafe cases in report
 cpa.usagestatistics.printAllUnsafeUsages = false
 
+# print information about false unsafes
+cpa.usagestatistics.printFalseUnsafes = false
+
+# output only true unsafes
+cpa.usagestatistics.printOnlyTrueUnsafes = false
+
+# a limit for paths for one usage, which could be refined
+cpa.usagestatistics.refinablePathLimitation = Integer.MAX_VALUE
+
+# The order of refinement blocks
+cpa.usagestatistics.refinementChain = no default value
+
+# The functions, which are executed in one thread
+cpa.usagestatistics.singleThreadFunctions = new HashSet<>()
+
 # functions, which we don't analize
 cpa.usagestatistics.skippedfunctions = no default value
 
-# variables, which will not be saved in statistics
-cpa.usagestatistics.skippedvariables = no default value
+# variables, which will be filtered by function location
+cpa.usagestatistics.skippedvariables.byFunction = no default value
 
-# which stop operator to use for LockStatisticsCPA
-cpa.usagestatistics.stop = "SEP"
-  allowed values: [SEP, JOIN, NEVER]
+# variables, which will be filtered by function prefix
+cpa.usagestatistics.skippedvariables.byFunctionPrefix = no default value
+
+# variables, which will be filtered by its name
+cpa.usagestatistics.skippedvariables.byName = no default value
+
+# variables, which will be filtered by its name prefix
+cpa.usagestatistics.skippedvariables.byNamePrefix = no default value
+
+# variables, which will be filtered by its type
+cpa.usagestatistics.skippedvariables.byType = no default value
+
+# clean all ARG or try to reuse some parts of it (memory consuming)
+cpa.usagestatistics.totalARGCleaning = false
+
+# ignore unsafes only with empty callstacks
+cpa.usagestatistics.unsafedetector.ignoreEmptyLockset = false
 
 # which merge operator to use for ValidVarsCPA
 cpa.validVars.merge = "JOIN"
@@ -2757,6 +2789,10 @@ pdr.maxAttemptsToDropLiteralsDuringGeneralization = 10
 # generalization of states.
 pdr.maxLiteralsToDropDuringGeneralization = 5
 
+# A path to a precision output
+# A path to precision
+precision.path = "localsave"
+
 # whether to track relevant variables only at the exact program location
 # (sharing=location), or within their respective (function-/global-) scope
 # (sharing=scoped).
@@ -2847,22 +2883,6 @@ reachedSet.dot = "reached.dot"
 reachedSet.export = false
 reachedSet.file = "reached.txt"
 
-<<<<<<< HEAD
-# File name where to put the path program that is generated as input for a
-# common c compiler. A temporary file is used if this is unspecified. 
-realC.dumpRealCfile = no default value
-
-# Path to the compiler. Can be absolute or on PATH
-realC.pathToCompiler = no default value
-
-# maximum time limit for realC (use milliseconds or specify a unit; 0 for
-# infinite)
-realC.timelimit = 0ms
-
-# if it's true, we always run other algorithm, even previous is sound and
-# finished correctly
-restartAlgorithm.alwaysrun = false
-=======
 # Generate HTML report with analysis result.
 report.export = true
 
@@ -2881,10 +2901,13 @@ residualprogram.file = "residualProgram.c"
 # write collected assumptions as automaton to file
 residualprogram.slice = true
 
+# if it's true, we always run other algorithm, even previous is sound and
+# finished correctly
+restartAlgorithm.alwaysrun = false
+
 # combine (partial) ARGs obtained by restarts of the analysis after an
 # unknown result with a different configuration
 restartAlgorithm.combineARGsAfterRestart = false
->>>>>>> master
 
 # List of files with configurations to use. A filename can be suffixed with
 # :if-interrupted, :if-failed, and :if-terminated which means that this
