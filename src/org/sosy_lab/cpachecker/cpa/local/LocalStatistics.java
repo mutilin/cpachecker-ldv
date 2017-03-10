@@ -64,6 +64,11 @@ public class LocalStatistics implements Statistics {
 
   @Override
   public void printStatistics(PrintStream pOut, Result pResult, UnmodifiableReachedSet pReached) {
+    if (pReached.size() <= 2) {
+      //evil hack: means we are called from general statistics collector
+      //wait until BAM provides its handmade reached set
+      return;
+    }
     try {
       Map<CFANode, LocalState> reachedStatistics = new TreeMap<>();
       //Path p = Paths.get(outputFileName);
