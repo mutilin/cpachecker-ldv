@@ -92,7 +92,6 @@ public class PredicateRefinerAdapter extends GenericSinglePathRefiner {
     }
 
     logger = predicateCpa.getLogger();
-    Configuration config = predicateCpa.getConfiguration();
     Solver solver = predicateCpa.getSolver();
     PathFormulaManager pfmgr = predicateCpa.getPathFormulaManager();
 
