@@ -45,7 +45,7 @@ import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.CFATerminationNode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier;
+import org.sosy_lab.cpachecker.cpa.lock.LockIdentifier;
 import org.sosy_lab.cpachecker.util.CFATraversal;
 import org.sosy_lab.cpachecker.util.CFAUtils;
 

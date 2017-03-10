@@ -30,13 +30,13 @@ import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.blocks.BlockPartitioning;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsTransferRelation;
+import org.sosy_lab.cpachecker.cpa.lock.LockTransferRelation;
 
 
 
 public class UnrecursiveBlockPartitioningBuilder extends ExtendedBlockPartitioningBuilder {
 
-  public UnrecursiveBlockPartitioningBuilder(LockStatisticsTransferRelation l) {
+  public UnrecursiveBlockPartitioningBuilder(LockTransferRelation l) {
     super(l);
   }
 

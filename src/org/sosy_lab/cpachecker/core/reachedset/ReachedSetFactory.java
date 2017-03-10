@@ -39,7 +39,7 @@ import org.sosy_lab.cpachecker.core.waitlist.ThreadingSortedWaitlist;
 import org.sosy_lab.cpachecker.core.waitlist.Waitlist;
 import org.sosy_lab.cpachecker.core.waitlist.Waitlist.WaitlistFactory;
 import org.sosy_lab.cpachecker.cpa.automaton.AutomatonVariableWaitlist;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.USReachedSet;
+import org.sosy_lab.cpachecker.cpa.usage.UsageReachedSet;
 
 @Options(prefix="analysis")
 public class ReachedSetFactory {
@@ -150,7 +150,7 @@ public class ReachedSetFactory {
       return new LocationMappedReachedSet(waitlistFactory);
 
     case USAGESTATISTICS:
-      return new USReachedSet(waitlistFactory);
+      return new UsageReachedSet(waitlistFactory);
 
     case NORMAL:
     default:

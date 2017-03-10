@@ -44,8 +44,8 @@ import org.sosy_lab.cpachecker.cfa.blocks.ReferencedVariable;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionEntryNode;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockIdentifier;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsTransferRelation;
+import org.sosy_lab.cpachecker.cpa.lock.LockIdentifier;
+import org.sosy_lab.cpachecker.cpa.lock.LockTransferRelation;
 
 /**
  *  Class implements more intelligent partitioning building,
@@ -55,9 +55,9 @@ import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsTransferRelation
  */
 public class ExtendedBlockPartitioningBuilder extends BlockPartitioningBuilder {
 
-  private final LockStatisticsTransferRelation ltransfer;
+  private final LockTransferRelation ltransfer;
 
-  public ExtendedBlockPartitioningBuilder(LockStatisticsTransferRelation t) {
+  public ExtendedBlockPartitioningBuilder(LockTransferRelation t) {
     ltransfer = t;
   }
 

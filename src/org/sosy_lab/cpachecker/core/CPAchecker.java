@@ -80,7 +80,7 @@ import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
 import org.sosy_lab.cpachecker.core.interfaces.Targetable;
 import org.sosy_lab.cpachecker.core.reachedset.AggregatedReachedSets;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsState;
+import org.sosy_lab.cpachecker.cpa.usage.UsageState;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.ParserException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
@@ -517,7 +517,7 @@ public class CPAchecker {
       return Result.UNKNOWN;
     }
 
-    UsageStatisticsState state = AbstractStates.extractStateByType(reached.getLastState(), UsageStatisticsState.class);
+    UsageState state = AbstractStates.extractStateByType(reached.getLastState(), UsageState.class);
     if (state != null) {
       state.updateContainerIfNecessary();
       if (state.getContainer().getTotalUnsafeSize() > 0) {

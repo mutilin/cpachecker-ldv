@@ -61,9 +61,9 @@ import org.sosy_lab.cpachecker.core.interfaces.StopOperator;
 import org.sosy_lab.cpachecker.core.interfaces.pcc.ProofChecker;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSetFactory;
 import org.sosy_lab.cpachecker.cpa.arg.ARGStatistics;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsCPA;
-import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsTransferRelation;
-import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsCPA;
+import org.sosy_lab.cpachecker.cpa.lock.LockCPA;
+import org.sosy_lab.cpachecker.cpa.lock.LockTransferRelation;
+import org.sosy_lab.cpachecker.cpa.usage.UsageCPA;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.CPAs;
@@ -191,7 +191,7 @@ public class BAMCPA extends AbstractSingleWrapperCPA implements StatisticsProvid
               wrappedProofChecker,
               pShutdownNotifier);
     }
-    UsageStatisticsCPA usageCPA = CPAs.retrieveCPA(pCpa, UsageStatisticsCPA.class);
+    UsageCPA usageCPA = CPAs.retrieveCPA(pCpa, UsageCPA.class);
     if (usageCPA != null) {
       usageCPA.getStats().setBAMTransfer(transfer);
     }
@@ -202,8 +202,8 @@ public class BAMCPA extends AbstractSingleWrapperCPA implements StatisticsProvid
   private BlockPartitioning buildBlockPartitioning(CFA pCfa) {
     BlockPartitioningBuilder blockBuilder;
     if (useExtendedPartitioningBuilder) {
-      LockStatisticsCPA cpa = retrieveWrappedCpa(LockStatisticsCPA.class);
-      blockBuilder = new ExtendedBlockPartitioningBuilder(cpa == null ? null : (LockStatisticsTransferRelation)cpa.getTransferRelation());
+      LockCPA cpa = retrieveWrappedCpa(LockCPA.class);
+      blockBuilder = new ExtendedBlockPartitioningBuilder(cpa == null ? null : (LockTransferRelation)cpa.getTransferRelation());
     } else {
       blockBuilder = new BlockPartitioningBuilder();
     }
