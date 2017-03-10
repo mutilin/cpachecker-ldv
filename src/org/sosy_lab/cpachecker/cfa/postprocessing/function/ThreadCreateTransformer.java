@@ -23,15 +23,16 @@
  */
 package org.sosy_lab.cpachecker.cfa.postprocessing.function;
 
+import com.google.common.collect.Lists;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.CFACreationUtils;
 import org.sosy_lab.cpachecker.cfa.ast.FileLocation;
 import org.sosy_lab.cpachecker.cfa.ast.c.CAssignment;
+import org.sosy_lab.cpachecker.cfa.ast.c.CCastExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallStatement;
@@ -48,8 +49,6 @@ import org.sosy_lab.cpachecker.cfa.model.c.CFunctionEntryNode;
 import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
 import org.sosy_lab.cpachecker.util.CFATraversal;
 import org.sosy_lab.cpachecker.util.CFATraversal.TraversalProcess;
-
-import com.google.common.collect.Lists;
 
 
 public class ThreadCreateTransformer {
@@ -146,6 +145,8 @@ public class ThreadCreateTransformer {
       return (CIdExpression)fName;
     } else if (fName instanceof CUnaryExpression) {
       return getFunctionName(((CUnaryExpression)fName).getOperand());
+    } else if (fName instanceof CCastExpression) {
+      return getFunctionName(((CCastExpression)fName).getOperand());
     } else {
       assert false : "Unsupported expression in ldv_thread_create: " + fName;
       return null;

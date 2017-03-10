@@ -29,7 +29,6 @@ import static org.sosy_lab.cpachecker.util.AbstractStates.extractLocation;
 import static org.sosy_lab.cpachecker.util.AbstractStates.isTargetState;
 
 import com.google.common.base.Preconditions;
-import com.google.common.base.Predicate;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.LinkedListMultimap;
@@ -228,7 +227,8 @@ public class BAMTransferRelation implements TransferRelation {
 
     return partitioning.isReturnNode(node)
         // multiple exits at same location possible.
-        && partitioning.getBlocksForReturnNode(node).contains(getBlockForState(argState));
+        && from(partitioning.getBlocksForReturnNode(node))
+        .anyMatch(b -> b.getNodes().contains(argState));
   }
 
   /**
@@ -583,13 +583,8 @@ public class BAMTransferRelation implements TransferRelation {
           returnStates.add(returnState);
         }
       }
-      Set<AbstractState> exitableStates = from(reached).filter(new Predicate<AbstractState> () {
-        @Override
-        public boolean apply(@Nullable AbstractState pInput) {
-          return AbstractStates.extractStateByType(pInput, UsageStatisticsExitableState.class) != null;
-        }
-
-      }).toSet();
+      Set<AbstractState> exitableStates = from(reached).filter(s ->
+           AbstractStates.extractStateByType(s, UsageStatisticsExitableState.class) != null).toSet();
       for (AbstractState returnState : exitableStates) {
         returnStates.add(returnState);
       }

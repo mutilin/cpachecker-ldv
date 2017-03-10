@@ -203,7 +203,7 @@ public class BAMCPA extends AbstractSingleWrapperCPA implements StatisticsProvid
     BlockPartitioningBuilder blockBuilder;
     if (useExtendedPartitioningBuilder) {
       LockStatisticsCPA cpa = retrieveWrappedCpa(LockStatisticsCPA.class);
-      blockBuilder = new ExtendedBlockPartitioningBuilder((LockStatisticsTransferRelation)cpa.getTransferRelation());
+      blockBuilder = new ExtendedBlockPartitioningBuilder(cpa == null ? null : (LockStatisticsTransferRelation)cpa.getTransferRelation());
     } else {
       blockBuilder = new BlockPartitioningBuilder();
     }

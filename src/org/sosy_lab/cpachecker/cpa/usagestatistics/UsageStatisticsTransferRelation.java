@@ -257,6 +257,7 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
 
   private void handleFunctionCall(UsageStatisticsPrecision pPrecision, CFunctionCallEdge edge) throws HandleCodeException {
     CStatement statement = edge.getRawAST().get();
+
     if (statement instanceof CFunctionCallAssignmentStatement) {
       /*
        * a = f(b)
@@ -492,14 +493,5 @@ public class UsageStatisticsTransferRelation implements TransferRelation {
     logger.log(Level.FINEST, "Its locks are: " + lockState);
 
     state.addUsage(singleId, usage);
-  }
-
-  @Override
-  public Collection<? extends AbstractState> strengthen(
-      AbstractState pElement, List<AbstractState> pOtherElements,
-      CFAEdge pCfaEdge, Precision pPrecision) {
-    // in this method we could access the abstract domains of other CPAs
-    // if required.
-    return null;
   }
 }

@@ -107,7 +107,7 @@ public class BAMMultipleCEXSubgraphComputer extends BAMSubgraphComputer{
       // add parent for further processing
       openElements.addAll(currentState.getParents());
 
-      if (data.hasInitialState(currentState) && !inCallstackFunction) {
+      if (data.hasInitialState(currentState) && !inCallstackFunction && !childrenInSubgraph.isEmpty()) {
 
         // If child-state is an expanded state, the child is at the exit-location of a block.
         // In this case, we enter the block (backwards).

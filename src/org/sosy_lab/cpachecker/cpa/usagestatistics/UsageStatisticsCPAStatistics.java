@@ -25,9 +25,11 @@ package org.sosy_lab.cpachecker.cpa.usagestatistics;
 
 import static com.google.common.collect.FluentIterable.from;
 
+import com.google.common.base.Predicate;
 import com.google.common.collect.Sets;
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.Writer;
@@ -158,6 +160,9 @@ public class UsageStatisticsCPAStatistics implements Statistics {
   public final Timer printStatisticsTimer = new Timer();
 
   private final String outputSuffix;
+
+  private final static Predicate<CFAEdge> FILTER_EMPTY_FILE_LOCATIONS =
+      e -> e.getFileLocation()!= null && !(e.getFileLocation().getFileName().contains("none"));
 
   public UsageStatisticsCPAStatistics(Configuration pConfig, LogManager pLogger,
       LockStatisticsTransferRelation lTransfer) throws InvalidConfigurationException{
@@ -322,7 +327,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       assert outputFileType == OutputFileType.MULTIPLE_FILES;
       //Special format for Multi error traces in LDV
       Path currentPath = Paths.get(outputSuffix + "ErrorPath." + createUniqueName(id) + ".txt");
-      writer = Files.newBufferedWriter(currentPath, StandardOpenOption.WRITE);
+      writer = new FileWriter(currentPath.toString());
     }
     if (isTrueUnsafe) {
     	trueUnsafes++;
@@ -393,17 +398,19 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     if (firstPath == null || secondPath == null) {
       return;
     }
-    Writer w;
     try {
       File name = new File("output/witness." + createUniqueName(pId) + ".graphml");
-      //w = Files.newBufferedWriter(Paths.get(name.getAbsolutePath()), StandardOpenOption.WRITE);
-      String defaultSourcefileName = firstPath.get(0).getFileLocation().getFileName();
+      String defaultSourcefileName = from(firstPath)
+          .filter(FILTER_EMPTY_FILE_LOCATIONS).get(0).getFileLocation().getFileName();
 
       GraphMlBuilder builder = new GraphMlBuilder(WitnessType.VIOLATION_WITNESS, defaultSourcefileName, Language.C,
           MachineModel.LINUX64, new VerificationTaskMetaData(config, Optional.empty()));
 
+      idCounter = 0;
+      Element result = builder.createNodeElement("A0", NodeType.ONPATH);
+      builder.addDataElementChild(result, NodeFlag.ISENTRY.key , "true");
       printPath(firstUsage, 0, builder);
-      Element result = printPath(secondUsage, 1, builder);
+      result = printPath(secondUsage, 1, builder);
 
       builder.addDataElementChild(result, NodeFlag.ISVIOLATION.key, "true");
 
@@ -429,7 +436,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     List<CFAEdge> path = usage.getPath();
 
     Iterator<CFAEdge> iterator = from(path)
-               .filter(e -> (e.getFileLocation()!= null && !(e.getFileLocation().getFileName().contains("none"))))
+               .filter(FILTER_EMPTY_FILE_LOCATIONS)
                .iterator();
     Element result = null;
 
@@ -507,7 +514,7 @@ public class UsageStatisticsCPAStatistics implements Statistics {
       Writer writer = null;
       try {
         if (outputFileType == OutputFileType.SINGLE_FILE) {
-          writer = Files.newBufferedWriter(outputStatFileName, StandardOpenOption.WRITE);
+          writer = new FileWriter(outputStatFileName.toString());
           logger.log(Level.FINE, "Print statistics about unsafe cases");
           printCountStatistics(writer, container.getUnsafeIterator());
         }
@@ -647,4 +654,5 @@ public class UsageStatisticsCPAStatistics implements Statistics {
     name = name.replace(" ", "_");
     return name;
   }
+
 }

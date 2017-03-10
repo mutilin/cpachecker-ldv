@@ -328,7 +328,7 @@ public abstract class BAMPredicateRefiner implements Refiner {
           if (newRelevantPredicatesComputer.equals(relevantPredicatesComputer)) {
             // repeated CEX && relevantPredicatesComputer was refined && refinement does not produce progress -> error
             // TODO if this happens, there might be a bug in the analysis!
-            throw new RefinementFailedException(Reason.RepeatedCounterexample, null);
+            //throw new RefinementFailedException(Reason.RepeatedCounterexample, null);
 
           } else {
             // we have a better relevantPredicatesComputer, thus update it.

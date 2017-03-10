@@ -152,6 +152,9 @@ public class BAMPredicateReducer implements Reducer {
       PredicateAbstractState rootState = (PredicateAbstractState) pRootState;
       PredicateAbstractState reducedState = (PredicateAbstractState) pReducedState;
 
+      if (!reducedState.isAbstractionState()) {
+        System.out.println("Not abstraction state");
+      }
       Preconditions.checkState(reducedState.isAbstractionState());
       Preconditions.checkState(rootState.isAbstractionState());
 

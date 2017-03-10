@@ -312,7 +312,6 @@ public class PredicateCPARefiner implements ARGBasedRefiner, StatisticsProvider 
           }
           relatedStates.add(interpolationPoint.getSecond());
         }
-        totalRefinement.stop();
         CounterexampleInfo info = CounterexampleInfo.spurious(formulas);
         info.addFurtherInformation(relatedStates, null);
         return info;

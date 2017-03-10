@@ -30,6 +30,7 @@ import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
 import org.sosy_lab.cpachecker.cpa.lockstatistics.LockStatisticsReducer;
+import org.sosy_lab.cpachecker.cpa.usagestatistics.UsageStatisticsState.UsageStatisticsExitableState;
 
 public class UsageStatisticsReducer implements Reducer {
   private final Reducer wrappedReducer;
@@ -54,7 +55,14 @@ public class UsageStatisticsReducer implements Reducer {
                         Block pReducedContext, Block outerSubtree, AbstractState pReducedElement) throws InterruptedException {
     UsageStatisticsState funRootState = (UsageStatisticsState)pRootElement;
     UsageStatisticsState funReducedState = (UsageStatisticsState)pReducedElement;
-    AbstractState exp = wrappedReducer.getVariableExpandedState(funRootState.getWrappedState(), pReducedContext, funReducedState.getWrappedState());
+    AbstractState exp;
+    if (!(funReducedState instanceof UsageStatisticsExitableState)) {
+      exp = wrappedReducer.getVariableExpandedState(funRootState.getWrappedState(), pReducedContext, outerSubtree, funReducedState.getWrappedState());
+    } else {
+      //Predicate analysis can not expand a random state - only abstract ones,
+      // and Exitable one can occur at any moment
+      exp = funReducedState.getWrappedState();
+    }
     return funReducedState.expand(funRootState, exp, pReducedContext, lockReducer);
   }
 

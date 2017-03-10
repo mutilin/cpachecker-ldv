@@ -24,13 +24,11 @@
 package org.sosy_lab.cpachecker.cpa.local;
 
 import java.io.FileNotFoundException;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintStream;
-import java.io.Writer;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.logging.Level;
@@ -69,7 +67,7 @@ public class LocalStatistics implements Statistics {
     try {
       Map<CFANode, LocalState> reachedStatistics = new TreeMap<>();
       //Path p = Paths.get(outputFileName);
-      try (Writer writer = Files.newBufferedWriter(outputFileName, StandardOpenOption.WRITE)) {
+      try (FileWriter writer = new FileWriter(outputFileName.toString())) {
         logger.log(Level.FINE, "Write precision to " + outputFileName);
         for (AbstractState state : pReached.asCollection()) {
           CFANode node = AbstractStates.extractLocation(state);
@@ -87,7 +85,7 @@ public class LocalStatistics implements Statistics {
         }
       }
     } catch(FileNotFoundException e) {
-      System.out.println("Cannot open file " + outputFileName);
+      logger.log(Level.SEVERE, "Cannot open file " + outputFileName + " for output result of shared analysis");
       return;
     } catch (IOException e) {
       e.printStackTrace();

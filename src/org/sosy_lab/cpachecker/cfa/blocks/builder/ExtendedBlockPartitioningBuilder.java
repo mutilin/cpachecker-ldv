@@ -218,7 +218,10 @@ public class ExtendedBlockPartitioningBuilder extends BlockPartitioningBuilder {
     Set<CFANode> callNodes = collectCallNodes(nodes);
     Set<CFANode> returnNodes = collectReturnNodes(nodes);
     Set<FunctionEntryNode> innerFunctionCalls = collectInnerFunctionCalls(nodes);
-    Set<LockIdentifier> innerLocks = collectLocks(nodes);
+    Set<LockIdentifier> innerLocks = Sets.newHashSet();
+    if (ltransfer != null) {
+      innerLocks = collectLocks(nodes);
+    }
 
     if (callNodes.isEmpty()) {
      /* What shall we do with function, which is not called from anywhere?
