@@ -73,7 +73,7 @@ import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.UnrecognizedCCodeException;
 import org.sosy_lab.cpachecker.util.Pair;
 
-@Options(prefix="cpa.lockStatistics")
+@Options(prefix="cpa.lock")
 public class LockTransferRelation implements TransferRelation
 {
 

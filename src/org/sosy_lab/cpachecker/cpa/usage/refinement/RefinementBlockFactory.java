@@ -37,14 +37,14 @@ import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.bam.BAMCPA;
 import org.sosy_lab.cpachecker.cpa.bam.BAMTransferRelation;
 import org.sosy_lab.cpachecker.cpa.local.LocalTransferRelation;
-import org.sosy_lab.cpachecker.cpa.usage.UsageInfo;
 import org.sosy_lab.cpachecker.cpa.usage.UsageCPA;
+import org.sosy_lab.cpachecker.cpa.usage.UsageInfo;
 import org.sosy_lab.cpachecker.cpa.usage.storage.UsageInfoSet;
 import org.sosy_lab.cpachecker.util.CPAs;
 import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
-@Options(prefix="cpa.usagestatistics")
+@Options(prefix="cpa.usage")
 public class RefinementBlockFactory {
 
   public static enum RefinementBlockTypes {
@@ -72,7 +72,7 @@ public class RefinementBlockFactory {
     ReachedSet;
   }
 
-  private final static String CLASS_PREFIX = "org.sosy_lab.cpachecker.cpa.usagestatistics.refinement";
+  private final static String CLASS_PREFIX = "org.sosy_lab.cpachecker.cpa.usage.refinement";
   Map<ARGState, ARGState> subgraphStatesToReachedState = new HashMap<>();
   final ConfigurableProgramAnalysis cpa;
   Configuration config;

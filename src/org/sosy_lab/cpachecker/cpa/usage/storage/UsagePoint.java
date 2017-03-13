@@ -1,16 +1,14 @@
 package org.sosy_lab.cpachecker.cpa.usage.storage;
 
+import com.google.common.base.Preconditions;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
-
 import org.sosy_lab.cpachecker.cpa.usage.CompatibleState;
 import org.sosy_lab.cpachecker.cpa.usage.UsageInfo;
 import org.sosy_lab.cpachecker.cpa.usage.UsageInfo.Access;
 import org.sosy_lab.cpachecker.cpa.usage.UsageTreeNode;
-
-import com.google.common.base.Preconditions;
 
 public class UsagePoint implements Comparable<UsagePoint> {
 
@@ -92,6 +90,9 @@ public class UsagePoint implements Comparable<UsagePoint> {
     access = pAccess;
     coveredUsages = new TreeSet<>();
     compatibleNodes = nodes;
+    if (nodes.isEmpty()) {
+      System.out.println("Empty");
+    }
   }
 
   public static UsagePoint createUsagePoint(UsageInfo info) {
@@ -170,6 +171,9 @@ public class UsagePoint implements Comparable<UsagePoint> {
     int result = access.compareTo(o.access);
     if (result != 0) {
       return result;
+    }
+    if (compatibleNodes.size() != o.compatibleNodes.size()) {
+      System.out.println("Not equals");
     }
     Preconditions.checkArgument(compatibleNodes.size() == o.compatibleNodes.size());
     for (int i = 0; i < compatibleNodes.size(); i++) {

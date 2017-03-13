@@ -25,7 +25,6 @@ package org.sosy_lab.cpachecker.cpa.usage.storage;
 
 import java.util.Set;
 import java.util.SortedSet;
-
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
@@ -34,7 +33,7 @@ import org.sosy_lab.cpachecker.cpa.usage.UsageInfo;
 import org.sosy_lab.cpachecker.cpa.usage.UsageInfo.Access;
 import org.sosy_lab.cpachecker.util.Pair;
 
-@Options(prefix="cpa.usagestatistics.unsafedetector")
+@Options(prefix="cpa.usage.unsafedetector")
 public class UnsafeDetector {
   @Option(name="ignoreEmptyLockset", description="ignore unsafes only with empty callstacks")
   private boolean ignoreEmptyLockset = false;

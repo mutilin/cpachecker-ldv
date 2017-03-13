@@ -80,7 +80,7 @@ import org.sosy_lab.cpachecker.util.identifiers.LocalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.StructureIdentifier;
 
-@Options(prefix="cpa.usagestatistics")
+@Options(prefix="cpa.usage")
 public class UsageTransferRelation implements TransferRelation {
 
   private final TransferRelation wrappedTransfer;

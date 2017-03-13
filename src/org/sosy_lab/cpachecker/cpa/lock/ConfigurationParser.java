@@ -23,21 +23,19 @@
  */
 package org.sosy_lab.cpachecker.cpa.lock;
 
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
-
-@Options(prefix="cpa.lockStatistics")
+@Options(prefix="cpa.lock")
 public class ConfigurationParser {
   private Configuration config;
 

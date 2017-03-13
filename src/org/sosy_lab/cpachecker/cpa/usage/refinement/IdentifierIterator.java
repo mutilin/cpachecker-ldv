@@ -59,7 +59,7 @@ import org.sosy_lab.cpachecker.util.Precisions;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 
-@Options(prefix="cpa.usagestatistics")
+@Options(prefix="cpa.usage")
 public class IdentifierIterator extends WrappedConfigurableRefinementBlock<ReachedSet, SingleIdentifier> {
 
   private final ConfigurableProgramAnalysis cpa;
@@ -71,6 +71,7 @@ public class IdentifierIterator extends WrappedConfigurableRefinementBlock<Reach
   @Option(name="refinablePathLimitation", description="a limit for paths for one usage, which could be refined")
   private int refinablePathLimitation = Integer.MAX_VALUE;
 
+  //TODO Option is broken!!
   @Option(name="totalARGCleaning", description="clean all ARG or try to reuse some parts of it (memory consuming)")
   private boolean totalARGCleaning = false;
 

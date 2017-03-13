@@ -32,7 +32,6 @@ import java.util.Set;
 import javax.annotation.Nonnull;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractWrapperState;
 import org.sosy_lab.cpachecker.cpa.lock.LockState;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
@@ -81,22 +80,12 @@ public class UsageInfo implements Comparable<UsageInfo> {
       @Nonnull UsageState state, AbstractIdentifier ident) {
     if (ident instanceof SingleIdentifier) {
       UsageInfo result = new UsageInfo(atype, new LineInfo(l, AbstractStates.extractLocation(state)), (SingleIdentifier)ident);
-      result.addCompatibleParts(state);
+      AbstractStates.asIterable(state)
+        .filter(CompatibleState.class)
+        .forEach(s -> result.compatibleStates.put(s.getClass(), s.prepareToStore()));
       return result;
     } else {
       return UNSUPPORTED_USAGE;
-    }
-  }
-
-  private void addCompatibleParts(AbstractState state) {
-    if (state instanceof CompatibleState) {
-      CompatibleState cState = (CompatibleState) state;
-      compatibleStates.put(cState.getClass(), cState.prepareToStore());
-    }
-    if (state instanceof AbstractWrapperState) {
-      for (AbstractState child : ((AbstractWrapperState)state).getWrappedStates()) {
-        addCompatibleParts(child);
-      }
     }
   }
 
@@ -204,7 +193,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
     sb.append(accessType);
     sb.append(" access to ");
     sb.append(id);
-    LockState locks = AbstractStates.extractStateByType(keyState, LockState.class);
+    LockState locks = (LockState) compatibleStates.get(LockState.class);
     if (locks.getSize() == 0) {
       sb.append(" without locks");
     } else {
@@ -293,6 +282,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
     result.path = this.path;
     result.isLooped = this.isLooped;
     result.isReachable = this.isReachable;
+    result.compatibleStates.putAll(this.compatibleStates);
     return result;
   }
 
