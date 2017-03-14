@@ -29,6 +29,7 @@ import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.defaults.AbstractCPA;
 import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
+import org.sosy_lab.cpachecker.core.defaults.DelegateAbstractDomain;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.CPAFactory;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysisWithBAM;
@@ -43,7 +44,7 @@ public class LockCPA extends AbstractCPA implements ConfigurableProgramAnalysisW
   private final LockReducer reducer;
 
   private LockCPA (Configuration config, LogManager logger) throws InvalidConfigurationException {
-    super("sep", "sep", new LockDomain(), new LockTransferRelation(config, logger));
+    super("sep", "sep", DelegateAbstractDomain.<LockState>getInstance(), new LockTransferRelation(config, logger));
     LockTransferRelation transfer = (LockTransferRelation) getTransferRelation();
     reducer             = new LockReducer(config, transfer.annotatedfunctions, transfer.lockDescription);
   }

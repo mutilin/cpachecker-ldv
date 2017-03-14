@@ -28,13 +28,13 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
-
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.defaults.AbstractCPA;
 import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
+import org.sosy_lab.cpachecker.core.defaults.DelegateAbstractDomain;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.CPAFactory;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysisWithBAM;
@@ -54,7 +54,7 @@ public class LocalCPA extends AbstractCPA implements ConfigurableProgramAnalysis
     }
 
     private LocalCPA(LogManager pLogger, Configuration pConfig) throws InvalidConfigurationException {
-      super("join", "sep", new LocalDomain(), new LocalTransferRelation(pConfig));
+      super("join", "sep", DelegateAbstractDomain.<LocalState>getInstance(), new LocalTransferRelation(pConfig));
       statistics = new LocalStatistics(pConfig, pLogger);
       reducer = new LocalReducer();
       String localVars = pConfig.getProperty("cpa.local.localvariables");

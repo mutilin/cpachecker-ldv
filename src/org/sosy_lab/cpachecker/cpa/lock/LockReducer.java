@@ -23,12 +23,8 @@
  */
 package org.sosy_lab.cpachecker.cpa.lock;
 
-import static com.google.common.collect.FluentIterable.from;
-
-import com.google.common.base.Function;
 import java.util.Map;
 import java.util.Set;
-import javax.annotation.Nullable;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
@@ -50,15 +46,6 @@ public class LockReducer implements Reducer {
   @Option(description="reduce unused locks")
   private boolean reduceUselessLocks = false;
 
-  private final Function<LockIdentifier, String> GETNAME =
-      new Function<LockIdentifier, String>() {
-      @Override
-      @Nullable
-      public String apply(@Nullable LockIdentifier pInput) {
-          return pInput.getName();
-      }
-    };
-
   public LockReducer(Configuration config, Map<String, AnnotationInfo> annotations, Set<LockInfo> locks) throws InvalidConfigurationException {
     config.inject(this);
   }
@@ -68,14 +55,10 @@ public class LockReducer implements Reducer {
     LockState lockState = (LockState) pExpandedElement;
     LockStateBuilder builder = lockState.builder();
     builder.reduce();
-    if (aggressiveReduction) {
-      Set<LockIdentifier> uselessLocks;
-      if (reduceUselessLocks) {
-        uselessLocks = pContext.getCapturedLocks();
-      } else {
-        uselessLocks = null;
-      }
-      builder.reduceLocks(from(pContext.getCapturedLocks()).transform(GETNAME).toSet(), uselessLocks);
+    if (reduceUselessLocks) {
+      builder.reduceLocks(pContext.getCapturedLocks());
+    } else if (aggressiveReduction) {
+      builder.reduceLockCounters(pContext.getCapturedLocks());
     }
     return builder.build();
   }
@@ -88,14 +71,10 @@ public class LockReducer implements Reducer {
     LockState rootState = (LockState) pRootElement;
     LockStateBuilder builder = reducedState.builder();
     builder.expand(rootState);
-    if (aggressiveReduction) {
-      Set<LockIdentifier> uselessLocks;
-      if (reduceUselessLocks) {
-        uselessLocks = pReducedContext.getCapturedLocks();
-      } else {
-        uselessLocks = null;
-      }
-      builder.expandLocks(rootState, (from(pReducedContext.getCapturedLocks()).transform(GETNAME).toSet()), uselessLocks);
+    if (reduceUselessLocks) {
+      builder.expandLocks(rootState, pReducedContext.getCapturedLocks());
+    } else if (aggressiveReduction) {
+      builder.expandLockCounters(rootState, pReducedContext.getCapturedLocks());
     }
     return builder.build();
   }

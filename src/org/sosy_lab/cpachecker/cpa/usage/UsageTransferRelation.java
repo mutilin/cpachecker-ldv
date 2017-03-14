@@ -65,7 +65,6 @@ import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackTransferRelation;
 import org.sosy_lab.cpachecker.cpa.local.LocalState.DataType;
-import org.sosy_lab.cpachecker.cpa.lock.LockState;
 import org.sosy_lab.cpachecker.cpa.usage.BinderFunctionInfo.LinkerInfo;
 import org.sosy_lab.cpachecker.cpa.usage.UsageInfo.Access;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
@@ -104,6 +103,7 @@ public class UsageTransferRelation implements TransferRelation {
   private final LogManager logger;
 
   private UsageState newState;
+  private UsagePrecision precision;
 
   public UsageTransferRelation(TransferRelation pWrappedTransfer,
       Configuration config, LogManager pLogger, UsageCPAStatistics s,
@@ -190,9 +190,10 @@ public class UsageTransferRelation implements TransferRelation {
 
     AbstractState oldWrappedState = oldState.getWrappedState();
     newState = oldState.clone();
-    handleEdge((UsagePrecision)pPrecision, pCfaEdge);
+    precision = (UsagePrecision)pPrecision;
+    handleEdge(pCfaEdge);
     Collection<? extends AbstractState> newWrappedStates = wrappedTransfer.getAbstractSuccessorsForEdge(oldWrappedState,
-        ((UsagePrecision)pPrecision).getWrappedPrecision(), currentEdge);
+        precision.getWrappedPrecision(), currentEdge);
     for (AbstractState newWrappedState : newWrappedStates) {
       UsageState resultState = newState.clone(newWrappedState);
       if (resultState != null) {
@@ -216,30 +217,30 @@ public class UsageTransferRelation implements TransferRelation {
     return false;
   }
 
-  private void handleEdge(UsagePrecision precision, CFAEdge pCfaEdge) throws CPATransferException {
+  private void handleEdge(CFAEdge pCfaEdge) throws CPATransferException {
 
     switch(pCfaEdge.getEdgeType()) {
 
       case DeclarationEdge: {
         CDeclarationEdge declEdge = (CDeclarationEdge) pCfaEdge;
-        handleDeclaration(precision, declEdge);
+        handleDeclaration(declEdge);
         break;
       }
 
       // if edge is a statement edge, e.g. a = b + c
       case StatementEdge: {
         CStatementEdge statementEdge = (CStatementEdge) pCfaEdge;
-        handleStatement(precision, statementEdge.getStatement());
+        handleStatement(statementEdge.getStatement());
         break;
       }
 
       case AssumeEdge: {
-        visitStatement(newState, precision, ((CAssumeEdge)pCfaEdge).getExpression(), Access.READ);
+        visitStatement(((CAssumeEdge)pCfaEdge).getExpression(), Access.READ);
         break;
       }
 
       case FunctionCallEdge: {
-        handleFunctionCall(precision, (CFunctionCallEdge)pCfaEdge);
+        handleFunctionCall((CFunctionCallEdge)pCfaEdge);
         break;
       }
 
@@ -255,7 +256,7 @@ public class UsageTransferRelation implements TransferRelation {
     }
   }
 
-  private void handleFunctionCall(UsagePrecision pPrecision, CFunctionCallEdge edge) throws HandleCodeException {
+  private void handleFunctionCall(CFunctionCallEdge edge) throws HandleCodeException {
     CStatement statement = edge.getRawAST().get();
 
     if (statement instanceof CFunctionCallAssignmentStatement) {
@@ -265,24 +266,24 @@ public class UsageTransferRelation implements TransferRelation {
       CRightHandSide right = ((CFunctionCallAssignmentStatement)statement).getRightHandSide();
       CExpression variable = ((CFunctionCallAssignmentStatement)statement).getLeftHandSide();
 
-      visitStatement(newState, pPrecision, variable, Access.WRITE);
+      visitStatement(variable, Access.WRITE);
       // expression - only name of function
       if (right instanceof CFunctionCallExpression) {
-        handleFunctionCallExpression(pPrecision, variable, (CFunctionCallExpression)right);
+        handleFunctionCallExpression(variable, (CFunctionCallExpression)right);
       } else {
         //where is function?
         throw new HandleCodeException("Can't find function call here: " + right.toASTString());
       }
 
     } else if (statement instanceof CFunctionCallStatement) {
-      handleFunctionCallExpression(pPrecision, null, ((CFunctionCallStatement)statement).getFunctionCallExpression());
+      handleFunctionCallExpression(null, ((CFunctionCallStatement)statement).getFunctionCallExpression());
 
     } else {
       throw new HandleCodeException("No function found");
     }
   }
 
-  private void handleDeclaration(UsagePrecision pPrecision, CDeclarationEdge declEdge) throws CPATransferException {
+  private void handleDeclaration(CDeclarationEdge declEdge) throws CPATransferException {
 
     if (declEdge.getDeclaration().getClass() != CVariableDeclaration.class) {
       // not a variable declaration
@@ -303,24 +304,15 @@ public class UsageTransferRelation implements TransferRelation {
 
     if (init instanceof CInitializerExpression) {
       CExpression initExpression = ((CInitializerExpression)init).getExpression();
-      //Use EdgeType assignement for initializer expression to avoid mistakes related to expressions "int CPACHECKER_TMP_0 = global;"
-      visitStatement(newState, pPrecision, initExpression, Access.READ);
+      //Use EdgeType assignment for initializer expression to avoid mistakes related to expressions "int CPACHECKER_TMP_0 = global;"
+      visitStatement(initExpression, Access.READ);
 
-      if (!decl.toASTString().equals(declEdge.getRawStatement())) {
-        //CPA replace "int t;" into "int t = 0;", so here there isn't assignment
-        //It is right, but creates false unsafes.
-        return;
-      }
-      String funcName = AbstractStates.extractStateByType(newState, CallstackState.class).getCurrentFunction();
-
-      AbstractIdentifier id = IdentifierCreator.createIdentifier(decl, funcName, 0);
-      id = newState.getLinksIfNecessary(id);
-      UsageInfo usage = UsageInfo.createUsageInfo(Access.WRITE, declEdge.getLineNumber(), newState, id);
-      visitId(newState, pPrecision, usage);
+      // We do not add usage for currently declared variable
+      // It can not cause a race
     }
   }
 
-  private void handleFunctionCallExpression(final UsagePrecision pPrecision, final CExpression left, final CFunctionCallExpression fcExpression) throws HandleCodeException {
+  private void handleFunctionCallExpression(final CExpression left, final CFunctionCallExpression fcExpression) throws HandleCodeException {
 
     String functionCallName = fcExpression.getFunctionNameExpression().toASTString();
     if (binderFunctions != null && binderFunctions.contains(functionCallName))
@@ -343,19 +335,19 @@ public class UsageTransferRelation implements TransferRelation {
         id = newState.getLinksIfNecessary(id);
         UsageInfo usage = UsageInfo.createUsageInfo(currentInfo.pInfo.get(i).access,
             fcExpression.getFileLocation().getStartingLineNumber(), newState, id);
-        visitId(newState, pPrecision, usage);
+        addUsageIfNeccessary(usage);
       }
 
     } else if (abortfunctions.contains(functionCallName)) {
       newState = newState.asExitable();
     } else {
       for (CExpression p : fcExpression.getParameterExpressions()) {
-        visitStatement(newState, pPrecision, p, Access.READ);
+        visitStatement(p, Access.READ);
       }
     }
   }
 
-  private void handleStatement(final UsagePrecision pPrecision, final CStatement pStatement) throws HandleCodeException {
+  private void handleStatement(final CStatement pStatement) throws HandleCodeException {
 
     if (pStatement instanceof CAssignment) {
       // assignment like "a = b" or "a = foo()"
@@ -363,23 +355,23 @@ public class UsageTransferRelation implements TransferRelation {
       CExpression left = assignment.getLeftHandSide();
       CRightHandSide right = assignment.getRightHandSide();
 
-      visitStatement(newState, pPrecision, left, Access.WRITE);
+      visitStatement(left, Access.WRITE);
 
       if (right instanceof CExpression) {
-        visitStatement(newState, pPrecision, (CExpression)right, Access.READ);
+        visitStatement((CExpression)right, Access.READ);
 
       } else if (right instanceof CFunctionCallExpression) {
-        handleFunctionCallExpression(pPrecision, left, (CFunctionCallExpression)right);
+        handleFunctionCallExpression(left, (CFunctionCallExpression)right);
 
       } else {
         throw new HandleCodeException("Unrecognised type of right side of assignment: " + assignment.toASTString());
       }
 
     } else if (pStatement instanceof CFunctionCallStatement) {
-      handleFunctionCallExpression(pPrecision, null, ((CFunctionCallStatement)pStatement).getFunctionCallExpression());
+      handleFunctionCallExpression(null, ((CFunctionCallStatement)pStatement).getFunctionCallExpression());
 
     } else if (pStatement instanceof CExpressionStatement) {
-      visitStatement(newState, pPrecision, ((CExpressionStatement)pStatement).getExpression(), Access.WRITE);
+      visitStatement(((CExpressionStatement)pStatement).getExpression(), Access.WRITE);
 
     } else {
       throw new HandleCodeException("Unrecognized statement: " + pStatement.toASTString());
@@ -439,21 +431,19 @@ public class UsageTransferRelation implements TransferRelation {
     state.put(idIn, idFrom);
   }
 
-  private void visitStatement(final UsageState state, final UsagePrecision pPrecision
-      , final CExpression expression, final Access access) throws HandleCodeException {
-    String functionName = AbstractStates.extractStateByType(state, CallstackState.class).getCurrentFunction();
-    handler.setMode(functionName, access, state);
+  private void visitStatement(final CExpression expression, final Access access) throws HandleCodeException {
+    String functionName = AbstractStates.extractStateByType(newState, CallstackState.class).getCurrentFunction();
+    handler.setMode(functionName, access, newState);
     expression.accept(handler);
 
-    for (Pair<AbstractIdentifier, Access> pair : handler.result) {
-      UsageInfo usage = UsageInfo.createUsageInfo(pair.getSecond(), expression.getFileLocation().getStartingLineNumber(), state, pair.getFirst());
-      visitId(state, pPrecision, usage);
+    for (Pair<AbstractIdentifier, Access> pair : handler.getProcessedIdentifiers()) {
+      UsageInfo usage = UsageInfo.createUsageInfo(pair.getSecond(), expression.getFileLocation().getStartingLineNumber(), newState, pair.getFirst());
+      addUsageIfNeccessary(usage);
     }
 
   }
 
-  private void visitId(final UsageState state, final UsagePrecision pPrecision
-      , UsageInfo usage) {
+  private void addUsageIfNeccessary(UsageInfo usage) {
 
     //Precise information, using results of shared analysis
     if (!usage.isSupported()) {
@@ -462,8 +452,8 @@ public class UsageTransferRelation implements TransferRelation {
 
     SingleIdentifier singleId = usage.getId();
 
-    CFANode node = AbstractStates.extractLocation(state);
-    Map<GeneralIdentifier, DataType> localInfo = pPrecision.get(node);
+    CFANode node = AbstractStates.extractLocation(newState);
+    Map<GeneralIdentifier, DataType> localInfo = precision.get(node);
 
     if (localInfo != null && singleId.getType(localInfo) == DataType.LOCAL) {
       logger.log(Level.FINER, singleId + " is considered to be local, so it wasn't add to statistics");
@@ -486,10 +476,8 @@ public class UsageTransferRelation implements TransferRelation {
       singleId = ((StructureIdentifier)singleId).toStructureFieldIdentifier();
     }
 
-    logger.log(Level.FINER, "Add id " + singleId + " to unsafe statistics");
-    LockState lockState = AbstractStates.extractStateByType(state, LockState.class);
-    logger.log(Level.FINEST, "Its locks are: " + lockState);
+    logger.log(Level.FINER, "Add " + usage + " to unsafe statistics");
 
-    state.addUsage(singleId, usage);
+    newState.addUsage(singleId, usage);
   }
 }

@@ -143,15 +143,6 @@ public class LocalTransferRelation extends ForwardingTransferRelation<LocalState
     if (exprOnSummary instanceof CFunctionCallAssignmentStatement) {
       CFunctionCallAssignmentStatement assignExp = ((CFunctionCallAssignmentStatement)exprOnSummary);
       String funcName = assignExp.getRightHandSide().getFunctionNameExpression().toASTString();
-      boolean isAllocatedFunction = (allocate == null ? false : allocate.contains(funcName));
-      if (!isAllocatedFunction) {
-        for (String pattern : allocatePattern) {
-          if (funcName.contains(pattern)) {
-            isAllocatedFunction = true;
-            break;
-          }
-        }
-      }
       boolean isConservativeFunction = (conservationOfSharedness == null ? false : conservationOfSharedness.contains(funcName));
 
       CExpression op1 = assignExp.getLeftHandSide();
@@ -160,7 +151,7 @@ public class LocalTransferRelation extends ForwardingTransferRelation<LocalState
       int dereference = findDereference(type);
       AbstractIdentifier returnId = createId(op1, dereference);
 
-      if (isAllocatedFunction) {
+      if (isAllocatedFunction(funcName)) {
         Integer num = allocateInfo.get(funcName);
         if (num == null) {
           //Means that we use pattern
@@ -190,8 +181,7 @@ public class LocalTransferRelation extends ForwardingTransferRelation<LocalState
     CFunctionSummaryEdge sEdge = cfaEdge.getSummaryEdge();
     CFunctionEntryNode entry = sEdge.getFunctionEntry();
     String funcName = entry.getFunctionName();
-    boolean isAllocatedFunction = (allocate == null ? false : allocate.contains(funcName));
-    if (!isAllocatedFunction) {
+    if (!isAllocatedFunction(funcName)) {
       List<String> paramNames = entry.getFunctionParameterNames();
       List<CExpression> arguments = sEdge.getExpression().getFunctionCallExpression().getParameterExpressions();
       List<CParameterDeclaration> parameterTypes = entry.getFunctionDefinition().getParameters();
@@ -335,15 +325,7 @@ public class LocalTransferRelation extends ForwardingTransferRelation<LocalState
         }
       } else if (right instanceof CFunctionCallExpression) {
 	    	String funcName = ((CFunctionCallExpression)right).getFunctionNameExpression().toASTString();
-	    	boolean isAllocatedFunction = (allocate == null ? false : allocate.contains(funcName));
-	      if (!isAllocatedFunction) {
-	        for (String pattern : allocatePattern) {
-	          if (funcName.contains(pattern)) {
-	            isAllocatedFunction = true;
-	            break;
-	          }
-	        }
-	      }
+	    	boolean isAllocatedFunction = isAllocatedFunction(funcName);
 	    	boolean isConservativeFunction = (conservationOfSharedness == null ? false : conservationOfSharedness.contains(funcName));
 
 	    	if (isAllocatedFunction) {
@@ -396,5 +378,17 @@ public class LocalTransferRelation extends ForwardingTransferRelation<LocalState
       }
     }
     return newState;
+  }
+
+  private boolean isAllocatedFunction(String funcName) {
+    if (allocate.contains(funcName)) {
+      return true;
+    }
+    for (String pattern : allocatePattern) {
+      if (funcName.contains(pattern)) {
+        return true;
+      }
+    }
+    return false;
   }
 }

@@ -29,7 +29,8 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
-
+import java.util.logging.Level;
+import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cpa.local.LocalState.DataType;
@@ -43,17 +44,17 @@ import org.sosy_lab.cpachecker.util.identifiers.GeneralStructureFieldIdentifier;
 public class PresisionParser {
   private String file;
   private CFA cfa;
+  private final LogManager logger;
   private Map<Integer, CFANode> idToNodeMap = new HashMap<>();
 
-  PresisionParser(String filename, CFA pCfa) {
+  PresisionParser(String filename, CFA pCfa, LogManager l) {
     file = filename;
     cfa = pCfa;
+    logger = l;
   }
 
   public UsagePrecision parse(UsagePrecision precision) {
-    BufferedReader reader = null;
-    try {
-      reader = new BufferedReader(new FileReader(file));
+    try (BufferedReader reader = new BufferedReader(new FileReader(file))){
       String line, local;
       CFANode node = null;
       String[] localSet;
@@ -87,7 +88,7 @@ public class PresisionParser {
             //Return identifier, it's not interesting for us
             continue;
           } else {
-            System.err.println("Can't resolve such line: " + line);
+            logger.log(Level.WARNING, "Can't resolve such line: " + line);
             continue;
           }
           if (localSet[3].equalsIgnoreCase("global")) {
@@ -95,7 +96,7 @@ public class PresisionParser {
           } else if (localSet[3].equalsIgnoreCase("local")){
             type = DataType.LOCAL;
           } else {
-            System.err.println("Can't resolve such data type: " + localSet[3]);
+            logger.log(Level.WARNING, "Can't resolve such data type: " + localSet[3]);
             continue;
           }
           info.put(id, type);
@@ -107,19 +108,11 @@ public class PresisionParser {
         }
       }
     } catch(FileNotFoundException e) {
-      System.err.println("Cannot open file " + file);
+      logger.log(Level.WARNING, "Cannot open file " + file);
     } catch (IOException e) {
       e.printStackTrace();
     } catch (CPAException e) {
-      System.err.println("Can't parse presision: " + e.getMessage());
-    } finally {
-      if (reader != null) {
-        try {
-          reader.close();
-        } catch (IOException e) {
-          e.printStackTrace();
-        }
-      }
+      logger.log(Level.WARNING, "Can't parse presision: " + e.getMessage());
     }
     return precision;
   }

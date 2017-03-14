@@ -91,8 +91,8 @@ public class UsageCPA extends AbstractSingleWrapperCPA implements ConfigurablePr
     pConfig.inject(this);
     this.cfa = pCfa;
     this.abstractDomain = new UsageDomain(pCpa.getAbstractDomain());
-    this.mergeOperator = initializeMergeOperator();
-    this.stopOperator = initializeStopOperator();
+    this.mergeOperator = MergeSepOperator.getInstance();
+    this.stopOperator = new StopSepOperator(abstractDomain);
 
     LockCPA LockCPA = (CPAs.retrieveCPA(this, LockCPA.class));
     this.statistics = new UsageCPAStatistics(pConfig, pLogger,
@@ -113,14 +113,6 @@ public class UsageCPA extends AbstractSingleWrapperCPA implements ConfigurablePr
     this.transferRelation = new UsageTransferRelation(pCpa.getTransferRelation(), pConfig, pLogger, statistics
         , (CallstackTransferRelation) (CPAs.retrieveCPA(this, CallstackCPA.class)).getTransferRelation());
 
-  }
-
-  private MergeOperator initializeMergeOperator() {
-    return MergeSepOperator.getInstance();
-  }
-
-  private StopOperator initializeStopOperator() {
-    return new StopSepOperator(abstractDomain);
   }
 
   @Override
@@ -151,7 +143,7 @@ public class UsageCPA extends AbstractSingleWrapperCPA implements ConfigurablePr
   @Override
   public Precision getInitialPrecision(CFANode pNode, StateSpacePartition p) throws InterruptedException {
     precision = new UsagePrecision(this.getWrappedCpa().getInitialPrecision(pNode, p));
-    PresisionParser parser = new PresisionParser(outputFileName.toString(), cfa);
+    PresisionParser parser = new PresisionParser(outputFileName.toString(), cfa, logger);
     parser.parse(precision);
     return precision;
   }

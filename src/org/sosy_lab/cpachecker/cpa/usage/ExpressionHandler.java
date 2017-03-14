@@ -25,7 +25,6 @@ package org.sosy_lab.cpachecker.cpa.usage;
 
 import java.util.LinkedList;
 import java.util.List;
-
 import org.sosy_lab.cpachecker.cfa.ast.c.CAddressOfLabelExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CArraySubscriptExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression;
@@ -51,7 +50,7 @@ import org.sosy_lab.cpachecker.util.identifiers.IdentifierCreator;
 
 public class ExpressionHandler implements CExpressionVisitor<Void, HandleCodeException> {
 
-  public List<Pair<AbstractIdentifier, Access>> result;
+  private List<Pair<AbstractIdentifier, Access>> result;
   protected Access accessMode;
   protected String function;
   private IdentifierCreator creator = new IdentifierCreator();
@@ -160,6 +159,10 @@ public class ExpressionHandler implements CExpressionVisitor<Void, HandleCodeExc
     AbstractIdentifier id = e.accept(creator);
     id = currentState.getLinksIfNecessary(id);
     result.add(Pair.of(id, accessMode));
+  }
+
+  public List<Pair<AbstractIdentifier, Access>> getProcessedIdentifiers() {
+    return result;
   }
 }
 

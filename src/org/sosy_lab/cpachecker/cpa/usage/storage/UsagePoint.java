@@ -62,6 +62,10 @@ public class UsagePoint implements Comparable<UsagePoint> {
 
     @Override
     public boolean covers(UsagePoint o) {
+      //Here can be read accesses without locks
+      if (this.access == Access.READ && o.access == Access.READ) {
+        return super.covers(o);
+      }
       /* Key usage is important, if it is present, it is write access without locks,
        * and we should handle all of them without inserting into covered elements of the tree structure
        */
@@ -90,9 +94,6 @@ public class UsagePoint implements Comparable<UsagePoint> {
     access = pAccess;
     coveredUsages = new TreeSet<>();
     compatibleNodes = nodes;
-    if (nodes.isEmpty()) {
-      System.out.println("Empty");
-    }
   }
 
   public static UsagePoint createUsagePoint(UsageInfo info) {
@@ -106,7 +107,7 @@ public class UsagePoint implements Comparable<UsagePoint> {
       isEmpty &= constructedNode.isEmpty();
       nodes.add(constructedNode);
     }
-    if (!isEmpty || accessType == Access.READ) {
+    if (!isEmpty) {
       return new UsagePoint(nodes, accessType);
     } else {
       return new UsagePointWithEmptyLockSet(nodes, accessType, info);
@@ -171,9 +172,6 @@ public class UsagePoint implements Comparable<UsagePoint> {
     int result = access.compareTo(o.access);
     if (result != 0) {
       return result;
-    }
-    if (compatibleNodes.size() != o.compatibleNodes.size()) {
-      System.out.println("Not equals");
     }
     Preconditions.checkArgument(compatibleNodes.size() == o.compatibleNodes.size());
     for (int i = 0; i < compatibleNodes.size(); i++) {

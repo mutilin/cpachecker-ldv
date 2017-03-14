@@ -157,6 +157,7 @@ public abstract class ErrorTracePrinter {
       if (printOnlyTrueUnsafes && !isTrueUnsafe) {
         continue;
       }
+
       Pair<UsageInfo, UsageInfo> tmpPair = detector.getUnsafePair(uinfo);
       if ((tmpPair.getFirst().isLooped() || tmpPair.getSecond().isLooped()) && printOnlyTrueUnsafes) {
         continue;

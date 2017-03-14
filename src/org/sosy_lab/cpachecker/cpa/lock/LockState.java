@@ -35,7 +35,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeSet;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
+import org.sosy_lab.cpachecker.core.defaults.LatticeAbstractState;
 import org.sosy_lab.cpachecker.cpa.lock.LockIdentifier.LockType;
 import org.sosy_lab.cpachecker.cpa.lock.effects.AcquireLockEffect;
 import org.sosy_lab.cpachecker.cpa.lock.effects.LockEffect;
@@ -43,7 +43,7 @@ import org.sosy_lab.cpachecker.cpa.lock.effects.ReleaseLockEffect;
 import org.sosy_lab.cpachecker.cpa.usage.CompatibleState;
 import org.sosy_lab.cpachecker.cpa.usage.UsageTreeNode;
 
-public class LockState implements AbstractState, Serializable, CompatibleState {
+public class LockState implements LatticeAbstractState<LockState>, Serializable, CompatibleState {
 
   public static class LockTreeNode extends TreeSet<LockIdentifier> implements UsageTreeNode{
 
@@ -203,11 +203,17 @@ public class LockState implements AbstractState, Serializable, CompatibleState {
       mutableToRestore = null;
     }
 
-    public void reduceLocks(Set<String> exceptLocks, Set<LockIdentifier> usedLocks) {
+    public void reduceLocks(Set<LockIdentifier> usedLocks) {
       for (LockIdentifier lock : new HashSet<>(mutableLocks.keySet())) {
         if (usedLocks != null && !usedLocks.contains(lock)) {
           mutableLocks.remove(lock);
-        } else if (!exceptLocks.contains(lock.getName())) {
+        }
+      }
+    }
+
+    public void reduceLockCounters(Set<LockIdentifier> exceptLocks) {
+      for (LockIdentifier lock : new HashSet<>(mutableLocks.keySet())) {
+        if (!exceptLocks.contains(lock)) {
           mutableLocks.remove(lock);
           add(lock);
         }
@@ -218,11 +224,17 @@ public class LockState implements AbstractState, Serializable, CompatibleState {
       mutableToRestore = rootState.toRestore;
     }
 
-    public void expandLocks(LockState pRootState, Set<String> pRestrictedLocks, Set<LockIdentifier> usedLocks) {
+    public void expandLocks(LockState pRootState,  Set<LockIdentifier> usedLocks) {
       for (LockIdentifier lock : pRootState.locks.keySet()) {
         if (usedLocks != null && !usedLocks.contains(lock)) {
           mutableLocks.put(lock, pRootState.locks.get(lock));
-        } else if (!pRestrictedLocks.contains(lock.getName())) {
+        }
+      }
+    }
+
+    public void expandLockCounters(LockState pRootState, Set<LockIdentifier> pRestrictedLocks) {
+      for (LockIdentifier lock : pRootState.locks.keySet()) {
+        if (!pRestrictedLocks.contains(lock)) {
           Integer size = mutableLocks.get(lock);
           Integer rootSize = pRootState.locks.get(lock);
           //null is also correct (it shows, that we've found new lock)
@@ -344,6 +356,7 @@ public class LockState implements AbstractState, Serializable, CompatibleState {
    * @param other the other element
    * @return true, if this element is less or equal than the other element, based on the order imposed by the lattice
    */
+  @Override
   public boolean isLessOrEqual(LockState other) {
     //State is less, if it has the same locks as the other and may be some more
 
@@ -443,5 +456,10 @@ public class LockState implements AbstractState, Serializable, CompatibleState {
   @Override
   public UsageTreeNode getTreeNode() {
     return new LockTreeNode(locks.keySet());
+  }
+
+  @Override
+  public LockState join(LockState pOther) {
+    throw new UnsupportedOperationException("Operation join isn't supported for LockStatisticsCPA");
   }
 }

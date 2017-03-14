@@ -25,8 +25,7 @@ package org.sosy_lab.cpachecker.cpa.lock;
 
 import static com.google.common.collect.FluentIterable.from;
 
-import com.google.common.base.Function;
-import com.google.common.base.Predicate;
+import com.google.common.base.Optional;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
@@ -34,7 +33,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import javax.annotation.Nullable;
+import java.util.logging.Level;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
@@ -124,19 +123,8 @@ public class LockTransferRelation implements TransferRelation
   public Set<LockIdentifier> getAffectedLocks(CFAEdge cfaEdge) {
     try {
       return from(determineOperations(cfaEdge))
-      .filter(new Predicate<AbstractLockEffect>() {
-        @Override
-        public boolean apply(@Nullable AbstractLockEffect pInput) {
-          return pInput instanceof LockEffect;
-        }
-      })
-      .transform(new Function<AbstractLockEffect, LockIdentifier>() {
-        @Override
-        @Nullable
-        public LockIdentifier apply(@Nullable AbstractLockEffect pInput) {
-          return ((LockEffect)pInput).getAffectedLock();
-        }
-      }).toSet();
+      .filter(e -> e instanceof LockEffect)
+      .transform(e -> ((LockEffect)e).getAffectedLock()).toSet();
     } catch (UnrecognizedCCodeException e) {
       e.printStackTrace();
       return Collections.emptySet();
@@ -144,37 +132,15 @@ public class LockTransferRelation implements TransferRelation
   }
 
   private List<AbstractLockEffect> determineOperations(CFAEdge cfaEdge) throws UnrecognizedCCodeException {
-    List<AbstractLockEffect> toProcess;
+
     switch (cfaEdge.getEdgeType()) {
 
       case FunctionCallEdge:
-        toProcess = handleFunctionCall((CFunctionCallEdge)cfaEdge);
-        break;
+        return handleFunctionCall((CFunctionCallEdge)cfaEdge);
 
       case FunctionReturnEdge:
-        toProcess = handleFunctionReturnEdge((CFunctionReturnEdge)cfaEdge);
-        break;
+        return handleFunctionReturnEdge((CFunctionReturnEdge)cfaEdge);
 
-      default:
-        toProcess = handleSimpleEdge(cfaEdge);
-    }
-    return toProcess;
-  }
-
-  private LockInfo findLockByName(String name) {
-    for (LockInfo lock : lockDescription) {
-      if (lock.lockName.equals(name)) {
-        return lock;
-      }
-    }
-    return null;
-  }
-
-  private List<AbstractLockEffect> handleSimpleEdge(CFAEdge cfaEdge) throws UnrecognizedCCodeException {
-
-    List<AbstractLockEffect> result;
-
-    switch(cfaEdge.getEdgeType()) {
       case StatementEdge:
         CStatement statement = ((CStatementEdge)cfaEdge).getStatement();
         /*if (statement instanceof CFunctionCallStatement && lockreset != null &&
@@ -198,14 +164,23 @@ public class LockTransferRelation implements TransferRelation
     return Collections.emptyList();
   }
 
+  private Optional<LockInfo> findLockByName(String name) {
+    return from(lockDescription)
+        .firstMatch(l -> l.lockName.equals(name));
+  }
+
+  private Optional<LockInfo> findLockByVariable(String varName) {
+    return from(lockDescription).firstMatch(l -> l.Variables.contains(varName));
+  }
+
   private List<AbstractLockEffect> handleAssumption(CAssumeEdge cfaEdge) {
     CExpression assumption = cfaEdge.getExpression();
 
     if (assumption instanceof CBinaryExpression) {
       if (((CBinaryExpression) assumption).getOperand1() instanceof CIdExpression) {
-        LockInfo lockInfo = findLockByVariable(((CIdExpression)((CBinaryExpression) assumption).getOperand1()).getName());
-        if (lockInfo != null) {
-          LockIdentifier id = LockIdentifier.of(lockInfo.lockName);
+        Optional<LockInfo> lockInfo = findLockByVariable(((CIdExpression)((CBinaryExpression) assumption).getOperand1()).getName());
+        if (lockInfo.isPresent()) {
+          LockIdentifier id = LockIdentifier.of(lockInfo.get().lockName);
           if ((((CBinaryExpression) assumption).getOperand2() instanceof CIntegerLiteralExpression)) {
             int level = ((CIntegerLiteralExpression)(((CBinaryExpression) assumption).getOperand2())).getValue().intValue();
             AbstractLockEffect e = CheckLockEffect.createEffectForId(level, cfaEdge.getTruthAssumption(), id);
@@ -253,8 +228,12 @@ public class LockTransferRelation implements TransferRelation
         if (currentAnnotation.captureLocks.size() > 0) {
           for (String lockName : currentAnnotation.captureLocks.keySet()) {
             LockIdentifier tagerId = LockIdentifier.of(lockName, currentAnnotation.captureLocks.get(lockName));
-            LockInfo lock = findLockByName(tagerId.getName());
-            result.add(AcquireLockEffect.createEffectForId(tagerId, lock.maxLock));
+            Optional<LockInfo> lock = findLockByName(tagerId.getName());
+            if (lock.isPresent()) {
+              result.add(AcquireLockEffect.createEffectForId(tagerId, lock.get().maxLock));
+            } else {
+              logger.log(Level.WARNING, "Can not find lock by name: " + tagerId);
+            }
           }
         }
         return result;
@@ -330,11 +309,11 @@ public class LockTransferRelation implements TransferRelation
          */
         CLeftHandSide leftSide = ((CAssignment) statement).getLeftHandSide();
         CRightHandSide rightSide = ((CAssignment) statement).getRightHandSide();
-        LockInfo lock = findLockByVariable(leftSide.toASTString());
-        if (lock != null) {
+        Optional<LockInfo> lock = findLockByVariable(leftSide.toASTString());
+        if (lock.isPresent()) {
           if (rightSide instanceof CIntegerLiteralExpression) {
             int level = ((CIntegerLiteralExpression)rightSide).getValue().intValue();
-            AbstractLockEffect e = SetLockEffect.createEffectForId(level, LockIdentifier.of(lock.lockName));
+            AbstractLockEffect e = SetLockEffect.createEffectForId(level, LockIdentifier.of(lock.get().lockName));
             return Collections.singletonList(e);
           } else {
             return Collections.emptyList();
@@ -386,17 +365,6 @@ public class LockTransferRelation implements TransferRelation
       }
     }
     return Pair.of(changedLocks, e);
-  }
-
-  private LockInfo findLockByVariable(String varName) {
-    for (LockInfo lock : lockDescription) {
-      for (String variable : lock.Variables) {
-        if (variable.equals(varName)) {
-          return lock;
-        }
-      }
-    }
-    return null;
   }
 
   @Override

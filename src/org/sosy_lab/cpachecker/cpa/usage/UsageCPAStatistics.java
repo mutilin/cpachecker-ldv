@@ -36,7 +36,6 @@ import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
 import org.sosy_lab.cpachecker.cpa.bam.BAMTransferRelation;
 import org.sosy_lab.cpachecker.cpa.lock.LockTransferRelation;
-import org.sosy_lab.cpachecker.cpa.usage.storage.UsageContainer;
 
 @Options(prefix="cpa.usage")
 public class UsageCPAStatistics implements Statistics {
@@ -62,7 +61,6 @@ public class UsageCPAStatistics implements Statistics {
   //private int maxTrueUsages = 0;
  // private final ShutdownNotifier shutdownNotifier;
 
-  private UsageContainer container;
   private BAMTransferRelation transfer;
   private final Configuration config;
   private final LockTransferRelation lockTransfer;

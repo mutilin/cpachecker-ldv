@@ -27,14 +27,13 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-
-import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
+import org.sosy_lab.cpachecker.core.defaults.LatticeAbstractState;
 import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.GlobalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.SingleIdentifier;
 
 
-public class LocalState implements AbstractState {
+public class LocalState implements LatticeAbstractState<LocalState> {
 
   public static enum DataType {
     LOCAL,
@@ -127,6 +126,7 @@ public class LocalState implements AbstractState {
     return this.clone(null);
   }
 
+  @Override
   public LocalState join(LocalState pState2) {
     //by definition of Merge operator we should return state2, not this!
     if (this.equals(pState2)) {
@@ -174,6 +174,7 @@ public class LocalState implements AbstractState {
     return joinState;
   }
 
+  @Override
   public boolean isLessOrEqual(LocalState pState2) {
     //LOCAL < NULL < GLOBAL
     for (AbstractIdentifier name : this.DataInfo.keySet()) {
