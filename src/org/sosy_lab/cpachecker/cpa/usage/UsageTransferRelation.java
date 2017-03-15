@@ -155,27 +155,8 @@ public class UsageTransferRelation implements TransferRelation {
     statistics.transferRelationTimer.start();
     Collection<AbstractState> result = new ArrayList<>();
     CFAEdge currentEdge = pCfaEdge;
-    UsageState oldState = (UsageState) pState;
-    CFANode node = AbstractStates.extractLocation(oldState);
-    /*if (pCfaEdge instanceof CFunctionCallEdge || pCfaEdge instanceof CStatementEdge) {
-      String functionName = null;
-      if (pCfaEdge instanceof CFunctionCallEdge) {
-        functionName = ((CFunctionCallEdge)pCfaEdge).getSuccessor().getFunctionName();
-      } else {
-        CStatement statement = ((CStatementEdge)pCfaEdge).getStatement();
-        if (statement instanceof CFunctionCallStatement) {
-          functionName = ((CFunctionCallStatement)statement).getFunctionCallExpression().getFunctionNameExpression().toString();
-        }
-      }
-      if (functionName != null && abortfunctions != null && abortfunctions.contains(functionName)) {
-        logger.log(Level.FINEST, currentEdge + " is abort edge, analysis was stopped");
-        //oldState.forceUpdateContainer();
-        statistics.transferRelationTimer.stop();
-        return Collections.emptySet();
-      }
-    }*/
 
-    if (oldState instanceof Exitable) {
+    if (pState instanceof Exitable) {
       statistics.transferRelationTimer.stop();
       return Collections.emptySet();
     }
@@ -199,6 +180,7 @@ public class UsageTransferRelation implements TransferRelation {
       }
     }
 
+    UsageState oldState = (UsageState) pState;
     AbstractState oldWrappedState = oldState.getWrappedState();
     newState = oldState.clone();
     precision = (UsagePrecision)pPrecision;
