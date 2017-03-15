@@ -80,7 +80,7 @@ public class ThreadLabel implements Comparable<ThreadLabel> {
     if (result != 0) {
       return result;
     } else {
-      return status.compareTo(status);
+      return status.compareTo(pO.status);
     }
   }
 

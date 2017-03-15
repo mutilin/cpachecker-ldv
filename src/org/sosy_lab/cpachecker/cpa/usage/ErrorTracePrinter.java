@@ -25,10 +25,10 @@ package org.sosy_lab.cpachecker.cpa.usage;
 
 import com.google.common.base.Predicate;
 import com.google.common.collect.Sets;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.Writer;
+import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -183,7 +183,7 @@ public abstract class ErrorTracePrinter {
       Set<SingleIdentifier> falseUnsafes = Sets.difference(initialUnsafes, currentUnsafes);
 
       if (falseUnsafes.size() > 0) {
-        try (Writer writer = new FileWriter(outputFalseUnsafes.toString())) {
+        try (Writer writer = Files.newBufferedWriter(Paths.get(outputFalseUnsafes.toString()), Charset.defaultCharset())) {
           logger.log(Level.FINE, "Print statistics about false unsafes");
           for (SingleIdentifier id : falseUnsafes) {
             writer.append(createUniqueName(id) + "\n");

@@ -86,6 +86,7 @@ public class RefinementBlockFactory {
     pConfig.inject(this);
   }
 
+  @SuppressWarnings("unchecked")
   public ConfigurableRefinementBlock<ReachedSet> create() throws InvalidConfigurationException {
     BAMCPA bam = CPAs.retrieveCPA(cpa, BAMCPA.class);
     BAMTransferRelation bamTransfer = bam.getTransferRelation();

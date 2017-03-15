@@ -23,9 +23,10 @@
  */
 package org.sosy_lab.cpachecker.cpa.usage;
 
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Writer;
+import java.nio.charset.Charset;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Iterator;
@@ -67,7 +68,7 @@ public class ETVErrorTracePrinter extends ErrorTracePrinter {
   @Override
   protected void init() {
     try {
-      writer = new FileWriter(outputStatFileName.toString());
+      writer = Files.newBufferedWriter(Paths.get(outputStatFileName.toString()), Charset.defaultCharset());
       logger.log(Level.FINE, "Print statistics about unsafe cases");
       printCountStatistics(writer, container.getUnsafeIterator());
     } catch (IOException e) {

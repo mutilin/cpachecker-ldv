@@ -45,7 +45,7 @@ import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 public class ThreadState implements AbstractState, AbstractStateWithLocation, Partitionable,
     AbstractWrapperState, UsageTreeNode {
 
-  public class ThreadStateBuilder {
+  public static class ThreadStateBuilder {
     private LocationState loc;
     private CallstackState cs;
     private List<ThreadLabel> tSet;
@@ -277,7 +277,7 @@ public class ThreadState implements AbstractState, AbstractStateWithLocation, Pa
     return threadSet.toString();
   }
 
-  public class StoredThreadState extends ThreadState {
+  public static class StoredThreadState extends ThreadState {
     StoredThreadState(ThreadState origin) {
       super(null, null, origin.threadSet, null);
     }

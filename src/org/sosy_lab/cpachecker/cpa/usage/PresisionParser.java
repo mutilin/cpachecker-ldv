@@ -25,8 +25,10 @@ package org.sosy_lab.cpachecker.cpa.usage;
 
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
-import java.io.FileReader;
 import java.io.IOException;
+import java.nio.charset.Charset;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.logging.Level;
@@ -54,7 +56,7 @@ public class PresisionParser {
   }
 
   public UsagePrecision parse(UsagePrecision precision) {
-    try (BufferedReader reader = new BufferedReader(new FileReader(file))){
+    try (BufferedReader reader = Files.newBufferedReader(Paths.get(file), Charset.defaultCharset())){
       String line, local;
       CFANode node = null;
       String[] localSet;
