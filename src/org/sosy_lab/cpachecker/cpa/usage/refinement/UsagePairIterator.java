@@ -23,10 +23,8 @@
  */
 package org.sosy_lab.cpachecker.cpa.usage.refinement;
 
-import java.io.PrintStream;
 import java.util.Iterator;
 import java.util.logging.Level;
-
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cpa.usage.UsageInfo;
 import org.sosy_lab.cpachecker.cpa.usage.storage.UsageInfoSet;
@@ -129,8 +127,8 @@ public class UsagePairIterator extends GenericIterator<Pair<UsageInfoSet, UsageI
     }
   }
 
-  @Override
+  /*@Override
   protected void printDetailedStatistics(PrintStream pOut) {
     pOut.println("--UsagePairIterator--");
-  }
+  }*/
 }

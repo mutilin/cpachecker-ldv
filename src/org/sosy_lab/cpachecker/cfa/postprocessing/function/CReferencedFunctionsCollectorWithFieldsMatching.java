@@ -46,7 +46,6 @@ import org.sosy_lab.cpachecker.cfa.types.c.CFunctionType;
 import org.sosy_lab.cpachecker.cfa.types.c.CPointerType;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
 import org.sosy_lab.cpachecker.cfa.types.c.CTypedefType;
-import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
 import org.sosy_lab.cpachecker.util.identifiers.AbstractIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.GlobalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.IdentifierCreator;
@@ -169,16 +168,11 @@ class CReferencedFunctionsCollectorWithFieldsMatching extends CReferencedFunctio
         if (left instanceof CFieldReference) {
           functionToFieldMatching.put(((CFieldReference) left).getFieldName(), lastFunction);
         } else {
-          try {
-            AbstractIdentifier id = left.accept(idCreator);
-            if (id instanceof StructureIdentifier) {
-              assert false : "Structures should be handled above";
-            } else if (id instanceof GlobalVariableIdentifier) {
-              funcToGlobal.put(((SingleIdentifier) id).getName(), lastFunction);
-            }
-
-          } catch (HandleCodeException e) {
-            e.printStackTrace();
+          AbstractIdentifier id = left.accept(idCreator);
+          if (id instanceof StructureIdentifier) {
+            assert false : "Structures should be handled above";
+          } else if (id instanceof GlobalVariableIdentifier) {
+            funcToGlobal.put(((SingleIdentifier) id).getName(), lastFunction);
           }
         }
       }

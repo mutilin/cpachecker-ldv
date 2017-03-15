@@ -23,8 +23,6 @@
  */
 package org.sosy_lab.cpachecker.cpa.lock;
 
-import java.util.Map;
-import java.util.Set;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
@@ -46,7 +44,7 @@ public class LockReducer implements Reducer {
   @Option(description="reduce unused locks")
   private boolean reduceUselessLocks = false;
 
-  public LockReducer(Configuration config, Map<String, AnnotationInfo> annotations, Set<LockInfo> locks) throws InvalidConfigurationException {
+  public LockReducer(Configuration config) throws InvalidConfigurationException {
     config.inject(this);
   }
 

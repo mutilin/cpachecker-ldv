@@ -23,40 +23,32 @@
  */
 package org.sosy_lab.cpachecker.util.identifiers;
 
-import org.sosy_lab.cpachecker.cfa.ast.c.CAddressOfLabelExpression;
+import com.google.common.base.Preconditions;
 import org.sosy_lab.cpachecker.cfa.ast.c.CArraySubscriptExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CBinaryExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CCastExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CCharLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CComplexCastExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CExpressionVisitor;
 import org.sosy_lab.cpachecker.cfa.ast.c.CFieldReference;
-import org.sosy_lab.cpachecker.cfa.ast.c.CFloatLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CImaginaryLiteralExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CIntegerLiteralExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CParameterDeclaration;
 import org.sosy_lab.cpachecker.cfa.ast.c.CPointerExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CSimpleDeclaration;
-import org.sosy_lab.cpachecker.cfa.ast.c.CStringLiteralExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CTypeIdExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.DefaultCExpressionVisitor;
 import org.sosy_lab.cpachecker.cfa.types.c.CEnumType.CEnumerator;
 import org.sosy_lab.cpachecker.cfa.types.c.CSimpleType;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
-import org.sosy_lab.cpachecker.exceptions.HandleCodeException;
-
-import com.google.common.base.Preconditions;
+import org.sosy_lab.cpachecker.cpa.loopinvariants.polynom.visitors.Visitor.NoException;
 
 
-public class IdentifierCreator implements CExpressionVisitor<AbstractIdentifier, HandleCodeException> {
+public class IdentifierCreator extends DefaultCExpressionVisitor<AbstractIdentifier, NoException> {
   protected int dereference;
   protected String function;
 
   public void clear(String func) {
-    dereference = 0;
+    clearDereference();
     function = func;
   }
 
@@ -65,13 +57,13 @@ public class IdentifierCreator implements CExpressionVisitor<AbstractIdentifier,
   }
 
   @Override
-  public AbstractIdentifier visit(CArraySubscriptExpression expression) throws HandleCodeException {
+  public AbstractIdentifier visit(CArraySubscriptExpression expression) {
     dereference++;
     return expression.getArrayExpression().accept(this);
   }
 
   @Override
-  public AbstractIdentifier visit(CBinaryExpression expression) throws HandleCodeException {
+  public AbstractIdentifier visit(CBinaryExpression expression) {
     AbstractIdentifier resultId1, resultId2, result;
     int oldDereference = dereference;
     dereference = 0;
@@ -84,12 +76,12 @@ public class IdentifierCreator implements CExpressionVisitor<AbstractIdentifier,
   }
 
   @Override
-  public AbstractIdentifier visit(CCastExpression expression) throws HandleCodeException {
+  public AbstractIdentifier visit(CCastExpression expression) {
     return expression.getOperand().accept(this);
   }
 
   @Override
-  public AbstractIdentifier visit(CFieldReference expression) throws HandleCodeException {
+  public AbstractIdentifier visit(CFieldReference expression) {
     CExpression owner = expression.getFieldOwner();
     int oldDeref = dereference;
     dereference = (expression.isPointerDereference() ? 1 : 0);
@@ -101,7 +93,7 @@ public class IdentifierCreator implements CExpressionVisitor<AbstractIdentifier,
   }
 
   @Override
-  public AbstractIdentifier visit(CIdExpression expression) throws HandleCodeException {
+  public AbstractIdentifier visit(CIdExpression expression) {
     CSimpleDeclaration decl = expression.getDeclaration();
 
     if (decl == null) {
@@ -114,32 +106,7 @@ public class IdentifierCreator implements CExpressionVisitor<AbstractIdentifier,
   }
 
   @Override
-  public AbstractIdentifier visit(CCharLiteralExpression expression) throws HandleCodeException {
-    return new ConstantIdentifier(expression.toASTString(), dereference);
-  }
-
-  @Override
-  public AbstractIdentifier visit(CFloatLiteralExpression expression) throws HandleCodeException {
-    return new ConstantIdentifier(expression.toASTString(), dereference);
-  }
-
-  @Override
-  public AbstractIdentifier visit(CIntegerLiteralExpression expression) throws HandleCodeException {
-    return new ConstantIdentifier(expression.toASTString(), dereference);
-  }
-
-  @Override
-  public AbstractIdentifier visit(CStringLiteralExpression expression) throws HandleCodeException {
-    return new ConstantIdentifier(expression.toASTString(), dereference);
-  }
-
-  @Override
-  public AbstractIdentifier visit(CTypeIdExpression expression) throws HandleCodeException {
-    return new ConstantIdentifier(expression.toASTString(), dereference);
-  }
-
-  @Override
-  public AbstractIdentifier visit(CUnaryExpression expression) throws HandleCodeException {
+  public AbstractIdentifier visit(CUnaryExpression expression) {
     if (expression.getOperator() == CUnaryExpression.UnaryOperator.AMPER) {
       --dereference;
     }
@@ -154,8 +121,7 @@ public class IdentifierCreator implements CExpressionVisitor<AbstractIdentifier,
     dereference = pDereference;
   }
 
-  public static AbstractIdentifier createIdentifier(CSimpleDeclaration decl, String function, int dereference) throws HandleCodeException
-  {
+  public static AbstractIdentifier createIdentifier(CSimpleDeclaration decl, String function, int dereference) {
     Preconditions.checkNotNull(decl);
     String name = decl.getName();
     CType type = decl.getType();
@@ -177,7 +143,7 @@ public class IdentifierCreator implements CExpressionVisitor<AbstractIdentifier,
   }
 
   @Override
-  public AbstractIdentifier visit(CPointerExpression pPointerExpression) throws HandleCodeException {
+  public AbstractIdentifier visit(CPointerExpression pPointerExpression) {
     ++dereference;
     AbstractIdentifier result = pPointerExpression.getOperand().accept(this);
     if (result instanceof BinaryIdentifier) {
@@ -219,17 +185,12 @@ public class IdentifierCreator implements CExpressionVisitor<AbstractIdentifier,
   }
 
   @Override
-  public AbstractIdentifier visit(CComplexCastExpression pComplexCastExpression) throws HandleCodeException {
+  public AbstractIdentifier visit(CComplexCastExpression pComplexCastExpression) {
     return pComplexCastExpression.getOperand().accept(this);
   }
 
   @Override
-  public AbstractIdentifier visit(CImaginaryLiteralExpression PIastLiteralExpression) throws HandleCodeException {
-    return new ConstantIdentifier(PIastLiteralExpression.toASTString(), dereference);
-  }
-
-  @Override
-  public AbstractIdentifier visit(CAddressOfLabelExpression pAddressOfLabelExpression) throws HandleCodeException {
-    throw new HandleCodeException("Can't create an identifier for " + pAddressOfLabelExpression);
+  protected AbstractIdentifier visitDefault(CExpression pExp) {
+    return new ConstantIdentifier(pExp.toASTString(), dereference);
   }
 }

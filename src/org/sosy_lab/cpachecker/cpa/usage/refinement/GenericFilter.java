@@ -23,26 +23,19 @@
  */
 package org.sosy_lab.cpachecker.cpa.usage.refinement;
 
+import com.google.common.base.Function;
+import com.google.common.base.Predicate;
 import java.io.PrintStream;
-
 import javax.annotation.Nullable;
-
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionEntryNode;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
-import org.sosy_lab.cpachecker.cpa.usage.refinement.ConfigurableRefinementBlock;
-import org.sosy_lab.cpachecker.cpa.usage.refinement.ExtendedARGPath;
-import org.sosy_lab.cpachecker.cpa.usage.refinement.RefinementResult;
-import org.sosy_lab.cpachecker.cpa.usage.refinement.WrappedConfigurableRefinementBlock;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Pair;
-
-import com.google.common.base.Function;
-import com.google.common.base.Predicate;
 
 
 public abstract class GenericFilter<P>  extends
@@ -69,14 +62,7 @@ WrappedConfigurableRefinementBlock<Pair<ExtendedARGPath, ExtendedARGPath>, Pair<
 
   };
 
-  Function<ARGState, String> getFunctionName = new Function<ARGState, String>() {
-    @Override
-    public String apply(@Nullable ARGState pInput) {
-      CFANode location = AbstractStates.extractLocation(pInput);
-
-      return location.getFunctionName();
-    }
-  };
+  Function<ARGState, String> getFunctionName = s -> AbstractStates.extractLocation(s).getFunctionName();
 
   public GenericFilter(ConfigurableRefinementBlock<Pair<ExtendedARGPath, ExtendedARGPath>> pWrapper
       , Configuration pConfig) {

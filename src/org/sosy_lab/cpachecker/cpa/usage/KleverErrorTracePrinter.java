@@ -25,13 +25,14 @@ package org.sosy_lab.cpachecker.cpa.usage;
 
 import static com.google.common.collect.FluentIterable.from;
 
+import com.google.common.base.Optional;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.file.Paths;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Optional;
+import java.util.logging.Level;
 import javax.xml.parsers.ParserConfigurationException;
 import org.sosy_lab.common.Appender;
 import org.sosy_lab.common.configuration.Configuration;
@@ -64,7 +65,10 @@ public class KleverErrorTracePrinter extends ErrorTracePrinter {
     super(c, pT, pL);
   }
 
-  int globalCounter = 0;
+  int idCounter = 0;
+  private String getId() {
+    return "A" + idCounter++;
+  }
 
   @Override
   protected void printUnsafe(SingleIdentifier pId, Pair<UsageInfo, UsageInfo> pTmpPair) {
@@ -90,7 +94,7 @@ public class KleverErrorTracePrinter extends ErrorTracePrinter {
           .filter(FILTER_EMPTY_FILE_LOCATIONS).get(0).getFileLocation().getFileName();
 
       GraphMlBuilder builder = new GraphMlBuilder(WitnessType.VIOLATION_WITNESS, defaultSourcefileName, Language.C,
-          MachineModel.LINUX64, new VerificationTaskMetaData(config, Optional.empty()));
+          MachineModel.LINUX64, new VerificationTaskMetaData(config, java.util.Optional.empty()));
 
       idCounter = 0;
       Element result = builder.createNodeElement("A0", NodeType.ONPATH);
@@ -124,7 +128,21 @@ public class KleverErrorTracePrinter extends ErrorTracePrinter {
     Iterator<CFAEdge> iterator = from(path)
                .filter(FILTER_EMPTY_FILE_LOCATIONS)
                .iterator();
+
+    Optional<CFAEdge> warningEdge = from(path)
+      .filter(e -> e.getLineNumber() == usage.getLine().getLine() && e.toString().contains(pId.getName()))
+      .last();
+
+    CFAEdge warning;
+
+    if (warningEdge.isPresent()) {
+      warning = warningEdge.get();
+    } else {
+      logger.log(Level.WARNING, "Can not determine an unsafe edge");
+      warning = null;
+    }
     Element result = null;
+    Element lastWarningElement = null;
 
     while (iterator.hasNext()) {
       currentId = nextId;
@@ -135,21 +153,18 @@ public class KleverErrorTracePrinter extends ErrorTracePrinter {
       dumpCommonInfoForEdge(builder, result, pEdge);
       builder.addDataElementChild(result, KeyDef.THREADID, Integer.toString(threadId));
 
-      boolean isWarning = (pEdge.getLineNumber() == usage.getLine().getLine() && pEdge.toString().contains(pId.getName()));
-      if (isWarning) {
-        builder.addDataElementChild(result, KeyDef.WARNING, usage.getWarningMessage());
+      if (pEdge == warning) {
+        lastWarningElement = result;
       }
       result = builder.createNodeElement(nextId, NodeType.ONPATH);
+    }
+    if (lastWarningElement != null) {
+      builder.addDataElementChild(lastWarningElement, KeyDef.WARNING, usage.getWarningMessage());
     }
 
     //Special hack to connect two traces
     idCounter--;
     return result;
-  }
-
-  int idCounter = 0;
-  private String getId() {
-    return "A" + idCounter++;
   }
 
   private void dumpCommonInfoForEdge(GraphMlBuilder builder, Element result, CFAEdge pEdge) {

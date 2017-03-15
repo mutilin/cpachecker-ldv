@@ -127,7 +127,7 @@ public class RefinementBlockFactory {
 
           case PredicateRefiner:
             currentBlock = new PredicateRefinerAdapter((ConfigurableRefinementBlock<Pair<ExtendedARGPath, ExtendedARGPath>>) currentBlock,
-                cpa, null);
+                cpa);
             break;
 
           case CallstackFilter:

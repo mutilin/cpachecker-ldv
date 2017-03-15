@@ -28,7 +28,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.core.defaults.SingletonPrecision;
 import org.sosy_lab.cpachecker.cpa.local.LocalState;
@@ -44,7 +43,6 @@ public class SharedRefiner extends GenericSinglePathRefiner {
 
   private LocalTransferRelation transferRelation;
 
-
   //Debug counter
   private int counter = 0;
   private final StatInt totalFalseConditions = new StatInt(StatKind.COUNT, "Number of false conditions that were detected by SharedRefiner");
@@ -53,13 +51,10 @@ public class SharedRefiner extends GenericSinglePathRefiner {
   public SharedRefiner(ConfigurableRefinementBlock<Pair<ExtendedARGPath, ExtendedARGPath>> pWrapper, LocalTransferRelation RelationForSharedRefiner) {
     super(pWrapper);
     transferRelation = RelationForSharedRefiner;
-
-    // TODO Auto-generated constructor stub
   }
 
   @Override
   protected RefinementResult call(ExtendedARGPath pPath) throws CPAException, InterruptedException {
-    // TODO Auto-generated method stub
     RefinementResult result = RefinementResult.createUnknown();
     List<CFAEdge> edges  = pPath.getFullPath();
     SingletonPrecision emptyPrecision = SingletonPrecision.getInstance();
@@ -69,14 +64,10 @@ public class SharedRefiner extends GenericSinglePathRefiner {
     UsageInfo sharedUsage = pPath.getUsageInfo();
     SingleIdentifier usageId = pPath.getUsageInfo().getId();
 
-
-
-
     for (CFAEdge edge : edges) {
       assert(successors.size() <= 1);
       Iterator<LocalState> sharedIterator= successors.iterator();
       if (sharedUsage.getLine().getLine() == edge.getLineNumber()) {
-        System.out.println(edge.getLineNumber());
         LocalState usageState = sharedIterator.next();
         assert (usageState != null);
 
@@ -108,23 +99,11 @@ public class SharedRefiner extends GenericSinglePathRefiner {
     return result;
   }
 
-
-
-
   @Override
   public void printAdditionalStatistics(PrintStream pOut) {
-    System.out.println(totalFalseConditions.toString());
     pOut.println("--Shared Refiner--");
     pOut.println("Number of cases with empty successors: " + counter);
     pOut.println("Number of false results: " + numOfFalseResults);
-  }/*
-  @Override
-  public final void printAdditionalStatistics(PrintStream pOut) {
-    pOut.println("--GenericSinglePathRefiner--");
-    pOut.println("Timer for block:           " + totalTimer);
-    pOut.println("Number of calls:           " + numberOfRefinements);
-    //printAdditionalStatistics(pOut);
-    //wrappedRefiner.printStatistics(pOut);
-  }*/
-
+    pOut.println(totalFalseConditions);
+  }
 }

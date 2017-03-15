@@ -30,12 +30,13 @@ import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.log.LogManager;
-import org.sosy_lab.common.time.Timer;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
 import org.sosy_lab.cpachecker.cpa.bam.BAMTransferRelation;
 import org.sosy_lab.cpachecker.cpa.lock.LockTransferRelation;
+import org.sosy_lab.cpachecker.util.statistics.StatTimer;
+import org.sosy_lab.cpachecker.util.statistics.StatisticsWriter;
 
 @Options(prefix="cpa.usage")
 public class UsageCPAStatistics implements Statistics {
@@ -66,8 +67,8 @@ public class UsageCPAStatistics implements Statistics {
   private final LockTransferRelation lockTransfer;
   private ErrorTracePrinter errPrinter;
 
-  public final Timer transferRelationTimer = new Timer();
-  public final Timer printStatisticsTimer = new Timer();
+  public final StatTimer transferRelationTimer = new StatTimer("Time for transfer relation");
+  public final StatTimer printStatisticsTimer = new StatTimer("Time for printing statistics");
 
   public UsageCPAStatistics(Configuration pConfig, LogManager pLogger,
       LockTransferRelation lTransfer) throws InvalidConfigurationException{
@@ -82,10 +83,12 @@ public class UsageCPAStatistics implements Statistics {
     printStatisticsTimer.start();
     assert errPrinter != null;
     errPrinter.printErrorTraces(reached);
-    printStatisticsTimer.stop();
     errPrinter.printStatistics(out);
-    out.println("Time for transfer relation:         " + transferRelationTimer);
-    out.println("Time for printing statistics:       " + printStatisticsTimer);
+    printStatisticsTimer.stop();
+    //out.
+    StatisticsWriter writer = StatisticsWriter.writingStatisticsTo(out);
+    writer.put(transferRelationTimer);
+    writer.put(printStatisticsTimer);
     out.println("Time for expanding:                 " + UsageState.tmpTimer1);
     out.println("Time for joining:                   " + UsageState.tmpTimer2);
     out.println("Time for joining2:                  " + UsageState.tmpTimer3);

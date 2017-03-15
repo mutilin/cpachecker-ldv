@@ -197,7 +197,7 @@ public class LocalTransferRelation extends ForwardingTransferRelation<LocalState
     return newElement;
   }
 
-  private void handleAllocatedFunction(LocalState pSuccessor, CFunctionCallExpression right) throws HandleCodeException {
+  private void handleAllocatedFunction(LocalState pSuccessor, CFunctionCallExpression right) {
     String funcName = right.getFunctionNameExpression().toASTString();
     int num = allocateInfo.get(funcName);
     if (num > 0) {
@@ -214,7 +214,7 @@ public class LocalTransferRelation extends ForwardingTransferRelation<LocalState
   @Override
   protected LocalState handleFunctionCallEdge(CFunctionCallEdge cfaEdge,
       List<CExpression> arguments, List<CParameterDeclaration> parameterTypes,
-      String calledFunctionName) throws HandleCodeException {
+      String calledFunctionName) {
     LocalState newState = new LocalState(state);
 
     CFunctionEntryNode functionEntryNode = cfaEdge.getSuccessor();
@@ -239,7 +239,7 @@ public class LocalTransferRelation extends ForwardingTransferRelation<LocalState
 
   private List<Pair<AbstractIdentifier, LocalVariableIdentifier>> extractIdentifiers(
       List<CExpression> arguments,
-      List<String> paramNames, List<CParameterDeclaration> parameterTypes) throws HandleCodeException {
+      List<String> paramNames, List<CParameterDeclaration> parameterTypes) {
 
     List<Pair<AbstractIdentifier, LocalVariableIdentifier>> result = new LinkedList<>();
     CExpression currentArgument;
@@ -264,7 +264,7 @@ public class LocalTransferRelation extends ForwardingTransferRelation<LocalState
   }
 
   @Override
-  protected LocalState handleStatementEdge(CStatementEdge cfaEdge, CStatement statement) throws HandleCodeException {
+  protected LocalState handleStatementEdge(CStatementEdge cfaEdge, CStatement statement) {
     LocalState newState = state.clone();
     if (statement instanceof CAssignment) {
       // assignment like "a = b" or "a = foo()"
@@ -289,7 +289,7 @@ public class LocalTransferRelation extends ForwardingTransferRelation<LocalState
     }
   }
 
-  private AbstractIdentifier createId(CExpression expression, int dereference) throws HandleCodeException {
+  private AbstractIdentifier createId(CExpression expression, int dereference) {
     idCreator.setDereference(dereference);
     AbstractIdentifier id = expression.accept(idCreator);
     if (id instanceof GlobalVariableIdentifier || id instanceof LocalVariableIdentifier) {
@@ -298,7 +298,7 @@ public class LocalTransferRelation extends ForwardingTransferRelation<LocalState
     return id;
   }
 
-  private void assign(LocalState pSuccessor, CExpression left, CRightHandSide right) throws HandleCodeException {
+  private void assign(LocalState pSuccessor, CExpression left, CRightHandSide right) {
 
     int leftDereference = findDereference(left.getExpressionType());
 
@@ -361,7 +361,7 @@ public class LocalTransferRelation extends ForwardingTransferRelation<LocalState
   }
 
   @Override
-  protected LocalState handleDeclarationEdge(CDeclarationEdge declEdge, CDeclaration decl) throws HandleCodeException {
+  protected LocalState handleDeclarationEdge(CDeclarationEdge declEdge, CDeclaration decl) {
     LocalState newState = state.clone();
 
     if (decl instanceof CVariableDeclaration) {

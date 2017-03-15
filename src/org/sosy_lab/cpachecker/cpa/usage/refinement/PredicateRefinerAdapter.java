@@ -79,7 +79,7 @@ public class PredicateRefinerAdapter extends GenericSinglePathRefiner {
   private int numberOfBAMupdates = 0;
 
   public PredicateRefinerAdapter(ConfigurableRefinementBlock<Pair<ExtendedARGPath, ExtendedARGPath>> wrapper,
-      ConfigurableProgramAnalysis pCpa, ReachedSet pReached) throws InvalidConfigurationException {
+      ConfigurableProgramAnalysis pCpa) throws InvalidConfigurationException {
     super(wrapper);
 
     if (!(pCpa instanceof WrapperCPA)) {

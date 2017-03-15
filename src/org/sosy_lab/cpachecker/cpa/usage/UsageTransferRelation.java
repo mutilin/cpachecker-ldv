@@ -25,6 +25,7 @@ package org.sosy_lab.cpachecker.cpa.usage;
 
 import static org.sosy_lab.cpachecker.util.AbstractStates.extractLocation;
 
+import com.google.common.collect.Sets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -56,7 +57,7 @@ import org.sosy_lab.cpachecker.cfa.model.FunctionCallEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
-import org.sosy_lab.cpachecker.cfa.model.c.CFunctionSummaryEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionSummaryStatementEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Exitable;
@@ -121,7 +122,10 @@ public class UsageTransferRelation implements TransferRelation {
         tmpInfo = new BinderFunctionInfo(name, config, logger);
         binderFunctionInfo.put(name, tmpInfo);
       }
+      //BindedFunctions should not be analysed
+      skippedfunctions = skippedfunctions == null ? binderFunctions : Sets.union(skippedfunctions, binderFunctions);
     }
+
     handler = new ExpressionHandler();
     varSkipper = new VariableSkipper(config);
   }
@@ -180,9 +184,16 @@ public class UsageTransferRelation implements TransferRelation {
     if (checkFunciton(pCfaEdge, skippedfunctions)) {
       callstackTransfer.enableRecursiveContext();
       needToReset = true;
-      if (node.getLeavingSummaryEdge() != null) {
-        currentEdge = node.getLeavingSummaryEdge();
-        logger.log(Level.FINEST, ((CFunctionSummaryEdge)currentEdge).getFunctionEntry().getFunctionName() + " is skipped");
+      CFANode predecessor = pCfaEdge.getPredecessor();
+      boolean summaryEdgeFound = false;
+      for (int i = 0; i < predecessor.getNumLeavingEdges(); i++) {
+        if (predecessor.getLeavingEdge(i) instanceof CFunctionSummaryStatementEdge) {
+          currentEdge = predecessor.getLeavingEdge(i);
+          summaryEdgeFound = true;
+        }
+      }
+      if (summaryEdgeFound) {
+        logger.log(Level.FINEST, pCfaEdge.getSuccessor().getFunctionName() + " is skipped");
       } else {
         throw new CPATransferException("Cannot find summary edge for " + pCfaEdge + " as skipped function");
       }
@@ -379,7 +390,7 @@ public class UsageTransferRelation implements TransferRelation {
   }
 
   private void linkVariables(final UsageState state, final CExpression left, final List<CExpression> params
-      , final Pair<LinkerInfo, LinkerInfo> linkInfo) throws HandleCodeException {
+      , final Pair<LinkerInfo, LinkerInfo> linkInfo) {
     String function = AbstractStates.extractStateByType(state, CallstackState.class).getCurrentFunction();
     AbstractIdentifier leftId, rightId;
     IdentifierCreator creator = new IdentifierCreator();
@@ -433,11 +444,16 @@ public class UsageTransferRelation implements TransferRelation {
 
   private void visitStatement(final CExpression expression, final Access access) throws HandleCodeException {
     String functionName = AbstractStates.extractStateByType(newState, CallstackState.class).getCurrentFunction();
-    handler.setMode(functionName, access, newState);
+    handler.setMode(access);
     expression.accept(handler);
 
-    for (Pair<AbstractIdentifier, Access> pair : handler.getProcessedIdentifiers()) {
-      UsageInfo usage = UsageInfo.createUsageInfo(pair.getSecond(), expression.getFileLocation().getStartingLineNumber(), newState, pair.getFirst());
+    IdentifierCreator creator = new IdentifierCreator();
+    creator.clear(functionName);
+    for (Pair<CExpression, Access> pair : handler.getProcessedExpressions()) {
+      creator.clearDereference();
+      AbstractIdentifier id = pair.getFirst().accept(creator);
+      id = newState.getLinksIfNecessary(id);
+      UsageInfo usage = UsageInfo.createUsageInfo(pair.getSecond(), expression.getFileLocation().getStartingLineNumber(), newState, id);
       addUsageIfNeccessary(usage);
     }
 
