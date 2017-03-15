@@ -249,7 +249,7 @@ public class UsageState extends AbstractSingleWrapperState implements Targetable
   public void saveUnsafesInContainerIfNecessary(AbstractState abstractState) {
     ARGState argState = AbstractStates.extractStateByType(abstractState, ARGState.class);
     PredicateAbstractState state = AbstractStates.extractStateByType(argState, PredicateAbstractState.class);
-    if (state == null || !state.getAbstractionFormula().isFalse() && state.isAbstractionState()) {
+    if (state == null || (!state.getAbstractionFormula().isFalse() && state.isAbstractionState())) {
       recentUsages.setKeyState(argState);
       List<LockEffect> emptyList = Collections.emptyList();
       tmpTimer3.start();
