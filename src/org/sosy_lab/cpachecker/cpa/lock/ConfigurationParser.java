@@ -52,6 +52,7 @@ public class ConfigurationParser {
     config = pConfig;
   }
 
+  @SuppressWarnings("deprecation")
   public ImmutableSet<LockInfo> parseLockInfo() {
     Set<LockInfo> tmpInfo = new HashSet<>();
     Map<String, Integer> lockFunctions;
@@ -120,6 +121,7 @@ public class ConfigurationParser {
     return ImmutableSet.copyOf(tmpInfo);
   }
 
+  @SuppressWarnings("deprecation")
   public ImmutableMap<String, AnnotationInfo> parseAnnotatedFunctions() {
     Map<String, String> freeLocks;
     Map<String, String> restoreLocks;

@@ -57,6 +57,7 @@ public class LocalCPA extends AbstractCPA implements ConfigurableProgramAnalysis
       super("join", "sep", DelegateAbstractDomain.<LocalState>getInstance(), new LocalTransferRelation(pConfig));
       statistics = new LocalStatistics(pConfig, pLogger);
       reducer = new LocalReducer();
+      @SuppressWarnings("deprecation")
       String localVars = pConfig.getProperty("cpa.local.localvariables");
       if (localVars != null) {
         localVariables = new HashSet<>(Arrays.asList(localVars.split(", ")));

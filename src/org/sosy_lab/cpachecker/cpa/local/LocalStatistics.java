@@ -24,9 +24,11 @@
 package org.sosy_lab.cpachecker.cpa.local;
 
 import java.io.FileNotFoundException;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.io.Writer;
+import java.nio.charset.Charset;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Map;
@@ -72,7 +74,7 @@ public class LocalStatistics implements Statistics {
     try {
       Map<CFANode, LocalState> reachedStatistics = new TreeMap<>();
       //Path p = Paths.get(outputFileName);
-      try (FileWriter writer = new FileWriter(outputFileName.toString())) {
+      try (Writer writer = Files.newBufferedWriter(Paths.get(outputFileName.toString()), Charset.defaultCharset())) {
         logger.log(Level.FINE, "Write precision to " + outputFileName);
         for (AbstractState state : pReached.asCollection()) {
           CFANode node = AbstractStates.extractLocation(state);

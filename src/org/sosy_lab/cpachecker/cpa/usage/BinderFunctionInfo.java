@@ -23,17 +23,15 @@
  */
 package org.sosy_lab.cpachecker.cpa.usage;
 
+import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.logging.Level;
-
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cpa.usage.UsageInfo.Access;
 import org.sosy_lab.cpachecker.util.Pair;
-
-import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
 
 /**
  * Information about special functions like sdlFirst() and sdlNext();
@@ -69,6 +67,7 @@ public class BinderFunctionInfo {
    */
   public final Pair<LinkerInfo, LinkerInfo> linkInfo;
 
+  @SuppressWarnings("deprecation")
   BinderFunctionInfo(String nm, Configuration pConfig, LogManager l) {
     name = nm;
     try {

@@ -97,6 +97,7 @@ public class LocalTransferRelation extends ForwardingTransferRelation<LocalState
     idCreator = new IdentifierCreator();
   }
 
+  @SuppressWarnings("deprecation")
   private void parseAllocatedFunctions(Configuration config) {
     String num;
     allocateInfo = new HashMap<>();
