@@ -80,8 +80,9 @@ public class LocalTransferRelation extends ForwardingTransferRelation<LocalState
   @Option(name="allocatefunctions", description = "functions, which allocate new free memory")
   private Set<String> allocate;
 
+  //Use it carefully: just alloc is not enough, because EMG generates ldv_random_allocationless_scenario_callback_*
   @Option(name="allocateFunctionPattern", description = "functions, which allocate new free memory")
-  private Set<String> allocatePattern = Sets.newHashSet("alloc");
+  private Set<String> allocatePattern = Sets.newHashSet();
 
   @Option(name="conservativefunctions", description = "functions, which allocate new free memory")
   private Set<String> conservationOfSharedness;
