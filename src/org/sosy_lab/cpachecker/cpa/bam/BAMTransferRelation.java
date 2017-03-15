@@ -227,8 +227,7 @@ public class BAMTransferRelation implements TransferRelation {
 
     return partitioning.isReturnNode(node)
         // multiple exits at same location possible.
-        && from(partitioning.getBlocksForReturnNode(node))
-        .anyMatch(b -> b.getNodes().contains(argState));
+        && (!stack.isEmpty() && partitioning.getBlocksForReturnNode(node).contains(stack.getLast().getThird()));
   }
 
   /**
