@@ -56,7 +56,7 @@ public class ThreadCreateTransformer {
   private final static String CREATE = "ldv_thread_create";
   private final static String CREATE_SELF_PARALLEL = "ldv_thread_create_N";
 
-  public class ThreadFinder implements CFATraversal.CFAVisitor {
+  public static class ThreadFinder implements CFATraversal.CFAVisitor {
 
     Map<CFAEdge, CFunctionCallExpression> threadCreates = new HashMap<>();
 
