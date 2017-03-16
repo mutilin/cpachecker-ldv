@@ -290,7 +290,7 @@ public class ThreadState implements AbstractState, AbstractStateWithLocation, Pa
 
   @Override
   public boolean cover(UsageTreeNode pNode) {
-    return true;
+    return this.threadSet.containsAll(((ThreadState)pNode).threadSet);
   }
 
   @Override
