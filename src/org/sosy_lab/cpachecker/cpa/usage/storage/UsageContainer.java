@@ -264,6 +264,7 @@ public class UsageContainer {
 
   public void setAsRefined(SingleIdentifier id, RefinementResult result) {
     Preconditions.checkArgument(result.isTrue(), "Result is not true, can not set the set as refined");
+    Preconditions.checkArgument(detector.isUnsafe(getUsages(id)), "Refinement is successful, but the unsafe is absent for identifier " + id);
 
     setAsRefined(id, result.getTrueRace().getFirst(), result.getTrueRace().getSecond());
   }
