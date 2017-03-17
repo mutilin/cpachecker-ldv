@@ -197,11 +197,11 @@ public class UsageState extends AbstractSingleWrapperState implements Targetable
     }
 
     // in case of true, we need to copy usages
-    for (SingleIdentifier id : this.recentUsages.keySet()) {
+    /*for (SingleIdentifier id : this.recentUsages.keySet()) {
       for (UsageInfo usage : this.recentUsages.get(id)) {
         other.addUsage(id, usage);
       }
-    }
+    }*/
     return true;
   }
 
