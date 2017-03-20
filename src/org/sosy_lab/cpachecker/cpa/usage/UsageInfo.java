@@ -289,7 +289,7 @@ public class UsageInfo implements Comparable<UsageInfo> {
   public UsageInfo expand(LockState expandedState) {
     UsageInfo result = clone();
 
-    compatibleStates.put(LockState.class, expandedState);
+    result.compatibleStates.put(LockState.class, expandedState);
     return result;
   }
 }
