@@ -25,6 +25,7 @@ package org.sosy_lab.cpachecker.cpa.blockator;
 
 import com.google.common.collect.ImmutableCollection;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Objects;
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.blocks.BlockPartitioning;
@@ -37,8 +38,10 @@ import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation.ReachedSetAware;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
+import org.sosy_lab.cpachecker.cpa.blockator.BlockatorState.StateKind;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
+import org.sosy_lab.cpachecker.util.automaton.NondeterministicFiniteAutomaton.State;
 
 public class BlockatorTransferRelation implements TransferRelation, ReachedSetAware {
   private BlockatorCPA parent;
@@ -76,10 +79,8 @@ public class BlockatorTransferRelation implements TransferRelation, ReachedSetAw
       AbstractState reducedState = reducer.getVariableReducedState(state, block, node);
       Precision reducedPrecision = reducer.getVariableReducedPrecision(precision, block);
 
-      System.out.println("Entering block " + block);
-
-      bState = bState.enterBlock(state, precision, block, reducedPrecision);
-      parent.getStateRegistry().replace(state, bState);
+      bState = bState.enterBlock(state, precision, block, reducedState, reducedPrecision);
+      parent.getStateRegistry().put(reducedState, bState);
 
       Collection<? extends AbstractState> subStates = getWrappedSuccessors(bState.transition(),
           reducedState, reducedPrecision);
@@ -105,8 +106,6 @@ public class BlockatorTransferRelation implements TransferRelation, ReachedSetAw
       }
 
       bState = bState.exitBlock();
-      parent.getStateRegistry().replace(state, bState);
-
       BlockatorState.BlockEntry blockEntry = parent.getStateRegistry()
           .get(innerBlock.entryState).getBlockEntry();
 

@@ -24,7 +24,6 @@
 package org.sosy_lab.cpachecker.cpa.blockator;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import javax.annotation.Nonnull;
@@ -35,6 +34,11 @@ import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 
 public class BlockatorState {
+  public enum StateKind {
+    NORMAL,
+    BLOCK_ENTRY
+  }
+
   public static class BlockEntry {
     public final AbstractState entryState;
     public final Precision entryPrecision;
@@ -73,7 +77,8 @@ public class BlockatorState {
 
   private BlockEntry blockEntry = null;
   private List<BlockInner> blockStack = Collections.emptyList();
-  private Precision expandedPrecision = null;
+  private Precision modifiedPrecision = null;
+  private StateKind stateKind = StateKind.NORMAL;
 
   public BlockatorState() {
 
@@ -82,7 +87,11 @@ public class BlockatorState {
   public BlockatorState(BlockatorState st) {
     blockEntry = st.blockEntry;
     blockStack = st.blockStack;
-    expandedPrecision = st.expandedPrecision;
+    modifiedPrecision = st.modifiedPrecision;
+  }
+
+  public StateKind getStateKind() {
+    return stateKind;
   }
 
   @Nullable
@@ -96,8 +105,8 @@ public class BlockatorState {
   }
 
   @Nullable
-  public Precision getExpandedPrecision() {
-    return expandedPrecision;
+  public Precision getModifiedPrecision() {
+    return modifiedPrecision;
   }
 
   @Nullable
@@ -112,20 +121,23 @@ public class BlockatorState {
 
   public BlockatorState transition(Precision pExpandedPrecision) {
     BlockatorState st = new BlockatorState(this);
+    st.stateKind = StateKind.NORMAL;
     st.blockEntry = null;
-    st.expandedPrecision = pExpandedPrecision;
+    st.modifiedPrecision = pExpandedPrecision;
     return st;
   }
 
   public BlockatorState enterBlock(AbstractState pEntryState, Precision pEntryPrecision,
-                                   Block pBlock, Precision pReducedPrecision) {
+                                   Block pBlock, AbstractState pReducedState, Precision pReducedPrecision) {
     BlockEntry newEntry = new BlockEntry(pEntryState, pEntryPrecision, pBlock, pReducedPrecision);
     List<BlockInner> newBlockStack = new ArrayList<>(blockStack);
-    newBlockStack.add(new BlockInner(pBlock, pEntryState));
+    newBlockStack.add(new BlockInner(pBlock, pReducedState));
 
     BlockatorState state = new BlockatorState(this);
+    state.stateKind = StateKind.BLOCK_ENTRY;
     state.blockEntry = newEntry;
     state.blockStack = Collections.unmodifiableList(newBlockStack);
+    state.modifiedPrecision = pReducedPrecision;
     return state;
   }
 

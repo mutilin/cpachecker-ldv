@@ -53,17 +53,17 @@ public class BlockatorPrecisionAdjustment implements PrecisionAdjustment {
       AbstractState fullState) throws CPAException, InterruptedException {
     // precision might be outdated, if comes from a block-start and the inner part was refined.
     // so lets use the (expanded) inner precision.
-    Precision expandedPrecision = parent.getStateRegistry().get(state).getExpandedPrecision();
-    if (expandedPrecision != null) {
-      precision = expandedPrecision;
+    Precision modifiedPrecision = parent.getStateRegistry().get(state).getModifiedPrecision();
+    if (modifiedPrecision != null) {
+      precision = modifiedPrecision;
     }
 
     Optional<PrecisionAdjustmentResult> resultOpt = wrappedPrecisionAdjustment.prec(state,
         precision, states, stateProjection, fullState);
 
     if (resultOpt.isEmpty()) {
-      return expandedPrecision != null
-         ? Optional.of(PrecisionAdjustmentResult.create(state, expandedPrecision, Action.CONTINUE))
+      return modifiedPrecision != null
+         ? Optional.of(PrecisionAdjustmentResult.create(state, modifiedPrecision, Action.CONTINUE))
          : Optional.empty();
     }
 
