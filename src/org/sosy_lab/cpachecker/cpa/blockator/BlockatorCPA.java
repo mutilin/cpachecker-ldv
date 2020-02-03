@@ -41,9 +41,11 @@ import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.CPAFactory;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysisWithBAM;
+import org.sosy_lab.cpachecker.core.interfaces.MergeOperator;
 import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustment;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
 import org.sosy_lab.cpachecker.core.interfaces.StateSpacePartition;
+import org.sosy_lab.cpachecker.core.interfaces.StopOperator;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 
@@ -68,6 +70,8 @@ public class BlockatorCPA extends AbstractSingleWrapperCPA {
 
   private BlockatorTransferRelation transferRelation;
   private BlockatorPrecisionAdjustment precisionAdjustment;
+  private BlockatorStopOperator stopOperator;
+  private BlockatorMergeOperator mergeOperator;
 
   protected BlockatorCPA(
       ConfigurableProgramAnalysis pCpa,
@@ -92,6 +96,8 @@ public class BlockatorCPA extends AbstractSingleWrapperCPA {
 
     transferRelation = new BlockatorTransferRelation(this, pCpa.getTransferRelation());
     precisionAdjustment = new BlockatorPrecisionAdjustment(this, pCpa.getPrecisionAdjustment());
+    stopOperator = new BlockatorStopOperator(this, pCpa.getStopOperator());
+    mergeOperator = new BlockatorMergeOperator(this, pCpa.getMergeOperator());
   }
 
   public BlockPartitioning getPartitioning() {
@@ -122,5 +128,15 @@ public class BlockatorCPA extends AbstractSingleWrapperCPA {
   @Override
   public PrecisionAdjustment getPrecisionAdjustment() {
     return precisionAdjustment;
+  }
+
+  @Override
+  public StopOperator getStopOperator() {
+    return stopOperator;
+  }
+
+  @Override
+  public MergeOperator getMergeOperator() {
+    return mergeOperator;
   }
 }
