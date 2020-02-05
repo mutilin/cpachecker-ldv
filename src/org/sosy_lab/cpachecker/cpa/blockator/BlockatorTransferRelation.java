@@ -100,8 +100,10 @@ public class BlockatorTransferRelation implements TransferRelation, ReachedSetAw
       Block block = blocks.iterator().next();
       BlockatorState.BlockInner innerBlock = bState.getLastBlock();
       if (innerBlock == null || !innerBlock.block.equals(block)) {
-        throw new RuntimeException("Trying to exit from wrong block! innerBlock=" + innerBlock +
-            ", exiting from block " + block);
+        // FIXME This should not happen
+        return Collections.emptyList();
+//        throw new RuntimeException("Trying to exit from wrong block! innerBlock=" + innerBlock +
+//            ", exiting from block " + block);
       }
 
       bState = bState.exitBlock();
