@@ -91,6 +91,25 @@ public class BlockatorReachedSet extends ARGReachedSet.ForwardingARGReachedSet {
       }
 
       BlockatorState bState = cpa.getStateRegistry().get(current);
+      if (bState.getLastBlock() != null) {
+        BlockStackEntry stackEntry = bState.getLastBlock();
+        BlockEntry blockEntry = cpa.getStateRegistry().get(stackEntry.entryState).getBlockEntry();
+        if (blockEntry == null || !blockEntry.block.equals(stackEntry.block)) {
+          throw new RuntimeException("Mismatched stack entry pointer");
+        }
+
+        CacheEntry cacheEntry = cpa.getCacheManager().get(blockEntry.block,
+            blockEntry.reducedState, blockEntry.reducedPrecision);
+
+        if (cacheEntry != null && cacheEntry.hasExitUsages(current)) {
+          for (AbstractState st: cacheEntry.getExitUsages(current)) {
+            worklist.add((ARGState) st);
+          }
+
+          cacheEntry.removeExitUsage(current);
+        }
+      }
+
       if (bState.getStateKind() == StateKind.BLOCK_ENTRY) {
         BlockStackEntry stackEntry = bState.getLastBlock();
         if (stackEntry == null) {

@@ -128,9 +128,10 @@ public class BlockatorTransferRelation implements TransferRelation, ReachedSetAw
           BlockatorState wrappedState = bState.transition(expandedPrecision)
               .cacheUsage(blockEntry.entryState, exit.getFirstNotNull());
 
-          Collection<? extends  AbstractState> wrappedResults = getWrappedSuccessors(wrappedState,
+          Collection<? extends AbstractState> wrappedResults = getWrappedSuccessors(wrappedState,
               expandedState, expandedPrecision);
 
+          cached.addExitUsages(exit.getFirstNotNull(), wrappedResults);
           result.addAll(wrappedResults);
         }
 
@@ -183,6 +184,8 @@ public class BlockatorTransferRelation implements TransferRelation, ReachedSetAw
 
           Collection<? extends AbstractState> wrappedResults = getWrappedSuccessors(usageState,
               expandedState, expandedPrecision);
+
+          cached.addExitUsages(state, wrappedResults);
 
           setParent(wrappedResults, usage.getFirstNotNull());
           for (AbstractState st: wrappedResults) {

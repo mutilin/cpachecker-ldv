@@ -24,8 +24,11 @@
 package org.sosy_lab.cpachecker.cpa.blockator;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -69,6 +72,7 @@ public class BlockatorCacheManager {
     private AtomicBoolean isComputed = new AtomicBoolean(false);
     private List<Pair<AbstractState, Precision>> cacheUsages = new ArrayList<>();
     private List<Pair<AbstractState, Precision>> exitStates = new ArrayList<>();
+    private Map<AbstractState, List<AbstractState>> exitUsages = new HashMap<>();
 
     public boolean shouldCompute() {
       return !isComputed.getAndSet(true);
@@ -89,6 +93,23 @@ public class BlockatorCacheManager {
     public void addExitState(AbstractState state, Precision precision) {
       exitStates.add(Pair.of(state, precision));
     }
+
+    public void addExitUsages(AbstractState exit, Collection<? extends AbstractState> usage) {
+      exitUsages.computeIfAbsent(exit, (k) -> new ArrayList<>()).addAll(usage);
+    }
+
+    public boolean hasExitUsages(AbstractState exit) {
+      return exitUsages.containsKey(exit);
+    }
+
+    public List<AbstractState> getExitUsages(AbstractState exit) {
+      List<AbstractState> ret = exitUsages.get(exit);
+      return ret != null ? Collections.unmodifiableList(ret) : null;
+    }
+
+    public void removeExitUsage(AbstractState exit) {
+      exitUsages.remove(exit);
+    }
   }
 
   private Reducer reducer;
@@ -98,13 +119,19 @@ public class BlockatorCacheManager {
     reducer = pReducer;
   }
 
+  private CacheKey key(Block block, AbstractState state, Precision precision) {
+    return new CacheKey(block, reducer.getHashCodeForState(state, precision));
+  }
+
   public CacheEntry getOrCreate(Block block, AbstractState state, Precision precision) {
-    CacheKey key = new CacheKey(block, reducer.getHashCodeForState(state, precision));
-    return cache.computeIfAbsent(key, (k) -> new CacheEntry());
+    return cache.computeIfAbsent(key(block, state, precision), (k) -> new CacheEntry());
+  }
+
+  public CacheEntry get(Block block, AbstractState state, Precision precision) {
+    return cache.get(key(block, state, precision));
   }
 
   public void remove(Block block, AbstractState state, Precision precision) {
-    CacheKey key = new CacheKey(block, reducer.getHashCodeForState(state, precision));
-    cache.remove(key);
+    cache.remove(key(block, state, precision));
   }
 }
