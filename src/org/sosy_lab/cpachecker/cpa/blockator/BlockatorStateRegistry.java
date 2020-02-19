@@ -67,4 +67,9 @@ public class BlockatorStateRegistry {
       put(dest, get(source));
     }
   }
+
+  public void remove(AbstractState base) {
+    int stateId = extractArgState(base).getStateId();
+    states.remove(stateId);
+  }
 }

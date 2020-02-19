@@ -28,6 +28,7 @@ import java.util.Collections;
 import java.util.List;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import javax.swing.plaf.nimbus.State;
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
@@ -43,25 +44,28 @@ public class BlockatorState {
     public final AbstractState entryState;
     public final Precision entryPrecision;
     public final Block block;
+    public final AbstractState reducedState;
     public final Precision reducedPrecision;
 
     public BlockEntry(
         AbstractState pEntryState,
         Precision pEntryPrecision,
         Block pBlock,
+        AbstractState pReducedState,
         Precision pReducedPrecision) {
       entryState = pEntryState;
       entryPrecision = pEntryPrecision;
       block = pBlock;
+      reducedState = pReducedState;
       reducedPrecision = pReducedPrecision;
     }
   }
 
-  public static class BlockInner {
+  public static class BlockStackEntry {
     public final Block block;
     public final AbstractState entryState;
 
-    public BlockInner(Block pBlock, AbstractState pEntryState) {
+    public BlockStackEntry(Block pBlock, AbstractState pEntryState) {
       block = pBlock;
       entryState = pEntryState;
     }
@@ -75,8 +79,19 @@ public class BlockatorState {
     }
   }
 
+  public static class BlockCacheUsage {
+    public final AbstractState firstBlockState;
+    public final AbstractState lastBlockState;
+
+    public BlockCacheUsage(AbstractState pFirstBlockState, AbstractState pLastBlockState) {
+      firstBlockState = pFirstBlockState;
+      lastBlockState = pLastBlockState;
+    }
+  }
+
   private BlockEntry blockEntry = null;
-  private List<BlockInner> blockStack = Collections.emptyList();
+  private BlockCacheUsage blockCacheUsage = null;
+  private List<BlockStackEntry> blockStack = Collections.emptyList();
   private Precision modifiedPrecision = null;
   private StateKind stateKind = StateKind.NORMAL;
 
@@ -84,14 +99,12 @@ public class BlockatorState {
 
   }
 
-  public BlockatorState(BlockatorState st) {
+  private BlockatorState(BlockatorState st) {
     blockEntry = st.blockEntry;
+    blockCacheUsage = st.blockCacheUsage;
     blockStack = st.blockStack;
     modifiedPrecision = st.modifiedPrecision;
-  }
-
-  public StateKind getStateKind() {
-    return stateKind;
+    stateKind = st.stateKind;
   }
 
   @Nullable
@@ -99,8 +112,13 @@ public class BlockatorState {
     return blockEntry;
   }
 
+  @Nullable
+  public BlockCacheUsage getBlockCacheUsage() {
+    return blockCacheUsage;
+  }
+
   @Nonnull
-  public List<BlockInner> getBlockStack() {
+  public List<BlockStackEntry> getBlockStack() {
     return blockStack;
   }
 
@@ -110,7 +128,12 @@ public class BlockatorState {
   }
 
   @Nullable
-  public BlockInner getLastBlock() {
+  public StateKind getStateKind() {
+    return stateKind;
+  }
+
+  @Nullable
+  public BlockStackEntry getLastBlock() {
     if (blockStack.isEmpty()) return null;
     return blockStack.get(blockStack.size() - 1);
   }
@@ -121,20 +144,27 @@ public class BlockatorState {
 
   public BlockatorState transition(Precision pExpandedPrecision) {
     BlockatorState st = new BlockatorState(this);
-    st.stateKind = StateKind.NORMAL;
     st.blockEntry = null;
+    st.blockCacheUsage = null;
     st.modifiedPrecision = pExpandedPrecision;
+    st.stateKind = blockEntry != null ? StateKind.BLOCK_ENTRY : StateKind.NORMAL;
+    return st;
+  }
+
+  public BlockatorState cacheUsage(AbstractState firstState, AbstractState lastState) {
+    BlockatorState st = new BlockatorState(this);
+    st.blockCacheUsage = new BlockCacheUsage(firstState, lastState);
     return st;
   }
 
   public BlockatorState enterBlock(AbstractState pEntryState, Precision pEntryPrecision,
                                    Block pBlock, AbstractState pReducedState, Precision pReducedPrecision) {
-    BlockEntry newEntry = new BlockEntry(pEntryState, pEntryPrecision, pBlock, pReducedPrecision);
-    List<BlockInner> newBlockStack = new ArrayList<>(blockStack);
-    newBlockStack.add(new BlockInner(pBlock, pReducedState));
+    BlockEntry newEntry = new BlockEntry(pEntryState, pEntryPrecision, pBlock, pReducedState,
+        pReducedPrecision);
+    List<BlockStackEntry> newBlockStack = new ArrayList<>(blockStack);
+    newBlockStack.add(new BlockStackEntry(pBlock, pReducedState));
 
     BlockatorState state = new BlockatorState(this);
-    state.stateKind = StateKind.BLOCK_ENTRY;
     state.blockEntry = newEntry;
     state.blockStack = Collections.unmodifiableList(newBlockStack);
     state.modifiedPrecision = pReducedPrecision;
@@ -142,7 +172,7 @@ public class BlockatorState {
   }
 
   public BlockatorState exitBlock() {
-    List<BlockInner> newBlockStack = new ArrayList<>(blockStack);
+    List<BlockStackEntry> newBlockStack = new ArrayList<>(blockStack);
     newBlockStack.remove(newBlockStack.size() - 1);
 
     BlockatorState state = new BlockatorState();

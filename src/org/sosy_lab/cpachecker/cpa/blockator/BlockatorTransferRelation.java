@@ -24,8 +24,10 @@
 package org.sosy_lab.cpachecker.cpa.blockator;
 
 import com.google.common.collect.ImmutableCollection;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.cfa.blocks.BlockPartitioning;
@@ -38,15 +40,18 @@ import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation.ReachedSetAware;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
-import org.sosy_lab.cpachecker.cpa.blockator.BlockatorState.StateKind;
+import org.sosy_lab.cpachecker.cpa.blockator.BlockatorCacheManager.CacheEntry;
+import org.sosy_lab.cpachecker.cpa.blockator.BlockatorState.BlockEntry;
+import org.sosy_lab.cpachecker.cpa.blockator.BlockatorState.BlockStackEntry;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
-import org.sosy_lab.cpachecker.util.automaton.NondeterministicFiniteAutomaton.State;
+import org.sosy_lab.cpachecker.util.Pair;
 
 public class BlockatorTransferRelation implements TransferRelation, ReachedSetAware {
   private BlockatorCPA parent;
   private TransferRelation wrappedTransfer;
   private ReachedSet reachedSet;
+  private boolean enableCache = true;
 
   public BlockatorTransferRelation(
       BlockatorCPA pParent,
@@ -60,11 +65,29 @@ public class BlockatorTransferRelation implements TransferRelation, ReachedSetAw
     reachedSet = pReachedSet;
   }
 
+  private BlockEntry getBlockEntry(AbstractState state, Block expectedBlock) {
+    BlockatorStateRegistry registry = parent.getStateRegistry();
+    BlockStackEntry stackEntry = registry.get(state).getLastBlock();
+    if (stackEntry == null)
+      throw new IllegalArgumentException("State does not have any blocks");
+
+    if (!stackEntry.block.equals(expectedBlock))
+      throw new IllegalArgumentException("State is inside of different block");
+
+    BlockEntry blockEntry = registry.get(stackEntry.entryState).getBlockEntry();
+    return Objects.requireNonNull(blockEntry, "State has wrong block entry pointer");
+  }
+
   @Override
   public Collection<? extends AbstractState> getAbstractSuccessors(
       AbstractState state, Precision precision) throws CPATransferException, InterruptedException {
     if (reachedSet == null) {
       throw new IllegalStateException("updateReachedSet() should be called prior to invocation");
+    }
+
+    if (((ARGState) state).getStateId() > 1000) {
+      System.out.println("Stopping");
+      return Collections.emptyList();
     }
 
     BlockatorState bState = parent.getStateRegistry().get(state);
@@ -79,14 +102,47 @@ public class BlockatorTransferRelation implements TransferRelation, ReachedSetAw
       AbstractState reducedState = reducer.getVariableReducedState(state, block, node);
       Precision reducedPrecision = reducer.getVariableReducedPrecision(precision, block);
 
-      bState = bState.enterBlock(state, precision, block, reducedState, reducedPrecision);
-      parent.getStateRegistry().put(reducedState, bState);
+      CacheEntry cached = null;
+      if (enableCache) {
+        cached = parent.getCacheManager().getOrCreate(block, reducedState, reducedPrecision);
+      }
 
-      Collection<? extends AbstractState> subStates = getWrappedSuccessors(bState.transition(),
-          reducedState, reducedPrecision);
+      if (cached == null || cached.shouldCompute()) {
+        parent.getStatistics().cacheMisses.inc();
+        bState = bState.enterBlock(state, precision, block, reducedState, reducedPrecision);
+        parent.getStateRegistry().put(reducedState, bState);
 
-      setParent(subStates, state);
-      return subStates;
+        Collection<? extends AbstractState> subStates = getWrappedSuccessors(bState.transition(),
+            reducedState, reducedPrecision);
+
+        setParent(subStates, state);
+        return subStates;
+      } else {
+        parent.getStatistics().cacheHits.inc();
+        cached.addCacheUsage(state, precision);
+
+        List<AbstractState> result = new ArrayList<>();
+        for (Pair<AbstractState, Precision> exit: cached.getExitStates()) {
+          AbstractState expandedState = reducer.getVariableExpandedState(state, block,
+              exit.getFirstNotNull());
+
+          Precision expandedPrecision = reducer.getVariableExpandedPrecision(precision, block,
+              exit.getSecondNotNull());
+
+          BlockEntry blockEntry = getBlockEntry(exit.getFirstNotNull(), block);
+          BlockatorState wrappedState = bState.transition(expandedPrecision)
+              .cacheUsage(blockEntry.entryState, exit.getFirstNotNull());
+
+          Collection<? extends  AbstractState> wrappedResults = getWrappedSuccessors(wrappedState,
+              expandedState, expandedPrecision);
+
+          result.addAll(wrappedResults);
+        }
+
+        setParent(result, state);
+
+        return result;
+      }
     }
 
     if (partitioning.isReturnNode(node)) {
@@ -98,8 +154,8 @@ public class BlockatorTransferRelation implements TransferRelation, ReachedSetAw
       }
 
       Block block = blocks.iterator().next();
-      BlockatorState.BlockInner innerBlock = bState.getLastBlock();
-      if (innerBlock == null || !innerBlock.block.equals(block)) {
+      BlockStackEntry blockStackEntry = bState.getLastBlock();
+      if (blockStackEntry == null || !blockStackEntry.block.equals(block)) {
         // FIXME This should not happen
         return Collections.emptyList();
 //        throw new RuntimeException("Trying to exit from wrong block! innerBlock=" + innerBlock +
@@ -108,9 +164,37 @@ public class BlockatorTransferRelation implements TransferRelation, ReachedSetAw
 
       bState = bState.exitBlock();
       BlockatorState.BlockEntry blockEntry = parent.getStateRegistry()
-          .get(innerBlock.entryState).getBlockEntry();
+          .get(blockStackEntry.entryState).getBlockEntry();
 
       Objects.requireNonNull(blockEntry, "blockEntry should be defined for entry states");
+
+      if (enableCache) {
+        CacheEntry cached = parent.getCacheManager().getOrCreate(block, blockEntry.reducedState,
+            blockEntry.reducedPrecision);
+
+        cached.addExitState(state, precision);
+
+        for (Pair<AbstractState, Precision> usage: cached.getCacheUsages()) {
+          AbstractState expandedState = reducer.getVariableExpandedState(usage.getFirstNotNull(),
+              block, state);
+
+          Precision expandedPrecision =
+              reducer.getVariableExpandedPrecision(usage.getSecondNotNull(),
+                  block, precision);
+
+          BlockatorState usageState = parent.getStateRegistry().get(usage.getFirstNotNull())
+              .transition(expandedPrecision)
+              .cacheUsage(blockEntry.entryState, state);
+
+          Collection<? extends AbstractState> wrappedResults = getWrappedSuccessors(usageState,
+              expandedState, expandedPrecision);
+
+          setParent(wrappedResults, usage.getFirstNotNull());
+          for (AbstractState st: wrappedResults) {
+            reachedSet.add(st, expandedPrecision);
+          }
+        }
+      }
 
       AbstractState expandedState = reducer.getVariableExpandedState(blockEntry.entryState,
           blockEntry.block, state);

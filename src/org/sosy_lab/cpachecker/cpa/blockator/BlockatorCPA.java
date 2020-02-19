@@ -23,6 +23,7 @@
  */
 package org.sosy_lab.cpachecker.cpa.blockator;
 
+import java.util.Collection;
 import org.sosy_lab.common.configuration.ClassOption;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
@@ -45,6 +46,7 @@ import org.sosy_lab.cpachecker.core.interfaces.MergeOperator;
 import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustment;
 import org.sosy_lab.cpachecker.core.interfaces.Reducer;
 import org.sosy_lab.cpachecker.core.interfaces.StateSpacePartition;
+import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.interfaces.StopOperator;
 import org.sosy_lab.cpachecker.core.interfaces.TransferRelation;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
@@ -66,7 +68,10 @@ public class BlockatorCPA extends AbstractSingleWrapperCPA {
 
   private BlockPartitioning partitioning;
   private Reducer reducer;
+  private LogManager logger;
   private BlockatorStateRegistry stateRegistry;
+  private BlockatorCacheManager cacheManager;
+  private BlockatorStatistics statistics;
 
   private BlockatorTransferRelation transferRelation;
   private BlockatorPrecisionAdjustment precisionAdjustment;
@@ -85,6 +90,7 @@ public class BlockatorCPA extends AbstractSingleWrapperCPA {
       throw new IllegalArgumentException("BlockatorCPA should wrap BAM-capable CPA");
     }
 
+    logger = pLogger;
     reducer = ((ConfigurableProgramAnalysisWithBAM) pCpa).getReducer();
 
     final BlockPartitioningBuilder blockBuilder = new BlockPartitioningBuilder();
@@ -93,6 +99,8 @@ public class BlockatorCPA extends AbstractSingleWrapperCPA {
     ((ConfigurableProgramAnalysisWithBAM) pCpa).setPartitioning(partitioning);
 
     stateRegistry = new BlockatorStateRegistry();
+    cacheManager = new BlockatorCacheManager(reducer);
+    statistics = new BlockatorStatistics();
 
     transferRelation = new BlockatorTransferRelation(this, pCpa.getTransferRelation());
     precisionAdjustment = new BlockatorPrecisionAdjustment(this, pCpa.getPrecisionAdjustment());
@@ -108,8 +116,20 @@ public class BlockatorCPA extends AbstractSingleWrapperCPA {
     return reducer;
   }
 
+  public LogManager getLogger() {
+    return logger;
+  }
+
   public BlockatorStateRegistry getStateRegistry() {
     return stateRegistry;
+  }
+
+  public BlockatorCacheManager getCacheManager() {
+    return cacheManager;
+  }
+
+  public BlockatorStatistics getStatistics() {
+    return statistics;
   }
 
   @Override
@@ -138,5 +158,11 @@ public class BlockatorCPA extends AbstractSingleWrapperCPA {
   @Override
   public MergeOperator getMergeOperator() {
     return mergeOperator;
+  }
+
+  @Override
+  public void collectStatistics(Collection<Statistics> pStatsCollection) {
+    super.collectStatistics(pStatsCollection);
+    pStatsCollection.add(statistics);
   }
 }
