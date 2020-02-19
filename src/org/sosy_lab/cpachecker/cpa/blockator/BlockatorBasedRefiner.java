@@ -111,13 +111,13 @@ public class BlockatorBasedRefiner extends AbstractARGBasedRefiner {
 
     recurseBlock(pLastElement, null, path);
 
-    for (int i = 0; i < path.size(); i++) {
-      path.set(i, new BackwardARGState(path.get(i)));
-    }
-
-    for (int i = 0; i < path.size() - 1; i++) {
-      path.get(i).addParent(path.get(i + 1));
-    }
+//    for (int i = 0; i < path.size(); i++) {
+//      path.set(i, new BackwardARGState(path.get(i)));
+//    }
+//
+//    for (int i = 0; i < path.size() - 1; i++) {
+//      path.get(i).addParent(path.get(i + 1));
+//    }
 
     return new ARGPath(Lists.reverse(path));
   }

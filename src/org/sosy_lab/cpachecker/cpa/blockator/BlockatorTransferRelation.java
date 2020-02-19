@@ -85,11 +85,6 @@ public class BlockatorTransferRelation implements TransferRelation, ReachedSetAw
       throw new IllegalStateException("updateReachedSet() should be called prior to invocation");
     }
 
-    if (((ARGState) state).getStateId() > 1000) {
-      System.out.println("Stopping");
-      return Collections.emptyList();
-    }
-
     BlockatorState bState = parent.getStateRegistry().get(state);
     BlockPartitioning partitioning = parent.getPartitioning();
     Reducer reducer = parent.getReducer();
