@@ -114,6 +114,11 @@ public class BAMPredicateReducer
     PersistentMap<CFANode, Integer> abstractionLocations =
         predicateElement.getAbstractionLocationsOnPath().empty();
 
+    // FIXME why non-abstractions reach the entry nodes?
+    if (!predicateElement.isAbstractionState()) {
+      return predicateElement;
+    }
+
     Preconditions.checkState(predicateElement.isAbstractionState());
     Preconditions.checkState(bfmgr.isTrue(pathFormula.getFormula()));
 
@@ -257,6 +262,11 @@ public class BAMPredicateReducer
   public PredicateAbstractState getVariableExpandedState0(
       PredicateAbstractState rootState, Block pReducedContext, PredicateAbstractState reducedState)
       throws InterruptedException {
+
+    // FIXME why non-abstractions reach the entry nodes?
+    if (!reducedState.isAbstractionState() || !rootState.isAbstractionState()) {
+      return reducedState;
+    }
 
     Preconditions.checkState(reducedState.isAbstractionState());
     Preconditions.checkState(rootState.isAbstractionState());

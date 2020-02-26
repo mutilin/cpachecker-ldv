@@ -82,7 +82,6 @@ public class BlockatorReachedSet extends ARGReachedSet.ForwardingARGReachedSet {
 
     Set<ARGState> toRemove = new HashSet<>();
     Deque<ARGState> worklist = new ArrayDeque<>();
-    System.out.println("Iter start");
 
     worklist.add(pState);
     while (!worklist.isEmpty()) {

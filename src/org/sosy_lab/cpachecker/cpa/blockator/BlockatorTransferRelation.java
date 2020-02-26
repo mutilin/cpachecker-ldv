@@ -172,6 +172,9 @@ public class BlockatorTransferRelation implements TransferRelation, ReachedSetAw
         cached.addExitState(state, precision);
 
         for (Pair<AbstractState, Precision> usage: cached.getCacheUsages()) {
+          // TODO Find a way to mark cache usages
+          if (((ARGState) usage.getFirstNotNull()).isDestroyed()) continue;
+
           AbstractState expandedState = reducer.getVariableExpandedState(usage.getFirstNotNull(),
               block, state);
 

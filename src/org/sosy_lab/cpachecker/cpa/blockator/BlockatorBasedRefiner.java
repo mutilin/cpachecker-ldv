@@ -106,18 +106,9 @@ public class BlockatorBasedRefiner extends AbstractARGBasedRefiner {
   protected @Nullable ARGPath computePath(ARGState pLastElement, ARGReachedSet pReached)
       throws InterruptedException, CPATransferException
   {
-    System.out.println("BlockatorBasedRefiner.computePath");
     List<ARGState> path = new ArrayList<>();
 
     recurseBlock(pLastElement, null, path);
-
-//    for (int i = 0; i < path.size(); i++) {
-//      path.set(i, new BackwardARGState(path.get(i)));
-//    }
-//
-//    for (int i = 0; i < path.size() - 1; i++) {
-//      path.get(i).addParent(path.get(i + 1));
-//    }
 
     return new ARGPath(Lists.reverse(path));
   }
