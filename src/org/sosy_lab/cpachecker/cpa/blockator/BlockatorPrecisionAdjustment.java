@@ -69,6 +69,7 @@ public class BlockatorPrecisionAdjustment implements PrecisionAdjustment {
 
     PrecisionAdjustmentResult result = resultOpt.get();
     parent.getStateRegistry().copy(state, result.abstractState());
+    parent.getCacheManager().replace(state, result.abstractState());
     return resultOpt;
   }
 }

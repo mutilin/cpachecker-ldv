@@ -99,7 +99,7 @@ public class BlockatorCPA extends AbstractSingleWrapperCPA {
     ((ConfigurableProgramAnalysisWithBAM) pCpa).setPartitioning(partitioning);
 
     stateRegistry = new BlockatorStateRegistry();
-    cacheManager = new BlockatorCacheManager(reducer);
+    cacheManager = new BlockatorCacheManager(reducer, stateRegistry);
     statistics = new BlockatorStatistics();
 
     transferRelation = new BlockatorTransferRelation(this, pCpa.getTransferRelation());

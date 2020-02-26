@@ -94,6 +94,7 @@ public class ARGState extends AbstractSingleWrapperState
   private boolean mayCover = true;
   private boolean destroyed = false;
   private boolean hasCoveredParent = false;
+  private Exception destroyTrace = null;
 
   private ARGState mergedWith = null;
 
@@ -141,6 +142,7 @@ public class ARGState extends AbstractSingleWrapperState
    * @return An unmodifiable collection of ARGStates without duplicates.
    */
   public Collection<ARGState> getChildren() {
+    if (destroyed) throw new RuntimeException("Don't use destoryed ARGState " + getStateId(), destroyTrace);
     assert !destroyed : "Don't use destroyed ARGState " + this;
     return Collections.unmodifiableCollection(children);
   }
@@ -633,6 +635,7 @@ public class ARGState extends AbstractSingleWrapperState
     clearCoverageRelation();
 
     destroyed = true;
+    destroyTrace = new Exception("State " + stateId + " destroyed here");
   }
 
   /**
@@ -813,6 +816,7 @@ public class ARGState extends AbstractSingleWrapperState
     }
 
     destroyed = true;
+    destroyTrace = new Exception("Replaced by " + replacement.getStateId() + " here");
   }
 
   /* (non-Javadoc)

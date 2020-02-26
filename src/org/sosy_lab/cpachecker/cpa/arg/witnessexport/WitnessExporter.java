@@ -347,9 +347,10 @@ public class WitnessExporter {
     Preconditions.checkNotNull(pIsRelevantEdge);
     Preconditions.checkNotNull(pInvariantProvider);
 
-    Witness generatedWitness =
-        generateProofWitness(pRootState, pIsRelevantState, pIsRelevantEdge, pInvariantProvider);
-    WitnessToOutputFormatsUtils.writeToGraphMl(generatedWitness, pTarget);
+    return; // Disable exporting to avoid false 'ASSERTION' errors due to inconsistencies
+//    Witness generatedWitness =
+//        generateProofWitness(pRootState, pIsRelevantState, pIsRelevantEdge, pInvariantProvider);
+//    WitnessToOutputFormatsUtils.writeToGraphMl(generatedWitness, pTarget);
   }
 
   protected String getInitialFileName(ARGState pRootState) {

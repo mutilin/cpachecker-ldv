@@ -68,8 +68,9 @@ public class BlockatorCacheManager {
     }
   }
 
-  public static final class CacheEntry {
+  public final class CacheEntry {
     private AtomicBoolean isComputed = new AtomicBoolean(false);
+    private boolean isDestroyed = false;
     private List<Pair<AbstractState, Precision>> cacheUsages = new ArrayList<>();
     private List<Pair<AbstractState, Precision>> exitStates = new ArrayList<>();
     private Map<AbstractState, List<AbstractState>> exitUsages = new HashMap<>();
@@ -110,13 +111,35 @@ public class BlockatorCacheManager {
     public void removeExitUsage(AbstractState exit) {
       exitUsages.remove(exit);
     }
+
+    private void replaceState(AbstractState old, AbstractState fresh) {
+      if (isDestroyed) {
+        throw new RuntimeException("Replacing state in a destroyed cache entry");
+      }
+
+      exitStates.replaceAll(p -> old.equals(p.getFirst()) ? Pair.of(fresh, p.getSecond()) : p);
+      cacheUsages.replaceAll(p -> old.equals(p.getFirst()) ? Pair.of(fresh, p.getSecond()) : p);
+
+      List<AbstractState> r = exitUsages.remove(old);
+      if (r != null) exitUsages.put(fresh, r);
+
+      for (List<AbstractState> v: exitUsages.values()) {
+        v.replaceAll(st -> st.equals(old) ? fresh : st);
+      }
+    }
+
+    private void destroy() {
+      isDestroyed = true;
+    }
   }
 
   private Reducer reducer;
+  private BlockatorStateRegistry stateRegistry;
   private ConcurrentHashMap<CacheKey, CacheEntry> cache = new ConcurrentHashMap<>();
 
-  public BlockatorCacheManager(Reducer pReducer) {
+  public BlockatorCacheManager(Reducer pReducer, BlockatorStateRegistry pStateRegistry) {
     reducer = pReducer;
+    stateRegistry = pStateRegistry;
   }
 
   private CacheKey key(Block block, AbstractState state, Precision precision) {
@@ -132,6 +155,19 @@ public class BlockatorCacheManager {
   }
 
   public void remove(Block block, AbstractState state, Precision precision) {
-    cache.remove(key(block, state, precision));
+    CacheEntry entry = cache.remove(key(block, state, precision));
+    if (entry != null) {
+      entry.destroy();
+    }
+  }
+
+  public void replace(AbstractState old, AbstractState fresh) {
+    if (old.equals(fresh)) {
+      return;
+    }
+
+    for (CacheEntry e: cache.values()) {
+      e.replaceState(old, fresh);
+    }
   }
 }
