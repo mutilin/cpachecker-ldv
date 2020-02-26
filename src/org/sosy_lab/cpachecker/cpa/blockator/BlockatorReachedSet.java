@@ -82,6 +82,7 @@ public class BlockatorReachedSet extends ARGReachedSet.ForwardingARGReachedSet {
 
     Set<ARGState> toRemove = new HashSet<>();
     Deque<ARGState> worklist = new ArrayDeque<>();
+    System.out.println("Iter start");
 
     worklist.add(pState);
     while (!worklist.isEmpty()) {
@@ -90,6 +91,7 @@ public class BlockatorReachedSet extends ARGReachedSet.ForwardingARGReachedSet {
         current = ((BackwardARGState) current).getARGState();
       }
 
+      if (current.isDestroyed()) continue; // FIXME This check should not be needed!
       BlockatorState bState = cpa.getStateRegistry().get(current);
       if (bState.getLastBlock() != null) {
         BlockStackEntry stackEntry = bState.getLastBlock();
@@ -107,6 +109,10 @@ public class BlockatorReachedSet extends ARGReachedSet.ForwardingARGReachedSet {
           }
 
           cacheEntry.removeExitUsage(current);
+        }
+
+        if (cacheEntry != null) {
+          cacheEntry.removeExitState(current);
         }
       }
 
@@ -126,8 +132,11 @@ public class BlockatorReachedSet extends ARGReachedSet.ForwardingARGReachedSet {
 
         for (Pair<AbstractState, Precision> usage: cacheEntry.getCacheUsages()) {
           ARGState usageState = (ARGState) usage.getFirstNotNull();
-          worklist.addAll(usageState.getSuccessors());
-          worklist.addAll(usageState.getCoveredByThis());
+          // Cache usage may have been removed by other refinement
+          if (!usageState.isDestroyed()) {
+            worklist.addAll(usageState.getSuccessors());
+            worklist.addAll(usageState.getCoveredByThis());
+          }
         }
 
         cpa.getCacheManager().remove(blockEntry.block, blockEntry.reducedState,
@@ -142,12 +151,12 @@ public class BlockatorReachedSet extends ARGReachedSet.ForwardingARGReachedSet {
     Set<ARGState> toReadd = new HashSet<>();
     for (ARGState state: toRemove) {
       for (ARGState parent: state.getParents()) {
-        if (toRemove.contains(parent)) {
-          continue;
-        }
-
         if (parent.getAppliedFrom() != null) {
           parent = parent.getAppliedFrom().getFirst();
+        }
+
+        if (parent == null || toRemove.contains(parent)) {
+          continue;
         }
 
         toReadd.add(parent);
@@ -160,73 +169,6 @@ public class BlockatorReachedSet extends ARGReachedSet.ForwardingARGReachedSet {
 
     for (ARGState state: toReadd) {
       delegate.readdToWaitlist(state, pPrecisions, pPrecTypes);
-    }
-  }
-
-  public void removeSubtreeXX(
-      ARGState pState, List<Precision> pPrecisions, List<Predicate<? super Precision>> pPrecTypes)
-      throws InterruptedException {
-    if (pState instanceof BackwardARGState) {
-      pState = ((BackwardARGState) pState).getARGState();
-    }
-
-    for (ARGState state: pState.getParents()) {
-      if (state.getAppliedFrom() != null) {
-        state = state.getAppliedFrom().getFirst();
-      }
-
-      delegate.readdToWaitlist(state, pPrecisions, pPrecTypes);
-    }
-
-    ArrayDeque<ARGState> worklist = new ArrayDeque<>();
-    ArrayList<ARGState> readdCandidates = new ArrayList<>();
-    worklist.add(pState);
-
-    while (!worklist.isEmpty()) {
-      ARGState current = worklist.removeFirst();
-      if (current instanceof BackwardARGState) {
-        current = ((BackwardARGState) current).getARGState();
-      }
-
-      if (current.isDestroyed()) {
-        continue;
-      }
-
-//      BlockatorState bState = cpa.getStateRegistry().get(current);
-//      if (bState.getStateKind() == StateKind.BLOCK_ENTRY) {
-//        BlockStackEntry stackEntry = bState.getLastBlock();
-//        if (stackEntry == null) {
-//          throw new RuntimeException("Empty block stack on block entry state");
-//        }
-//
-//        BlockEntry blockEntry = cpa.getStateRegistry().get(stackEntry.entryState).getBlockEntry();
-//        if (blockEntry == null || !blockEntry.block.equals(stackEntry.block)) {
-//          throw new RuntimeException("Mismatched stack entry pointer");
-//        }
-//
-//        CacheEntry cacheEntry = cpa.getCacheManager().getOrCreate(blockEntry.block,
-//            blockEntry.reducedState, blockEntry.reducedPrecision);
-//
-//        for (Pair<AbstractState, Precision> usage: cacheEntry.getCacheUsages()) {
-//          ARGState usageState = (ARGState) usage.getFirstNotNull();
-//          readdCandidates.add(usageState);
-//          worklist.addAll(usageState.getChildren());
-//        }
-//
-//        cpa.getCacheManager().remove(blockEntry.block, blockEntry.reducedState,
-//            blockEntry.reducedPrecision);
-//      }
-
-      current.removeFromARG();
-      worklist.addAll(current.getSuccessors());
-      worklist.addAll(current.getCoveredByThis());
-      cpa.getStateRegistry().remove(current);
-      delegate.remove(current);
-    }
-
-    for (ARGState readd: readdCandidates) {
-      if (readd.isDestroyed()) continue;
-      delegate.readdToWaitlist(readd);
     }
   }
 }

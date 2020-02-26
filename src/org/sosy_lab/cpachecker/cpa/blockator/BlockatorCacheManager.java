@@ -95,6 +95,10 @@ public class BlockatorCacheManager {
       exitStates.add(Pair.of(state, precision));
     }
 
+    public void removeExitState(AbstractState state) {
+      exitStates.removeIf(p -> state.equals(p.getFirst()));
+    }
+
     public void addExitUsages(AbstractState exit, Collection<? extends AbstractState> usage) {
       exitUsages.computeIfAbsent(exit, (k) -> new ArrayList<>()).addAll(usage);
     }

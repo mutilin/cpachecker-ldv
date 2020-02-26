@@ -62,9 +62,7 @@ public class BlockatorPrecisionAdjustment implements PrecisionAdjustment {
         precision, states, stateProjection, fullState);
 
     if (resultOpt.isEmpty()) {
-      return modifiedPrecision != null
-         ? Optional.of(PrecisionAdjustmentResult.create(state, modifiedPrecision, Action.CONTINUE))
-         : Optional.empty();
+      return resultOpt;
     }
 
     PrecisionAdjustmentResult result = resultOpt.get();

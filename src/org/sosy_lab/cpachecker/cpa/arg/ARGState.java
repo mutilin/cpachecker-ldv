@@ -382,6 +382,7 @@ public class ARGState extends AbstractSingleWrapperState
   }
 
   public boolean isCovered() {
+    if (destroyed) throw new RuntimeException("Don't use destoryed ARGState " + getStateId(), destroyTrace);
     assert !destroyed : "Don't use destroyed ARGState " + this;
     return mCoveredBy != null;
   }

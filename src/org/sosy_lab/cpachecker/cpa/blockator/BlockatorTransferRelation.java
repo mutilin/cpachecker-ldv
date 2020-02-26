@@ -152,6 +152,7 @@ public class BlockatorTransferRelation implements TransferRelation, ReachedSetAw
       Block block = blocks.iterator().next();
       BlockStackEntry blockStackEntry = bState.getLastBlock();
       if (blockStackEntry == null || !blockStackEntry.block.equals(block)) {
+        System.out.println("WARNING: Mismatched block stack!");
         // FIXME This should not happen
         return Collections.emptyList();
 //        throw new RuntimeException("Trying to exit from wrong block! innerBlock=" + innerBlock +
