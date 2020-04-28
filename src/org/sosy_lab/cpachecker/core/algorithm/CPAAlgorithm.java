@@ -328,6 +328,11 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
     }
 
     stats.transferTimer.start();
+
+    if (transferRelation instanceof TransferRelation.ReachedSetAware) {
+      ((TransferRelation.ReachedSetAware) transferRelation).updateReachedSet(reachedSet);
+    }
+
     Collection<? extends AbstractState> successors;
     try {
       successors = transferRelation.getAbstractSuccessors(state, reachedSet, precision);

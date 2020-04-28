@@ -47,7 +47,7 @@ import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Pair;
 
-public class BlockatorTransferRelation implements TransferRelation, ReachedSetAware {
+public class BlockatorTransferRelation implements TransferRelation.ReachedSetAware {
   private BlockatorCPA parent;
   private TransferRelation wrappedTransfer;
   private ReachedSet reachedSet;
