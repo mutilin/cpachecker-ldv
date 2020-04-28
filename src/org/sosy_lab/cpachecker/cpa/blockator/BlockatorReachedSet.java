@@ -23,6 +23,7 @@
  */
 package org.sosy_lab.cpachecker.cpa.blockator;
 
+import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import java.util.ArrayDeque;
@@ -162,12 +163,24 @@ public class BlockatorReachedSet extends ARGReachedSet.ForwardingARGReachedSet {
       }
 
       state.removeFromARG();
-      delegate.remove(state);
+      delegate.mReached.remove(state);
       cpa.getStateRegistry().remove(state);
     }
 
-    for (ARGState state: toReadd) {
-      delegate.readdToWaitlist(state, pPrecisions, pPrecTypes);
+    for (ARGState waitingState : toReadd) {
+      Precision waitingStatePrec = delegate.mReached.getPrecision(waitingState);
+
+      for (int i = 0; i < pPrecisions.size(); i++) {
+        Precision adaptedPrec = delegate.adaptPrecision(waitingStatePrec, pPrecisions.get(i), pPrecTypes.get(i));
+
+        // adaptedPrec == null, if the precision component was not changed
+        if (adaptedPrec != null ) {
+          waitingStatePrec = adaptedPrec;
+        }
+      }
+
+      mReached.updatePrecision(waitingState, waitingStatePrec);
+      mReached.reAddToWaitlist(waitingState);
     }
   }
 }

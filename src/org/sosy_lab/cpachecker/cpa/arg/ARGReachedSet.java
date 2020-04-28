@@ -69,7 +69,7 @@ public class ARGReachedSet {
   private final int refinementNumber;
   private final ConfigurableProgramAnalysis cpa;
 
-  private final ReachedSet mReached;
+  public final ReachedSet mReached; // TODO: Replace with more suitable methods
   private final UnmodifiableReachedSet mUnmodifiableReached;
 
   /**
@@ -317,7 +317,7 @@ public class ARGReachedSet {
    * @param pNewPrecision New precision.
    * @return The adapted precision.
    */
-  private Precision adaptPrecision(Precision pOldPrecision, Precision pNewPrecision,
+  public Precision adaptPrecision(Precision pOldPrecision, Precision pNewPrecision,
       Predicate<? super Precision> pPrecisionType) {
     return Precisions.replaceByType(pOldPrecision, pNewPrecision, pPrecisionType);
   }

@@ -29,7 +29,6 @@ import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustment;
 import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustmentResult;
-import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustmentResult.Action;
 import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 
@@ -61,7 +60,7 @@ public class BlockatorPrecisionAdjustment implements PrecisionAdjustment {
     Optional<PrecisionAdjustmentResult> resultOpt = wrappedPrecisionAdjustment.prec(state,
         precision, states, stateProjection, fullState);
 
-    if (resultOpt.isEmpty()) {
+    if (!resultOpt.isPresent()) {
       return resultOpt;
     }
 
