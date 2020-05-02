@@ -116,6 +116,7 @@ public class BAMPredicateReducer
 
     // FIXME why non-abstractions reach the entry nodes?
     if (!predicateElement.isAbstractionState()) {
+      System.out.println("Warn! Did not reduced anything!");
       return predicateElement;
     }
 
@@ -265,6 +266,7 @@ public class BAMPredicateReducer
 
     // FIXME why non-abstractions reach the entry nodes?
     if (!reducedState.isAbstractionState() || !rootState.isAbstractionState()) {
+      System.out.println("Warn! Did not reduced anything!");
       return reducedState;
     }
 

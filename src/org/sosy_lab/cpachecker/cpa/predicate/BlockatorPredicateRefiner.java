@@ -26,13 +26,14 @@ package org.sosy_lab.cpachecker.cpa.predicate;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.Refiner;
+import org.sosy_lab.cpachecker.cpa.arg.ARGBasedRefiner;
 import org.sosy_lab.cpachecker.cpa.blockator.BlockatorBasedRefiner;
 import org.sosy_lab.cpachecker.cpa.blockator.BlockatorCPA;
 import org.sosy_lab.cpachecker.util.CPAs;
 
 public abstract class BlockatorPredicateRefiner implements Refiner {
 
-  public static Refiner create(ConfigurableProgramAnalysis pCpa)
+  public static ARGBasedRefiner create(ConfigurableProgramAnalysis pCpa)
       throws InvalidConfigurationException {
     return BlockatorBasedRefiner.forARGBasedRefiner(BAMPredicateRefiner.create0(pCpa),
         CPAs.retrieveCPAOrFail(pCpa, BlockatorCPA.class, BlockatorPredicateRefiner.class));

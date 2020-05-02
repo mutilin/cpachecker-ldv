@@ -45,14 +45,14 @@ import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.CPAs;
 
-public class BlockatorBasedRefiner extends AbstractARGBasedRefiner {
+public class BlockatorBasedRefiner extends AbstractARGBasedRefiner implements ARGBasedRefiner {
   private final BlockatorCPA cpa;
   private final BlockatorPathRestorator pathRestorator;
 
   /**
    * Create a {@link Refiner} instance that supports BAM from a {@link ARGBasedRefiner} instance.
    */
-  public static Refiner forARGBasedRefiner(
+  public static BlockatorBasedRefiner forARGBasedRefiner(
       final ARGBasedRefiner pRefiner, final ConfigurableProgramAnalysis pCpa)
       throws InvalidConfigurationException {
     checkArgument(
@@ -81,7 +81,7 @@ public class BlockatorBasedRefiner extends AbstractARGBasedRefiner {
   }
 
   @Override
-  protected CounterexampleInfo performRefinementForPath(ARGReachedSet pReached, ARGPath pPath)
+  public CounterexampleInfo performRefinementForPath(ARGReachedSet pReached, ARGPath pPath)
       throws CPAException, InterruptedException
   {
     assert pPath == null || pPath.size() > 0;

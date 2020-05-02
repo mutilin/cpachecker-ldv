@@ -78,6 +78,7 @@ public class BlockatorPathRestorator implements PathRestorator {
 
   @Override
   public ARGPath computePath(ARGState pLastElement, Set<List<Integer>> pRefinedStates) {
+    System.out.println("BlockatorPathRestorator.computePath");
     List<ARGState> path = new ArrayList<>();
 
     recurseBlock(pLastElement, null, path);
@@ -87,6 +88,7 @@ public class BlockatorPathRestorator implements PathRestorator {
 
   @Override
   public PathIterator iterator(ARGState pTarget) {
+    System.out.println("BlockatorPathRestorator.iterator");
     return new PathIterator() {
       boolean returnedPath = false;
 

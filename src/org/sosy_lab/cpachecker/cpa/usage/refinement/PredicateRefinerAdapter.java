@@ -35,6 +35,7 @@ import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.ConfigurationBuilder;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.log.LogManager;
+import org.sosy_lab.cpachecker.cfa.blocks.Block;
 import org.sosy_lab.cpachecker.core.counterexample.CounterexampleInfo;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.Statistics;
@@ -46,10 +47,12 @@ import org.sosy_lab.cpachecker.cpa.arg.ARGReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.arg.path.ARGPath;
 import org.sosy_lab.cpachecker.cpa.bam.BAMSubgraphComputer.BackwardARGState;
+import org.sosy_lab.cpachecker.cpa.blockator.BlockatorCPA;
 import org.sosy_lab.cpachecker.cpa.predicate.BAMBlockFormulaStrategy;
 import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateCPA;
 import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateRefiner;
 import org.sosy_lab.cpachecker.cpa.predicate.BlockFormulaStrategy;
+import org.sosy_lab.cpachecker.cpa.predicate.BlockatorPredicateRefiner;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractionGlobalRefinementStrategy;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractionManager;
@@ -95,6 +98,8 @@ public class PredicateRefinerAdapter extends GenericSinglePathRefiner {
     BAMPredicateCPA bamPredicateCpa = ((WrapperCPA) pCpa).retrieveWrappedCpa(BAMPredicateCPA.class);
     PredicateCPA predicateCpa = ((WrapperCPA) pCpa).retrieveWrappedCpa(PredicateCPA.class);
 
+    BlockatorCPA blockatorCPA = ((WrapperCPA) pCpa).retrieveWrappedCpa(BlockatorCPA.class);
+
     boolean withBAM = bamPredicateCpa != null;
     predicateCpa = withBAM ? bamPredicateCpa : predicateCpa;
     assert predicateCpa != null;
@@ -105,7 +110,7 @@ public class PredicateRefinerAdapter extends GenericSinglePathRefiner {
     PathFormulaManager pfmgr = predicateCpa.getPathFormulaManager();
 
     if (withBAM) {
-      transformer = s -> ((BackwardARGState) s).getARGState();
+      transformer = s -> s instanceof BackwardARGState ? ((BackwardARGState) s).getARGState() : s;
       blockFormulaStrategy = new BAMBlockFormulaStrategy(pfmgr);
     } else {
       transformer = s -> s;
@@ -122,8 +127,9 @@ public class PredicateRefinerAdapter extends GenericSinglePathRefiner {
             predicateCpa.getPredicateManager(),
             transformer);
 
-    ARGBasedRefiner pRefiner =
-        new PredicateCPARefinerFactory(pCpa).setBlockFormulaStrategy(blockFormulaStrategy)
+    ARGBasedRefiner pRefiner = blockatorCPA != null
+        ? BlockatorPredicateRefiner.create(pCpa)
+        : new PredicateCPARefinerFactory(pCpa).setBlockFormulaStrategy(blockFormulaStrategy)
             .create(pStrategy);
 
     return new PredicateRefinerAdapter(wrapper, pLogger, pStrategy, pRefiner);
