@@ -242,6 +242,11 @@ public class BlockatorTransferRelation implements TransferRelation.ReachedSetAwa
     }
   }
 
+  public void cleanCaches() {
+    parent.getCacheManager().clear();
+    parent.getStateRegistry().clear();
+  }
+
   @Override
   public Collection<? extends AbstractState> getAbstractSuccessorsForEdge(
       AbstractState state, Precision precision, CFAEdge cfaEdge)

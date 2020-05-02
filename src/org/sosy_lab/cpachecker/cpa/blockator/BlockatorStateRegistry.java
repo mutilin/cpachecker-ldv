@@ -72,4 +72,8 @@ public class BlockatorStateRegistry {
     int stateId = extractArgState(base).getStateId();
     states.remove(stateId);
   }
+
+  public void clear() {
+    states.clear();
+  }
 }

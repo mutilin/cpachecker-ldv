@@ -60,6 +60,7 @@ import org.sosy_lab.cpachecker.cfa.types.c.CType;
 import org.sosy_lab.cpachecker.core.Specification;
 import org.sosy_lab.cpachecker.cpa.bam.BAMMultipleCEXSubgraphComputer;
 import org.sosy_lab.cpachecker.cpa.lock.LockTransferRelation;
+import org.sosy_lab.cpachecker.cpa.usage.refinement.PathRestorator;
 import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.automaton.AutomatonGraphmlCommon;
 import org.sosy_lab.cpachecker.util.automaton.AutomatonGraphmlCommon.AssumeCase;
@@ -125,7 +126,7 @@ public class KleverErrorTracePrinter extends ErrorTracePrinter {
 
   public KleverErrorTracePrinter(
       Configuration c,
-      BAMMultipleCEXSubgraphComputer pT,
+      PathRestorator pT,
       CFA pCfa,
       LogManager pL,
       LockTransferRelation lT)

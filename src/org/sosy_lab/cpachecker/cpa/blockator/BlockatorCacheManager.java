@@ -174,4 +174,8 @@ public class BlockatorCacheManager {
       e.replaceState(old, fresh);
     }
   }
+
+  public void clear() {
+    cache.clear();
+  }
 }

@@ -46,7 +46,8 @@ import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.CPAs;
 
 public class BlockatorBasedRefiner extends AbstractARGBasedRefiner {
-  private BlockatorCPA cpa;
+  private final BlockatorCPA cpa;
+  private final BlockatorPathRestorator pathRestorator;
 
   /**
    * Create a {@link Refiner} instance that supports BAM from a {@link ARGBasedRefiner} instance.
@@ -71,46 +72,12 @@ public class BlockatorBasedRefiner extends AbstractARGBasedRefiner {
       BlockatorCPA pCpa, LogManager pLogger) throws InvalidConfigurationException {
     super(pRefiner, CPAs.retrieveCPAOrFail(pCpa, ARGCPA.class, BlockatorBasedRefiner.class), pLogger);
     this.cpa = pCpa;
-  }
-
-  private void recurseBlock(ARGState last, ARGState first, List<ARGState> path) {
-    ARGState current = last;
-
-    while (!current.getParents().isEmpty() && !current.equals(first)) {
-      BlockCacheUsage cacheUsage = cpa.getStateRegistry().get(current).getBlockCacheUsage();
-
-      path.add(current);
-
-      if (cacheUsage != null) {
-        recurseBlock((ARGState) cacheUsage.lastBlockState, (ARGState) cacheUsage.firstBlockState,
-            path);
-      }
-
-      if (current.getParents().size() != 1) {
-        throw new RuntimeException("State has multiple parents: #" + current.getStateId());
-      }
-
-      current = current.getParents().iterator().next();
-    }
-
-    if (first != null && !current.equals(first)) {
-      throw new RuntimeException("Did'nt found entry state in ARG");
-    }
-
-    if (!current.equals(first)) {
-      path.add(current);
-    }
+    this.pathRestorator = new BlockatorPathRestorator(cpa);
   }
 
   @Override
-  protected @Nullable ARGPath computePath(ARGState pLastElement, ARGReachedSet pReached)
-      throws InterruptedException, CPATransferException
-  {
-    List<ARGState> path = new ArrayList<>();
-
-    recurseBlock(pLastElement, null, path);
-
-    return new ARGPath(Lists.reverse(path));
+  protected @Nullable ARGPath computePath(ARGState pLastElement, ARGReachedSet pReached) {
+    return pathRestorator.computePath(pLastElement);
   }
 
   @Override

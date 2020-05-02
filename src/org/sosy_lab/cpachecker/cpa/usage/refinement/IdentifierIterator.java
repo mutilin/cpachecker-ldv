@@ -56,6 +56,8 @@ import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.bam.BAMCPA;
 import org.sosy_lab.cpachecker.cpa.bam.BAMTransferRelation;
+import org.sosy_lab.cpachecker.cpa.blockator.BlockatorCPA;
+import org.sosy_lab.cpachecker.cpa.blockator.BlockatorTransferRelation;
 import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateCPA;
 import org.sosy_lab.cpachecker.cpa.predicate.BAMPredicateRefiner;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicatePrecision;
@@ -118,7 +120,7 @@ public class IdentifierIterator extends WrappedConfigurableRefinementBlock<Reach
   private final boolean disableAllCaching;
 
   private final Stats stats;
-  private final BAMTransferRelation transfer;
+  private final BlockatorTransferRelation transfer;
 
   int i = 0;
   int lastFalseUnsafeSize = -1;
@@ -128,14 +130,14 @@ public class IdentifierIterator extends WrappedConfigurableRefinementBlock<Reach
 
   public IdentifierIterator(ConfigurableRefinementBlock<SingleIdentifier> pWrapper, Configuration config,
       ConfigurableProgramAnalysis pCpa,
-      BAMTransferRelation pTransfer,
+      BlockatorTransferRelation pTransfer,
       boolean pDisableCaching)
       throws InvalidConfigurationException {
     super(pWrapper);
     config.inject(this);
     cpa = pCpa;
     UsageCPA uCpa = CPAs.retrieveCPA(pCpa, UsageCPA.class);
-    BAMCPA bamCPA = CPAs.retrieveCPA(pCpa, BAMCPA.class);
+    BlockatorCPA bamCPA = CPAs.retrieveCPA(pCpa, BlockatorCPA.class);
     if (bamCPA != null) {
       uCpa.getStats().setBAMCPA(bamCPA);
     }

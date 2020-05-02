@@ -59,6 +59,7 @@ import org.sosy_lab.cpachecker.cpa.arg.ARGUtils;
 import org.sosy_lab.cpachecker.cpa.arg.path.ARGPath;
 import org.sosy_lab.cpachecker.cpa.bam.BAMMultipleCEXSubgraphComputer;
 import org.sosy_lab.cpachecker.cpa.lock.LockTransferRelation;
+import org.sosy_lab.cpachecker.cpa.usage.refinement.PathRestorator;
 import org.sosy_lab.cpachecker.cpa.usage.storage.UsageContainer;
 import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.automaton.AutomatonGraphmlCommon;
@@ -149,13 +150,13 @@ public abstract class ErrorTracePrinter {
   protected UsageContainer container;
 
   protected Predicate<CFAEdge> FILTER_EMPTY_FILE_LOCATIONS;
-  private final BAMMultipleCEXSubgraphComputer subgraphComputer;
+  private final PathRestorator subgraphComputer;
 
   private final Map<Set<TraceCore>, AbstractIdentifier> printedTraces;
 
   public ErrorTracePrinter(
       Configuration c,
-      BAMMultipleCEXSubgraphComputer t,
+      PathRestorator t,
       CFA pCfa,
       LogManager l,
       LockTransferRelation lT)

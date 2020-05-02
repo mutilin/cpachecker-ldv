@@ -141,7 +141,7 @@ public class BlockatorCPA extends AbstractSingleWrapperCPA {
   }
 
   @Override
-  public TransferRelation getTransferRelation() {
+  public BlockatorTransferRelation getTransferRelation() {
     return transferRelation;
   }
 

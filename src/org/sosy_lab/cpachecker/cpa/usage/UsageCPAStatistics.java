@@ -40,7 +40,10 @@ import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.bam.BAMCPA;
 import org.sosy_lab.cpachecker.cpa.bam.BAMMultipleCEXSubgraphComputer;
+import org.sosy_lab.cpachecker.cpa.blockator.BlockatorCPA;
+import org.sosy_lab.cpachecker.cpa.blockator.BlockatorPathRestorator;
 import org.sosy_lab.cpachecker.cpa.lock.LockTransferRelation;
+import org.sosy_lab.cpachecker.cpa.usage.refinement.PathRestorator;
 import org.sosy_lab.cpachecker.util.statistics.StatTimer;
 import org.sosy_lab.cpachecker.util.statistics.StatisticsWriter;
 
@@ -79,7 +82,7 @@ public class UsageCPAStatistics implements Statistics {
   private ErrorTracePrinter errPrinter;
   private final CFA cfa;
 
-  private BAMMultipleCEXSubgraphComputer computer;
+  private PathRestorator computer;
 
   final StatTimer transferRelationTimer = new StatTimer("Time for transfer relation");
   final StatTimer transferForEdgeTimer = new StatTimer("Time for transfer for edge");
@@ -168,8 +171,8 @@ public class UsageCPAStatistics implements Statistics {
     writer.put(printStatisticsTimer);
   }
 
-  public void setBAMCPA(BAMCPA pBamCpa) {
-    computer = pBamCpa.createBAMMultipleSubgraphComputer(ARGState::getStateId);
+  public void setBAMCPA(BlockatorCPA pBamCpa) {
+    computer = new BlockatorPathRestorator(pBamCpa);
   }
 
   @Override

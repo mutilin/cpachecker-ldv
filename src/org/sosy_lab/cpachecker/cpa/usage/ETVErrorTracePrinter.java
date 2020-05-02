@@ -48,6 +48,7 @@ import org.sosy_lab.cpachecker.cfa.model.c.CReturnStatementEdge;
 import org.sosy_lab.cpachecker.cpa.bam.BAMMultipleCEXSubgraphComputer;
 import org.sosy_lab.cpachecker.cpa.lock.AbstractLockState;
 import org.sosy_lab.cpachecker.cpa.lock.LockTransferRelation;
+import org.sosy_lab.cpachecker.cpa.usage.refinement.PathRestorator;
 import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.identifiers.GlobalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.identifiers.LocalVariableIdentifier;
@@ -71,7 +72,7 @@ public class ETVErrorTracePrinter extends ErrorTracePrinter {
 
   public ETVErrorTracePrinter(
       Configuration pC,
-      BAMMultipleCEXSubgraphComputer pT,
+      PathRestorator pT,
       CFA pCfa,
       LogManager pL,
       LockTransferRelation t)

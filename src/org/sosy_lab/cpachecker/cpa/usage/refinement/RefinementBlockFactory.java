@@ -37,6 +37,8 @@ import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.Refiner;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.bam.BAMCPA;
+import org.sosy_lab.cpachecker.cpa.blockator.BlockatorCPA;
+import org.sosy_lab.cpachecker.cpa.blockator.BlockatorPathRestorator;
 import org.sosy_lab.cpachecker.cpa.local.LocalTransferRelation;
 import org.sosy_lab.cpachecker.cpa.lock.LockCPA;
 import org.sosy_lab.cpachecker.cpa.lock.LockReducer;
@@ -118,7 +120,7 @@ public class RefinementBlockFactory {
 
   @SuppressWarnings("unchecked")
   public Refiner create() throws InvalidConfigurationException {
-    BAMCPA bamCpa = CPAs.retrieveCPA(cpa, BAMCPA.class);
+    BlockatorCPA bamCpa = CPAs.retrieveCPA(cpa, BlockatorCPA.class);
     UsageCPA usCPA = CPAs.retrieveCPA(cpa, UsageCPA.class);
     LogManager logger = usCPA.getLogger();
     ShutdownNotifier notifier = usCPA.getNotifier();
@@ -145,7 +147,8 @@ public class RefinementBlockFactory {
 
     PathRestorator computer;
     if (bamCpa != null) {
-      computer = bamCpa.createBAMMultipleSubgraphComputer(idExtractor);
+      // TODO: idExtractor is ignored now!
+      computer = new BlockatorPathRestorator(bamCpa);
     } else {
       computer = new ARGPathRestorator(idExtractor);
     }
